@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-02T13:35:00Z",
+  "generatedAt": "2026-09-02T18:30:00Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -203,7 +203,11 @@
       { "name": "The Scarce Signal Rule", "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.", "section": "colors" },
       { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence, health, or success. Do not swap their jobs for variety.", "section": "colors" },
       { "name": "The Two Voices Rule", "body": "Serif type tells the story; sans-serif type helps the member act.", "section": "typography" },
-      { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" }
+      { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" },
+      { "name": "The Perceptible Control Rule", "body": "Interactive boundaries use the dedicated control outline and keep a minimum 44px target; faint separators only divide passive content.", "section": "components" },
+      { "name": "The Human Signal Rule", "body": "Presence, save state, status, rank, and compatibility are expressed in text as well as color or iconography.", "section": "components" },
+      { "name": "The Artwork Leads Rule", "body": "Supplied artwork preserves its intended aspect ratio and leads media compositions; gradients exist only to protect artwork legibility.", "section": "components" },
+      { "name": "The Social Context Rule", "body": "Taste and social components explain why content matters through named people and readable context rather than anonymous engagement totals.", "section": "components" }
     ],
     "dos": [
       "Do use the supplied brand and artwork assets instead of recreating them with generic icons.",

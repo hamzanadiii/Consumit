@@ -222,6 +222,31 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 - **Native behavior:** Preserve caller-owned input types, values, autocomplete, and other native attributes. Normalize browser autofill to the Input Field, Warm Ink, and Signal Orange caret palette.
 - **Scope:** Search adornments, password reveal, textarea, shared helper or error text, and checkbox behavior remain separate form-foundation components.
 
+### Selection and Filters
+
+- Tabs own horizontal overflow so narrow layouts keep one readable row without widening the page.
+- Chips, segmented controls, toggles, and issue selectors use the dedicated control outline; faint separators are never used as interactive boundaries.
+- Native radio and checkbox semantics remain intact. Every interactive target is at least 44px in both dimensions.
+- Selected treatments remain legible in every pointer state: dark selections keep warm-ivory text, while ivory selections keep midnight text on hover.
+
+### Identity and Signals
+
+- Avatars identify people once. Decorative portraits are hidden from assistive technology when the adjacent byline already names the member.
+- Presence, save state, status, rank, and compatibility always include explicit text for assistive technology; color and iconography only reinforce that meaning.
+- Lilac is reserved for taste overlap and social affinity. Lime remains reserved for presence and healthy states.
+
+### Media and Content Cards
+
+- Supplied artwork leads the composition. Poster, landscape, missing-art, and editorial frames preserve deliberate aspect ratios rather than stretching media.
+- Card APIs separate image, metadata, social context, progress, and action content so screens can compose the right density without duplicating card internals.
+- Gradients belong to artwork legibility only; ordinary card surfaces stay flat.
+
+### Editorial and Social
+
+- Section headings establish a clear editorial opening before controls or grids.
+- Social proof explains why a title matters through named people, reactions, and taste context rather than anonymous engagement totals.
+- Spoilers use native disclosure behavior. Member status and reaction state remain announced independently of their visual treatment.
+
 ## Do's and Don'ts
 
 ### Do:

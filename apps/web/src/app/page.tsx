@@ -2,6 +2,8 @@ import { ArrowRight, Play, Plus, Trash2 } from 'lucide-react'
 
 import { Button, GlobalNavigation, Input, Label } from '@consumit/ui'
 
+import { ComponentFamiliesCatalog } from './catalog/component-families'
+
 const variantNames = [
   'Primary',
   'Accent',
@@ -37,13 +39,16 @@ export default function Home() {
             Shared interface
           </h1>
           <p className="mt-6 max-w-[68ch] text-pretty text-base leading-7 text-copy sm:text-lg sm:leading-8">
-            Consumit&apos;s reusable language now covers action, wayfinding, and
-            the first form controls. Each component is built from the active
-            screens, then tested as a durable product primitive.
+            Consumit&apos;s reusable language now stretches from action and
+            wayfinding through selection, media, editorial, and social
+            building blocks. Each component is built from the active screens,
+            then tested as a durable product primitive.
           </p>
         </header>
 
-        <section className="mt-16 border-t border-border py-10 lg:mt-24 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
+        <ComponentFamiliesCatalog />
+
+        <section className="border-t border-border py-10 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
           <div>
             <h2 className="font-display text-2xl tracking-[-0.02em] text-ink">
               Label + input{' '}

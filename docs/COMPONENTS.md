@@ -29,13 +29,13 @@ These patterns recur across the complete active screen set and should be preserv
 | 1 | Action | Button, icon button, loading and disabled states | Complete |
 | 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Complete |
 | 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | In progress |
-| 4 | Selection | Tabs, filter chip, segmented control, toggle, issue selector | Planned |
-| 5 | Identity | Avatar, avatar group, member byline, service mark | Planned |
-| 6 | Signals | Badge, status dot, progress rail, Taste Match meter, rating display | Planned |
-| 7 | Media | Artwork frame, poster card, landscape still, empty/missing art | Planned |
-| 8 | Content cards | Content card, continue card, trending card, curated-list card | Planned |
-| 9 | Editorial | Section heading, editorial feature, mood selector, social proof | Planned |
-| 10 | Social | Activity item, trusted reaction, friend/follow row, comment card | Planned |
+| 4 | Selection | Tabs, filter chip, segmented control, toggle, issue selector | Complete |
+| 5 | Identity | Avatar, avatar group, member byline, service mark | Complete |
+| 6 | Signals | Badge, status dot, progress rail, Taste Match meter, rating display | Complete |
+| 7 | Media | Artwork frame, poster card, landscape still, empty/missing art | Complete |
+| 8 | Content cards | Content card, continue card, trending card, curated-list card | Complete |
+| 9 | Editorial | Section heading, editorial feature, mood selector, social proof | Complete |
+| 10 | Social | Activity item, trusted reaction, friend/follow row, comment card | Complete |
 | 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature | Planned |
 | 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Planned |
 | 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Planned |
@@ -93,3 +93,83 @@ Included behavior:
 - Autofill, caret, keyboard focus, and reduced-motion treatment match the Consumit palette
 
 Search adornments, password reveal, textarea, shared helper/error text, and checkbox behavior remain intentionally deferred to the next form-foundation slices.
+
+## Component 04 — Selection
+
+Source references: Search / Explore, Friends Activity, List Detail, Settings, and Report Issue.
+
+Included behavior:
+
+- Route tabs with an orange active line and native link semantics
+- Compact pressed-state filter chips with optional semantic signal dots
+- Native-radio segmented controls and issue selectors with keyboard selection
+- Controlled switch semantics for on/off settings, including disabled state
+- Visible focus, touch-safe sizing, reduced motion, and horizontal tab overflow
+
+## Component 05 — Identity
+
+Source references: Global Navigation, Friends Activity, Settings, Public Profile, and onboarding.
+
+Included behavior:
+
+- Supplied-image or initials-fallback avatars at four scales
+- Online, away, and offline presence with explicit standalone labeling
+- Capped avatar groups with a readable overflow count and group summary
+- Member bylines with optional profile destination, context, presence, and action
+- Service marks with supplied assets, status, and fallback initials
+
+## Component 06 — Signals
+
+Source references: Home, Search / Explore, Profile, List Detail, Settings, and playback support.
+
+Included behavior:
+
+- Compact semantic badges and labeled status dots
+- Clamped, accessible progress rails in the reserved signal colors
+- Taste Match meter with score, human reason, and optional social detail
+- Fractional rating display with a spoken numeric value rather than color-only meaning
+
+## Component 07 — Media
+
+Source references: Home, Search / Explore, Friends Activity, Public Profile, and title detail.
+
+Included behavior:
+
+- Portrait, landscape, square, and wide artwork frames
+- Supplied poster assets with title, metadata, badge, and destination support
+- Landscape stills with a named continuation action and accessible progress
+- A code-native geometric missing-art state that preserves the cinematic composition
+- Lazy image loading and reduced-motion artwork response
+
+## Component 08 — Content cards
+
+Source references: Home, Search / Explore, Library, Friends Activity, and Public Profile.
+
+Included behavior:
+
+- Default, saved, and watched poster cards with contextual badges and friend rings
+- Continue cards with one explicit playback destination and remaining progress
+- Ranked trending cards with member score and completion proof
+- Curated-list cards with supplied artwork collage, curator identity, and save count
+
+## Component 09 — Editorial
+
+Source references: Home, Search / Explore, Friends Activity, and List Detail.
+
+Included behavior:
+
+- Editorial section headings with restrained description and optional action
+- Cinematic editorial features with context, synopsis, actions, and social proof
+- Controlled mood selection with semantic color dots and pressed state
+- Compact social proof combining a named member group with human evidence
+
+## Component 10 — Social
+
+Source references: Friends Activity, Title Detail, List Detail, Search / Explore, and onboarding.
+
+Included behavior:
+
+- Activity items combining member context, media, title, rating, commentary, and destination
+- Trusted reactions with member identity, numeric rating, quote, and engagement
+- Friend and follow rows with clamped overlap, relationship state, and caller-owned action
+- Comment cards for member and curator roles, including native disclosure for hidden spoilers

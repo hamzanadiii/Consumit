@@ -1,0 +1,263 @@
+import type { ComponentProps, ReactNode } from 'react'
+import { Bookmark, Check } from 'lucide-react'
+
+import {
+  Avatar,
+  AvatarGroup,
+  type AvatarGroupItem,
+} from '../identity/identity'
+import { cn } from '../lib/cn'
+import {
+  ArtworkFrame,
+  LandscapeStill,
+  MissingArtwork,
+} from '../media/media'
+import { Badge, RatingDisplay } from '../signals/signals'
+
+export type ContentCardState = 'default' | 'saved' | 'watched'
+
+export type ContentCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  alt?: string | undefined
+  artworkSrc?: string | undefined
+  badge?: ReactNode | undefined
+  friends?: readonly AvatarGroupItem[] | undefined
+  href?: string | undefined
+  meta?: ReactNode | undefined
+  signal?: ReactNode | undefined
+  state?: ContentCardState | undefined
+  title: string
+}
+
+export function ContentCard({
+  alt,
+  artworkSrc,
+  badge,
+  className,
+  friends,
+  href,
+  meta,
+  signal,
+  state = 'default',
+  title,
+  ...props
+}: ContentCardProps) {
+  return (
+    <article
+      className={cn('group min-w-0', className)}
+      data-consumit-content-card
+      data-state={state}
+      {...props}
+    >
+      <ArtworkFrame alt={alt ?? `${title} poster`} src={artworkSrc}>
+        {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
+        {state === 'watched' ? (
+          <Badge className="absolute top-3 right-3" tone="lime">
+            <Check aria-hidden="true" className="mr-1 size-3" /> Watched
+          </Badge>
+        ) : null}
+        {state === 'saved' ? (
+          <span
+            className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-canvas/85 text-orange"
+          >
+            <Bookmark aria-hidden="true" className="size-4 fill-current" />
+            <span className="sr-only">Saved</span>
+          </span>
+        ) : null}
+        {friends && friends.length > 0 ? (
+          <AvatarGroup
+            className="absolute right-3 bottom-3"
+            items={friends}
+            label={`${friends.length} friends connected to ${title}`}
+            max={3}
+          />
+        ) : null}
+      </ArtworkFrame>
+      <div className="mt-3 min-w-0">
+        {href ? (
+          <a
+            className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+            href={href}
+          >
+            {title}
+          </a>
+        ) : (
+          <h3 className="font-interface text-sm font-bold text-ink">{title}</h3>
+        )}
+        {meta ? <div className="mt-1 text-xs text-muted">{meta}</div> : null}
+        {signal ? <div className="mt-2 text-xs text-copy">{signal}</div> : null}
+      </div>
+    </article>
+  )
+}
+
+export type ContinueCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  alt?: string | undefined
+  artworkSrc?: string | undefined
+  href: string
+  meta: ReactNode
+  progress: number
+  title: string
+}
+
+export function ContinueCard({
+  alt,
+  artworkSrc,
+  className,
+  href,
+  meta,
+  progress,
+  title,
+  ...props
+}: ContinueCardProps) {
+  return (
+    <article
+      className={cn('group min-w-0', className)}
+      data-consumit-continue-card
+      {...props}
+    >
+      <LandscapeStill
+        alt={alt ?? `${title} still`}
+        playHref={href}
+        playLabel={`Continue ${title}`}
+        progress={progress}
+        src={artworkSrc}
+      />
+      <a
+        className="mt-3 inline-block text-sm font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+        href={href}
+      >
+        {title}
+      </a>
+      <div className="mt-1 text-xs text-muted">{meta}</div>
+    </article>
+  )
+}
+
+export type TrendingCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  alt?: string | undefined
+  artworkSrc?: string | undefined
+  completionProof: string
+  href?: string | undefined
+  memberScore: number
+  rank: number
+  title: string
+}
+
+export function TrendingCard({
+  alt,
+  artworkSrc,
+  className,
+  completionProof,
+  href,
+  memberScore,
+  rank,
+  title,
+  ...props
+}: TrendingCardProps) {
+  return (
+    <article
+      className={cn('group relative grid min-w-0 grid-cols-[4rem_1fr]', className)}
+      data-consumit-trending-card
+      {...props}
+    >
+      <span className="sr-only">Rank {rank}</span>
+      <span
+        aria-hidden="true"
+        className="self-end font-display text-[5.5rem] leading-[0.76] text-surface-raised"
+      >
+        {rank}
+      </span>
+      <div className="relative z-10 min-w-0">
+        <ArtworkFrame alt={alt ?? `${title} poster`} src={artworkSrc}>
+          <Badge className="absolute top-3 left-3" tone="neutral">
+            {memberScore.toFixed(1)} member
+          </Badge>
+        </ArtworkFrame>
+        {href ? (
+          <a
+            className="mt-3 inline-block text-sm font-bold text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+            href={href}
+          >
+            {title}
+          </a>
+        ) : (
+          <h3 className="mt-3 text-sm font-bold text-ink">{title}</h3>
+        )}
+        <p className="mt-1 text-xs text-muted">{completionProof}</p>
+      </div>
+    </article>
+  )
+}
+
+export type CuratedListCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  artworkSources: readonly (string | undefined)[]
+  curator: string
+  curatorAvatarSrc?: string | undefined
+  href?: string | undefined
+  saves: string
+  title: string
+}
+
+export function CuratedListCard({
+  artworkSources,
+  className,
+  curator,
+  curatorAvatarSrc,
+  href,
+  saves,
+  title,
+  ...props
+}: CuratedListCardProps) {
+  return (
+    <article
+      className={cn(
+        'group overflow-hidden rounded-card border border-border bg-surface p-4',
+        className,
+      )}
+      data-consumit-curated-list-card
+      {...props}
+    >
+      <div className="grid grid-cols-4 gap-1.5 overflow-hidden rounded-control">
+        {artworkSources.slice(0, 4).map((src, index) => (
+          <div className="aspect-[2/3] overflow-hidden" key={`${src ?? 'missing'}-${index}`}>
+            {src ? (
+              <img
+                alt=""
+                className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                loading="lazy"
+                src={src}
+              />
+            ) : (
+              <MissingArtwork label="List artwork unavailable" />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[0.625rem] font-bold uppercase tracking-[0.1em] text-orange">
+            {curator}&apos;s list
+          </p>
+          {href ? (
+            <a
+              className="mt-1 block font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+              href={href}
+            >
+              {title}
+            </a>
+          ) : (
+            <h3 className="mt-1 font-display text-xl leading-tight text-ink">
+              {title}
+            </h3>
+          )}
+          <p className="mt-2 text-xs text-muted">{saves} saves</p>
+        </div>
+        <Avatar name={curator} size="sm" src={curatorAvatarSrc} />
+      </div>
+    </article>
+  )
+}
+
+export function ContentRating({ value }: { value: number }) {
+  return <RatingDisplay value={value} />
+}
