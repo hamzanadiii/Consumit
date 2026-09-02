@@ -2,23 +2,25 @@
 
 ## Working method
 
-Consumit will be built in small, reviewable increments: foundations, primitives, component details, composed sections, static screens, then behavior and platform logic. Each increment leaves a visible and verifiable result without prematurely creating the full monorepo.
+Consumit is built in small, reviewable increments: foundations, primitives, component details, composed sections, static screens, then behavior and platform logic. Each increment leaves a visible and verifiable result without prematurely creating the full target workspace.
 
 The unit of progress is the **smallest coherent slice**, not the smallest possible file. A slice includes the states and accessibility needed to judge it in context.
 
 ## Stage 0 — foundation
 
-Current stage.
+Completed for the initial workspace.
 
 - Agree on product language and scope.
 - Index active design references and deprecated concepts.
-- Resolve the technical starting point in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md).
-- Choose the first screen slice and its acceptance states.
-- Keep the repository free of app scaffolding until the foundation decision is explicit.
+- Select Bun workspaces, Next.js web, Bun/Fastify API, and the shared UI boundary.
+- Pin supported runtime and toolchain lines.
+- Keep data stores, integrations, and speculative packages out until a slice demands them.
 
-Exit criterion: the decisions blocking the first implementation slice are answered and its reference screen is named.
+Exit criterion: the workspace installs, lints, type-checks, tests, and builds from one root command.
 
 ## Stage 1 — visual foundations
+
+Current stage, paired with the first Stage 2 primitive.
 
 Implement only the foundations exercised by the first slice:
 

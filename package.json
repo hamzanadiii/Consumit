@@ -1,0 +1,31 @@
+{
+  "name": "consumit",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --parallel --workspaces --if-present dev",
+    "build": "bun run --sequential --workspaces --if-present build",
+    "lint": "bun run --sequential --workspaces --if-present lint",
+    "typecheck": "bun run --sequential --workspaces --if-present typecheck",
+    "test": "bun run --sequential --workspaces --if-present test",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+  },
+  "engines": {
+    "bun": ">=1.4.0",
+    "node": ">=24.0.0 <27"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/bun": "^1.4.0",
+    "@types/node": "^24.13.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^4.1.11"
+  }
+}

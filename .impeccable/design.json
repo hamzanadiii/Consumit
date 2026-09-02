@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-02T08:43:00Z",
+  "title": "Design System: Consumit",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Midnight Canvas",
+        "canonical": "#09090b",
+        "tonalRamp": ["#09090b", "#18181c", "#303036", "#4b4b52", "#6d6d75", "#96969d", "#c4c4c9", "#f3f3f5"]
+      },
+      "navigation": {
+        "role": "neutral",
+        "displayName": "Navigation Black",
+        "canonical": "#0b0b0e",
+        "tonalRamp": ["#0b0b0e", "#19191d", "#313137", "#4d4d54", "#707077", "#9999a0", "#c6c6cb", "#f4f4f6"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Quiet Surface",
+        "canonical": "#121216",
+        "tonalRamp": ["#121216", "#202025", "#38383f", "#53535b", "#75757e", "#9e9ea6", "#cacacf", "#f5f5f6"]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised Surface",
+        "canonical": "#19191e",
+        "tonalRamp": ["#19191e", "#27272d", "#3f3f47", "#5b5b64", "#7d7d86", "#a5a5ad", "#ceced3", "#f6f6f7"]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Input Field",
+        "canonical": "#0d0d10",
+        "tonalRamp": ["#0d0d10", "#1b1b1f", "#333339", "#4f4f56", "#717179", "#9a9aa1", "#c7c7cc", "#f4f4f6"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Ink",
+        "canonical": "#f4f0e8",
+        "tonalRamp": ["#26231f", "#433e36", "#625b50", "#82796c", "#a39a8d", "#c2b9ad", "#ded8ce", "#f4f0e8"]
+      },
+      "copy": {
+        "role": "neutral",
+        "displayName": "Warm Copy",
+        "canonical": "#c9c4bc",
+        "tonalRamp": ["#211f1c", "#3b3833", "#57534d", "#746f67", "#928c83", "#afa9a0", "#cec9c1", "#f0ece6"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Metadata",
+        "canonical": "#85817c",
+        "tonalRamp": ["#1d1c1a", "#343230", "#4d4a47", "#67635f", "#85817c", "#a6a29d", "#c9c6c1", "#eeece8"]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Faint Decoration",
+        "canonical": "#67645f",
+        "tonalRamp": ["#1b1a18", "#302e2b", "#47443f", "#5e5b56", "#79756f", "#99958f", "#c0bdb7", "#eceae6"]
+      },
+      "signal-orange": {
+        "role": "primary",
+        "displayName": "Signal Orange",
+        "canonical": "#ff5d38",
+        "tonalRamp": ["#35150e", "#5d2115", "#872f1d", "#b53d25", "#e54c2e", "#ff7252", "#ffa28d", "#ffd6cc"]
+      },
+      "social-lilac": {
+        "role": "secondary",
+        "displayName": "Social Lilac",
+        "canonical": "#a79cff",
+        "tonalRamp": ["#211d3d", "#393267", "#524993", "#6c61c0", "#887ced", "#a79cff", "#cac4ff", "#ebe9ff"]
+      },
+      "positive-lime": {
+        "role": "tertiary",
+        "displayName": "Positive Lime",
+        "canonical": "#b8d86d",
+        "tonalRamp": ["#26310f", "#40531b", "#5c7728", "#789c38", "#96c14d", "#b8d86d", "#d4e9a1", "#edf7d2"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Quiet Danger",
+        "canonical": "#8e5450",
+        "tonalRamp": ["#271313", "#452322", "#653533", "#854a46", "#a8625d", "#c9827d", "#e2aaa6", "#f5d5d2"]
+      },
+      "separator": {
+        "role": "neutral",
+        "displayName": "Warm Hairline",
+        "canonical": "rgba(255, 255, 255, 0.10)",
+        "tonalRamp": ["#171719", "#29292c", "#3f3f43", "#59595e", "#77777d", "#9b9ba1", "#c6c6ca", "#f2f2f4"]
+      },
+      "control-outline": {
+        "role": "neutral",
+        "displayName": "Perceptible Control Outline",
+        "canonical": "rgba(244, 240, 232, 0.40)",
+        "tonalRamp": ["#211f1c", "#3b3833", "#55514b", "#716c64", "#918b82", "#b1aba2", "#d2cdc5", "#f4f0e8"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Editorial Display",
+        "purpose": "Hero statements and major page titles."
+      },
+      "body": {
+        "displayName": "Interface Body",
+        "purpose": "Readable descriptions, navigation, metadata, and controls."
+      },
+      "label": {
+        "displayName": "Tracked Label",
+        "purpose": "Uppercase roles, categories, and compact state names."
+      },
+      "control": {
+        "displayName": "Interface Control",
+        "purpose": "Compact, direct action labels."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "150ms cubic-bezier(0, 0, 0.2, 1)",
+        "purpose": "Button color, border, and opacity transitions. Disabled when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The confident immediate action, such as Play or View.",
+      "html": "<button class=\"ds-button ds-button-primary\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m6 3 14 9-14 9V3Z\"/></svg>Play now</button>",
+      "css": ".ds-button{height:44px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:var(--consumit-radius-control,6px);font:500 14px/1 'DejaVu Sans',Arial,sans-serif;letter-spacing:-.01em;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out}.ds-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75}.ds-button-primary{background:var(--consumit-ink,#f4f0e8);color:var(--consumit-canvas,#09090b)}.ds-button-primary:hover{background:#fff}.ds-button-primary:active{background:var(--consumit-copy,#c9c4bc)}.ds-button:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-button:disabled{cursor:default;opacity:.45}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Accent Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "Committed flow progression, such as Create, Continue, or Submit.",
+      "html": "<button class=\"ds-button ds-button-accent\" type=\"button\">Create account</button>",
+      "css": ".ds-button{height:44px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:var(--consumit-radius-control,6px);font:500 14px/1 'DejaVu Sans',Arial,sans-serif;letter-spacing:-.01em;cursor:pointer;transition:filter 150ms ease-out,opacity 150ms ease-out}.ds-button-accent{background:var(--consumit-orange,#ff5d38);color:var(--consumit-canvas,#09090b)}.ds-button-accent:hover{filter:brightness(1.1)}.ds-button-accent:active{filter:brightness(.95)}.ds-button:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-button:disabled{cursor:default;opacity:.45}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined secondary work that remains clearly interactive on the midnight canvas.",
+      "html": "<button class=\"ds-button ds-button-secondary\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M12 5v14M5 12h14\"/></svg>Save to library</button>",
+      "css": ".ds-button{height:44px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--consumit-radius-control,6px);font:500 14px/1 'DejaVu Sans',Arial,sans-serif;letter-spacing:-.01em;cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,opacity 150ms ease-out}.ds-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75}.ds-button-secondary{border:1px solid var(--consumit-control-outline,rgba(244,240,232,.4));background:transparent;color:var(--consumit-ink,#f4f0e8)}.ds-button-secondary:hover{background:var(--consumit-surface-raised,#19191e)}.ds-button-secondary:active{background:var(--consumit-surface,#121216)}.ds-button:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-button:disabled{cursor:default;opacity:.45}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "A low-emphasis text destination with a quiet tonal response.",
+      "html": "<button class=\"ds-button ds-button-ghost\" type=\"button\">View details <svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M5 12h14m-6-6 6 6-6 6\"/></svg></button>",
+      "css": ".ds-button{height:44px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:var(--consumit-radius-control,6px);font:500 14px/1 'DejaVu Sans',Arial,sans-serif;letter-spacing:-.01em;cursor:pointer;transition:background-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out}.ds-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75}.ds-button-ghost{background:transparent;color:var(--consumit-copy,#c9c4bc)}.ds-button-ghost:hover{background:var(--consumit-surface,#121216);color:var(--consumit-ink,#f4f0e8)}.ds-button:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-button:disabled{cursor:default;opacity:.45}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "A muted destructive action that communicates consequence without alarmist saturation.",
+      "html": "<button class=\"ds-button ds-button-danger\" type=\"button\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6\"/></svg>Delete list</button>",
+      "css": ".ds-button{height:44px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:var(--consumit-radius-control,6px);font:500 14px/1 'DejaVu Sans',Arial,sans-serif;letter-spacing:-.01em;cursor:pointer;transition:filter 150ms ease-out,opacity 150ms ease-out}.ds-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.75}.ds-button-danger{background:var(--consumit-danger,#8e5450);color:var(--consumit-ink,#f4f0e8)}.ds-button-danger:hover{filter:brightness(1.1)}.ds-button-danger:active{filter:brightness(.95)}.ds-button:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-button:disabled{cursor:default;opacity:.45}@media(prefers-reduced-motion:reduce){.ds-button{transition:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Cinema After Midnight",
+    "overview": "Consumit feels cinematic, editorial, and human: a near-black room lit by warm ivory type and rare signals of color. The interface is intimate rather than glossy, with enough quiet space for artwork, taste, and other people’s perspectives to carry emotional weight.\n\nThe system pairs decisive controls with restrained surfaces. It should feel alive with other people’s taste without becoming noisy, gamified, or generically “streaming app.” Generic dashboards and glossy-tech decoration are explicit anti-references.",
+    "keyCharacteristics": [
+      "Near-black, flat surfaces with warm editorial contrast",
+      "Charter display type paired with compact DejaVu Sans controls",
+      "Square-to-gently-rounded geometry and warm-white hairlines",
+      "Rare orange action signals with semantically reserved lilac and lime",
+      "Purposeful composition that becomes distinct on mobile"
+    ],
+    "rules": [
+      { "name": "The Scarce Signal Rule", "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.", "section": "colors" },
+      { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence, health, or success. Do not swap their jobs for variety.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Serif type tells the story; sans-serif type helps the member act.", "section": "typography" },
+      { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use the supplied brand and artwork assets instead of recreating them with generic icons.",
+      "Do reserve ivory for confident immediate actions and orange for committed progression.",
+      "Do preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.",
+      "Do finish each shared component and its states before composing the next screen."
+    ],
+    "donts": [
+      "Don't introduce large pills, routine gradients, glass effects, or floating dashboard cards.",
+      "Don't use orange, lilac, or lime as interchangeable decoration.",
+      "Don't reduce every surface to a rounded card grid.",
+      "Don't treat mobile as a scaled-down desktop composition."
+    ]
+  }
+}

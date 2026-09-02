@@ -1,0 +1,55 @@
+@import 'charter-webfont/charter.css';
+@import '@fontsource/dejavu-sans/400.css';
+@import '@fontsource/dejavu-sans/700.css';
+
+:root {
+  color-scheme: dark;
+
+  --consumit-canvas: #09090b;
+  --consumit-nav: #0b0b0e;
+  --consumit-surface: #121216;
+  --consumit-surface-raised: #19191e;
+  --consumit-field: #0d0d10;
+  --consumit-ink: #f4f0e8;
+  --consumit-copy: #c9c4bc;
+  --consumit-muted: #85817c;
+  --consumit-faint: #67645f;
+  --consumit-orange: #ff5d38;
+  --consumit-lilac: #a79cff;
+  --consumit-lime: #b8d86d;
+  --consumit-danger: #8e5450;
+  --consumit-border: rgb(255 255 255 / 10%);
+  --consumit-control-outline: rgb(244 240 232 / 40%);
+
+  --consumit-font-display: 'Charter', 'Bitstream Charter', Georgia, serif;
+  --consumit-font-interface: 'DejaVu Sans', Arial, sans-serif;
+
+  --consumit-radius-micro: 4px;
+  --consumit-radius-control: 6px;
+  --consumit-radius-card: 8px;
+  --consumit-content-margin-desktop: 62px;
+  --consumit-nav-height-desktop: 84px;
+}
+
+@theme inline {
+  --color-canvas: var(--consumit-canvas);
+  --color-nav: var(--consumit-nav);
+  --color-surface: var(--consumit-surface);
+  --color-surface-raised: var(--consumit-surface-raised);
+  --color-field: var(--consumit-field);
+  --color-ink: var(--consumit-ink);
+  --color-copy: var(--consumit-copy);
+  --color-muted: var(--consumit-muted);
+  --color-faint: var(--consumit-faint);
+  --color-orange: var(--consumit-orange);
+  --color-lilac: var(--consumit-lilac);
+  --color-lime: var(--consumit-lime);
+  --color-danger: var(--consumit-danger);
+  --color-border: var(--consumit-border);
+  --color-control-outline: var(--consumit-control-outline);
+  --font-display: var(--consumit-font-display);
+  --font-interface: var(--consumit-font-interface);
+  --radius-micro: var(--consumit-radius-micro);
+  --radius-control: var(--consumit-radius-control);
+  --radius-card: var(--consumit-radius-card);
+}

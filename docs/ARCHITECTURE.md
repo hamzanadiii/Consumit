@@ -2,7 +2,7 @@
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The repository is intentionally unscaffolded; the system described here does not exist yet. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementation.
+This document organizes the target direction from the founding architecture brief. The web, API, and shared-UI workspace shells now exist; the product, data, playback, and operations systems described here do not. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
 
 ## System shape
 
@@ -27,10 +27,15 @@ Start as a monorepo and a modular system. Split deployment units only when load,
 
 ## Target stack
 
-The founding direction is:
+The selected foundation is:
 
-- Next.js web application
-- Bun/Fastify API
+- Bun 1.4 workspaces and Node 24 LTS
+- Next.js 16 web application with React 19 and Tailwind CSS 4
+- Bun/Fastify 5 API
+- Shared React UI package with Lucide icons and typed variants
+
+The longer-term direction remains:
+
 - Postgres, initially a managed option such as Neon
 - Valkey for shared cache, coordination, rate limits, sessions, and initial queues
 - Cloudflare for DNS, WAF, CDN, and edge rate limiting
@@ -38,11 +43,11 @@ The founding direction is:
 - OpenTelemetry, Prometheus, Grafana, Loki, and Sentry for initial observability
 - ClickHouse later for high-volume playback analytics
 
-Exact versions, workspace tooling, vendors, and deployment configuration are selected when scaffolding begins.
+Dependency rationale and deferred choices are recorded in [LIBRARIES.md](./LIBRARIES.md). Data, infrastructure, and deployment vendors are selected only when a product slice requires them.
 
 ## Planned workspace shape
 
-Create only the parts demanded by an implementation slice:
+Create only the parts demanded by an implementation slice. The current tree begins with `apps/web`, `apps/api`, and `packages/ui`; the following remains a destination:
 
 ```text
 apps/
