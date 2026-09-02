@@ -23,7 +23,7 @@
 
 - `class-variance-authority` defines typed visual variants.
 - `clsx` and `tailwind-merge` combine caller classes without conflicting utilities.
-- Radix Primitives are an approved option for components with complex behavior or accessibility contracts, but are not installed until such a component is selected.
+- Radix Dialog 1.1.23 provides focus management, Escape dismissal, focus restoration, and modal semantics for the global navigation's mobile panel. Other Radix primitives remain deferred until a named component needs them.
 
 ## Quality
 

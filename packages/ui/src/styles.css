@@ -28,6 +28,7 @@
   --consumit-radius-control: 6px;
   --consumit-radius-card: 8px;
   --consumit-content-margin-desktop: 62px;
+  --consumit-nav-height-mobile: 64px;
   --consumit-nav-height-desktop: 84px;
 }
 
@@ -52,4 +53,43 @@
   --radius-micro: var(--consumit-radius-micro);
   --radius-control: var(--consumit-radius-control);
   --radius-card: var(--consumit-radius-card);
+  --spacing-nav-mobile: var(--consumit-nav-height-mobile);
+  --spacing-nav-desktop: var(--consumit-nav-height-desktop);
+}
+
+@keyframes consumit-nav-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes consumit-nav-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+[data-consumit-nav-overlay][data-state='open'] {
+  animation: consumit-nav-overlay-in 180ms ease-out;
+}
+
+[data-consumit-nav-panel][data-state='open'] {
+  animation: consumit-nav-panel-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-consumit-nav-overlay],
+  [data-consumit-nav-panel] {
+    animation: none !important;
+  }
 }

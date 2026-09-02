@@ -90,6 +90,11 @@ components:
     rounded: "{rounded.control}"
     padding: "0 16px"
     height: "44px"
+  global-navigation:
+    backgroundColor: "{colors.navigation}"
+    textColor: "{colors.copy}"
+    typography: "{typography.control}"
+    height: "84px"
 ---
 
 # Design System: Consumit
@@ -165,7 +170,7 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 Desktop compositions use a 62px content edge and an 84px global navigation shell. The base unit is 4px, with the established rhythm progressing through 8, 12, 18, 24, 32, 48, and 64px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
 
-The current catalog responds at 640px and 1024px. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
+The current catalog responds at 640px and 1024px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
 
 ## Elevation & Depth
 
@@ -192,6 +197,18 @@ Buttons are compact, direct, and consequence-aware.
 - **Hover / Active:** Short 150ms color or brightness transitions; disabled actions use reduced opacity and no pointer affordance.
 - **Focus:** A two-pixel signal-orange ring with a canvas offset remains visible on every variant.
 - **Loading:** Preserve the label, prepend a spinning status glyph, expose `aria-busy`, and block repeat activation. Respect reduced-motion preferences.
+
+### Global Navigation
+
+Global navigation is the stable wayfinding shell for catalog and social surfaces, not a universal header for every product flow.
+
+- **Desktop:** Use an 84px flat Navigation Black shell with the exact supplied mark, Home / Movies / Series / Friends, a universal outlined search field, and the supplied member portrait. The active route receives a thin signal-orange baseline.
+- **Search:** Submit a GET query named `q`. The destination, initial value, and placeholder may change through the component API, but the field remains a 44px outlined global search rather than a filled or pill-shaped control.
+- **Member presence:** The portrait is supplied by the caller; the component alone owns the optional Positive Lime presence dot and keeps its visible and announced online state synchronized.
+- **Mobile:** Below 1024px, keep only the brand and a 44px menu trigger in the 64px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
+- **API:** `activeHref` owns current-route presentation, while `items` defaults to Home / Movies / Series / Friends. Brand, search, and profile destinations and content may be overridden without changing the shell anatomy; `sticky` changes positioning only.
+- **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
+- **Scope:** Exclude this shell from Watch / Embed and from the reduced authentication, onboarding, and report headers.
 
 ## Do's and Don'ts
 

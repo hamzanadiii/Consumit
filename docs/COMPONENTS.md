@@ -27,7 +27,7 @@ These patterns recur across the complete active screen set and should be preserv
 | Order | Family | Components | Status |
 |---:|---|---|---|
 | 1 | Action | Button, icon button, loading and disabled states | Complete |
-| 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Next |
+| 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Complete |
 | 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | Planned |
 | 4 | Selection | Tabs, filter chip, segmented control, toggle, issue selector | Planned |
 | 5 | Identity | Avatar, avatar group, member byline, service mark | Planned |
@@ -64,4 +64,16 @@ The Button establishes shared control height, radius, icon rhythm, type weight, 
 
 ## Component 02 — Global navigation
 
-The next slice will derive its desktop composition from the active screen set and define a separate narrow/mobile composition instead of shrinking the desktop bar. It will include the brand mark, primary destinations, active signal line, universal search entry, and profile trigger. The Watch / Embed surface will intentionally omit it.
+Source references: Home / Discover, Search, Movies, Series, Friends, Profile, Settings, and Help Center.
+
+Included behavior:
+
+- Exact 84px desktop shell and sparse 64px brand-and-menu shell
+- Supplied Consumit mark, primary destinations, and orange active-route line
+- Native GET search form with an accessible search label
+- Supplied member portrait with component-owned visual and announced presence state
+- Dedicated mobile menu with trapped focus, Escape dismissal, and trigger focus restoration
+- Optional sticky positioning and caller-owned route/search/profile destinations
+- Reduced-motion handling for the mobile overlay and panel entrance
+
+The component intentionally does not cover the reduced authentication, onboarding, report, Watch, or Embed headers. Those surfaces own purpose-specific navigation, and Watch / Embed omits the global shell entirely.
