@@ -1,0 +1,29 @@
+{
+  "project": "Consumit",
+  "viewport": "desktop",
+  "active_screen_count": 18,
+  "active_playback_screen": "consumit-watch-embed",
+  "deprecated_screens": ["consumit-player-screen"],
+  "features_excluded": ["watch rooms", "co-watching rooms", "watch parties"],
+  "formats": ["png", "svg"],
+  "screens": [
+    "consumit-home",
+    "consumit-public-profile",
+    "consumit-profile-owner",
+    "consumit-settings",
+    "consumit-title-screen",
+    "consumit-watch-embed",
+    "consumit-series-detail",
+    "consumit-search-explore",
+    "consumit-my-library",
+    "consumit-friends-activity",
+    "consumit-list-detail",
+    "consumit-auth-sign-in",
+    "consumit-auth-create-account",
+    "consumit-onboarding-history",
+    "consumit-onboarding-favorites",
+    "consumit-onboarding-circle",
+    "consumit-help-center",
+    "consumit-report-issue"
+  ]
+}

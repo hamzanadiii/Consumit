@@ -1,78 +1,32 @@
-# React + TypeScript + Vite
+# Consumit
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Consumit is a cinematic social streaming and taste-discovery product for movies and series: watch immediately, remember what you love, and discover through people whose taste you trust.
 
-Currently, two official plugins are available:
+## Project status
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The project is in **foundation stage**. The repository intentionally contains documentation and the desktop UI reference package, with no application scaffold or product implementation yet.
 
-## React Compiler
+Before coding, resolve the workspace foundation, first implementation slice, design-package versioning, and playback scope in [Open decisions](./docs/OPEN-QUESTIONS.md).
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+## Project guide
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+| Document | Purpose |
+|---|---|
+| [Domain context](./CONTEXT.md) | Canonical product language |
+| [Product foundation](./docs/PRODUCT.md) | Promise, experience loops, active surfaces, and scope |
+| [Architecture foundation](./docs/ARCHITECTURE.md) | Target modules, playback, data, security, scale, and operations |
+| [Delivery strategy](./docs/DELIVERY.md) | Small-modules-to-screens-to-logic implementation order |
+| [Open decisions](./docs/OPEN-QUESTIONS.md) | Questions that must not be guessed away |
+| [Agent working agreement](./AGENTS.md) | Task-specific reading and execution rules |
 
-## Expanding the ESLint configuration
+## Design reference
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+`design/Consumit_UI_Package/` contains active desktop PNG/SVG screens, brand assets, CSS tokens, the module registry, and page grammar.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- `manifest.json` is the authority for active and deprecated screens.
+- `docs/brand-system.md` is the visual and interaction contract.
+- `archive/custom-player-concept/` is project history and is not implementation input.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Intended implementation direction
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
+The founding direction is a monorepo with a Next.js web application, Bun/Fastify API, Postgres, and Valkey. The workspace will be scaffolded lazily after the first slice and tooling decisions are confirmed.

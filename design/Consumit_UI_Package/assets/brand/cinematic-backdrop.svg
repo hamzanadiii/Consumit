@@ -1,0 +1,13 @@
+<svg width="1440" height="520" viewBox="0 0 1440 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="520" gradientUnits="userSpaceOnUse"><stop stop-color="#09090B"/><stop offset=".42" stop-color="#17131A"/><stop offset=".72" stop-color="#3C2632"/><stop offset="1" stop-color="#743629"/></linearGradient>
+    <radialGradient id="light" cx="0" cy="0" r="1" gradientTransform="translate(1160 160) rotate(90) scale(210)" gradientUnits="userSpaceOnUse"><stop stop-color="#FF9B65" stop-opacity=".46"/><stop offset="1" stop-color="#FF5D38" stop-opacity="0"/></radialGradient>
+    <filter id="grain"><feTurbulence baseFrequency=".72" numOctaves="3" type="fractalNoise"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .09 0"/></filter>
+  </defs>
+  <rect width="1440" height="520" fill="url(#bg)"/><rect width="1440" height="520" fill="url(#light)"/>
+  <path d="M610 0h248l-46 520H548Z" fill="#12303A" fill-opacity=".35"/><path d="M786 0h244l-50 520H720Z" fill="#422447" fill-opacity=".36"/>
+  <circle cx="1160" cy="160" r="112" fill="#D8754C" fill-opacity=".24"/><circle cx="1160" cy="160" r="86" fill="none" stroke="#FFF" stroke-opacity=".12"/>
+  <path d="M1002 520 1160 190 1296 520Z" fill="#1B1116" fill-opacity=".72"/><path d="M0 410 1440 326V520H0Z" fill="#09090B" fill-opacity=".64"/>
+  <rect width="1440" height="520" filter="url(#grain)" opacity=".45"/>
+</svg>
+

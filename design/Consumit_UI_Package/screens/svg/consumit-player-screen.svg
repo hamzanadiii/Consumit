@@ -1,0 +1,73 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="room" x1="0" y1="0" x2="1440" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#101116"/><stop offset=".44" stop-color="#1B1820"/><stop offset=".7" stop-color="#4A2927"/><stop offset="1" stop-color="#14151A"/></linearGradient>
+    <linearGradient id="sky" x1="720" y1="80" x2="1350" y2="680" gradientUnits="userSpaceOnUse"><stop stop-color="#45302F"/><stop offset=".46" stop-color="#A95843"/><stop offset="1" stop-color="#1B2730"/></linearGradient>
+    <radialGradient id="sunGlow" cx="0" cy="0" r="1" gradientTransform="translate(1118 306) rotate(96) scale(285 330)" gradientUnits="userSpaceOnUse"><stop stop-color="#FF7A50" stop-opacity=".55"/><stop offset="1" stop-color="#FF6B44" stop-opacity="0"/></radialGradient>
+    <linearGradient id="topFade" x1="720" y1="0" x2="720" y2="190" gradientUnits="userSpaceOnUse"><stop stop-color="#050507" stop-opacity=".88"/><stop offset="1" stop-color="#050507" stop-opacity="0"/></linearGradient>
+    <linearGradient id="bottomFade" x1="720" y1="620" x2="720" y2="900" gradientUnits="userSpaceOnUse"><stop stop-color="#050507" stop-opacity="0"/><stop offset=".6" stop-color="#050507" stop-opacity=".76"/><stop offset="1" stop-color="#050507" stop-opacity=".96"/></linearGradient>
+    <filter id="grain"><feTurbulence baseFrequency=".72" numOctaves="3" stitchTiles="stitch" type="fractalNoise"/><feColorMatrix values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 .13 0"/></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+
+  <!-- film frame -->
+  <rect width="1440" height="900" fill="url(#room)"/>
+  <rect x="486" y="0" width="954" height="720" fill="url(#sky)"/>
+  <rect x="486" y="0" width="954" height="720" fill="url(#sunGlow)"/>
+  <circle cx="1116" cy="305" r="150" fill="#E96A48" fill-opacity=".63"/><circle cx="1116" cy="305" r="126" fill="none" stroke="#FFE6CF" stroke-opacity=".16"/>
+  <!-- rain on glass -->
+  <g opacity=".28" stroke="#FFF" stroke-width="1"><path d="M520 -30 620 730"/><path d="M575 -30 675 730"/><path d="M630 -30 730 730"/><path d="M685 -30 785 730"/><path d="M740 -30 840 730"/><path d="M795 -30 895 730"/><path d="M850 -30 950 730"/><path d="M905 -30 1005 730"/><path d="M960 -30 1060 730"/><path d="M1015 -30 1115 730"/><path d="M1070 -30 1170 730"/><path d="M1125 -30 1225 730"/><path d="M1180 -30 1280 730"/><path d="M1235 -30 1335 730"/><path d="M1290 -30 1390 730"/></g>
+  <!-- window architecture -->
+  <rect x="477" width="24" height="750" fill="#090A0D"/><rect x="862" width="20" height="720" fill="#0A0A0E"/><rect x="1260" width="20" height="720" fill="#0A0A0E"/><rect x="486" y="532" width="954" height="19" fill="#0A0A0E"/>
+  <!-- distant city -->
+  <g fill="#101419"><rect x="521" y="428" width="102" height="290"/><path d="M605 390H701V354H710V390H756V718H605Z"/><rect x="740" y="464" width="115" height="254"/><path d="M882 396H993V338H1005V396H1054V718H882Z"/><rect x="1040" y="448" width="106" height="270"/><path d="M1134 373H1204L1218 344L1231 373H1280V718H1134Z"/><rect x="1264" y="475" width="176" height="243"/></g>
+  <g fill="#E8B26E" fill-opacity=".25"><circle cx="553" cy="473" r="2"/><circle cx="593" cy="518" r="2"/><circle cx="655" cy="448" r="2"/><circle cx="693" cy="503" r="2"/><circle cx="782" cy="514" r="2"/><circle cx="827" cy="480" r="2"/><circle cx="922" cy="442" r="2"/><circle cx="970" cy="492" r="2"/><circle cx="1078" cy="505" r="2"/><circle cx="1180" cy="427" r="2"/><circle cx="1248" cy="486" r="2"/><circle cx="1320" cy="523" r="2"/></g>
+  <!-- interior foreground -->
+  <path d="M0 0H495L407 900H0Z" fill="#090A0D" fill-opacity=".72"/><path d="M0 620 415 545 670 900H0Z" fill="#090A0D"/><rect x="0" y="715" width="1440" height="185" fill="#090A0D"/>
+  <ellipse cx="930" cy="566" rx="43" ry="50" fill="#08090C"/><path d="M872 628C877 585 899 565 933 565 974 565 995 592 998 637L1012 760H854L872 628Z" fill="#08090C"/><path d="M884 654 798 696 793 724 909 685Z" fill="#08090C"/>
+  <ellipse cx="932" cy="742" rx="165" ry="29" fill="#000" fill-opacity=".35" filter="url(#soft)"/>
+  <rect width="1440" height="900" filter="url(#grain)" opacity=".35"/>
+
+  <!-- control overlays -->
+  <rect width="1440" height="205" fill="url(#topFade)"/>
+  <rect y="590" width="1440" height="310" fill="url(#bottomFade)"/>
+
+  <!-- top bar -->
+  <path d="M74 42 58 58 74 74" stroke="#F4F0E8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="98" y="54" fill="#F4F0E8" font-family="DejaVu Sans" font-size="14" font-weight="700">The Last City After Rain</text>
+  <text x="98" y="75" fill="#AAA7A1" font-family="DejaVu Sans" font-size="10">Playing from Consumit · 4K</text>
+  <g transform="translate(1340 28)" opacity=".9"><circle cx="14" cy="14" r="11" stroke="#FF5D38" stroke-width="4" stroke-dasharray="56 15" transform="rotate(12 14 14)"/><circle cx="26" cy="24" r="2.5" fill="#FF5D38"/></g>
+
+  <!-- subtitles -->
+  <rect x="366" y="680" width="708" height="44" rx="5" fill="#050507" fill-opacity=".62"/>
+  <text x="720" y="708" text-anchor="middle" fill="#F4F0E8" font-family="DejaVu Sans" font-size="18" font-weight="600">Some places disappear long before anyone leaves them.</text>
+
+  <!-- chapter and time -->
+  <text x="62" y="770" fill="#F4F0E8" font-family="DejaVu Sans" font-size="11" font-weight="700">Chapter 4 · The missing street</text>
+  <text x="1378" y="770" text-anchor="end" fill="#C5C1BA" font-family="DejaVu Sans" font-size="10">42:18 / 2:08:00</text>
+
+  <!-- timeline -->
+  <rect x="62" y="789" width="1316" height="4" rx="2" fill="#FFF" fill-opacity=".18"/>
+  <rect x="62" y="789" width="436" height="4" rx="2" fill="#FF5D38"/>
+  <rect x="498" y="789" width="152" height="4" rx="2" fill="#FFF" fill-opacity=".24"/>
+  <circle cx="498" cy="791" r="7" fill="#F4F0E8" stroke="#FF5D38" stroke-width="2"/>
+
+  <!-- transport controls -->
+  <g stroke="#F4F0E8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="62" y="829" width="5" height="22" rx="1" fill="#F4F0E8" stroke="none"/><rect x="76" y="829" width="5" height="22" rx="1" fill="#F4F0E8" stroke="none"/>
+    <path d="M118 835C105 839 103 855 114 861 124 867 136 859 134 848"/><path d="M118 835 111 829M118 835 111 840"/><text x="114" y="854" fill="#F4F0E8" stroke="none" font-family="DejaVu Sans" font-size="8" font-weight="700">10</text>
+    <path d="M178 835C191 839 193 855 182 861 172 867 160 859 162 848"/><path d="M178 835 185 829M178 835 185 840"/><text x="171" y="854" fill="#F4F0E8" stroke="none" font-family="DejaVu Sans" font-size="8" font-weight="700">10</text>
+    <path d="M220 839H228L239 831V860L228 852H220Z"/><path d="M245 840C251 845 251 852 245 857"/><path d="M251 835C261 843 261 854 251 862"/>
+  </g>
+  <rect x="277" y="846" width="88" height="3" rx="1.5" fill="#FFF" fill-opacity=".2"/><rect x="277" y="846" width="56" height="3" rx="1.5" fill="#F4F0E8"/><circle cx="333" cy="847.5" r="4.5" fill="#F4F0E8"/>
+  <text x="390" y="849" fill="#AAA7A1" font-family="DejaVu Sans" font-size="10">English audio</text>
+
+  <!-- right controls -->
+  <g fill="none" stroke="#F4F0E8" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="1124" y="830" width="31" height="21" rx="4"/><path d="M1132 837H1147M1132 844H1143"/>
+    <circle cx="1194" cy="841" r="12"/><path d="M1189 836C1191 832 1198 832 1200 836M1189 846C1192 849 1197 849 1200 846"/>
+    <circle cx="1255" cy="841" r="10"/><circle cx="1255" cy="841" r="3"/><path d="M1255 826V831M1255 851V856M1240 841H1245M1265 841H1270M1244 830 1248 834M1262 848 1266 852M1266 830 1262 834M1248 848 1244 852"/>
+    <rect x="1300" y="830" width="28" height="21" rx="2"/><rect x="1305" y="835" width="18" height="11" rx="1"/>
+    <path d="M1360 837V830H1367M1378 837V830H1371M1360 845V852H1367M1378 845V852H1371"/>
+  </g>
+  <text x="1130" y="872" fill="#FF5D38" font-family="DejaVu Sans" font-size="8" font-weight="700">SUBTITLES</text>
+</svg>

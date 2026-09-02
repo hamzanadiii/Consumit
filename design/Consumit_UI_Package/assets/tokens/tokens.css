@@ -1,0 +1,26 @@
+:root {
+  --consumit-canvas: #09090b;
+  --consumit-nav: #0b0b0e;
+  --consumit-surface: #121216;
+  --consumit-surface-raised: #19191e;
+  --consumit-field: #0d0d10;
+  --consumit-ink: #f4f0e8;
+  --consumit-copy: #c9c4bc;
+  --consumit-muted: #85817c;
+  --consumit-faint: #67645f;
+  --consumit-orange: #ff5d38;
+  --consumit-lilac: #a79cff;
+  --consumit-lime: #b8d86d;
+  --consumit-danger: #8e5450;
+
+  --consumit-font-display: "Bitstream Charter", Georgia, serif;
+  --consumit-font-interface: "DejaVu Sans", Arial, sans-serif;
+
+  --consumit-radius-micro: 4px;
+  --consumit-radius-control: 6px;
+  --consumit-radius-card: 8px;
+  --consumit-border: rgba(255, 255, 255, 0.10);
+  --consumit-content-margin-desktop: 62px;
+  --consumit-nav-height-desktop: 84px;
+}
+
