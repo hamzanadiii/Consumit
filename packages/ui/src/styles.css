@@ -93,3 +93,10 @@
     animation: none !important;
   }
 }
+
+[data-consumit-input]:autofill,
+[data-consumit-input]:-webkit-autofill {
+  box-shadow: 0 0 0 1000px var(--consumit-field) inset;
+  -webkit-text-fill-color: var(--consumit-ink);
+  caret-color: var(--consumit-orange);
+}

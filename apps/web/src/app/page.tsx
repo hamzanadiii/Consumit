@@ -1,6 +1,6 @@
 import { ArrowRight, Play, Plus, Trash2 } from 'lucide-react'
 
-import { Button, GlobalNavigation } from '@consumit/ui'
+import { Button, GlobalNavigation, Input, Label } from '@consumit/ui'
 
 const variantNames = [
   'Primary',
@@ -37,13 +37,114 @@ export default function Home() {
             Shared interface
           </h1>
           <p className="mt-6 max-w-[68ch] text-pretty text-base leading-7 text-copy sm:text-lg sm:leading-8">
-            Consumit&apos;s reusable language now has its action foundation and
-            global wayfinding. Each component is built from the active screens,
-            then tested as a durable product primitive.
+            Consumit&apos;s reusable language now covers action, wayfinding, and
+            the first form controls. Each component is built from the active
+            screens, then tested as a durable product primitive.
           </p>
         </header>
 
         <section className="mt-16 border-t border-border py-10 lg:mt-24 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
+          <div>
+            <h2 className="font-display text-2xl tracking-[-0.02em] text-ink">
+              Label + input{' '}
+              <span className="font-interface text-xs font-bold tracking-[0.12em] text-orange">
+                03.1
+              </span>
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted">
+              Persistent context and a quiet 52px field across empty, filled,
+              invalid, and unavailable states.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:mt-0">
+            <div className="border-b border-border pb-8">
+              <p className="mb-5 text-xs uppercase tracking-[0.12em] text-muted">
+                Empty
+              </p>
+              <div className="max-w-[27rem]">
+                <Label htmlFor="catalog-display-name">Display name</Label>
+                <Input
+                  className="mt-2"
+                  id="catalog-display-name"
+                  placeholder="What should people call you?"
+                />
+              </div>
+            </div>
+
+            <div className="border-b border-border pb-8">
+              <p className="mb-5 text-xs uppercase tracking-[0.12em] text-muted">
+                Populated
+              </p>
+              <div className="max-w-[27rem]">
+                <Label htmlFor="catalog-email">Email</Label>
+                <Input
+                  autoComplete="email"
+                  className="mt-2"
+                  defaultValue="hamza@example.com"
+                  id="catalog-email"
+                  type="email"
+                />
+              </div>
+            </div>
+
+            <div className="border-b border-border pb-8">
+              <p className="mb-5 text-xs uppercase tracking-[0.12em] text-muted">
+                Read-only
+              </p>
+              <div className="max-w-[27rem]">
+                <Label htmlFor="catalog-location">Location</Label>
+                <Input
+                  className="mt-2"
+                  defaultValue="Rabat, Morocco"
+                  id="catalog-location"
+                  readOnly
+                />
+              </div>
+            </div>
+
+            <div className="border-b border-border pb-8">
+              <p className="mb-5 text-xs uppercase tracking-[0.12em] text-muted">
+                Invalid
+              </p>
+              <div className="max-w-[27rem]">
+                <Label htmlFor="catalog-username">Username</Label>
+                <Input
+                  aria-describedby="catalog-username-error"
+                  aria-invalid="true"
+                  className="mt-2"
+                  defaultValue="ham za"
+                  id="catalog-username"
+                />
+                <p
+                  className="mt-2 text-xs leading-5 text-copy"
+                  id="catalog-username-error"
+                >
+                  Use letters, numbers, or underscores—no spaces.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-b border-border pb-8">
+              <p className="mb-5 text-xs uppercase tracking-[0.12em] text-muted">
+                Disabled
+              </p>
+              <div className="max-w-[27rem]">
+                <Label className="text-muted" htmlFor="catalog-service">
+                  Imported account
+                </Label>
+                <Input
+                  className="mt-2"
+                  defaultValue="Netflix"
+                  disabled
+                  id="catalog-service"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-border py-10 lg:grid lg:grid-cols-[16rem_1fr] lg:gap-12">
           <div>
             <p className="text-xs uppercase tracking-[0.14em] text-orange">
               Component 02

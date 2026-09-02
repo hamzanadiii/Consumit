@@ -28,7 +28,7 @@ These patterns recur across the complete active screen set and should be preserv
 |---:|---|---|---|
 | 1 | Action | Button, icon button, loading and disabled states | Complete |
 | 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Complete |
-| 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | Planned |
+| 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | In progress |
 | 4 | Selection | Tabs, filter chip, segmented control, toggle, issue selector | Planned |
 | 5 | Identity | Avatar, avatar group, member byline, service mark | Planned |
 | 6 | Signals | Badge, status dot, progress rail, Taste Match meter, rating display | Planned |
@@ -77,3 +77,19 @@ Included behavior:
 - Reduced-motion handling for the mobile overlay and panel entrance
 
 The component intentionally does not cover the reduced authentication, onboarding, report, Watch, or Embed headers. Those surfaces own purpose-specific navigation, and Watch / Embed omits the global shell entirely.
+
+## Component 03 — Form foundation
+
+### 03.1 Label + Input
+
+Source references: Create Account, Sign In, Settings, and Report Issue.
+
+Included behavior:
+
+- Persistent uppercase label with caller-owned native association
+- 52px text field with the shared field surface and control radius
+- Empty, populated, hover, focus, invalid, read-only, and disabled styling
+- Native input attributes, autocomplete, validation, and accessible descriptions remain caller-owned
+- Autofill, caret, keyboard focus, and reduced-motion treatment match the Consumit palette
+
+Search adornments, password reveal, textarea, shared helper/error text, and checkbox behavior remain intentionally deferred to the next form-foundation slices.

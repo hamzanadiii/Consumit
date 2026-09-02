@@ -210,6 +210,18 @@ Global navigation is the stable wayfinding shell for catalog and social surfaces
 - **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
 - **Scope:** Exclude this shell from Watch / Embed and from the reduced authentication, onboarding, and report headers.
 
+### Label and Input
+
+Labels and inputs form one quiet, native-first control contract while remaining independently composable.
+
+- **Label:** Keep context visible above the field in 12px, 700-weight uppercase DejaVu Sans with `0.12em` tracking and Warm Copy color. The caller owns `htmlFor` / `id` association.
+- **Input:** Use a native input at exactly 52px high with the 6px control radius, Input Field surface, Warm Ink text, and the perceptible control outline.
+- **Focus:** Keyboard focus changes the boundary to Signal Orange and adds a visible two-pixel orange ring separated from the field by the Midnight Canvas. Remove the transition for reduced motion.
+- **Invalid:** `aria-invalid="true"` changes the boundary and focus ring to Quiet Danger. The caller owns validation, `aria-describedby`, and message content.
+- **Read-only / Disabled:** Read-only fields move to Quiet Surface while preserving legibility. Disabled fields use the same surface with muted text, reduced opacity, and an unavailable cursor.
+- **Native behavior:** Preserve caller-owned input types, values, autocomplete, and other native attributes. Normalize browser autofill to the Input Field, Warm Ink, and Signal Orange caret palette.
+- **Scope:** Search adornments, password reveal, textarea, shared helper or error text, and checkbox behavior remain separate form-foundation components.
+
 ## Do's and Don'ts
 
 ### Do:
