@@ -129,7 +129,7 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 ### Tertiary
 
-- **Positive Lime:** Presence, health, success, and availability only.
+- **Positive Lime:** Presence and healthy status only.
 - **Quiet Danger:** Destructive actions without alarmist saturation.
 
 ### Neutral
@@ -144,7 +144,9 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 **The Scarce Signal Rule.** Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.
 
-**The Semantic Accent Rule.** Lilac means social or taste context, and lime means presence, health, or success. Do not swap their jobs for variety.
+**The Semantic Accent Rule.** Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.
+
+**The Operational Status Rule.** Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present.
 
 ## Typography
 
@@ -171,6 +173,8 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 Desktop compositions use a 62px content edge and an 84px global navigation shell. The base unit is 4px, with the established rhythm progressing through 8, 12, 18, 24, 32, 48, and 64px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
 
 The current catalog responds at 640px and 1024px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
+
+Authentication, onboarding, report, and Watch / Embed use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 44px high.
 
 ## Elevation & Depth
 
@@ -247,6 +251,73 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 - Social proof explains why a title matters through named people, reactions, and taste context rather than anonymous engagement totals.
 - Spoilers use native disclosure behavior. Member status and reaction state remain announced independently of their visual treatment.
 
+### Profile and Taste Surfaces
+
+Profile surfaces are living taste spaces rather than account summaries.
+
+- **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then relationship actions. Statistics support the person; they do not become the headline.
+- **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.
+- **Diary row:** Keep date, artwork, title, rating, watch context, optional personal note, and destination action in separate readable slots. On narrow screens the action follows the content instead of compressing it.
+- **Taste signature:** Use one editorial sentence as the lead, followed by explicitly named taste worlds and restrained supporting behavior.
+
+**The Human Reason Rule.** Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.
+
+### Title and Series Surfaces
+
+- **Title masthead:** Make one cinematic promise with artwork, context, display title, metadata, synopsis, and a compact action cluster. Taste match and named social proof support that promise without competing with it.
+- **Member pulse:** Present the numeric rating and count accessibly; the distribution is secondary evidence and remains decorative to assistive technology.
+- **Season and episode choice:** Use a native season select with a visible label. Each episode row gives state first, then title and evidence, then a distinct action; progress is announced independently and never replaces the action label.
+- **Cast card:** Preserve the portrait ratio, identify the person once, and keep character or role subordinate to the name.
+
+**The Single Promise Rule.** A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.
+
+### Library and List Surfaces
+
+- **Library toolbar:** Keep in-library search, filters, and sort or view controls as distinct regions that can wrap without losing their labels or order.
+- **Saved title card:** Separate saved state, contextual badge, watch progress, metadata, personal or social signal, and destination. Progress uses orange and includes a textual equivalent.
+- **Ordered title row:** Preserve curator rank and note as authored evidence. Match, friend proof, and the title action remain separate; search and filtering must not silently reorder the list.
+- **Curator panel:** Name owners and collaborators with their roles and contribution detail before descriptive tags.
+
+**The State, Evidence, Action Rule.** Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.
+
+### Authentication and Onboarding
+
+- **Authentication shell:** Use a cinematic split at large widths and a focused form panel at small widths. Ask only for account essentials, preserve email access beside social providers, and place privacy or control language beside the decision it explains.
+- **Authentication field:** Keep a persistent label, optional contextual action, native input, and a single associated helper or error line. Validation text uses Warm Copy rather than turning the entire form into an alarm.
+- **Onboarding header:** Use the supplied mark, semantic step count, progress rail, and optional skip. The short mobile label may change to “Skip,” but visibility and touch-safe height do not.
+- **Onboarding choices:** Import options name what moves, the expected effort, and privacy implications. Selectable titles remain native checkboxes; member suggestions explain overlap and taste before asking for a follow.
+
+**The Reduced Shell Rule.** Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.
+
+### Settings and Support
+
+- **Settings rail:** Keep member identity and durable destinations together; mark the current destination semantically and with the orange selection line.
+- **Settings section:** Group preferences by human consequence. Each row pairs a plain label and consequence with one control instead of exposing implementation language.
+- **Source health:** Always render a textual health label beside its dot. Healthy uses Positive Lime, slow uses Warm Copy, and unavailable uses Muted Metadata.
+- **Diagnostic evidence:** Evidence upload remains an explicit native file choice with accepted formats, size guidance, and visible focus. Diagnostic consent and exact exclusions belong beside the upload or submit decision.
+
+### Playback Shell
+
+Component 17 is UI-shell-only. Provider ranking, health determination, entitlement checks, and switching behavior remain application logic behind the provider-adapter seam.
+
+- **Watch header:** Use the supplied Consumit mark, back destination, title context, active source status, and an explicit exit. Do not restore global navigation inside watch.
+- **Embed frame:** The authorized external provider owns all playback controls inside the frame. Consumit owns navigation around it, source-switching UI, recovery, report routing, and plain safety language.
+- **Source selector:** Use controlled native radio rows. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable.
+- **Composition contract:** The selected source, watch-header status, frame status, and active source detail update from the same application state. A visual selection must never disagree with the source reported as loaded.
+
+**The Provider Boundary Rule.** Consumit never draws playback controls over an external embed; it owns the safe shell, source choice, recovery, reporting, and exit around that provider-controlled frame.
+
+**The Synchronized Watch State Rule.** Source selection, watch status, frame status, and active detail always describe the same application state.
+
+### Global Finish
+
+- **Empty state:** Name the quiet condition, explain what will appear or change, and offer one relevant next action when recovery is possible.
+- **Loading state:** Announce the affected content through a status role, keep placeholders subordinate, and stop spinners and pulses when reduced motion is requested.
+- **Error state:** Name what failed, protect the member’s understanding of what remains safe, add useful diagnostic detail, and provide a direct recovery action.
+- **Footer:** End standard pages with restrained brand presence, support and legal destinations, and copyright; keep every link touch-safe and keyboard-visible.
+
+**The Honest Recovery Rule.** Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -255,6 +326,8 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 - **Do** reserve ivory for confident immediate actions and orange for committed progression.
 - **Do** preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.
 - **Do** finish each shared component and its states before composing the next screen.
+- **Do** keep playback selection, header status, frame status, and active source detail synchronized from one application state.
+- **Do** explain empty, loading, and error states in terms of member impact and the next useful recovery.
 
 ### Don't:
 
@@ -262,3 +335,5 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 - **Don't** use orange, lilac, or lime as interchangeable decoration.
 - **Don't** reduce every surface to a rounded card grid.
 - **Don't** treat mobile as a scaled-down desktop composition.
+- **Don't** synthesize the Consumit mark with styled text in reduced branded headers or hide onboarding skip on mobile.
+- **Don't** put provider ranking, health, entitlement, or switching logic inside Component 17, or draw Consumit playback controls over an external embed.

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-02T18:30:00Z",
+  "generatedAt": "2026-09-02T23:34:37Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -187,6 +187,30 @@
       "description": "A persistent tracked label paired with a quiet 52px native field across empty, filled, invalid, read-only, and disabled states.",
       "html": "<label class=\"ds-label\" for=\"display-name\">Display name</label><input class=\"ds-input\" id=\"display-name\" name=\"displayName\" type=\"text\" autocomplete=\"name\" placeholder=\"What should people call you?\" />",
       "css": ".ds-label{display:block;color:var(--consumit-copy,#c9c4bc);font:700 12px/20px 'DejaVu Sans',Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase}.ds-input{box-sizing:border-box;display:block;width:100%;min-width:0;height:52px;margin-top:8px;padding:0 16px;border:1px solid var(--consumit-control-outline,rgba(244,240,232,.4));border-radius:var(--consumit-radius-control,6px);outline:0;background:var(--consumit-field,#0d0d10);color:var(--consumit-ink,#f4f0e8);font:400 14px/1 'DejaVu Sans',Arial,sans-serif;transition:background-color 150ms ease-out,border-color 150ms ease-out,box-shadow 150ms ease-out}.ds-input::placeholder{color:var(--consumit-muted,#85817c)}.ds-input:hover{border-color:rgba(244,240,232,.6)}.ds-input:focus-visible{border-color:var(--consumit-orange,#ff5d38);box-shadow:0 0 0 1px var(--consumit-canvas,#09090b),0 0 0 3px rgba(255,93,56,.3)}.ds-input[aria-invalid=true]{border-color:var(--consumit-danger,#8e5450)}.ds-input[aria-invalid=true]:focus-visible{border-color:var(--consumit-danger,#8e5450);box-shadow:0 0 0 1px var(--consumit-canvas,#09090b),0 0 0 3px rgba(142,84,80,.4)}.ds-input:read-only{background:var(--consumit-surface,#121216)}.ds-input:disabled{cursor:not-allowed;border-color:var(--consumit-border,rgba(255,255,255,.1));background:var(--consumit-surface,#121216);color:var(--consumit-muted,#85817c);opacity:.6}.ds-input:-webkit-autofill{box-shadow:0 0 0 1000px var(--consumit-field,#0d0d10) inset;-webkit-text-fill-color:var(--consumit-ink,#f4f0e8);caret-color:var(--consumit-orange,#ff5d38)}@media(prefers-reduced-motion:reduce){.ds-input{transition:none}}"
+    },
+    {
+      "name": "Taste Compatibility Panel",
+      "kind": "custom",
+      "refersTo": "profile-compatibility",
+      "description": "A named relationship, overlap score, human reason, and mutual context presented as one taste explanation.",
+      "html": "<aside class=\"ds-compatibility\" aria-label=\"Taste compatibility with Hamza\"><p class=\"ds-compatibility-label\">YOU + HAMZA</p><p class=\"ds-compatibility-score\"><strong>87%</strong><span>taste overlap</span></p><p class=\"ds-compatibility-reason\">You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves.</p><p class=\"ds-compatibility-mutuals\">12 mutual friends · 46 shared favorites</p></aside>",
+      "css": ".ds-compatibility{max-width:420px;padding:20px;border:1px solid var(--consumit-border,rgba(255,255,255,.1));border-radius:var(--consumit-radius-card,8px);background:var(--consumit-surface,#121216);font-family:'DejaVu Sans',Arial,sans-serif}.ds-compatibility-label{margin:0;color:var(--consumit-orange,#ff5d38);font-size:12px;font-weight:700;letter-spacing:.12em}.ds-compatibility-score{display:flex;align-items:baseline;gap:8px;margin:16px 0 0}.ds-compatibility-score strong{color:var(--consumit-ink,#f4f0e8);font:400 48px/1 Charter,'Bitstream Charter',Georgia,serif}.ds-compatibility-score span{color:var(--consumit-copy,#c9c4bc);font-size:14px;font-weight:700}.ds-compatibility-reason{max-width:46ch;margin:16px 0 0;color:var(--consumit-muted,#85817c);font-size:14px;line-height:24px}.ds-compatibility-mutuals{margin:20px 0 0;padding-top:16px;border-top:1px solid var(--consumit-border,rgba(255,255,255,.1));color:var(--consumit-muted,#85817c);font-size:12px}"
+    },
+    {
+      "name": "Episode Row",
+      "kind": "card",
+      "refersTo": "title-episode-row",
+      "description": "A series row that separates continuation state, episode evidence, progress, and the next action.",
+      "html": "<article class=\"ds-episode\"><div class=\"ds-episode-art\" aria-hidden=\"true\"></div><div class=\"ds-episode-copy\"><p class=\"ds-episode-status\">CONTINUE · EPISODE 4</p><h3>Glass Teeth</h3><p class=\"ds-episode-meta\">52 min · 31% watched</p><p class=\"ds-episode-description\">Mina follows a violet reflection into an apartment that does not exist by day.</p><div class=\"ds-episode-progress\" role=\"progressbar\" aria-label=\"Glass Teeth watched\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"31\"><span></span></div></div><button class=\"ds-episode-action\" type=\"button\">Continue</button></article>",
+      "css": ".ds-episode{display:grid;grid-template-columns:144px minmax(0,1fr) auto;align-items:center;gap:16px;padding:12px;border:1px solid var(--consumit-border,rgba(255,255,255,.1));border-radius:var(--consumit-radius-card,8px);background:var(--consumit-surface,#121216);font-family:'DejaVu Sans',Arial,sans-serif}.ds-episode-art{aspect-ratio:16/9;border-radius:var(--consumit-radius-control,6px);background:linear-gradient(135deg,#231a37,#6d477c 48%,#19191e 49%)}.ds-episode-copy{min-width:0}.ds-episode-status{margin:0;color:var(--consumit-orange,#ff5d38);font-size:11px;font-weight:700;letter-spacing:.12em}.ds-episode h3{margin:4px 0 0;color:var(--consumit-ink,#f4f0e8);font:400 24px/1.25 Charter,'Bitstream Charter',Georgia,serif}.ds-episode-meta{margin:4px 0 0;color:var(--consumit-muted,#85817c);font-size:12px}.ds-episode-description{margin:8px 0 0;color:var(--consumit-copy,#c9c4bc);font-size:12px;line-height:20px}.ds-episode-progress{max-width:256px;height:4px;margin-top:12px;background:var(--consumit-surface-raised,#19191e)}.ds-episode-progress span{display:block;width:31%;height:100%;background:var(--consumit-orange,#ff5d38)}.ds-episode-action{min-height:44px;padding:0 16px;border:0;border-radius:var(--consumit-radius-control,6px);background:var(--consumit-ink,#f4f0e8);color:var(--consumit-canvas,#09090b);font:700 14px/1 'DejaVu Sans',Arial,sans-serif;cursor:pointer}.ds-episode-action:hover{background:#fff}.ds-episode-action:focus-visible{outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}@media(max-width:639px){.ds-episode{grid-template-columns:1fr}.ds-episode-action{justify-self:start}}"
+    },
+    {
+      "name": "Playback Source Selector",
+      "kind": "custom",
+      "refersTo": "playback-source-selector",
+      "description": "Controlled native radio rows for application-owned source selection, explicit status, and visible keyboard focus.",
+      "html": "<fieldset class=\"ds-source-selector\"><legend>Playback source</legend><p class=\"ds-source-description\">If playback fails, switch sources without leaving the film.</p><label class=\"ds-source-row\"><input type=\"radio\" name=\"source-preview\" value=\"one\" checked><span class=\"ds-source-dot ds-source-healthy\" aria-hidden=\"true\"></span><span class=\"ds-source-copy\"><strong>Source 1</strong><small>Active · Recommended</small></span><span class=\"ds-source-check\" aria-hidden=\"true\">✓</span></label><label class=\"ds-source-row\"><input type=\"radio\" name=\"source-preview\" value=\"three\"><span class=\"ds-source-dot ds-source-checking\" aria-hidden=\"true\"></span><span class=\"ds-source-copy\"><strong>Source 3</strong><small>Checking availability</small></span><span class=\"ds-source-check\" aria-hidden=\"true\">✓</span></label></fieldset>",
+      "css": ".ds-source-selector{max-width:320px;padding:20px;border:1px solid var(--consumit-border,rgba(255,255,255,.1));border-radius:var(--consumit-radius-card,8px);background:var(--consumit-surface,#121216);font-family:'DejaVu Sans',Arial,sans-serif}.ds-source-selector legend{padding:0 4px;color:var(--consumit-ink,#f4f0e8);font-size:16px;font-weight:700}.ds-source-description{margin:0 0 20px;color:var(--consumit-muted,#85817c);font-size:12px;line-height:20px}.ds-source-row{position:relative;display:flex;min-height:64px;align-items:center;gap:12px;margin-top:8px;padding:0 16px;border:1px solid var(--consumit-control-outline,rgba(244,240,232,.4));border-radius:var(--consumit-radius-control,6px);cursor:pointer;transition:background-color 150ms ease-out}.ds-source-row:hover{background:var(--consumit-surface-raised,#19191e)}.ds-source-row:has(input:checked){border-color:var(--consumit-orange,#ff5d38);background:var(--consumit-surface-raised,#19191e)}.ds-source-row:has(input:focus-visible){outline:2px solid var(--consumit-orange,#ff5d38);outline-offset:2px}.ds-source-row input{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-source-dot{width:10px;height:10px;flex:none;border-radius:50%}.ds-source-healthy{background:var(--consumit-lime,#b8d86d)}.ds-source-checking{background:var(--consumit-copy,#c9c4bc)}.ds-source-copy{min-width:0;flex:1}.ds-source-copy strong,.ds-source-copy small{display:block}.ds-source-copy strong{color:var(--consumit-ink,#f4f0e8);font-size:14px}.ds-source-copy small{margin-top:4px;color:var(--consumit-muted,#85817c);font-size:12px}.ds-source-check{display:none;color:var(--consumit-orange,#ff5d38);font-size:18px}.ds-source-row:has(input:checked) .ds-source-check{display:block}@media(prefers-reduced-motion:reduce){.ds-source-row{transition:none}}"
     }
   ],
   "narrative": {
@@ -201,25 +225,37 @@
     ],
     "rules": [
       { "name": "The Scarce Signal Rule", "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.", "section": "colors" },
-      { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence, health, or success. Do not swap their jobs for variety.", "section": "colors" },
+      { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.", "section": "colors" },
+      { "name": "The Operational Status Rule", "body": "Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present.", "section": "colors" },
       { "name": "The Two Voices Rule", "body": "Serif type tells the story; sans-serif type helps the member act.", "section": "typography" },
       { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" },
       { "name": "The Perceptible Control Rule", "body": "Interactive boundaries use the dedicated control outline and keep a minimum 44px target; faint separators only divide passive content.", "section": "components" },
       { "name": "The Human Signal Rule", "body": "Presence, save state, status, rank, and compatibility are expressed in text as well as color or iconography.", "section": "components" },
       { "name": "The Artwork Leads Rule", "body": "Supplied artwork preserves its intended aspect ratio and leads media compositions; gradients exist only to protect artwork legibility.", "section": "components" },
-      { "name": "The Social Context Rule", "body": "Taste and social components explain why content matters through named people and readable context rather than anonymous engagement totals.", "section": "components" }
+      { "name": "The Social Context Rule", "body": "Taste and social components explain why content matters through named people and readable context rather than anonymous engagement totals.", "section": "components" },
+      { "name": "The Human Reason Rule", "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.", "section": "components" },
+      { "name": "The Single Promise Rule", "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.", "section": "components" },
+      { "name": "The State, Evidence, Action Rule", "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.", "section": "components" },
+      { "name": "The Reduced Shell Rule", "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.", "section": "components" },
+      { "name": "The Provider Boundary Rule", "body": "Consumit never draws playback controls over an external embed; it owns the safe shell, source choice, recovery, reporting, and exit around that provider-controlled frame.", "section": "components" },
+      { "name": "The Synchronized Watch State Rule", "body": "Source selection, watch status, frame status, and active detail always describe the same application state.", "section": "components" },
+      { "name": "The Honest Recovery Rule", "body": "Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.", "section": "components" }
     ],
     "dos": [
       "Do use the supplied brand and artwork assets instead of recreating them with generic icons.",
       "Do reserve ivory for confident immediate actions and orange for committed progression.",
       "Do preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.",
-      "Do finish each shared component and its states before composing the next screen."
+      "Do finish each shared component and its states before composing the next screen.",
+      "Do keep playback selection, header status, frame status, and active source detail synchronized from one application state.",
+      "Do explain empty, loading, and error states in terms of member impact and the next useful recovery."
     ],
     "donts": [
       "Don't introduce large pills, routine gradients, glass effects, or floating dashboard cards.",
       "Don't use orange, lilac, or lime as interchangeable decoration.",
       "Don't reduce every surface to a rounded card grid.",
-      "Don't treat mobile as a scaled-down desktop composition."
+      "Don't treat mobile as a scaled-down desktop composition.",
+      "Don't synthesize the Consumit mark with styled text in reduced branded headers or hide onboarding skip on mobile.",
+      "Don't put provider ranking, health, entitlement, or switching logic inside Component 17, or draw Consumit playback controls over an external embed."
     ]
   }
 }

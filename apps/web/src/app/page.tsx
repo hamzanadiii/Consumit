@@ -3,6 +3,7 @@ import { ArrowRight, Play, Plus, Trash2 } from 'lucide-react'
 import { Button, GlobalNavigation, Input, Label } from '@consumit/ui'
 
 import { ComponentFamiliesCatalog } from './catalog/component-families'
+import { ComponentFamiliesCatalog1118 } from './catalog/component-families-11-18'
 
 const variantNames = [
   'Primary',
@@ -39,12 +40,15 @@ export default function Home() {
             Shared interface
           </h1>
           <p className="mt-6 max-w-[68ch] text-pretty text-base leading-7 text-copy sm:text-lg sm:leading-8">
-            Consumit&apos;s reusable language now stretches from action and
-            wayfinding through selection, media, editorial, and social
-            building blocks. Each component is built from the active screens,
-            then tested as a durable product primitive.
+            Consumit&apos;s reusable language now spans the complete supplied
+            screen set—from action and wayfinding through identity, titles,
+            libraries, onboarding, settings, playback, and resilient global
+            states. Each component is built from the active screens, then
+            tested as a durable product primitive.
           </p>
         </header>
+
+        <ComponentFamiliesCatalog1118 />
 
         <ComponentFamiliesCatalog />
 

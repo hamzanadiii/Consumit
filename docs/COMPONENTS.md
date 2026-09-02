@@ -36,14 +36,14 @@ These patterns recur across the complete active screen set and should be preserv
 | 8 | Content cards | Content card, continue card, trending card, curated-list card | Complete |
 | 9 | Editorial | Section heading, editorial feature, mood selector, social proof | Complete |
 | 10 | Social | Activity item, trusted reaction, friend/follow row, comment card | Complete |
-| 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature | Planned |
-| 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Planned |
-| 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Planned |
-| 14 | Authentication | Auth shell, auth field, social auth button, trust note | Planned |
-| 15 | Onboarding | Onboarding header, import option, selectable title, member suggestion | Planned |
-| 16 | Settings and support | Settings rail/section, preference row, health summary, dropzone | Planned |
-| 17 | Playback shell | Watch header, embed frame, source selector, report, trust note | Blocked by playback decisions |
-| 18 | Global finish | Footer, empty/loading/error compositions, responsive refinements | Planned |
+| 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature | Complete |
+| 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Complete |
+| 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Complete |
+| 14 | Authentication | Auth shell, auth field, social auth button, trust note | Complete |
+| 15 | Onboarding | Onboarding header, import option, selectable title, member suggestion | Complete |
+| 16 | Settings and support | Settings rail/section, preference row, health summary, dropzone | Complete |
+| 17 | Playback shell | Watch header, embed frame, source selector, report, trust note | Complete (UI shell) |
+| 18 | Global finish | Footer, empty/loading/error compositions, responsive refinements | Complete |
 
 ## Component 01 — Button
 
@@ -173,3 +173,93 @@ Included behavior:
 - Trusted reactions with member identity, numeric rating, quote, and engagement
 - Friend and follow rows with clamped overlap, relationship state, and caller-owned action
 - Comment cards for member and curator roles, including native disclosure for hidden spoilers
+
+## Component 11 — Profile
+
+Source references: Profile Owner and Public Profile.
+
+Included behavior:
+
+- Cinematic profile masthead with identity, optional presence, biography, member statistics, background artwork, and caller-owned actions
+- Clamped compatibility panel with a readable score, human reason, mutual-member proof, and optional detail
+- Responsive diary rows that keep date, artwork, rating, note, destination, and action distinct
+- Taste signature statement with semantically colored worlds and a supporting comparison detail
+
+## Component 12 — Title and series
+
+Source references: Title Detail and Series Detail.
+
+Included behavior:
+
+- Cinematic title masthead with metadata, synopsis, action hierarchy, Taste Match reason, and social proof
+- Member pulse with a single accessible rating label and decorative distribution histogram
+- Cast cards with supplied portrait support and a restrained geometric identity fallback
+- Native season selection with caller-owned state
+- Episode rows for available, continuing, and upcoming states, including optional progress and action
+
+## Component 13 — Library and lists
+
+Source references: My Library and List Detail.
+
+Included behavior:
+
+- Native library search toolbar with caller-owned filters, sort, and view controls
+- Saved-title cards with explicit save state, optional progress, signal, badge, and destination
+- Ordered title rows with stable rank, artwork, metadata, curator quote, match evidence, and action
+- Curator panels with readable ownership, collaborator detail, list description, and tags
+
+## Component 14 — Authentication
+
+Source references: Create Account and Sign In.
+
+Included behavior:
+
+- Responsive auth shell that removes the visual story panel below desktop while preserving the task form
+- Persistent auth fields with helper or error association and caller-owned native attributes
+- Named provider actions with light and dark action treatments
+- Plain-language trust notes using semantic signals without relying on color alone
+
+## Component 15 — Onboarding
+
+Source references: Onboarding History, Favorites, and Circle.
+
+Included behavior:
+
+- Reduced onboarding header with clamped step progress and optional skip destination
+- Import and start-fresh options with benefits, state, and caller-owned actions
+- Native-checkbox selectable title cards with supplied artwork and visible keyboard state
+- Member suggestions with identity, handle, overlap, taste explanation, and relationship action
+
+## Component 16 — Settings and support
+
+Source references: Settings, Help Center, and Report Issue.
+
+Included behavior:
+
+- Settings rail with member context and semantic current-page navigation
+- Settings sections and preference rows that accept the appropriate control rather than assuming every setting is a toggle
+- Health summaries with textual healthy, slow, and unavailable states
+- Native file dropzone for screenshots and short recordings with caller-owned file constraints
+
+## Component 17 — Playback shell
+
+Source references: Watch / Embed concept, Player Screen, and Report Issue.
+
+Included behavior:
+
+- Reduced watch header with explicit back and exit destinations
+- Named, sandbox-capable embed frame with poster and unavailable fallbacks
+- Native-radio source selection with health, availability detail, and caller-owned switching logic
+- Playback recovery destination and an explicit external-provider safety warning
+- UI scope only: provider ranking, entitlement, health probing, source switching, and playback business rules remain application logic
+
+## Component 18 — Global finish
+
+Source references: all active screens.
+
+Included behavior:
+
+- Responsive global footer with brand destination, legal/help links, and caller-owned copyright
+- Empty composition with a direct activation path
+- Reduced-motion loading composition with a live status label
+- Alerting error composition that explains impact, recovery, and optional diagnostic detail
