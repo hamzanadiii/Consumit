@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { EmbedFrame, PlaybackReport, PlaybackTrustNote, SourceSelector, WatchHeader } from './playback'
+import { ConsumitPlayer } from './consumit-player'
+import { PlaybackReport, PlaybackTrustNote, SourceSelector, WatchHeader } from './playback'
 
 describe('playback shell components', () => {
   it('renders reduced watch navigation', () => {
@@ -13,10 +14,15 @@ describe('playback shell components', () => {
     expect(screen.getByRole('link', { name: 'Exit watch' })).toBeInTheDocument()
   })
 
-  it('requires a named embed frame', () => {
-    render(<EmbedFrame src="about:blank" title="Movie provider" />)
+  it('renders direct native playback without an iframe', () => {
+    const { container } = render(
+      <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
+    )
 
-    expect(screen.getByTitle('Movie provider')).toBeInTheDocument()
+    expect(container.querySelector('video')).toHaveAttribute('src', '/movie.mp4')
+    expect(container.querySelector('iframe')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: 'Playback position' })).toBeInTheDocument()
   })
 
   it('keeps source selection native and controlled', () => {

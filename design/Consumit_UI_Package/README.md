@@ -9,7 +9,7 @@ Complete desktop design package for Consumit, a cinematic streaming and social-t
 3. Profile Owner View
 4. Settings
 5. Title Detail
-6. Watch / Embed
+6. Consumit Player
 7. Series Detail
 8. Search / Explore
 9. My Library
@@ -35,12 +35,12 @@ Every active screen is available as a presentation-ready PNG and an editable SVG
 - `assets/services/` — neutral service-identification marks
 - `assets/tokens/` — implementation-ready CSS variables
 - `docs/brand-system.md` — complete design contract, component registry, and screen inventory
-- `archive/custom-player-concept/` — obsolete custom player proposal, retained only for project history
+- `archive/custom-player-concept/` — obsolete provider-embed proposal, retained only for project history
 
 ## Important product decisions
 
-- The active playback experience is `Watch / Embed`. Consumit does not place custom playback controls over provider iframes.
-- The archived custom player must not be implemented.
+- The active playback experience is `Consumit Player`. Consumit owns the accessible playback controls and media surface.
+- Authorized providers supply direct media through adapters; iframe and embed playback must not be implemented.
 - Consumit has no rooms, co-watching rooms, or watch-party features.
 - Streaming services such as Netflix and Shahid are availability preferences, not connected billing accounts.
 - The visual system is original: editorial cinema, human social proof, flat dark surfaces, and restrained orange/lilac/lime signals.

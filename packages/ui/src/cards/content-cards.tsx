@@ -156,23 +156,33 @@ export function TrendingCard({
 }: TrendingCardProps) {
   return (
     <article
-      className={cn('group relative grid min-w-0 grid-cols-[4rem_1fr]', className)}
+      className={cn('group relative min-w-0', className)}
       data-consumit-trending-card
       {...props}
     >
       <span className="sr-only">Rank {rank}</span>
-      <span
-        aria-hidden="true"
-        className="self-end font-display text-[5.5rem] leading-[0.76] text-surface-raised"
+      <div
+        className="relative min-w-0 pl-10 sm:pl-12"
+        data-consumit-trending-poster
       >
-        {rank}
-      </span>
-      <div className="relative z-10 min-w-0">
-        <ArtworkFrame alt={alt ?? `${title} poster`} src={artworkSrc}>
+        <span
+          aria-hidden="true"
+          className="absolute top-1/2 left-2 -translate-y-1/2 font-display text-[6.25rem] leading-[0.76] text-surface-raised"
+          data-consumit-trending-rank
+        >
+          {rank}
+        </span>
+        <ArtworkFrame
+          alt={alt ?? `${title} poster`}
+          className="relative z-10"
+          src={artworkSrc}
+        >
           <Badge className="absolute top-3 left-3" tone="neutral">
             {memberScore.toFixed(1)} member
           </Badge>
         </ArtworkFrame>
+      </div>
+      <div className="min-w-0 pl-10 sm:pl-12">
         {href ? (
           <a
             className="mt-3 inline-block text-sm font-bold text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"

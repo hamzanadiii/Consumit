@@ -10,10 +10,10 @@ import {
   Button,
   CastCard,
   CompatibilityPanel,
+  ConsumitPlayer,
   CuratorPanel,
   DiaryRow,
   Dropzone,
-  EmbedFrame,
   EmptyState,
   EpisodeRow,
   ErrorState,
@@ -96,6 +96,7 @@ export function ComponentFamiliesCatalog1118() {
   const [season, setSeason] = useState('2')
   const [source, setSource] = useState('source-1')
   const [diarySharing, setDiarySharing] = useState(true)
+  const [followedMembers, setFollowedMembers] = useState(['@yasmineframes'])
   const [selectedTitles, setSelectedTitles] = useState(['silent-year', 'violet-hours'])
   const activeSourceLabel =
     source === 'source-1'
@@ -112,6 +113,14 @@ export function ComponentFamiliesCatalog1118() {
     )
   }
 
+  function setMemberFollowing(handle: string, following: boolean) {
+    setFollowedMembers((current) =>
+      following
+        ? Array.from(new Set([...current, handle]))
+        : current.filter((member) => member !== handle),
+    )
+  }
+
   return (
     <>
       <section className={`${familyClasses} mt-16 lg:mt-24`} data-component-family="11">
@@ -123,7 +132,7 @@ export function ComponentFamiliesCatalog1118() {
         <div className="mt-8 min-w-0 space-y-8 lg:mt-0">
           <Specimen label="Profile masthead">
             <ProfileMasthead
-              actions={<><Button>Follow</Button><Button variant="secondary">Message</Button></>}
+              actions={<Button>Follow</Button>}
               avatarSrc="/assets/hamza-avatar.svg"
               backgroundSrc={artwork.backdrop}
               bio="Chasing films that feel like memories I never had."
@@ -320,8 +329,8 @@ export function ComponentFamiliesCatalog1118() {
           </Specimen>
           <Specimen label="Member suggestions">
             <div className="grid gap-3 lg:grid-cols-2">
-              <MemberSuggestion action={<Button>Following</Button>} detail="Noir, moral fog, patient endings" films="428 films" following handle="@yasmineframes" name="Yasmine El Idrissi" overlap={93} />
-              <MemberSuggestion action={<Button variant="secondary">Follow</Button>} detail="Architecture, memory, long silences" films="612 films" handle="@slowcuts" name="Omar Benjelloun" overlap={87} />
+              <MemberSuggestion detail="Noir, moral fog, patient endings" films="428 films" following={followedMembers.includes('@yasmineframes')} handle="@yasmineframes" name="Yasmine El Idrissi" onFollowingChange={(following) => setMemberFollowing('@yasmineframes', following)} overlap={93} />
+              <MemberSuggestion detail="Architecture, memory, long silences" films="612 films" following={followedMembers.includes('@slowcuts')} handle="@slowcuts" name="Omar Benjelloun" onFollowingChange={(following) => setMemberFollowing('@slowcuts', following)} overlap={87} />
             </div>
           </Specimen>
         </div>
@@ -364,17 +373,30 @@ export function ComponentFamiliesCatalog1118() {
 
       <section className={familyClasses} data-component-family="17">
         <FamilyHeader
-          description="A reduced watch shell owns navigation, source health, recovery, and safety while the external provider owns playback controls."
+          description="A reduced watch shell pairs source recovery with a first-party Consumit player and direct media playback."
           number="17"
           title="Playback shell"
         />
         <div className="mt-8 min-w-0 space-y-6 lg:mt-0">
           <Specimen label="Watch header">
-            <WatchHeader backHref="#title" exitHref="#title" meta="2026 · 2h 08m" status={`${activeSourceLabel} loaded`} title="The Last City After Rain" />
+            <WatchHeader backHref="#title" exitHref="#title" meta="2026 · 2h 08m" status={`${activeSourceLabel} selected`} title="The Last City After Rain" />
           </Specimen>
           <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
-            <Specimen label="Embed frame">
-              <EmbedFrame posterSrc={artwork.backdrop} status={`${activeSourceLabel} loaded · Provider controls appear inside the frame`} title="The Last City After Rain provider" />
+            <Specimen label="Consumit player">
+              <ConsumitPlayer
+                loop
+                onDurationChange={(event) => {
+                  const video = event.currentTarget
+                  if (Number.isFinite(video.duration) && video.currentTime > video.duration) video.currentTime = 0
+                }}
+                onLoadedMetadata={(event) => {
+                  if (!Number.isFinite(event.currentTarget.duration)) event.currentTarget.currentTime = Number.MAX_SAFE_INTEGER
+                }}
+                posterSrc={artwork.backdrop}
+                src="/assets/demo-playback.webm"
+                status={`${activeSourceLabel} selected · Consumit controls stay in view`}
+                title="The Last City After Rain"
+              />
             </Specimen>
             <Specimen label="Source selector">
               <SourceSelector
@@ -395,7 +417,7 @@ export function ComponentFamiliesCatalog1118() {
               <PlaybackReport description="Wrong language, broken video, or bad subtitles—we will route the report." href="#report" />
             </Specimen>
             <Specimen label="Playback trust note">
-              <PlaybackTrustNote>Consumit never asks you to install extensions or download a “player.” Close anything that does.</PlaybackTrustNote>
+              <PlaybackTrustNote>Consumit never asks you to install extensions or download software. Close anything that does.</PlaybackTrustNote>
             </Specimen>
           </div>
         </div>

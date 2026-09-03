@@ -27,7 +27,7 @@ Consumit is a media platform with a social/product layer, not a website organize
 
 ### Discover and watch
 
-`Home/Search/Profile/List -> Title -> Watch / Embed -> Progress -> Resume`
+`Home/Search/Profile/List -> Title -> Watch -> Progress -> Resume`
 
 The member sees a confident recommendation, understands the personal or social reason, opens its detail, and starts a valid source. If that source fails, Consumit offers or performs a fallback without losing progress.
 
@@ -41,7 +41,7 @@ Watching is retained independently of the provider. Explicit choices improve the
 
 `Circle activity -> Title/List/Profile -> Follow/Save/Watch -> New activity`
 
-Social activity is asynchronous and discovery-led. It does not imply live chat or synchronized viewing.
+Social activity is asynchronous and discovery-led. It does not include private or direct messaging, live chat, or synchronized viewing.
 
 ## Active desktop screen inventory
 
@@ -52,7 +52,7 @@ The design manifest defines 18 active desktop references:
 3. Profile Owner View
 4. Settings
 5. Title Detail
-6. Watch / Embed
+6. Watch
 7. Series Detail
 8. Search / Explore
 9. My Library
@@ -86,9 +86,10 @@ The active desktop home reference uses this order:
 ## Confirmed scope constraints
 
 - Watch rooms, co-watching rooms, and watch parties are excluded.
+- Private or direct messaging between members is excluded; follows, profiles, reviews, lists, and circle activity carry the social experience.
 - Streaming-service choices are availability preferences, not connected billing accounts.
-- The archived custom-player concept is not an active screen.
-- The active playback design is the focused Watch / Embed shell. Provider controls remain inside the provider frame.
+- The active playback design is the focused Watch shell with a first-party Consumit Player.
+- Playback uses authorized direct media sources; iframe and embed delivery are excluded.
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
 - Provider integrations use sources Consumit is legally and contractually permitted to expose.

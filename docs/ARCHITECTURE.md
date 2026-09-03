@@ -114,7 +114,7 @@ Every provider adapter exposes the same conceptual input and result.
 - Expiration time for temporary access.
 - Resolution latency and structured failure information.
 
-A source describes its delivery type, URL or embed reference, quality, and language. External output is untrusted and schema-validated at the adapter seam.
+A source describes its direct delivery type, URL, quality, and language. External output is untrusted and schema-validated at the adapter seam.
 
 ## Resolve lifecycle
 
@@ -209,7 +209,7 @@ Progress is stored by member and title/episode, never by provider URL.
 
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
-The founding brief describes a generalized playback controller with HLS, DASH, native video, and iframe adapters. The active design package currently commits to a Watch / Embed shell with provider-owned controls. This conflict is intentionally unresolved in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md).
+The Consumit Player owns the playback controls and native media surface. A playback controller will load authorized HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
 
 ## Data ownership
 
@@ -299,7 +299,7 @@ This is an interface inventory, not route-level implementation approval. Contrac
 - Protect URL-fetching paths from SSRF. Block loopback, private networks, metadata endpoints, internal DNS, and non-HTTP protocols; prefer explicit domain allowlists.
 - Keep secrets in environment-backed secret storage initially and rotate them. Move to a dedicated secret manager as operations mature.
 - Keep public, internal, and admin interfaces separate.
-- Direct playback or embeds must be authorized; system quality does not remove copyright, contract, or regional obligations.
+- Direct playback sources must be authorized; system quality does not remove copyright, contract, or regional obligations.
 
 ## Deployment progression
 

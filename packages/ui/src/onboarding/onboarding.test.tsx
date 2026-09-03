@@ -29,8 +29,22 @@ describe('onboarding components', () => {
   })
 
   it('renders member overlap without relying on color', () => {
-    render(<MemberSuggestion handle="@yasmineframes" name="Yasmine El Idrissi" overlap={93} />)
+    render(
+      <>
+        <MemberSuggestion
+          following
+          handle="@yasmineframes"
+          name="Yasmine El Idrissi"
+          overlap={93}
+        />
+        <MemberSuggestion handle="@slowcuts" name="Omar Benjelloun" overlap={87} />
+      </>,
+    )
 
     expect(screen.getByText('93% overlap')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Follow' })).toHaveClass('bg-ink')
+    expect(screen.getByRole('button', { name: 'Following' })).toHaveClass(
+      'border-control-outline',
+    )
   })
 })

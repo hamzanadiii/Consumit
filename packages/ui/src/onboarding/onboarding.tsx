@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Check, Minus, Plus } from 'lucide-react'
 
+import { Button } from '../button/button'
 import { Avatar } from '../identity/identity'
 import { cn } from '../lib/cn'
 import { ArtworkFrame } from '../media/media'
@@ -141,6 +142,7 @@ export type MemberSuggestionProps = Omit<ComponentProps<'article'>, 'children'> 
   following?: boolean | undefined
   handle: string
   name: string
+  onFollowingChange?: ((following: boolean) => void) | undefined
   overlap: number
 }
 
@@ -153,6 +155,7 @@ export function MemberSuggestion({
   following = false,
   handle,
   name,
+  onFollowingChange,
   overlap,
   ...props
 }: MemberSuggestionProps) {
@@ -168,7 +171,15 @@ export function MemberSuggestion({
         {detail ? <p className="mt-1 text-xs leading-5 text-muted">{detail}</p> : null}
       </div>
       <div className="shrink-0">
-        {action ?? <span className="text-xs font-bold text-copy">{following ? 'Following' : 'Suggested'}</span>}
+        {action ?? (
+          <Button
+            aria-pressed={following}
+            onClick={() => onFollowingChange?.(!following)}
+            variant={following ? 'secondary' : 'primary'}
+          >
+            {following ? 'Following' : 'Follow'}
+          </Button>
+        )}
       </div>
     </article>
   )

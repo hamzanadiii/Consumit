@@ -58,7 +58,7 @@ Compose primitives into deep, reusable product modules:
 - Search result and filter rail
 - List row and curator panel
 - Authentication form
-- Watch header, embed frame, source selector, and playback report
+- Watch header, Consumit Player, source selector, and playback report
 
 Build only sections required by the next screen. Keep sample data at the section seam so visual work does not depend on production systems.
 
@@ -71,7 +71,7 @@ Assemble screens with deterministic local fixtures before wiring application log
 1. Sign In and Create Account
 2. Home / Discover
 3. Title Detail and Series Detail
-4. Watch / Embed
+4. Watch
 5. Help Center and Report Issue
 6. Search / Explore
 7. Public Profile and Profile Owner View

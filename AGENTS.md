@@ -17,7 +17,7 @@
 - Treat external provider output as hostile and playback sources as authorized-only inputs.
 - Use deterministic fixtures for visual work until integration is the explicit purpose of the slice.
 - Add directory and package structure lazily; create each part when a slice needs it.
-- Preserve the active Watch / Embed design. The archived custom-player concept remains historical material.
+- Preserve the active Consumit Player design. Consumit owns playback controls while authorized providers supply direct media through adapters.
 
 ## Completion
 

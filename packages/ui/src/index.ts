@@ -135,18 +135,20 @@ export {
   type SelectableTitleProps,
 } from './onboarding/onboarding'
 export {
-  EmbedFrame,
   PlaybackReport,
   PlaybackTrustNote,
   SourceSelector,
   WatchHeader,
-  type EmbedFrameProps,
   type PlaybackReportProps,
   type PlaybackSource,
   type PlaybackTrustNoteProps,
   type SourceSelectorProps,
   type WatchHeaderProps,
 } from './playback/playback'
+export {
+  ConsumitPlayer,
+  type ConsumitPlayerProps,
+} from './playback/consumit-player'
 export {
   CompatibilityPanel,
   DiaryRow,

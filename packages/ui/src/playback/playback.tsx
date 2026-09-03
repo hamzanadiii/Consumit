@@ -2,7 +2,6 @@ import type { ComponentProps, ReactNode } from 'react'
 import { AlertCircle, ArrowLeft, Check, RefreshCw } from 'lucide-react'
 
 import { cn } from '../lib/cn'
-import { MissingArtwork } from '../media/media'
 
 export type WatchHeaderProps = Omit<ComponentProps<'header'>, 'children' | 'title'> & {
   backHref: string
@@ -41,52 +40,6 @@ export function WatchHeader({
       {status ? <div className="ml-auto hidden text-xs text-muted sm:block">{status}</div> : null}
       {exitHref ? <a className="ml-auto flex min-h-11 shrink-0 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-copy outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:ml-4" href={exitHref}>Exit watch</a> : null}
     </header>
-  )
-}
-
-export type EmbedFrameProps = Omit<ComponentProps<'div'>, 'children' | 'title'> & {
-  allow?: string | undefined
-  children?: ReactNode | undefined
-  posterSrc?: string | undefined
-  sandbox?: string | undefined
-  src?: string | undefined
-  status?: string | undefined
-  title: string
-}
-
-export function EmbedFrame({
-  allow,
-  children,
-  className,
-  posterSrc,
-  sandbox,
-  src,
-  status,
-  title,
-  ...props
-}: EmbedFrameProps) {
-  return (
-    <div className={cn('overflow-hidden rounded-card border border-border bg-black', className)} data-consumit-embed-frame {...props}>
-      {status ? <div className="flex min-h-11 items-center gap-2 border-b border-border px-4 text-xs text-copy"><span aria-hidden="true" className="size-2 rounded-full bg-lime" />{status}</div> : null}
-      <div className="relative aspect-video overflow-hidden">
-        {src ? (
-          <iframe
-            allow={allow}
-            allowFullScreen
-            className="size-full border-0"
-            referrerPolicy="strict-origin-when-cross-origin"
-            sandbox={sandbox}
-            src={src}
-            title={title}
-          />
-        ) : posterSrc ? (
-          <img alt={`${title} playback frame`} className="size-full object-cover" src={posterSrc} />
-        ) : (
-          <MissingArtwork label={`${title} playback unavailable`} />
-        )}
-        {children ? <div className="absolute inset-0">{children}</div> : null}
-      </div>
-    </div>
   )
 }
 

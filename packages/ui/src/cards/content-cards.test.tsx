@@ -64,4 +64,35 @@ describe('content cards', () => {
     expect(screen.getByText('8.7 member')).toBeInTheDocument()
     expect(screen.getByText("Yasmine's list")).toBeInTheDocument()
   })
+
+  it('anchors the trending rank behind the poster instead of below the card', () => {
+    const { container } = render(
+      <TrendingCard
+        completionProof="94% finished"
+        memberScore={8.7}
+        rank={1}
+        title="Sea of Names"
+      />,
+    )
+
+    const posterGroup = container.querySelector<HTMLElement>(
+      '[data-consumit-trending-poster]',
+    )
+    const rank = container.querySelector<HTMLElement>(
+      '[data-consumit-trending-rank]',
+    )
+    const card = container.querySelector<HTMLElement>(
+      '[data-consumit-trending-card]',
+    )
+
+    expect(card).toHaveClass('relative')
+    expect(posterGroup).toContainElement(rank)
+    expect(rank).toHaveClass(
+      'absolute',
+      'top-1/2',
+      'left-2',
+      '-translate-y-1/2',
+      'text-[6.25rem]',
+    )
+  })
 })

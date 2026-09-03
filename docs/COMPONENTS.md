@@ -14,7 +14,7 @@ This roadmap translates the registry in `design/Consumit_UI_Package/docs/brand-s
 
 These patterns recur across the complete active screen set and should be preserved as components are added:
 
-- **Global shell:** an 84px desktop bar with the Consumit lockup, four primary destinations, universal search, and the member avatar. Active routes use a thin orange underline. Authentication, onboarding, reporting, and Watch / Embed use purpose-specific reduced headers.
+- **Global shell:** an 84px desktop bar with the Consumit lockup, four primary destinations, universal search, and the member avatar. Active routes use a thin orange underline. Authentication, onboarding, reporting, and Watch use purpose-specific reduced headers.
 - **Page structure:** a 62px desktop edge, broad editorial hero, warm-white hairline separators, and a main-content/side-rail split for dense decision surfaces. Mobile gets a separate composition rather than a scaled desktop grid.
 - **Action hierarchy:** ivory means the confident immediate action (play, view, accept); orange advances a committed flow (submit, continue, create); outlines hold secondary actions; ghost text handles low-emphasis destinations.
 - **Semantic signals:** orange marks brand, selection, ratings, and active progress; lilac is reserved for social/taste context; lime is reserved for presence, health, and success.
@@ -42,7 +42,7 @@ These patterns recur across the complete active screen set and should be preserv
 | 14 | Authentication | Auth shell, auth field, social auth button, trust note | Complete |
 | 15 | Onboarding | Onboarding header, import option, selectable title, member suggestion | Complete |
 | 16 | Settings and support | Settings rail/section, preference row, health summary, dropzone | Complete |
-| 17 | Playback shell | Watch header, embed frame, source selector, report, trust note | Complete (UI shell) |
+| 17 | Playback shell | Watch header, Consumit Player, source selector, report, trust note | Complete (UI shell) |
 | 18 | Global finish | Footer, empty/loading/error compositions, responsive refinements | Complete |
 
 ## Component 01 — Button
@@ -76,7 +76,7 @@ Included behavior:
 - Optional sticky positioning and caller-owned route/search/profile destinations
 - Reduced-motion handling for the mobile overlay and panel entrance
 
-The component intentionally does not cover the reduced authentication, onboarding, report, Watch, or Embed headers. Those surfaces own purpose-specific navigation, and Watch / Embed omits the global shell entirely.
+The component intentionally does not cover the reduced authentication, onboarding, report, or Watch headers. Those surfaces own purpose-specific navigation, and Watch omits the global shell entirely.
 
 ## Component 03 — Form foundation
 
@@ -228,7 +228,7 @@ Included behavior:
 - Reduced onboarding header with clamped step progress and optional skip destination
 - Import and start-fresh options with benefits, state, and caller-owned actions
 - Native-checkbox selectable title cards with supplied artwork and visible keyboard state
-- Member suggestions with identity, handle, overlap, taste explanation, and relationship action
+- Member suggestions with identity, handle, overlap, taste explanation, an ivory Follow action, and an outlined Following state; direct messaging is excluded
 
 ## Component 16 — Settings and support
 
@@ -243,15 +243,15 @@ Included behavior:
 
 ## Component 17 — Playback shell
 
-Source references: Watch / Embed concept, Player Screen, and Report Issue.
+Source references: Player Screen, playback architecture, and Report Issue.
 
 Included behavior:
 
 - Reduced watch header with explicit back and exit destinations
-- Named, sandbox-capable embed frame with poster and unavailable fallbacks
+- First-party Consumit Player with a semantic video surface, poster and unavailable fallbacks, and accessible playback controls
 - Native-radio source selection with health, availability detail, and caller-owned switching logic
-- Playback recovery destination and an explicit external-provider safety warning
-- UI scope only: provider ranking, entitlement, health probing, source switching, and playback business rules remain application logic
+- Playback recovery destination and an explicit installation-safety warning
+- UI scope only: provider ranking, entitlement, health probing, source switching, streaming adapters, and playback business rules remain application logic
 
 ## Component 18 — Global finish
 

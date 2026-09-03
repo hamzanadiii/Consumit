@@ -174,7 +174,9 @@ Desktop compositions use a 62px content edge and an 84px global navigation shell
 
 The current catalog responds at 640px and 1024px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
 
-Authentication, onboarding, report, and Watch / Embed use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 44px high.
+On Home, poster-led circle and trending collections become horizontal discovery rails on narrow screens. Continue-watching cards, the editorial feature, curated lists, and the mood action stack instead, preserving a readable sequence and full-width actions without compressing their content.
+
+Authentication, onboarding, report, and Watch use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 44px high.
 
 ## Elevation & Depth
 
@@ -201,6 +203,7 @@ Buttons are compact, direct, and consequence-aware.
 - **Hover / Active:** Short 150ms color or brightness transitions; disabled actions use reduced opacity and no pointer affordance.
 - **Focus:** A two-pixel signal-orange ring with a canvas offset remains visible on every variant.
 - **Loading:** Preserve the label, prepend a spinning status glyph, expose `aria-busy`, and block repeat activation. Respect reduced-motion preferences.
+- **Follow relationship:** On discovery surfaces, “Follow” uses the warm-ivory primary treatment. Once active, “Following” steps back to the dark outlined secondary treatment and exposes the state with `aria-pressed`.
 
 ### Global Navigation
 
@@ -212,7 +215,7 @@ Global navigation is the stable wayfinding shell for catalog and social surfaces
 - **Mobile:** Below 1024px, keep only the brand and a 44px menu trigger in the 64px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
 - **API:** `activeHref` owns current-route presentation, while `items` defaults to Home / Movies / Series / Friends. Brand, search, and profile destinations and content may be overridden without changing the shell anatomy; `sticky` changes positioning only.
 - **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
-- **Scope:** Exclude this shell from Watch / Embed and from the reduced authentication, onboarding, and report headers.
+- **Scope:** Exclude this shell from Watch and from the reduced authentication, onboarding, and report headers.
 
 ### Label and Input
 
@@ -245,17 +248,35 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 - Card APIs separate image, metadata, social context, progress, and action content so screens can compose the right density without duplicating card internals.
 - Gradients belong to artwork legibility only; ordinary card surfaces stay flat.
 
+### Home Composition
+
+Home at `/` follows one deliberate discovery sequence: featured hero with Taste Match; From your circle with friend activity; Continue watching; a personalized editorial feature; Trending tonight; Lists worth stealing; mood entry points; then the footer. This order belongs to Home and is not a default strategy for title, profile, library, or operational surfaces.
+
+The pacing alternates emotional and practical decisions. A broad cinematic opening leads into trusted social discovery, a compact return-to-watch section, an editorial interruption, ranked member evidence, human curation, and a final low-friction mood choice.
+
+**The Home Cadence Rule.** Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.
+
+### Trending Card
+
+- **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral quiet in Raised Surface so it reads as one ranked silhouette with the artwork rather than a competing badge.
+- **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable.
+- **Responsive behavior:** Trending remains a horizontal discovery rail on narrow screens and resolves to the five-card desktop row at the established wide breakpoint.
+
+**The Rank Behind the Poster Rule.** A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.
+
 ### Editorial and Social
 
 - Section headings establish a clear editorial opening before controls or grids.
 - Social proof explains why a title matters through named people, reactions, and taste context rather than anonymous engagement totals.
 - Spoilers use native disclosure behavior. Member status and reaction state remain announced independently of their visual treatment.
 
+**The Social Boundary Rule.** Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.
+
 ### Profile and Taste Surfaces
 
 Profile surfaces are living taste spaces rather than account summaries.
 
-- **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then relationship actions. Statistics support the person; they do not become the headline.
+- **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then the follow action. Statistics support the person; they do not become the headline. Direct messaging is not part of the product.
 - **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.
 - **Diary row:** Keep date, artwork, title, rating, watch context, optional personal note, and destination action in separate readable slots. On narrow screens the action follows the content instead of compressing it.
 - **Taste signature:** Use one editorial sentence as the lead, followed by explicitly named taste worlds and restrained supporting behavior.
@@ -285,7 +306,7 @@ Profile surfaces are living taste spaces rather than account summaries.
 - **Authentication shell:** Use a cinematic split at large widths and a focused form panel at small widths. Ask only for account essentials, preserve email access beside social providers, and place privacy or control language beside the decision it explains.
 - **Authentication field:** Keep a persistent label, optional contextual action, native input, and a single associated helper or error line. Validation text uses Warm Copy rather than turning the entire form into an alarm.
 - **Onboarding header:** Use the supplied mark, semantic step count, progress rail, and optional skip. The short mobile label may change to “Skip,” but visibility and touch-safe height do not.
-- **Onboarding choices:** Import options name what moves, the expected effort, and privacy implications. Selectable titles remain native checkboxes; member suggestions explain overlap and taste before asking for a follow.
+- **Onboarding choices:** Import options name what moves, the expected effort, and privacy implications. Selectable titles remain native checkboxes; member suggestions explain overlap and taste before asking for a follow. “Follow” uses the confident ivory primary treatment; “Following” steps back to the outlined secondary treatment.
 
 **The Reduced Shell Rule.** Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.
 
@@ -298,23 +319,23 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Playback Shell
 
-Component 17 is UI-shell-only. Provider ranking, health determination, entitlement checks, and switching behavior remain application logic behind the provider-adapter seam.
+Component 17 is UI-shell-only. Provider ranking, health determination, entitlement checks, streaming adapters, and switching behavior remain application logic behind the provider-adapter seam.
 
 - **Watch header:** Use the supplied Consumit mark, back destination, title context, active source status, and an explicit exit. Do not restore global navigation inside watch.
-- **Embed frame:** The authorized external provider owns all playback controls inside the frame. Consumit owns navigation around it, source-switching UI, recovery, report routing, and plain safety language.
+- **Consumit Player:** Render a semantic native video surface with first-party play, seek, volume, and fullscreen controls. Authorized providers supply direct HLS, DASH, or native-media sources through the later adapter seam; iframe and embed surfaces are excluded.
 - **Source selector:** Use controlled native radio rows. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable.
-- **Composition contract:** The selected source, watch-header status, frame status, and active source detail update from the same application state. A visual selection must never disagree with the source reported as loaded.
+- **Composition contract:** The selected source, watch-header status, player status, and active source detail update from the same application state. A visual selection must never disagree with the source reported as selected.
 
-**The Provider Boundary Rule.** Consumit never draws playback controls over an external embed; it owns the safe shell, source choice, recovery, reporting, and exit around that provider-controlled frame.
+**The Player Ownership Rule.** Consumit owns the playback controls and media surface; providers supply authorized direct media through an adapter boundary and never replace the interface with an embed.
 
-**The Synchronized Watch State Rule.** Source selection, watch status, frame status, and active detail always describe the same application state.
+**The Synchronized Watch State Rule.** Source selection, watch status, player status, and active detail always describe the same application state.
 
 ### Global Finish
 
 - **Empty state:** Name the quiet condition, explain what will appear or change, and offer one relevant next action when recovery is possible.
 - **Loading state:** Announce the affected content through a status role, keep placeholders subordinate, and stop spinners and pulses when reduced motion is requested.
 - **Error state:** Name what failed, protect the member’s understanding of what remains safe, add useful diagnostic detail, and provide a direct recovery action.
-- **Footer:** End standard pages with restrained brand presence, support and legal destinations, and copyright; keep every link touch-safe and keyboard-visible.
+- **Footer:** End standard pages with the supplied Consumit mark and wordmark, support and legal destinations, and copyright; keep every link touch-safe and keyboard-visible.
 
 **The Honest Recovery Rule.** Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.
 
@@ -326,7 +347,8 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 - **Do** reserve ivory for confident immediate actions and orange for committed progression.
 - **Do** preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.
 - **Do** finish each shared component and its states before composing the next screen.
-- **Do** keep playback selection, header status, frame status, and active source detail synchronized from one application state.
+- **Do** keep Home’s section order and responsive discovery rails specific to Home.
+- **Do** keep playback selection, header status, player status, and active source detail synchronized from one application state.
 - **Do** explain empty, loading, and error states in terms of member impact and the next useful recovery.
 
 ### Don't:
@@ -335,5 +357,6 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 - **Don't** use orange, lilac, or lime as interchangeable decoration.
 - **Don't** reduce every surface to a rounded card grid.
 - **Don't** treat mobile as a scaled-down desktop composition.
+- **Don't** reuse Home’s editorial cadence as a universal page template.
 - **Don't** synthesize the Consumit mark with styled text in reduced branded headers or hide onboarding skip on mobile.
-- **Don't** put provider ranking, health, entitlement, or switching logic inside Component 17, or draw Consumit playback controls over an external embed.
+- **Don't** put provider ranking, health, entitlement, streaming-adapter, or switching logic inside Component 17, and don't introduce iframe or embed playback.

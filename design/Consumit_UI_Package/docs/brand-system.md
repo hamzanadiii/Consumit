@@ -70,11 +70,11 @@
 | Member pulse | community average, rating volume, distribution | title detail |
 | Cast card | restrained portrait, person, role | cast and crew |
 | Trusted reaction | friend identity, rating, editorial review excerpt, engagement | title detail |
-| Watch header | Consumit mark, back action, title context, exit action | iframe watch page |
-| Embed frame | responsive provider iframe boundary with no Consumit playback controls over it | loaded, loading, failed |
+| Watch header | Consumit mark, back action, title context, exit action | first-party player page |
+| Consumit Player | semantic native media surface with first-party play, seek, volume, and fullscreen controls | ready, playing, paused, unavailable |
 | Source selector | source health, selected state, recommended state, backups, reload | provider switching |
 | Playback report | concise issue explanation and report action | wrong title, broken video, subtitle issue |
-| Embed trust note | safety guidance for external provider behavior | iframe watch page |
+| Playback trust note | safety guidance for authorized direct-media playback | first-party player page |
 | Season selector | season label, episode count, release state | active season, completed season, upcoming season |
 | Episode row | episode still, number, title, runtime, synopsis, action | unwatched, in progress, watched, upcoming |
 | Series progress rail | completed count, current episode, remaining time, continue action | fresh, active, season complete |
@@ -122,7 +122,7 @@
 | Segmented privacy control | one visible choice from public, friends, or private | public, friends, private |
 | Preference toggle row | setting label, human consequence, restrained switch | on, off, unavailable |
 | Streaming service selector | service identity, selection state, availability-only explanation | selected, unselected, unavailable |
-| Embed behavior panel | source rule, source memory, failure recovery, provider-ownership note | automatic, remembered source, manual |
+| Playback behavior panel | source rule, source memory, failure recovery, adapter-boundary note | automatic, remembered source, manual |
 | Subtitle priority control | ordered language choices, reorder action, provider limitation note | populated, reordered, unavailable |
 | Help search hero | human-language search field, example query, system-health signal | idle, populated, no result |
 | Help topic card | semantic icon, problem family, answer count, destination | playback, subtitles, account, library, imports, discovery |
@@ -140,8 +140,8 @@
 - Discovery rows are editorially named and may incorporate social proof directly on cards.
 - Profile and social screens use richer text/list compositions; do not reduce everything to rounded card grids.
 - Consumit has no watch rooms, co-watching rooms, or watch-party features. Social activity supports discovery and taste, not synchronized playback.
-- During iframe playback, suppress global navigation, recommendations, reviews, friend activity, and promotional UI. The provider owns playback controls inside the frame.
-- Series detail keeps season selection and watch state outside playback. Every playable episode opens the shared Watch / Embed shell; unreleased episodes offer notifications instead.
+- During playback, suppress global navigation, recommendations, reviews, friend activity, and promotional UI. Consumit owns the controls while authorized providers supply direct media through adapters.
+- Series detail keeps season selection and watch state outside playback. Every playable episode opens the shared Consumit Player shell; unreleased episodes offer notifications instead.
 - Search results lead with one confident top match, then expose filters and mixed result types. Taste ranking and friend proof explain why results appear without pretending the query is objective.
 - My Library pulls unfinished titles above the archive, keeps saved/favorite/history/list modes in one system, and exposes filters before a large backlog becomes visual sludge.
 - Friends activity is asynchronous and discovery-led: every review, rating, watch, or list update points toward a title, list, or member. It never implies rooms, live chat, or synchronized playback.
@@ -149,7 +149,7 @@
 - Authentication uses a cinematic split shell and asks only for account essentials. Social sign-in reduces friction but never hides email signup.
 - Onboarding is optional, shows meaningful three-step progress, and only asks for choices that change the product: import history, seed taste, and seed the friend feed. The last action opens a usable home state.
 - Profile owner view preserves the public-profile composition and taste story. Editing, privacy, completeness, and profile-pulse controls are explicit owner-only states and never appear to visitors.
-- Settings uses a stable owner rail and groups controls by consequence, not implementation. Streaming subscriptions affect discovery availability; iframe source behavior, subtitle limitations, and data visibility are explained exactly where users choose them.
+- Settings uses a stable owner rail and groups controls by consequence, not implementation. Streaming subscriptions affect discovery availability; direct-source behavior, subtitle limitations, and data visibility are explained exactly where users choose them.
 - Help resolves common playback, subtitle, account, library, import, and discovery problems before escalating. Live source health sits beside playback guidance so users can distinguish a local problem from a provider problem.
 - Report Issue captures title or episode, source, browser, region, timing, and anonymous request context automatically. Diagnostic attachment remains explicit opt-in, states what is excluded, and never publishes ticket content to profiles or friend activity.
 - Mobile will be composed separately, not shrunk from desktop.
@@ -157,7 +157,7 @@
 ## Decision log
 
 - Removed viewing-room functionality globally. Affected screens: title masthead and all future playback/social surfaces.
-- Retired the custom player concept. Consumit now provides an iframe Watch / Embed shell; playback controls belong to the selected provider.
+- Retired iframe and embed playback. Consumit now provides a first-party player; authorized providers supply direct media through an adapter boundary.
 
 ## Screen inventory
 
@@ -166,7 +166,7 @@
 | Home / Discover — desktop | choose, resume, or socially discover something worth watching | Play now | full-page proposal, 1440 × 3200 |
 | Public profile — desktop | understand a member's taste and decide whether to follow | Follow | full-page proposal, 1440 × 2760 |
 | Title detail — desktop | decide whether to watch and begin playback | Play now | full-page proposal, 1440 × 2780 |
-| Watch / Embed — desktop | load a provider, recover from failures, and watch without distraction | Watch in provider frame | loaded-source proposal, 1440 × 1000 |
+| Consumit Player — desktop | load an authorized source, recover from failures, and watch without distraction | Play in Consumit | ready-source proposal, 1440 × 1000 |
 | Series detail — desktop | choose a season or episode, resume progress, and understand release timing | Continue episode | full-page proposal, 1440 × 3100 |
 | Search / Explore — desktop | describe an intent, narrow results, and open a promising title, person, or list | View top match | populated-query proposal, 1440 × 2960 |
 | My Library — desktop | resume, filter, and organize saved titles, favorites, history, and personal lists | Continue a saved title | populated-saved-tab proposal, 1440 × 3000 |
@@ -178,7 +178,7 @@
 | Onboarding: favorites — desktop | seed recommendations with meaningful favorites | Continue with five selections | step 2 ready proposal, 1440 × 1000 |
 | Onboarding: circle — desktop | seed trusted social discovery and enter the product | Enter Consumit | step 3 ready proposal, 1440 × 1000 |
 | Profile owner view — desktop | maintain a public taste identity, diary, lists, and circle without leaving the profile | Edit profile | populated-owner proposal, 1440 × 3000 |
-| Settings — desktop | control identity, privacy, streaming availability, iframe behavior, language, notifications, and account data | Save changes | populated-account proposal, 1440 × 3000 |
+| Settings — desktop | control identity, privacy, streaming availability, playback behavior, language, notifications, and account data | Save changes | populated-account proposal, 1440 × 3000 |
 | Help Center — desktop | solve common problems quickly and understand current source health | Search help | healthy-system proposal, 1440 × 2600 |
 | Report Issue — desktop | send an actionable playback or product report with captured technical context | Submit report | populated-video-failure proposal, 1440 × 1700 |
 

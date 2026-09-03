@@ -17,8 +17,8 @@ A member's public or private expression of taste, including favorites, diary ent
 _Avoid_: Account page
 
 **Circle**:
-The members a member chooses to trust for social discovery; their activity can influence recommendations and feeds.
-_Avoid_: Friend list, network
+The members a member chooses to trust for social discovery; their activity can influence recommendations and feeds. A circle is not a reciprocal friendship or a private communication channel.
+_Avoid_: Friend list, network, chat
 
 **Follow**:
 A one-way relationship that adds another member to a member's circle.
@@ -112,6 +112,10 @@ _Avoid_: Scrape, fetch URL
 A replacement source selected after the current source becomes unavailable or unusable.
 _Avoid_: Retry, refresh
 
-**Watch / Embed**:
-The focused Consumit screen that frames provider-owned playback and provides source selection, recovery, reporting, and trust guidance.
-_Avoid_: Custom player, player screen
+**Watch**:
+The focused Consumit screen that contains the Consumit Player and provides source selection, recovery, reporting, and trust guidance.
+_Avoid_: Watch / Embed, provider frame
+
+**Consumit Player**:
+The first-party playback surface through which a member watches an authorized direct media source while keeping one consistent set of controls.
+_Avoid_: Embed frame, provider player

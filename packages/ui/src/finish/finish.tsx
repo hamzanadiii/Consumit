@@ -10,12 +10,14 @@ export type FooterLink = {
 
 export type FooterProps = Omit<ComponentProps<'footer'>, 'children'> & {
   brandHref?: string | undefined
+  brandSrc?: string | undefined
   copyright?: string | undefined
   links?: readonly FooterLink[] | undefined
 }
 
 export function Footer({
   brandHref = '/',
+  brandSrc = '/assets/consumit-mark.svg',
   className,
   copyright,
   links = [],
@@ -25,8 +27,8 @@ export function Footer({
     <footer className={cn('border-t border-border bg-nav px-5 py-8 sm:px-8', className)} data-consumit-footer {...props}>
       <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-6 sm:flex-row sm:items-center">
         <a className="inline-flex min-h-11 items-center gap-3 self-start rounded-control text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange" href={brandHref}>
-          <span aria-hidden="true" className="h-px w-7 bg-orange" />
-          <span className="font-display text-xl">Consumit</span>
+          <img alt="" className="size-7" src={brandSrc} />
+          <span className="text-sm font-bold tracking-[0.18em]">CONSUMIT</span>
         </a>
         {links.length > 0 ? (
           <nav aria-label="Footer" className="sm:ml-auto">
