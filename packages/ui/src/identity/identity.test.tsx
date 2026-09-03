@@ -37,7 +37,7 @@ describe('identity components', () => {
     render(
       <>
         <MemberByline
-          href="/members/omar"
+          href="/profile/omar"
           meta="612 films"
           name="Omar"
           status="online"
@@ -52,7 +52,7 @@ describe('identity components', () => {
 
     expect(screen.getByRole('link', { name: /Omar/ })).toHaveAttribute(
       'href',
-      '/members/omar',
+      '/profile/omar',
     )
     expect(screen.getByText(/online/)).toHaveClass('sr-only')
     expect(screen.getByText('Netflix').parentElement?.parentElement).toHaveTextContent(

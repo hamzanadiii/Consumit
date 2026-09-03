@@ -164,7 +164,7 @@ export function HomeScreen() {
       <GlobalNavigation
         activeHref="/"
         avatarSrc="/assets/hamza-avatar.svg"
-        profileHref="/members/hamza"
+        profileHref="/profile/hamza"
         profileName="Hamza"
         searchPlaceholder="Search titles, people, lists"
         sticky={false}

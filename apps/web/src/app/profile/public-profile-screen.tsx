@@ -78,22 +78,33 @@ function SectionAction({ href, label }: { href: string; label: string }) {
   )
 }
 
-export function PublicProfileScreen() {
+function displayNameFromUsername(username: string) {
+  return username
+    .split(/[-_.]+/)
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ') || 'Member'
+}
+
+export function PublicProfileScreen({ username }: { username: string }) {
   const [following, setFollowing] = useState(false)
+  const normalizedUsername = username.trim().replace(/^@+/, '') || 'member'
+  const name = displayNameFromUsername(normalizedUsername)
+  const profilePath = `/profile/${encodeURIComponent(normalizedUsername)}`
 
   return (
     <>
       <GlobalNavigation
-        activeHref="/members/hamza"
+        activeHref={profilePath}
         avatarSrc="/assets/hamza-avatar.svg"
-        profileHref="/members/hamza"
-        profileName="Hamza"
+        profileHref={profilePath}
+        profileName={name}
         searchPlaceholder="Search titles, people, lists"
         sticky={false}
       />
 
       <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-public-profile>
-        <h1 className="sr-only">Hamza&apos;s public profile</h1>
+        <h1 className="sr-only">{name}&apos;s public profile</h1>
         <ProfileMasthead
           actions={(
             <>
@@ -115,10 +126,10 @@ export function PublicProfileScreen() {
           bio="Chasing films that feel like memories I never had."
           className="rounded-none border-x-0 border-t-0 lg:min-h-[24.75rem] lg:px-[62px]"
           contentClassName="lg:inset-x-[62px]"
-          handle="@hamza"
+          handle={`@${normalizedUsername}`}
           joined="Joined 2024"
           location="Rabat, Morocco"
-          name="Hamza"
+          name={name}
           stats={[
             { label: 'films', value: 284 },
             { label: 'series', value: 39 },
@@ -129,7 +140,7 @@ export function PublicProfileScreen() {
         />
         <Tabs
           activeValue="overview"
-          aria-label="Hamza profile sections"
+          aria-label={`${name} profile sections`}
           className="bg-navigation px-5 sm:px-8 lg:px-[62px]"
           items={profileTabs}
         />
@@ -163,7 +174,7 @@ export function PublicProfileScreen() {
               <aside className="space-y-5" aria-label="Taste compatibility and current watch">
                 <CompatibilityPanel
                   items={mutuals}
-                  memberName="Hamza"
+                  memberName={name}
                   mutuals="12 shared circle members · 46 shared favorites"
                   reason="You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves."
                   score={87}
@@ -173,7 +184,7 @@ export function PublicProfileScreen() {
                     <h3 className="text-sm font-bold text-ink">Watching now</h3>
                     <span className="inline-flex items-center gap-2 text-xs text-muted">
                       <span aria-hidden="true" className="size-2 rounded-full bg-lime" />
-                      <span className="sr-only">Hamza is online</span>
+                      <span className="sr-only">{name} is online</span>
                     </span>
                   </div>
                   <ContinueCard
@@ -219,7 +230,7 @@ export function PublicProfileScreen() {
                 </div>
               </div>
 
-              <aside className="space-y-5" aria-label="Hamza taste summary">
+              <aside className="space-y-5" aria-label={`${name} taste summary`}>
                 <TasteSignature
                   detail="Rates fewer titles than 82% of members · Average 4.1"
                   statement="Restless futures. Quiet dread. People trying to come home."
@@ -274,26 +285,26 @@ export function PublicProfileScreen() {
             <SectionHeading
               action={<SectionAction href="#all-lists" label="All lists" />}
               id="lists-heading"
-              title="Hamza’s lists"
+              title={`${name}’s lists`}
             />
             <div className="mt-8 grid gap-5 md:grid-cols-3">
               <CuratedListCard
                 artworkSources={[artwork.northbound, artwork.thirdSun, artwork.saltwater, artwork.violetHours]}
-                curator="Hamza"
+                curator={name}
                 href="#films-like-memory"
                 saves="426"
                 title="Films that feel like a memory"
               />
               <CuratedListCard
                 artworkSources={[artwork.saltwater, artwork.northbound, artwork.thirdSun, artwork.violetHours]}
-                curator="Hamza"
+                curator={name}
                 href="#quiet-breakdown"
                 saves="319"
                 title="Movies for a quiet breakdown"
               />
               <CuratedListCard
                 artworkSources={[artwork.violetHours, artwork.saltwater, artwork.northbound, artwork.thirdSun]}
-                curator="Hamza"
+                curator={name}
                 href="#beautifully-strange"
                 saves="588"
                 title="Beautifully strange and worth it"
@@ -309,7 +320,7 @@ export function PublicProfileScreen() {
             <SectionHeading
               action={<span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">186 followers</span>}
               id="circle-heading"
-              title="People in Hamza’s circle"
+              title={`People in ${name}’s circle`}
             />
             <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-center">
               <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -322,7 +333,7 @@ export function PublicProfileScreen() {
                 ))}
               </div>
               <aside className="rounded-card border border-border bg-surface p-5">
-                <p className="text-sm font-bold text-ink">Follow Hamza to improve your feed</p>
+                <p className="text-sm font-bold text-ink">Follow {name} to improve your feed</p>
                 <p className="mt-2 text-xs leading-5 text-muted">His ratings will appear beside your recommendations.</p>
               </aside>
             </div>
