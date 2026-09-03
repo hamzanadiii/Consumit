@@ -164,6 +164,7 @@ export function HomeScreen() {
       <GlobalNavigation
         activeHref="/"
         avatarSrc="/assets/hamza-avatar.svg"
+        profileHref="/members/hamza"
         profileName="Hamza"
         searchPlaceholder="Search titles, people, lists"
         sticky={false}
@@ -237,7 +238,7 @@ export function HomeScreen() {
 
               <aside className="border-t border-border pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-7" aria-labelledby="friends-watching">
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-sm font-bold text-ink" id="friends-watching">Friends are watching</h3>
+                  <h3 className="text-sm font-bold text-ink" id="friends-watching">Your circle is watching</h3>
                   <SectionAction label="See all" />
                 </div>
                 <div className="mt-3 divide-y divide-border">
@@ -290,7 +291,7 @@ export function HomeScreen() {
               context="Because you loved Arrival"
               metadata="2025 · 1h 57m · Science fiction · Drama"
               secondaryAction={<Button variant="secondary">Why this pick?</Button>}
-              socialProof={<SocialProof detail="Average 4.6" items={people.slice(0, 2)} label="Yasmine and Omar" text="2 friends loved it" />}
+              socialProof={<SocialProof detail="Average 4.6" items={people.slice(0, 2)} label="Yasmine and Omar" text="2 people in your circle loved it" />}
               src={artwork.backdrop}
               synopsis="A linguist receives one signal from a future that never happened. To answer it, she has to remember a life she never lived."
               title="A Place Between Signals"

@@ -1,6 +1,11 @@
 import type { ComponentProps, ReactNode } from 'react'
 
-import { Avatar, AvatarGroup, type AvatarGroupItem } from '../identity/identity'
+import {
+  Avatar,
+  AvatarGroup,
+  type AvatarGroupItem,
+  type AvatarSize,
+} from '../identity/identity'
 import { cn } from '../lib/cn'
 import { ArtworkFrame } from '../media/media'
 import { RatingDisplay } from '../signals/signals'
@@ -12,9 +17,12 @@ export type ProfileStat = {
 
 export type ProfileMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
   actions?: ReactNode | undefined
+  avatarClassName?: string | undefined
+  avatarSize?: AvatarSize | undefined
   avatarSrc?: string | undefined
   backgroundSrc?: string | undefined
   bio?: string | undefined
+  contentClassName?: string | undefined
   handle: string
   joined?: string | undefined
   location?: string | undefined
@@ -25,10 +33,13 @@ export type ProfileMastheadProps = Omit<ComponentProps<'header'>, 'children'> & 
 
 export function ProfileMasthead({
   actions,
+  avatarClassName,
+  avatarSize = 'xl',
   avatarSrc,
   backgroundSrc,
   bio,
   className,
+  contentClassName,
   handle,
   joined,
   location,
@@ -60,11 +71,17 @@ export function ProfileMasthead({
         className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.96)_0%,rgba(9,9,11,.76)_55%,rgba(9,9,11,.28)_100%)]"
       />
 
-      <div className="flex min-w-0 flex-col gap-6 lg:absolute lg:inset-x-10 lg:bottom-10 lg:flex-row lg:items-end">
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-6 lg:absolute lg:inset-x-10 lg:bottom-10 lg:flex-row lg:items-end',
+          contentClassName,
+        )}
+      >
         <Avatar
+          className={avatarClassName}
           decorative={false}
           name={name}
-          size="xl"
+          size={avatarSize}
           src={avatarSrc}
           status={status}
         />
@@ -188,7 +205,7 @@ export function DiaryRow({
       <div className="min-w-0">
         {href ? (
           <a
-            className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+            className="inline-flex min-h-11 items-center font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
             href={href}
           >
             {title}
@@ -262,5 +279,105 @@ export function TasteSignature({
       ) : null}
       {detail ? <p className="mt-5 border-t border-border pt-4 text-xs leading-5 text-muted">{detail}</p> : null}
     </aside>
+  )
+}
+
+export type RatingRhythmProps = Omit<ComponentProps<'figure'>, 'children'> & {
+  maxLabel?: string | undefined
+  minLabel?: string | undefined
+  title?: string | undefined
+  values: readonly number[]
+}
+
+export function RatingRhythm({
+  className,
+  maxLabel = '5',
+  minLabel = '½',
+  title = 'Rating rhythm',
+  values,
+  ...props
+}: RatingRhythmProps) {
+  const safeValues = values.slice(0, 10).map((value) => Math.max(0, value))
+  const peak = Math.max(...safeValues, 1)
+
+  return (
+    <figure
+      aria-label={`${title}: ${safeValues.join(', ')}`}
+      className={cn('rounded-card border border-border bg-surface p-5', className)}
+      data-consumit-rating-rhythm
+      {...props}
+    >
+      <figcaption className="text-sm font-bold text-ink">{title}</figcaption>
+      <div aria-hidden="true" className="mt-6 flex h-28 items-end gap-2">
+        {safeValues.map((value, index) => (
+          <span
+            className="min-h-2 flex-1 rounded-t-micro bg-orange"
+            key={`${value}-${index}`}
+            style={{
+              height: `${Math.max((value / peak) * 100, 8)}%`,
+              opacity: 0.24 + (value / peak) * 0.52,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex justify-between text-[0.6875rem] text-muted">
+        <span>{minLabel}</span>
+        <span>{maxLabel}</span>
+      </div>
+    </figure>
+  )
+}
+
+export type ProfileReviewCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  artworkSrc?: string | undefined
+  excerpt: ReactNode
+  href?: string | undefined
+  likes: string
+  rating: number
+  reviewedOn: string
+  title: string
+}
+
+export function ProfileReviewCard({
+  artworkSrc,
+  className,
+  excerpt,
+  href,
+  likes,
+  rating,
+  reviewedOn,
+  title,
+  ...props
+}: ProfileReviewCardProps) {
+  return (
+    <article
+      className={cn(
+        'group grid min-w-0 grid-cols-[7rem_1fr] overflow-hidden rounded-card border border-border bg-surface sm:grid-cols-[10.5rem_1fr]',
+        className,
+      )}
+      data-consumit-profile-review-card
+      {...props}
+    >
+      <ArtworkFrame
+        alt={`${title} artwork`}
+        className="aspect-auto h-full min-h-52 rounded-none border-0"
+        src={artworkSrc}
+      />
+      <div className="min-w-0 p-4 sm:p-6">
+        <RatingDisplay value={rating} />
+        {href ? (
+          <a
+            className="mt-3 flex min-h-11 items-center font-display text-2xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none sm:text-3xl"
+            href={href}
+          >
+            {title}
+          </a>
+        ) : (
+          <h3 className="mt-3 font-display text-2xl leading-tight text-ink sm:text-3xl">{title}</h3>
+        )}
+        <p className="mt-2 text-xs text-muted">Reviewed {reviewedOn} · {likes} likes</p>
+        <blockquote className="mt-5 max-w-[34ch] text-sm leading-6 text-copy">{excerpt}</blockquote>
+      </div>
+    </article>
   )
 }

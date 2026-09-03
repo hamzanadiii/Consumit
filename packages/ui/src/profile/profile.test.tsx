@@ -1,13 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { CompatibilityPanel, DiaryRow, ProfileMasthead, TasteSignature } from './profile'
+import {
+  CompatibilityPanel,
+  DiaryRow,
+  ProfileMasthead,
+  ProfileReviewCard,
+  RatingRhythm,
+  TasteSignature,
+} from './profile'
 
 describe('profile components', () => {
   it('renders profile identity, context, stats, and actions', () => {
-    render(
+    const { container } = render(
       <ProfileMasthead
         actions={<button type="button">Follow</button>}
+        avatarClassName="lg:size-36"
+        contentClassName="lg:inset-x-[62px]"
         handle="@hamza"
         location="Rabat"
         name="Hamza"
@@ -20,6 +29,10 @@ describe('profile components', () => {
     expect(screen.getByText('@hamza · Rabat')).toBeInTheDocument()
     expect(screen.getByText('284')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Follow' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Hamza, online' })).toHaveClass('lg:size-36')
+    expect(
+      container.querySelector('[data-consumit-profile-masthead] > div'),
+    ).toHaveClass('lg:inset-x-[62px]')
   })
 
   it('clamps and labels compatibility', () => {
@@ -37,7 +50,29 @@ describe('profile components', () => {
     )
 
     expect(screen.getByRole('link', { name: 'Atlas Motel' })).toHaveAttribute('href', '/atlas')
+    expect(screen.getByRole('link', { name: 'Atlas Motel' })).toHaveClass('min-h-11')
     expect(screen.getByText('“Still hurts”')).toBeInTheDocument()
     expect(screen.getByText('Mystery')).toBeInTheDocument()
+  })
+
+  it('renders profile review and rating-distribution evidence', () => {
+    render(
+      <>
+        <ProfileReviewCard
+          excerpt="Some movies explain loneliness."
+          href="/reviews/atlas-motel"
+          likes="73"
+          rating={5}
+          reviewedOn="26 August"
+          title="Atlas Motel"
+        />
+        <RatingRhythm values={[4, 8, 14, 22, 29, 19, 11, 6]} />
+      </>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Atlas Motel' })).toHaveClass('min-h-11')
+    expect(screen.getByText('Reviewed 26 August · 73 likes')).toBeInTheDocument()
+    expect(screen.getByLabelText('Rating rhythm: 4, 8, 14, 22, 29, 19, 11, 6')).toBeInTheDocument()
+    expect(screen.getByText('½').parentElement).toHaveClass('text-muted')
   })
 })

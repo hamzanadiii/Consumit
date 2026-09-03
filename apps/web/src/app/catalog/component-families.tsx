@@ -131,7 +131,7 @@ export function ComponentFamiliesCatalog() {
               onValueChange={setPrivacy}
               options={[
                 { label: 'Public', value: 'public' },
-                { label: 'Friends', value: 'friends' },
+                { label: 'Circle', value: 'circle' },
                 { label: 'Private', value: 'private' },
               ]}
               value={privacy}
@@ -143,7 +143,7 @@ export function ComponentFamiliesCatalog() {
               <div>
                 <p className="text-sm font-bold text-ink">Share diary activity</p>
                 <p className="mt-1 text-xs leading-5 text-muted">
-                  Friends can see what you watched after you log it.
+                  People in your circle can see what you watched after you log it.
                 </p>
               </div>
               <Toggle
@@ -451,7 +451,7 @@ export function ComponentFamiliesCatalog() {
                   detail="Average 4.6"
                   items={avatars.slice(0, 2)}
                   label="Yasmine and Omar"
-                  text="2 friends loved it"
+                  text="2 people in your circle loved it"
                 />
               }
               src="/assets/cinematic-backdrop.svg"

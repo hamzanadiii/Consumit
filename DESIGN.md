@@ -233,7 +233,7 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 - Tabs own horizontal overflow so narrow layouts keep one readable row without widening the page.
 - Chips, segmented controls, toggles, and issue selectors use the dedicated control outline; faint separators are never used as interactive boundaries.
-- Native radio and checkbox semantics remain intact. Every interactive target is at least 44px in both dimensions.
+- Native radio and checkbox semantics remain intact. Controls and links keep at least a 44px target in both dimensions; compact title and action labels sit inside the larger interactive area instead of growing visually.
 - Selected treatments remain legible in every pointer state: dark selections keep warm-ivory text, while ivory selections keep midnight text on hover.
 
 ### Identity and Signals
@@ -277,11 +277,17 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 Profile surfaces are living taste spaces rather than account summaries.
 
 - **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then the follow action. Statistics support the person; they do not become the headline. Direct messaging is not part of the product.
+- **Profile composition:** Move from the masthead into horizontally scrollable section tabs, then pair primary section content with contextual evidence on desktop. On mobile, place each evidence block immediately after the content it explains.
 - **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.
 - **Diary row:** Keep date, artwork, title, rating, watch context, optional personal note, and destination action in separate readable slots. On narrow screens the action follows the content instead of compressing it.
 - **Taste signature:** Use one editorial sentence as the lead, followed by explicitly named taste worlds and restrained supporting behavior.
+- **Rating rhythm:** Treat the histogram as evidence rather than a control. Label the distribution on the figure, hide individual bars from assistive technology, and keep even the smallest axis labels at readable Muted Metadata contrast.
 
 **The Human Reason Rule.** Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.
+
+**The Related Evidence Rule.** Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.
+
+**The Rating Evidence Rule.** Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.
 
 ### Title and Series Surfaces
 
@@ -345,7 +351,7 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 
 - **Do** use the supplied brand and artwork assets instead of recreating them with generic icons.
 - **Do** reserve ivory for confident immediate actions and orange for committed progression.
-- **Do** preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.
+- **Do** preserve visible keyboard focus, 44px targets for compact controls and links, and readable metadata contrast.
 - **Do** finish each shared component and its states before composing the next screen.
 - **Do** keep Home’s section order and responsive discovery rails specific to Home.
 - **Do** keep playback selection, header status, player status, and active source detail synchronized from one application state.

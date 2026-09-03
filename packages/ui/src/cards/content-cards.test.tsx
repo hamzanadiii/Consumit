@@ -22,13 +22,15 @@ describe('content cards', () => {
       'href',
       '/titles/northbound',
     )
+    expect(screen.getByRole('link', { name: 'Northbound' })).toHaveClass('min-h-11')
     expect(screen.getByText('Saved')).toHaveClass('sr-only')
   })
 
   it('exposes a specific continuation action and progress', () => {
-    render(
+    const { container } = render(
       <ContinueCard
         href="/watch/fault-lines"
+        layout="compact"
         meta="S1 E06 · 29 min left"
         progress={34}
         title="Fault Lines"
@@ -40,6 +42,11 @@ describe('content cards', () => {
       '/watch/fault-lines',
     )
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '34')
+    expect(container.querySelector('[data-consumit-continue-card]')).toHaveAttribute(
+      'data-layout',
+      'compact',
+    )
+    expect(container.querySelector('[data-consumit-continue-card]')).toHaveClass('grid')
   })
 
   it('renders trend proof and curated-list ownership', () => {
@@ -54,6 +61,7 @@ describe('content cards', () => {
         <CuratedListCard
           artworkSources={[]}
           curator="Yasmine"
+          href="/lists/memory"
           saves="426"
           title="Films that feel like a memory"
         />
@@ -63,6 +71,7 @@ describe('content cards', () => {
     expect(screen.getByText('Rank 1')).toBeInTheDocument()
     expect(screen.getByText('8.7 member')).toBeInTheDocument()
     expect(screen.getByText("Yasmine's list")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Films that feel like a memory' })).toHaveClass('min-h-11')
   })
 
   it('anchors the trending rank behind the poster instead of below the card', () => {

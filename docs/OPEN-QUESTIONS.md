@@ -7,7 +7,7 @@ These questions are intentionally unresolved. They are ordered by how soon they 
 - Bun 1.4 workspaces orchestrate `apps/web`, `apps/api`, and `packages/ui`; no additional task runner is needed yet.
 - Node 24 LTS is the project runtime line.
 - Next.js 16, React 19, Fastify 5, Tailwind CSS 4, Lucide React, CVA, Vitest, and Testing Library form the initial dependency set.
-- The design package is versioned in this repository.
+- The design package stays local and ignored; `DESIGN.md`, `docs/COMPONENTS.md`, and the shipped UI are the versioned visual authority.
 - The first implementation slice is the visual token layer and shared Button primitive, presented in a local component catalog.
 - Playback uses a first-party Consumit Player with authorized direct media sources; iframe and embed delivery are excluded.
 - Social relationships use one-way Follow and Circle semantics; reciprocal friend requests and private or direct messaging are excluded.

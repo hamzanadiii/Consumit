@@ -67,7 +67,7 @@ export function ContentCard({
           <AvatarGroup
             className="absolute right-3 bottom-3"
             items={friends}
-            label={`${friends.length} friends connected to ${title}`}
+            label={`${friends.length} people in your circle connected to ${title}`}
             max={3}
           />
         ) : null}
@@ -75,7 +75,7 @@ export function ContentCard({
       <div className="mt-3 min-w-0">
         {href ? (
           <a
-            className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+            className="inline-flex min-h-11 items-center font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
             href={href}
           >
             {title}
@@ -94,6 +94,7 @@ export type ContinueCardProps = Omit<ComponentProps<'article'>, 'children'> & {
   alt?: string | undefined
   artworkSrc?: string | undefined
   href: string
+  layout?: 'compact' | 'stacked' | undefined
   meta: ReactNode
   progress: number
   title: string
@@ -104,6 +105,7 @@ export function ContinueCard({
   artworkSrc,
   className,
   href,
+  layout = 'stacked',
   meta,
   progress,
   title,
@@ -111,8 +113,13 @@ export function ContinueCard({
 }: ContinueCardProps) {
   return (
     <article
-      className={cn('group min-w-0', className)}
+      className={cn(
+        'group min-w-0',
+        layout === 'compact' && 'grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-4',
+        className,
+      )}
       data-consumit-continue-card
+      data-layout={layout}
       {...props}
     >
       <LandscapeStill
@@ -122,13 +129,18 @@ export function ContinueCard({
         progress={progress}
         src={artworkSrc}
       />
-      <a
-        className="mt-3 inline-block text-sm font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-        href={href}
-      >
-        {title}
-      </a>
-      <div className="mt-1 text-xs text-muted">{meta}</div>
+      <div className="min-w-0">
+        <a
+          className={cn(
+            'inline-flex min-h-11 items-center text-sm font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none',
+            layout === 'stacked' && 'mt-1',
+          )}
+          href={href}
+        >
+          {title}
+        </a>
+        <div className="text-xs leading-5 text-muted">{meta}</div>
+      </div>
     </article>
   )
 }
@@ -185,7 +197,7 @@ export function TrendingCard({
       <div className="min-w-0 pl-10 sm:pl-12">
         {href ? (
           <a
-            className="mt-3 inline-block text-sm font-bold text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+            className="mt-1 inline-flex min-h-11 items-center text-sm font-bold text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             href={href}
           >
             {title}
@@ -250,7 +262,7 @@ export function CuratedListCard({
           </p>
           {href ? (
             <a
-              className="mt-1 block font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+              className="mt-1 flex min-h-11 items-center font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
               href={href}
             >
               {title}

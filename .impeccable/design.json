@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T14:41:19Z",
+  "generatedAt": "2026-09-03T19:53:08Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -236,6 +236,8 @@
       { "name": "The Home Cadence Rule", "body": "Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.", "section": "components" },
       { "name": "The Rank Behind the Poster Rule", "body": "A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.", "section": "components" },
       { "name": "The Human Reason Rule", "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.", "section": "components" },
+      { "name": "The Related Evidence Rule", "body": "Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.", "section": "components" },
+      { "name": "The Rating Evidence Rule", "body": "Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.", "section": "components" },
       { "name": "The Single Promise Rule", "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.", "section": "components" },
       { "name": "The State, Evidence, Action Rule", "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.", "section": "components" },
       { "name": "The Reduced Shell Rule", "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.", "section": "components" },
@@ -247,7 +249,7 @@
     "dos": [
       "Do use the supplied brand and artwork assets instead of recreating them with generic icons.",
       "Do reserve ivory for confident immediate actions and orange for committed progression.",
-      "Do preserve visible keyboard focus, touch-safe control heights, and readable metadata contrast.",
+      "Do preserve visible keyboard focus, 44px targets for compact controls and links, and readable metadata contrast.",
       "Do finish each shared component and its states before composing the next screen.",
       "Do keep Home’s section order and responsive discovery rails specific to Home.",
       "Do keep playback selection, header status, player status, and active source detail synchronized from one application state.",
