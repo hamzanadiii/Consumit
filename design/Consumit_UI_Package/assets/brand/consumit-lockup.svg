@@ -1,7 +1,0 @@
-<svg width="300" height="64" viewBox="0 0 300 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="300" height="64" rx="10" fill="#09090B"/>
-  <circle cx="30" cy="27" r="16" stroke="#FF5D38" stroke-width="7" stroke-dasharray="82 23" transform="rotate(12 30 27)"/>
-  <circle cx="48" cy="44" r="4" fill="#FF5D38"/>
-  <text x="72" y="39" fill="#F4F0E8" font-family="DejaVu Sans, Arial" font-size="23" font-weight="800" letter-spacing="4">CONSUMIT</text>
-</svg>
-

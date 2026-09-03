@@ -34,7 +34,7 @@ Run the complete local quality gate with `bun run check`.
 
 ## Design reference
 
-`design/Consumit_UI_Package/` contains active desktop PNG/SVG screens, brand assets, CSS tokens, the module registry, and page grammar.
+[`DESIGN.md`](./DESIGN.md) captures the visual system, while [`docs/COMPONENTS.md`](./docs/COMPONENTS.md) records the shared-component registry and implementation boundaries.
 
 - `manifest.json` is the authority for active and deprecated screens.
 - `docs/brand-system.md` is the visual and interaction contract.

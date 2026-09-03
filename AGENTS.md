@@ -7,7 +7,7 @@
 - **Platform:** read [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) before changing providers, playback, contracts, data, security, infrastructure, or deployment.
 - **Delivery:** read [`docs/DELIVERY.md`](./docs/DELIVERY.md) before selecting or expanding an implementation slice.
 - **Decisions:** read [`docs/OPEN-QUESTIONS.md`](./docs/OPEN-QUESTIONS.md) before acting on an unresolved foundation.
-- **UI:** read `design/Consumit_UI_Package/manifest.json` and `design/Consumit_UI_Package/docs/brand-system.md`, then use the named active screen as the visual reference.
+- **UI:** read [`DESIGN.md`](./DESIGN.md) and [`docs/COMPONENTS.md`](./docs/COMPONENTS.md), then use the shipped shared components and current screen implementation as visual authority.
 
 ## Execution rules
 

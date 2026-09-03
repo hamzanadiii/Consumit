@@ -1,6 +1,6 @@
 # Shared component roadmap
 
-This roadmap translates the registry in `design/Consumit_UI_Package/docs/brand-system.md` into buildable families. The design package is the visual authority; this file tracks implementation order and boundaries.
+This roadmap records Consumit’s buildable component families, implementation order, and boundaries. [`DESIGN.md`](../DESIGN.md) is the durable visual authority, and shipped shared components are the executable reference.
 
 ## Rules
 

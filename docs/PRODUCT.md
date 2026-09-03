@@ -113,7 +113,7 @@ The visual thesis is **cinema after midnight**: editorial, intimate, and alive w
 - Interface type: DejaVu Sans
 - Base spacing: 4 px; primary rhythm: 8 / 12 / 18 / 24 / 32 / 48 / 64
 
-The complete module registry, page grammar, assets, tokens, and screen dimensions live in [`design/Consumit_UI_Package/docs/brand-system.md`](../design/Consumit_UI_Package/docs/brand-system.md). Its [`manifest.json`](../design/Consumit_UI_Package/manifest.json) is the authority for active and deprecated screens.
+The durable visual system and page grammar live in [`DESIGN.md`](../DESIGN.md). The shared-component registry and active implementation boundaries live in [`docs/COMPONENTS.md`](./COMPONENTS.md).
 
 ## Near-term product gaps
 
