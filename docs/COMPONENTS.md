@@ -215,7 +215,9 @@ Source references: Create Account and Sign In.
 Included behavior:
 
 - Responsive auth shell that removes the visual story panel below desktop while preserving the task form
+- Reduced-shell content prompts, story eyebrows, and caller-owned panel sizing for sign-in and account creation
 - Persistent auth fields with helper or error association and caller-owned native attributes
+- Optional trailing field actions for accessible password visibility controls
 - Named provider actions with light and dark action treatments
 - Plain-language trust notes using semantic signals without relying on color alone
 
