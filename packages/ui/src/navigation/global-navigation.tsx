@@ -31,7 +31,7 @@ export const defaultNavigationItems: readonly NavigationItem[] = [
   { href: '/', label: 'Home' },
   { href: '/movies', label: 'Movies' },
   { href: '/series', label: 'Series' },
-  { href: '/friends', label: 'Friends' },
+  { href: '/circle', label: 'Circle' },
 ]
 
 function Brand({ href, markSrc }: { href: string; markSrc: string }) {
@@ -147,6 +147,7 @@ export function GlobalNavigation({
   const profileLabel = isProfileOnline
     ? `Open ${profileName} profile, online`
     : `Open ${profileName} profile`
+  const isProfileActive = activeHref === profileHref
 
   return (
     <header
@@ -197,6 +198,7 @@ export function GlobalNavigation({
           />
           <a
             aria-label={profileLabel}
+            aria-current={isProfileActive ? 'page' : undefined}
             className="rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-4 focus-visible:ring-offset-nav motion-reduce:transform-none motion-reduce:transition-none"
             href={profileHref}
           >
@@ -286,6 +288,7 @@ export function GlobalNavigation({
 
                 <a
                   aria-label={profileLabel}
+                  aria-current={isProfileActive ? 'page' : undefined}
                   className="mt-auto flex items-center gap-4 border-t border-border pt-5 text-sm font-bold text-ink outline-none focus-visible:text-orange"
                   href={profileHref}
                 >

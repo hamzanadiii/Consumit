@@ -149,7 +149,7 @@ export function ComponentFamiliesCatalog1118() {
               <CompatibilityPanel
                 items={people}
                 memberName="Hamza"
-                mutuals="12 mutual friends · 46 shared favorites"
+                mutuals="12 shared circle members · 46 shared favorites"
                 reason="You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves."
                 score={87}
               />
@@ -185,7 +185,7 @@ export function ComponentFamiliesCatalog1118() {
               backgroundSrc={artwork.backdrop}
               context="Consumit premiere · Film"
               metadata="2026 · 2h 08m · Drama · Mystery · 4K"
-              socialProof={<SocialProof items={people} label="Yasmine, Omar, and Nadia" text="8 friends watched" detail="4.6 average" />}
+              socialProof={<SocialProof items={people} label="Yasmine, Omar, and Nadia" text="8 people in your circle watched" detail="4.6 average" />}
               synopsis="A cartographer returns to a city that has erased every street she remembers—and finds one stranger still living inside her old map."
               tasteReason="Strong fit: slow mysteries, hostile cities, and endings that refuse to explain themselves."
               tasteScore={92}
@@ -236,7 +236,7 @@ export function ComponentFamiliesCatalog1118() {
           </Specimen>
           <Specimen label="Saved title cards">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <SavedTitleCard artworkSrc={artwork.northbound} badge={<Badge tone="orange">96% match</Badge>} meta="2025 · Movie · 1h 47m" signal="3 friends rated it 4★+" title="The Silent Year" />
+              <SavedTitleCard artworkSrc={artwork.northbound} badge={<Badge tone="orange">96% match</Badge>} meta="2025 · Movie · 1h 47m" signal="3 people in your circle rated it 4★+" title="The Silent Year" />
               <SavedTitleCard artworkSrc={artwork.violetHours} badge={<Badge tone="lime">New episode</Badge>} meta="2022 · Series · 2 seasons" progress={31} signal="Continue S2 E04" title="Violet Hours" />
               <SavedTitleCard artworkSrc={artwork.saltwater} badge={<Badge tone="orange">Favorite</Badge>} meta="2025 · Limited series" signal="All episodes available" title="No One Leaves Sunday" />
               <SavedTitleCard artworkSrc={artwork.thirdSun} badge={<Badge tone="lilac">82% match</Badge>} meta="2021 · Movie · 1h 38m" signal="In your library since May" title="Little Gods" />
@@ -245,7 +245,7 @@ export function ComponentFamiliesCatalog1118() {
           <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
             <Specimen label="Ordered title rows">
               <div className="space-y-3">
-                <OrderedTitleRow action={<Button size="sm">View title</Button>} artworkSrc={artwork.northbound} index={1} match={96} meta="2021 · Movie · 1h 47m · Mystery" proof="3 friends rated it 4★+" quote="Every hallway feels like it is listening." title="The Silent Year" />
+                <OrderedTitleRow action={<Button size="sm">View title</Button>} artworkSrc={artwork.northbound} index={1} match={96} meta="2021 · Movie · 1h 47m · Mystery" proof="3 people in your circle rated it 4★+" quote="Every hallway feels like it is listening." title="The Silent Year" />
                 <OrderedTitleRow action={<Button size="sm" variant="secondary">View series</Button>} artworkSrc={artwork.violetHours} index={2} meta="2022 · Series · 2 seasons" proof="Omar finished the season" quote="The building edits everyone who enters." title="Violet Hours" />
               </div>
             </Specimen>
@@ -356,7 +356,7 @@ export function ComponentFamiliesCatalog1118() {
             <Specimen label="Settings section + preference rows">
               <SettingsSection action={<Button size="sm">Save changes</Button>} description="Decide what becomes part of your public taste." title="Privacy & social">
                 <PreferenceRow control={<Button size="sm" variant="secondary">Public</Button>} description="Controls who can open your complete profile." label="Profile visibility" />
-                <PreferenceRow control={<Toggle checked={diarySharing} label="Share diary activity" onCheckedChange={setDiarySharing} />} description="Friends can see what you watched after you log it." label="Share diary activity" />
+                <PreferenceRow control={<Toggle checked={diarySharing} label="Share diary activity" onCheckedChange={setDiarySharing} />} description="People in your circle can see what you watched after you log it." label="Share diary activity" />
               </SettingsSection>
             </Specimen>
             <div className="grid gap-6 sm:grid-cols-2">

@@ -36,7 +36,7 @@ These patterns recur across the complete active screen set and should be preserv
 | 8 | Content cards | Content card, continue card, trending card, curated-list card | Complete |
 | 9 | Editorial | Section heading, editorial feature, mood selector, social proof | Complete |
 | 10 | Social | Activity item, trusted reaction, friend/follow row, comment card | Complete |
-| 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature | Complete |
+| 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature, rating rhythm, profile review card | Complete |
 | 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Complete |
 | 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Complete |
 | 14 | Authentication | Auth shell, auth field, social auth button, trust note | Complete |
@@ -148,7 +148,7 @@ Source references: Home, Search / Explore, Library, Friends Activity, and Public
 Included behavior:
 
 - Default, saved, and watched poster cards with contextual badges and friend rings
-- Continue cards with one explicit playback destination and remaining progress
+- Continue cards with one explicit playback destination and remaining progress, in stacked rail or compact sidebar layouts
 - Ranked trending cards with member score and completion proof
 - Curated-list cards with supplied artwork collage, curator identity, and save count
 
@@ -184,6 +184,8 @@ Included behavior:
 - Clamped compatibility panel with a readable score, human reason, mutual-member proof, and optional detail
 - Responsive diary rows that keep date, artwork, rating, note, destination, and action distinct
 - Taste signature statement with semantically colored worlds and a supporting comparison detail
+- Rating rhythm histogram with a readable distribution label and decorative bars
+- Profile review cards that keep artwork, rating, review context, engagement, and excerpt distinct
 
 ## Component 12 — Title and series
 

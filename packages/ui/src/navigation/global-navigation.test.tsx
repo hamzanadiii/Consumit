@@ -24,6 +24,10 @@ describe('GlobalNavigation', () => {
       }),
     ).toHaveAttribute('name', 'q')
     expect(screen.getByRole('search')).toHaveAttribute('action', '/find')
+    expect(screen.getByRole('link', { name: 'Circle' })).toHaveAttribute(
+      'href',
+      '/circle',
+    )
   })
 
   it('opens a focused mobile dialog and restores focus when dismissed', async () => {
@@ -61,5 +65,21 @@ describe('GlobalNavigation', () => {
     expect(
       container.querySelector('[data-consumit-profile-presence]'),
     ).not.toBeInTheDocument()
+  })
+
+  it('marks the profile destination as current without highlighting Home', () => {
+    render(
+      <GlobalNavigation
+        activeHref="/profile"
+        profileHref="/profile"
+        profileName="Hamza"
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: 'Open Hamza profile, online' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
 })
