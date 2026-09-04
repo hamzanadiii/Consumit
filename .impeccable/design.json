@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T19:53:08Z",
+  "generatedAt": "2026-09-04T00:55:19Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -241,6 +241,7 @@
       { "name": "The Single Promise Rule", "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.", "section": "components" },
       { "name": "The State, Evidence, Action Rule", "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.", "section": "components" },
       { "name": "The Reduced Shell Rule", "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.", "section": "components" },
+      { "name": "The Heading Carries the Story Rule", "body": "Authentication story panels use brand, artwork, a headline, description, and optional proof; never add a kicker or eyebrow above the story headline.", "section": "components" },
       { "name": "The Player Ownership Rule", "body": "Consumit owns the playback controls and media surface; providers supply authorized direct media through an adapter boundary and never replace the interface with an embed.", "section": "components" },
       { "name": "The Synchronized Watch State Rule", "body": "Source selection, watch status, player status, and active detail always describe the same application state.", "section": "components" },
       { "name": "The Social Boundary Rule", "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.", "section": "components" },

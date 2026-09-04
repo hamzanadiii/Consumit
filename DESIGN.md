@@ -309,12 +309,14 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Authentication and Onboarding
 
-- **Authentication shell:** Use a cinematic split at large widths and a focused form panel at small widths. Ask only for account essentials, preserve email access beside social providers, and place privacy or control language beside the decision it explains.
+- **Authentication shell:** At large widths, place reference-authored focal artwork, narrative, and optional proof in a dedicated story panel beside the focused form. Below desktop, remove that story panel rather than shrinking it or moving it behind the form. Keep the shell's dark artwork overlay as the safe default; a caller may weaken or remove it only when the supplied artwork already preserves content legibility. Ask only for account essentials, preserve email access beside social providers, and place privacy or control language beside the decision it explains.
 - **Authentication field:** Keep a persistent label, optional contextual action, native input, and a single associated helper or error line. Validation text uses Warm Copy rather than turning the entire form into an alarm.
 - **Onboarding header:** Use the supplied mark, semantic step count, progress rail, and optional skip. The short mobile label may change to “Skip,” but visibility and touch-safe height do not.
 - **Onboarding choices:** Import options name what moves, the expected effort, and privacy implications. Selectable titles remain native checkboxes; member suggestions explain overlap and taste before asking for a follow. “Follow” uses the confident ivory primary treatment; “Following” steps back to the outlined secondary treatment.
 
 **The Reduced Shell Rule.** Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.
+
+**The Heading Carries the Story Rule.** Authentication story panels use brand, artwork, a headline, description, and optional proof; never add a kicker or eyebrow above the story headline.
 
 ### Settings and Support
 
