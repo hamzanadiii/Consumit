@@ -33,15 +33,6 @@ function AuthBrand({ className = '' }: { className?: string }) {
   )
 }
 
-function AuthEyebrow({ children }: { children: string }) {
-  return (
-    <p className="flex items-center gap-3 text-[0.6875rem] font-bold uppercase tracking-[0.22em] text-copy">
-      <span aria-hidden="true" className="h-0.5 w-6 bg-orange" />
-      {children}
-    </p>
-  )
-}
-
 function AuthDivider() {
   return (
     <div aria-label="or" className="flex items-center gap-5" role="separator">
@@ -99,12 +90,11 @@ export function SignInScreen() {
 
   return (
     <AuthShell
-      artworkClassName="object-[78%_center]"
-      artworkSrc="/assets/cinematic-backdrop.svg"
+      artworkOverlayClassName="bg-transparent"
+      artworkSrc="/assets/auth-sign-in-artwork.svg"
       asideClassName="lg:p-[62px]"
       asideContent={<SignInStoryProof />}
       asideDescription="Return to the films, people, and lists that know what your next night should feel like."
-      asideEyebrow={<AuthEyebrow>Your taste space</AuthEyebrow>}
       asideTitle="Your taste is waiting."
       className="min-h-screen rounded-none border-0 lg:grid-cols-[54.86%_45.14%]"
       contentClassName="bg-field"
@@ -214,7 +204,6 @@ export function SignUpScreen() {
     <AuthShell
       asideClassName="bg-[linear-gradient(145deg,#17131a_0%,#3b2531_48%,#765064_76%,#17151d_100%)] lg:px-[62px] lg:pt-[42px] lg:pb-[145px]"
       asideDescription="Build a library, remember every watch, and discover through people whose taste actually means something to you."
-      asideEyebrow={<AuthEyebrow>A profile with a pulse</AuthEyebrow>}
       asideTitle="Keep what you love. Find who gets it."
       className="min-h-screen rounded-none border-0 lg:grid-cols-[54.86%_45.14%]"
       contentClassName="bg-field lg:py-10"

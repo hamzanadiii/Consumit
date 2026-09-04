@@ -5,11 +5,16 @@ import { AuthField, AuthShell, SocialAuthButton, TrustNote } from './auth'
 
 describe('authentication components', () => {
   it('renders the auth shell landmark and heading', () => {
-    render(<AuthShell title="Welcome back" titleClassName="auth-title"><p>Form</p></AuthShell>)
+    const { container } = render(
+      <AuthShell artworkOverlayClassName="auth-artwork-overlay" title="Welcome back" titleClassName="auth-title">
+        <p>Form</p>
+      </AuthShell>,
+    )
 
     expect(screen.getByRole('main')).toHaveAttribute('data-consumit-auth-shell')
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toHaveClass('auth-title')
+    expect(container.querySelector('.auth-artwork-overlay')).toBeInTheDocument()
   })
 
   it('associates auth field labels and errors', () => {

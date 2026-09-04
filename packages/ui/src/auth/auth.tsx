@@ -6,6 +6,7 @@ import { cn } from '../lib/cn'
 
 export type AuthShellProps = Omit<ComponentProps<'main'>, 'children' | 'title'> & {
   artworkClassName?: string | undefined
+  artworkOverlayClassName?: string | undefined
   artworkSrc?: string | undefined
   asideClassName?: string | undefined
   asideContent?: ReactNode | undefined
@@ -25,6 +26,7 @@ export type AuthShellProps = Omit<ComponentProps<'main'>, 'children' | 'title'> 
 
 export function AuthShell({
   artworkClassName,
+  artworkOverlayClassName,
   artworkSrc,
   asideClassName,
   asideContent,
@@ -51,7 +53,7 @@ export function AuthShell({
     >
       <section className={cn('relative isolate hidden min-h-full overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between', asideClassName)}>
         {artworkSrc ? <img alt="" className={cn('absolute inset-0 -z-20 size-full object-cover', artworkClassName)} src={artworkSrc} /> : null}
-        <span aria-hidden="true" className="absolute inset-0 -z-10 bg-canvas/35" />
+        <span aria-hidden="true" className={cn('absolute inset-0 -z-10 bg-canvas/35', artworkOverlayClassName)} />
         {header}
         <div className="max-w-lg">
           {asideEyebrow ? <div className="mb-10">{asideEyebrow}</div> : null}
