@@ -10,12 +10,13 @@ describe('onboarding components', () => {
     expect(screen.getByRole('progressbar', { name: 'Onboarding step 2 of 3' })).toHaveAttribute('aria-valuenow', '66.66666666666666')
     expect(screen.getByRole('link', { name: 'Consumit home' })).toBeInTheDocument()
     expect(container.querySelector('img')).toHaveAttribute('src', '/assets/consumit-mark.svg')
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
     expect(screen.getByText('Skip for now').closest('a')).not.toHaveClass('hidden')
   })
 
   it('renders import benefits and selection state', () => {
     const onChange = vi.fn()
-    render(
+    const { container } = render(
       <>
         <ImportOption benefits={['Ratings and favorites']} description="Upload your export" selected title="Import from Letterboxd" />
         <SelectableTitle checked meta="2021 · Movie" onChange={onChange} title="The Silent Year" />
@@ -24,6 +25,7 @@ describe('onboarding components', () => {
 
     expect(screen.getByText('Ratings and favorites')).toBeInTheDocument()
     expect(screen.getByText('Selected')).toHaveClass('sr-only')
+    expect(container.querySelector('[data-consumit-selectable-artwork]')).toHaveClass('border-orange')
     fireEvent.click(screen.getByRole('checkbox', { name: /The Silent Year/ }))
     expect(onChange).toHaveBeenCalled()
   })

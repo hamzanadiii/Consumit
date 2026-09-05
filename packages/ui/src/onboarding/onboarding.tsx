@@ -38,7 +38,10 @@ export function OnboardingHeader({
         <span className="hidden text-sm font-bold tracking-[0.18em] sm:inline">CONSUMIT</span>
       </a>
       <div className="ml-auto w-28 sm:w-56">
-        <p className="text-[0.6875rem] uppercase tracking-[0.1em] text-muted">Onboarding · {safeCurrent} of {safeTotal}</p>
+        <p className="text-[0.6875rem] uppercase tracking-[0.1em] text-muted">
+          <span className="sm:hidden">Step {safeCurrent} of {safeTotal}</span>
+          <span className="hidden sm:inline">Onboarding · {safeCurrent} of {safeTotal}</span>
+        </p>
         <ProgressRail className="mt-2" label={`Onboarding step ${safeCurrent} of ${safeTotal}`} value={(safeCurrent / safeTotal) * 100} />
       </div>
       {skipHref ? (
@@ -116,17 +119,31 @@ export function SelectableTitle({
   ...props
 }: SelectableTitleProps) {
   return (
-    <label className={cn('group relative block min-w-0 cursor-pointer', className)} data-consumit-selectable-title>
+    <label
+      className={cn(
+        'group relative block min-w-0 cursor-pointer rounded-card outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-canvas',
+        className,
+      )}
+      data-consumit-selectable-title
+    >
       <input className="peer sr-only" checked={checked} type="checkbox" {...props} />
-      <span className="block rounded-card border border-transparent p-1 transition-colors peer-checked:border-orange peer-focus-visible:ring-2 peer-focus-visible:ring-orange peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-canvas motion-reduce:transition-none">
-        <ArtworkFrame alt={`${title} poster`} className="rounded-control" src={artworkSrc}>
-          {checked ? (
-            <span className="absolute top-3 right-3 grid size-7 place-items-center rounded-full bg-orange text-canvas">
-              <Check aria-hidden="true" className="size-4" />
-              <span className="sr-only">Selected</span>
-            </span>
-          ) : null}
-        </ArtworkFrame>
+      <span className="block">
+        <span
+          className={cn(
+            'relative block rounded-card border-2 p-0.5 transition-colors motion-reduce:transition-none',
+            checked ? 'border-orange' : 'border-transparent',
+          )}
+          data-consumit-selectable-artwork
+        >
+          <ArtworkFrame alt={`${title} poster`} className="rounded-[5px] border-0" src={artworkSrc}>
+            {checked ? (
+              <span className="absolute top-3 right-3 grid size-7 place-items-center rounded-full bg-orange text-canvas">
+                <Check aria-hidden="true" className="size-4" />
+                <span className="sr-only">Selected</span>
+              </span>
+            ) : null}
+          </ArtworkFrame>
+        </span>
         <span className="mt-3 block text-sm font-bold text-ink">{title}</span>
         <span className="mt-1 block text-xs text-muted">{meta}</span>
       </span>
@@ -167,8 +184,10 @@ export function MemberSuggestion({
       <div className="min-w-0 flex-1">
         <h3 className="text-base font-bold text-ink">{name}</h3>
         <p className="mt-1 text-xs text-muted">{handle}{films ? ` · ${films}` : ''}</p>
-        <p className="mt-3 text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>
-        {detail ? <p className="mt-1 text-xs leading-5 text-muted">{detail}</p> : null}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>
+          {detail ? <p className="text-xs leading-5 text-muted">{detail}</p> : null}
+        </div>
       </div>
       <div className="shrink-0">
         {action ?? (
