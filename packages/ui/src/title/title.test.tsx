@@ -7,6 +7,7 @@ describe('title and series components', () => {
   it('renders a cinematic title masthead and social proof', () => {
     render(
       <TitleMasthead
+        headingLevel="h1"
         metadata="2026 · Drama"
         socialProof={<p>8 friends watched</p>}
         synopsis="A city erased every street."
@@ -16,6 +17,7 @@ describe('title and series components', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'The Last City After Rain' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'The Last City After Rain' })).toBeInTheDocument()
     expect(screen.getByText('92%')).toBeInTheDocument()
     expect(screen.getByText('8 friends watched')).toBeInTheDocument()
   })

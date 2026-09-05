@@ -8,6 +8,7 @@ export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
   actions?: ReactNode | undefined
   backgroundSrc?: string | undefined
   context?: string | undefined
+  headingLevel?: 'h1' | 'h2' | undefined
   metadata: ReactNode
   socialProof?: ReactNode | undefined
   synopsis: string
@@ -21,6 +22,7 @@ export function TitleMasthead({
   backgroundSrc,
   className,
   context,
+  headingLevel = 'h2',
   metadata,
   socialProof,
   synopsis,
@@ -30,6 +32,7 @@ export function TitleMasthead({
   ...props
 }: TitleMastheadProps) {
   const safeScore = tasteScore === undefined ? undefined : Math.min(Math.max(Math.round(tasteScore), 0), 100)
+  const Heading = headingLevel
 
   return (
     <header
@@ -48,9 +51,9 @@ export function TitleMasthead({
         {context ? (
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-copy">{context}</p>
         ) : null}
-        <h2 className="mt-5 text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.9] tracking-[-0.025em] text-ink">
+        <Heading className={cn('text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.9] tracking-[-0.025em] text-ink', context && 'mt-5')}>
           {title}
-        </h2>
+        </Heading>
         <div className="mt-5 text-sm text-copy">{metadata}</div>
         <p className="mt-5 max-w-[60ch] text-sm leading-6 text-copy">{synopsis}</p>
         {actions ? <div className="mt-6 flex flex-wrap gap-2">{actions}</div> : null}

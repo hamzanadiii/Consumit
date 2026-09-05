@@ -292,11 +292,15 @@ Profile surfaces are living taste spaces rather than account summaries.
 ### Title and Series Surfaces
 
 - **Title masthead:** Make one cinematic promise with artwork, context, display title, metadata, synopsis, and a compact action cluster. Taste match and named social proof support that promise without competing with it.
+- **Detail priority:** Title Detail opens on Overview. Series Detail opens on Episodes and foregrounds season choice, episode state, progress, and the next available action.
+- **Responsive evidence:** On narrow screens, supporting evidence follows the content it explains. Cast and related-title collections become horizontal discovery rails instead of compressed grids.
 - **Member pulse:** Present the numeric rating and count accessibly; the distribution is secondary evidence and remains decorative to assistive technology.
 - **Season and episode choice:** Use a native season select with a visible label. Each episode row gives state first, then title and evidence, then a distinct action; progress is announced independently and never replaces the action label.
 - **Cast card:** Preserve the portrait ratio, identify the person once, and keep character or role subordinate to the name.
 
 **The Single Promise Rule.** A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.
+
+**The Detail Priority Rule.** Overview leads Title Detail; actionable episode state leads Series Detail. Social evidence remains supporting context at every width.
 
 ### Library and List Surfaces
 
