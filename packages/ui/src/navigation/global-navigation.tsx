@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Menu, Search, X } from 'lucide-react'
 import { useId } from 'react'
 
-import { Button } from '../button/button'
+import { Button, buttonVariants } from '../button/button'
 import { cn } from '../lib/cn'
 
 export type NavigationItem = {
@@ -24,6 +24,8 @@ export type GlobalNavigationProps = {
   searchAction?: string
   searchDefaultValue?: string
   searchPlaceholder?: string
+  signedIn?: boolean
+  signInHref?: string
   sticky?: boolean
 }
 
@@ -142,6 +144,8 @@ export function GlobalNavigation({
   searchAction = '/search',
   searchDefaultValue,
   searchPlaceholder = 'Search anything',
+  signedIn = true,
+  signInHref = '/sign-in',
   sticky = true,
 }: GlobalNavigationProps) {
   const profileLabel = isProfileOnline
@@ -156,7 +160,10 @@ export function GlobalNavigation({
         sticky && 'sticky top-0',
       )}
     >
-      <div className="mx-auto flex h-nav-mobile max-w-[90rem] items-center px-5 sm:px-8 lg:h-nav-desktop lg:px-[62px]">
+      <div
+        className="mx-auto flex h-nav-mobile max-w-[90rem] items-center px-5 sm:px-8 lg:h-nav-desktop lg:px-[62px]"
+        data-session-state={signedIn ? 'signed-in' : 'signed-out'}
+      >
         <Brand href={brandHref} markSrc={brandMarkSrc} />
 
         <nav
@@ -196,21 +203,32 @@ export function GlobalNavigation({
             placeholder={searchPlaceholder}
             variant="desktop"
           />
-          <a
-            aria-label={profileLabel}
-            aria-current={isProfileActive ? 'page' : undefined}
-            className="rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-4 focus-visible:ring-offset-nav motion-reduce:transform-none motion-reduce:transition-none"
-            href={profileHref}
-          >
-            <ProfileAvatar
-              avatarSrc={avatarSrc}
-              isOnline={isProfileOnline}
-              name={profileName}
-            />
-          </a>
+          {signedIn ? (
+            <a
+              aria-label={profileLabel}
+              aria-current={isProfileActive ? 'page' : undefined}
+              className="rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-4 focus-visible:ring-offset-nav motion-reduce:transform-none motion-reduce:transition-none"
+              href={profileHref}
+            >
+              <ProfileAvatar
+                avatarSrc={avatarSrc}
+                isOnline={isProfileOnline}
+                name={profileName}
+              />
+            </a>
+          ) : (
+            <a className={buttonVariants({ size: 'sm' })} href={signInHref}>
+              Sign in
+            </a>
+          )}
         </div>
 
-        <div className="ml-auto flex items-center gap-1 lg:hidden">
+        <div className="ml-auto flex items-center gap-2 lg:hidden">
+          {!signedIn ? (
+            <a className={buttonVariants({ size: 'sm' })} href={signInHref}>
+              Sign in
+            </a>
+          ) : null}
           <Dialog.Root>
             <Dialog.Trigger asChild>
               <Button aria-label="Open navigation" size="icon" variant="ghost">
@@ -286,24 +304,32 @@ export function GlobalNavigation({
                   })}
                 </nav>
 
-                <a
-                  aria-label={profileLabel}
-                  aria-current={isProfileActive ? 'page' : undefined}
-                  className="mt-auto flex items-center gap-4 border-t border-border pt-5 text-sm font-bold text-ink outline-none focus-visible:text-orange"
-                  href={profileHref}
-                >
-                  <ProfileAvatar
-                    avatarSrc={avatarSrc}
-                    isOnline={isProfileOnline}
-                    name={profileName}
-                  />
-                  <span>
-                    {profileName}
-                    <span className="mt-1 block text-xs font-normal text-muted">
-                      {isProfileOnline ? 'Online now' : 'View profile'}
+                {signedIn ? (
+                  <a
+                    aria-label={profileLabel}
+                    aria-current={isProfileActive ? 'page' : undefined}
+                    className="mt-auto flex items-center gap-4 border-t border-border pt-5 text-sm font-bold text-ink outline-none focus-visible:text-orange"
+                    href={profileHref}
+                  >
+                    <ProfileAvatar
+                      avatarSrc={avatarSrc}
+                      isOnline={isProfileOnline}
+                      name={profileName}
+                    />
+                    <span>
+                      {profileName}
+                      <span className="mt-1 block text-xs font-normal text-muted">
+                        {isProfileOnline ? 'Online now' : 'View profile'}
+                      </span>
                     </span>
-                  </span>
-                </a>
+                  </a>
+                ) : (
+                  <Dialog.Close asChild>
+                    <a className={cn(buttonVariants(), 'mt-auto w-full')} href={signInHref}>
+                      Sign in
+                    </a>
+                  </Dialog.Close>
+                )}
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>

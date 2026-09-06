@@ -148,7 +148,21 @@ export {
 export {
   ConsumitPlayer,
   type ConsumitPlayerProps,
+  type PlayerMenuId,
+  type PlayerOption,
 } from './playback/consumit-player'
+export {
+  attachDirectMedia,
+  canPlayHlsNatively,
+  formatPlaybackTime,
+  isSafeMediaUrl,
+  UnsafeMediaSourceError,
+  UnsupportedMediaTypeError,
+  type ChapterCue,
+  type DetachMedia,
+  type DirectMediaSource,
+  type DirectMediaType,
+} from './playback/media-source'
 export {
   CompatibilityPanel,
   DiaryRow,

@@ -148,9 +148,9 @@ export function ContinueCard({
 export type TrendingCardProps = Omit<ComponentProps<'article'>, 'children'> & {
   alt?: string | undefined
   artworkSrc?: string | undefined
-  completionProof: string
+  completionProof?: string | undefined
   href?: string | undefined
-  memberScore: number
+  memberScore?: number | undefined
   rank: number
   title: string
 }
@@ -189,9 +189,11 @@ export function TrendingCard({
           className="relative z-10"
           src={artworkSrc}
         >
-          <Badge className="absolute top-3 left-3" tone="neutral">
-            {memberScore.toFixed(1)} member
-          </Badge>
+          {memberScore === undefined ? null : (
+            <Badge className="absolute top-3 left-3" tone="neutral">
+              {memberScore.toFixed(1)} member
+            </Badge>
+          )}
         </ArtworkFrame>
       </div>
       <div className="min-w-0 pl-10 sm:pl-12">
@@ -205,7 +207,7 @@ export function TrendingCard({
         ) : (
           <h3 className="mt-3 text-sm font-bold text-ink">{title}</h3>
         )}
-        <p className="mt-1 text-xs text-muted">{completionProof}</p>
+        {completionProof ? <p className="mt-1 text-xs text-muted">{completionProof}</p> : null}
       </div>
     </article>
   )

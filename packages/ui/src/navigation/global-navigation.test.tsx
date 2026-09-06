@@ -82,4 +82,23 @@ describe('GlobalNavigation', () => {
     )
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
   })
+
+  it('replaces the member avatar with sign-in actions for signed-out visitors', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <GlobalNavigation profileName="Hamza" signedIn={false} />,
+    )
+
+    expect(container.querySelector('[data-session-state="signed-out"]')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Sign in' })).toHaveLength(2)
+    expect(screen.queryByRole('link', { name: /Open Hamza profile/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }))
+
+    expect(
+      within(screen.getByRole('dialog', { name: 'Primary navigation' })).getByRole('link', {
+        name: 'Sign in',
+      }),
+    ).toHaveAttribute('href', '/sign-in')
+  })
 })

@@ -1,41 +1,75 @@
+import type { ReactNode } from 'react'
+
 import { titleHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
 import { LockKeyhole } from 'lucide-react'
 
-import { ConsumitPlayer, PlaybackReport, PlaybackTrustNote, WatchHeader, buttonVariants } from '@consumit/ui'
+import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
 
-import { CatalogPreviewNotice } from '../catalog/catalog-attribution'
+export type WatchDemoPlayback = {
+  caption?: string | undefined
+  chapters?: readonly ChapterCue[] | undefined
+  qualityLabel?: string | undefined
+  source: DirectMediaSource
+  topMeta?: ReactNode | undefined
+}
 
-type WatchScreenProps = { episode?: CatalogEpisode | undefined; title: CatalogTitleDetail }
+type WatchScreenProps = {
+  demo?: WatchDemoPlayback | undefined
+  episode?: CatalogEpisode | undefined
+  title: CatalogTitleDetail
+}
 
-export function WatchScreen({ episode, title }: WatchScreenProps) {
+/**
+ * Deterministic fixture path for visual work only. Production routes never
+ * pass `demo`: with no authorized source the screen stays in its honest
+ * unavailable branch and loads no media, demo clip, trailer, or embed.
+ */
+export function WatchScreen({ demo, episode, title }: WatchScreenProps) {
   const displayTitle = episode ? `${title.title} · ${episode.title}` : title.title
   const meta = episode
     ? `Season ${episode.seasonNumber} · Episode ${episode.episodeNumber}${episode.runtimeMinutes ? ` · ${episode.runtimeMinutes} min` : ''}`
     : [title.year, title.kind === 'movie' && title.runtimeMinutes ? `${title.runtimeMinutes} min` : 'Movie'].filter(Boolean).join(' · ')
   const poster = episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined
+  const hasDemo = demo != null
+  const demoMeta = demo?.topMeta ?? (demo ? `Playing from Consumit · ${demo.qualityLabel ?? demo.source.qualityHint ?? 'HD'}` : undefined)
 
   return (
-    <main className="min-h-screen bg-black" data-consumit-watch-screen data-tmdb-id={title.id}>
-      <WatchHeader backHref={titleHref(title)} className="border-white/10 bg-black" exitHref={titleHref(title)} meta={meta} status={<strong className="text-muted">Source unavailable</strong>} title={displayTitle} />
-      <CatalogPreviewNotice />
-      <div className="mx-auto grid w-full max-w-[100rem] gap-6 px-4 py-5 sm:px-8 lg:min-h-[calc(100vh-5rem)] lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-center lg:px-10 lg:py-8">
-        <section aria-label={`${displayTitle} playback`} className="min-w-0">
-          <ConsumitPlayer className="rounded-none border-white/10 lg:max-h-[calc(100vh-9rem)]" posterSrc={poster} status="No authorized source available" statusTone="unavailable" title={displayTitle} videoClassName="lg:max-h-[calc(100vh-12rem)]" />
-          <div className="mt-4 flex items-start gap-3 rounded-card border border-white/10 bg-[#111114] p-4 text-sm leading-6 text-copy" role="status">
+    <main className="flex min-h-screen flex-col bg-black" data-consumit-player-screen data-consumit-watch-screen data-tmdb-id={title.id}>
+      <WatchHeader backHref={titleHref(title)} className="border-white/10 bg-black" exitHref={titleHref(title)} meta={meta} status={hasDemo ? <strong className="text-copy">Preview source ready</strong> : <strong className="text-muted">Source unavailable</strong>} title={displayTitle} />
+      <section aria-label={`${displayTitle} playback`} className="mx-auto flex w-full max-w-[100rem] flex-1 flex-col px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
+        <div className="flex min-h-0 flex-1 items-start pt-3 lg:items-center lg:pt-0">
+          {hasDemo && demo ? (
+            <ConsumitPlayer
+              caption={demo.caption}
+              chapters={demo.chapters}
+              className="w-full rounded-none border-white/10"
+              posterSrc={poster}
+              source={demo.source}
+              status="Preview source ready"
+              statusTone="healthy"
+              title={displayTitle}
+              topMeta={demoMeta}
+              videoClassName="max-h-[calc(100svh-13rem)]"
+            />
+          ) : (
+            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No authorized source available" statusTone="unavailable" title={displayTitle} videoClassName="max-h-[calc(100svh-13rem)]" />
+          )}
+        </div>
+        <div className="flex flex-col gap-4 border-t border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between" role="status">
+          <div className="flex max-w-[72ch] items-start gap-3 text-xs leading-5 text-muted sm:text-sm sm:leading-6">
             <LockKeyhole aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-orange" />
-            <p>Consumit has real metadata for this title, but no authorized direct-media source. Playback controls stay disabled until a licensed source is available.</p>
+            {hasDemo ? (
+              <p>Preview fixture. Source selection, status, and progress stay synchronized from one playback state.</p>
+            ) : (
+              <p>This is the Consumit Player. Playback remains disabled until an authorized direct-media source is available.</p>
+            )}
           </div>
-        </section>
-        <aside className="space-y-4 self-center" aria-label="Playback status and support">
-          <section className="rounded-card border border-border bg-surface p-5">
-            <h2 className="text-sm font-bold text-ink">Nothing was loaded</h2>
-            <p className="mt-3 text-xs leading-5 text-muted">No iframe, embed, trailer, or demo clip is standing in for this title.</p>
-            <a className={`${buttonVariants({ variant: 'secondary' })} mt-5 w-full`} href={titleHref(title)}>Return to title</a>
-          </section>
-          <PlaybackReport description="Tell us if you expected an authorized source. Your progress and library stay unchanged." href="/settings#support" />
-          <PlaybackTrustNote>Consumit will never ask you to install a player, browser extension, or codec pack.</PlaybackTrustNote>
-        </aside>
-      </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(title)}>Return to title</a>
+            <a className={buttonVariants({ size: 'sm', variant: 'ghost' })} href="/settings#support">Report an issue</a>
+          </div>
+        </div>
+      </section>
     </main>
   )
 }

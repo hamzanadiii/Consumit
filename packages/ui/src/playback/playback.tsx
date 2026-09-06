@@ -33,12 +33,12 @@ export function WatchHeader({
       <a aria-label="Back to title" className="grid size-11 shrink-0 place-items-center rounded-control text-copy outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={backHref}>
         <ArrowLeft aria-hidden="true" className="size-5" />
       </a>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h1 className="truncate text-sm font-bold text-ink sm:text-base">{title}</h1>
         {meta ? <div className="mt-1 truncate text-xs text-muted">{meta}</div> : null}
       </div>
       {status ? <div className="ml-auto hidden text-xs text-muted sm:block">{status}</div> : null}
-      {exitHref ? <a className="ml-auto flex min-h-11 shrink-0 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-copy outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:ml-4" href={exitHref}>Exit watch</a> : null}
+      {exitHref ? <a aria-label="Exit watch" className="ml-auto flex min-h-11 shrink-0 items-center rounded-control border border-control-outline px-3 text-sm font-bold text-copy outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:ml-4 sm:px-4" href={exitHref}><span className="sm:hidden">Exit</span><span className="hidden sm:inline">Exit watch</span></a> : null}
     </header>
   )
 }

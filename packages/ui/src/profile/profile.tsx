@@ -333,7 +333,7 @@ export type ProfileReviewCardProps = Omit<ComponentProps<'article'>, 'children'>
   excerpt: ReactNode
   href?: string | undefined
   likes: string
-  rating: number
+  rating?: number | undefined
   reviewedOn: string
   title: string
 }
@@ -364,7 +364,7 @@ export function ProfileReviewCard({
         src={artworkSrc}
       />
       <div className="min-w-0 p-4 sm:p-6">
-        <RatingDisplay value={rating} />
+        {rating === undefined ? null : <RatingDisplay value={rating} />}
         {href ? (
           <a
             className="mt-3 flex min-h-11 items-center font-display text-2xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none sm:text-3xl"

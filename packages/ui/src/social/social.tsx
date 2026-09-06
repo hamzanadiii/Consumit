@@ -103,7 +103,7 @@ export type TrustedReactionProps = Omit<ComponentProps<'article'>, 'children'> &
   memberName: string
   meta?: ReactNode | undefined
   quote: ReactNode
-  rating: number
+  rating?: number | undefined
 }
 
 export function TrustedReaction({
@@ -133,7 +133,7 @@ export function TrustedReaction({
           meta={meta}
           name={memberName}
         />
-        <RatingDisplay value={rating} />
+        {rating === undefined ? null : <RatingDisplay value={rating} />}
       </div>
       <blockquote className="mt-5 font-display text-xl leading-snug text-copy sm:text-2xl">
         “{quote}”
@@ -153,7 +153,7 @@ export type FriendRowProps = Omit<ComponentProps<'div'>, 'children'> & {
   href?: string | undefined
   name: string
   onAction?: (() => void) | undefined
-  overlap: number
+  overlap?: number | undefined
   status?: PresenceState | undefined
 }
 
@@ -170,7 +170,9 @@ export function FriendRow({
   status,
   ...props
 }: FriendRowProps) {
-  const safeOverlap = Math.min(Math.max(Math.round(overlap), 0), 100)
+  const safeOverlap = overlap === undefined
+    ? undefined
+    : Math.min(Math.max(Math.round(overlap), 0), 100)
   const resolvedActionLabel = actionLabel ?? (following ? 'Following' : 'Follow')
 
   return (
@@ -195,7 +197,7 @@ export function FriendRow({
           <p className="text-sm font-bold text-ink">{name}</p>
         )}
         {status ? <span className="sr-only">{status}</span> : null}
-        <p className="mt-1 text-xs text-lilac">{safeOverlap}% taste overlap</p>
+        {safeOverlap === undefined ? null : <p className="mt-1 text-xs text-lilac">{safeOverlap}% taste overlap</p>}
         {detail ? <div className="mt-1 text-[0.6875rem] text-muted">{detail}</div> : null}
       </div>
       <Button

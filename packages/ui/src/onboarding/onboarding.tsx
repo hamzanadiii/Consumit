@@ -160,7 +160,7 @@ export type MemberSuggestionProps = Omit<ComponentProps<'article'>, 'children'> 
   handle: string
   name: string
   onFollowingChange?: ((following: boolean) => void) | undefined
-  overlap: number
+  overlap?: number | undefined
 }
 
 export function MemberSuggestion({
@@ -176,7 +176,9 @@ export function MemberSuggestion({
   overlap,
   ...props
 }: MemberSuggestionProps) {
-  const safeOverlap = Math.min(Math.max(Math.round(overlap), 0), 100)
+  const safeOverlap = overlap === undefined
+    ? undefined
+    : Math.min(Math.max(Math.round(overlap), 0), 100)
 
   return (
     <article className={cn('flex min-w-0 flex-col gap-4 rounded-card border border-border bg-surface p-4 sm:flex-row sm:items-center', className)} data-consumit-member-suggestion {...props}>
@@ -185,7 +187,7 @@ export function MemberSuggestion({
         <h3 className="text-base font-bold text-ink">{name}</h3>
         <p className="mt-1 text-xs text-muted">{handle}{films ? ` · ${films}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>
+          {safeOverlap === undefined ? null : <p className="text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>}
           {detail ? <p className="text-xs leading-5 text-muted">{detail}</p> : null}
         </div>
       </div>
