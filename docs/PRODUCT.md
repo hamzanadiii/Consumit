@@ -98,6 +98,8 @@ From your circle and Continue watching are temporarily hidden behind the `SHOW_M
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
 - Provider integrations use sources Consumit is legally and contractually permitted to expose.
+- Launch market is tier-1: US, UK, CA, AU, DE, FR, NL, ES, and IT.
+- Monetization uses first-class ads with fail-open playback: ad failure never blocks media, and ads stay visibly separate from editorial and member surfaces.
 
 ## Visual direction
 

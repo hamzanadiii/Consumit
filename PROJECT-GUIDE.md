@@ -52,7 +52,10 @@ Hard scope walls: no watch parties/rooms, no messaging, availability
 preferences are not billing connections, dedicated first-party player screen
 (no embeds/iframes), every Watch action opens the player route directly,
 Taste Match/scores hidden until their logic ships, no global nav inside
-playback, mobile composed intentionally, only legally permitted sources.
+playback, mobile composed intentionally, only legally permitted sources. Launch
+market is tier-1 (US, UK, CA, AU, DE, FR, NL, ES, IT). Monetization uses
+first-class ads with fail-open playback, visibly separate from editorial and
+member surfaces.
 
 ## 2. Domain language (from CONTEXT.md)
 
@@ -110,8 +113,9 @@ CLOSED→OPEN→HALF_OPEN→CLOSED. Discovery and expiring-access caches are
 separate records; concurrent misses coalesce.
 
 Data: Postgres owns members, credentials, follows, ratings/reviews/
-favorites/lists, history/progress, catalog refs, provider config. Valkey owns
-caches, locks/single-flight, sessions, rate limits, health, queues. Raw
+favorites/lists, history/progress, catalog refs, provider config. Valkey arrives
+later on measured need (shared cache, coordination, queues); launch-time
+sessions live in Postgres. Raw
 telemetry moves to ClickHouse later. Strong consistency for identity/privacy;
 eventual for rankings/counters.
 
@@ -155,7 +159,9 @@ finish families ship in order, each with its states and accessibility, sample
 data at the seam, no speculative packages.
 
 Screen build order: auth → Home → Title/Series → Watch → Help/Report →
-Search → Profiles → Library → Friends → Lists → Settings → onboarding.
+Search → Profiles → Library → Friends → Lists → Settings → onboarding. SEO
+ships with screens: per-route metadata/OG/canonical, title pages as landing
+surfaces, sitemap + robots once routes stabilize.
 Behavior slices: identity (preview done, backend open) → catalog (TMDB slice
 done) → library → social → playback → personalization. Playback hardening
 (contract tests, SSRF, timeouts/hedging/breakers, cache discipline, sessions,
@@ -173,9 +179,10 @@ the next.
    native delivery. Blocks playback work. (Triage input: `PROVE/`.)
 2. Privacy defaults across profile/diary/ratings/reviews/lists/follows.
 3. Auth methods, import sources, recovery/verification/deletion/export.
-4. Launch market, languages, subtitle priorities, age rules, hosting region.
+4. Launch market decided (tier-1: US, UK, CA, AU, DE, FR, NL, ES, IT); languages, subtitle priorities, age rules incl. ads consent, hosting region open.
 5. First-release boundary (inventory > MVP).
 6. Success measures beyond playback reliability.
+7. Ads details: network, consent, age-gating, frequency ownership, revenue measures (Phase 9 gate).
 Resolved: Bun/Next/Fastify/Tailwind/Lucide/CVA/Vitest stack · Node 24 ·
 first-party player, no embeds · one-way Follow/Circle, no messaging · TMDB
 canonical (en-US/US/no-adult), anime as movie/series · first slice = tokens +

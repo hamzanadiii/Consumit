@@ -12,6 +12,8 @@ These questions are intentionally unresolved. They are ordered by how soon they 
 - Playback uses a first-party Consumit Player with authorized direct media sources; iframe and embed delivery are excluded.
 - Social relationships use one-way Follow and Circle semantics; reciprocal friend requests and private or direct messaging are excluded.
 - TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, people, and artwork. Anime is classified as a movie or series, not a separate title kind. Catalog metadata uses English (`en-US`), the US market, and excludes adult results.
+- Launch market is tier-1: US, UK, CA, AU, DE, FR, NL, ES, and IT.
+- Ads are a first-class monetization surface with fail-open playback; network, consent, and age-gating details remain open.
 
 ## Blocking playback work
 
@@ -33,7 +35,7 @@ Choose launch authentication methods and permitted sources/formats for history i
 
 ### 4. Initial market and localization
 
-Confirm launch countries, primary language(s), subtitle priorities, age/content requirements, and hosting region. Morocco/Europe and Frankfurt/Amsterdam appear as examples in the architecture brief, not confirmed commitments.
+Launch countries are decided (tier-1: US, UK, CA, AU, DE, FR, NL, ES, IT). Confirm primary language(s), subtitle priorities, age/content requirements including ads consent and age-gating, and hosting region.
 
 ### 5. First-release boundary
 
@@ -42,3 +44,7 @@ The screen inventory is broader than a small MVP. Decide which member loop must 
 ### 6. Success measures
 
 Set the first product measures in addition to playback reliability: for example, time to first useful recommendation, play-through rate, save/favorite conversion, week-one return, and discovery from circle activity.
+
+### 7. Ads and monetization
+
+Ads are in scope with fail-open playback. Decide the ad network, consent handling, age-gating, frequency policy ownership, and revenue measures before Phase 9 work begins.

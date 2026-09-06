@@ -83,7 +83,7 @@ Assemble screens with deterministic local fixtures before wiring application log
 
 This order is a proposal. Select the first screen after the technical foundation and first product slice are confirmed.
 
-For each screen, verify the reference viewport, a narrow desktop/tablet width, keyboard navigation, long copy, empty/loading/error states, and responsive intent. Mobile receives a separate composition decision.
+For each screen, verify the reference viewport, a narrow desktop/tablet width, keyboard navigation, long copy, empty/loading/error states, and responsive intent. Mobile receives a separate composition decision. Each screen also ships its SEO contract: route metadata (title, description, canonical), Open Graph/Twitter cards, and noindex where member-specific. Title and Series detail pages are landing surfaces with TMDB-driven metadata, JSON-LD, and crawlable overviews; sitemap and robots land once public routes stabilize.
 
 Exit criterion: the screen is visually reviewable end to end with local fixtures and no production integration required.
 

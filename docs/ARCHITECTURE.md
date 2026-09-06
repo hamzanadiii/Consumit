@@ -37,8 +37,8 @@ The selected foundation is:
 
 The longer-term direction remains:
 
-- Postgres, initially a managed option such as Neon
-- Valkey for shared cache, coordination, rate limits, sessions, and initial queues
+- Postgres, initially a managed option such as Neon — durable truth plus launch-time sessions
+- Valkey later, only when shared coordination, queues, distributed limits, or shared cache become measured needs
 - Cloudflare for DNS, WAF, CDN, and edge rate limiting
 - A simple Docker-based deployment on infrastructure such as Hetzner
 - OpenTelemetry, Prometheus, Grafana, Loki, and Sentry for initial observability
@@ -238,14 +238,9 @@ The Consumit Player owns the playback controls and native media surface. A playb
 - Playback-session history when durable retention is needed
 - Provider configuration and aggregates
 
-### Valkey
+### Valkey (later, on measured need)
 
-- Resolution and negative caches
-- Distributed locks and single-flight coordination
-- Short-lived playback sessions
-- Rate limits
-- Provider health and hot scores
-- Queues
+Introduced only when shared coordination, queues, distributed limits, or shared cache are required. Then it owns resolution and negative caches, distributed locks and single-flight coordination, rate counters, provider health and hot scores, and queues. Launch-time sessions live in Postgres.
 
 ### Analytics store, later
 
@@ -324,7 +319,7 @@ This is an interface inventory, not route-level implementation approval. Contrac
 
 ### Stage 1: simple production
 
-Cloudflare fronts a small deployment running the web app, API, resolver workers, and telemetry worker; managed Postgres and Valkey provide shared state; Docker provides repeatable operation. Named vendors are candidates, not mandatory commitments.
+Cloudflare fronts one small VPS running the web app, API, and resolver; managed Postgres with backups provides durable truth including launch-time sessions; bounded process memory covers disposable cache and single-flight. Docker provides repeatable operation. Valkey and worker separation arrive on measured need. Named vendors are candidates, not mandatory commitments.
 
 ### Stage 2: measured horizontal growth
 
@@ -367,7 +362,7 @@ These standards generalize the catalog module's established shape (`apps/api/src
 
 1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by a server-side store, with rotation on privilege change and origin checks on cookie-authed mutations. The browser-local preview session is never trusted (see the preview boundary above).
 2. **Direct-first media with one audited escape hatch.** Providers that require custom request headers cannot play directly from a browser; for exactly those, a narrow lease-scoped fetch proxy is permitted — short-lived leases, explicit domain allowlist, full SSRF guard, no open fetching. This keeps invariant 2 while preserving the old lease model's real lesson.
-3. **No rooms, DMs, watch parties, donations, ads, or checkout.** That scope is excluded; do not scaffold it.
+3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
 5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
 6. **Localized failure.** No global API-down panic: auth/catalog/playback failures stay in their surface with retry or fallback, as the web shell already expects.

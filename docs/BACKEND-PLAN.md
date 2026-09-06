@@ -2,13 +2,18 @@
 
 > **Purpose:** Build the backend **touch by touch** without turning Consumit into an over-engineered mess.
 >
-> **Status:** Research-backed implementation plan, 2026-09-06.
+> **Status:** Research-backed implementation plan, 2026-09-06. Updated for streaming + ads + lean-cost launch architecture.
 >
 > **Primary rule:** finish the smallest coherent backend slice, prove it, then move to the next one.
 >
 > This plan extends the existing `PROJECT-GUIDE.md`, `ARCHITECTURE.md`, `DELIVERY.md`,
 > `LIBRARIES.md`, `OPEN-QUESTIONS.md`, `PRODUCT.md`, and `PROVIDERS.md`.
 > Those files remain authoritative when they define product scope or an already-made decision.
+>
+> **Decision update (2026-09-06):** streaming remains a core Consumit capability and ads are back in
+> scope as a first-class monetization surface. This explicitly supersedes any earlier "no ads"
+> assumption for backend planning. The product/architecture source docs should be synchronized with
+> this decision when they are next updated so agents do not receive conflicting instructions.
 
 ---
 
@@ -32,13 +37,17 @@ Fastify API
    +--> library
    +--> social
    +--> playback
+   +--> ads
    +--> personalization
    |
-   +--> Postgres          durable truth
-   +--> Valkey-critical   sessions / locks / queues / coordination
-   +--> Valkey-cache      resolver/cache data when scale requires it
+   +--> Postgres          durable truth + launch sessions
+   +--> process memory    bounded cache / single-flight / hot health
+   +--> Valkey            only when shared coordination / queues / cache justify it
    |
    +--> workers           only when real background work exists
+   |
+   +--> authorized media providers/CDNs ---- media bytes ----> browser
+   +--> ad network/CDN ---------------------- ad creative ----> browser
 ```
 
 The API stays one deployable system until **measured load, security isolation, or operational
@@ -65,18 +74,20 @@ These existing decisions are good and should stay:
 2. Next.js web + Fastify API.
 3. Shared Zod contracts.
 4. TMDB as canonical metadata identity.
-5. Postgres for durable member/product data.
-6. Valkey for ephemeral/shared coordination.
+5. Postgres for durable member/product data and launch-time server sessions.
+6. Valkey only when shared coordination, queues, distributed limits, or shared cache become real needs.
 7. Provider quirks hidden behind adapters.
 8. First-party Consumit Player.
-9. Progress stored by member + title/episode, never by stream URL.
-10. Server-side cookie sessions, never localStorage auth tokens.
-11. Deterministic fakes and fixture-driven tests.
-12. Stateless request-serving processes.
-13. External output is untrusted until validated.
-14. Every external request is bounded.
-15. Provider failure is treated as a normal operating state.
-16. Queues, ClickHouse, multiple regions, orchestration, etc. arrive only when measured need exists.
+9. Streaming remains a core product path, with direct provider/CDN → browser delivery preferred.
+10. Ads are a first-class monetization module, but ad failure never blocks playback.
+11. Progress stored by member + title/episode, never by stream URL.
+12. Server-side cookie sessions, never localStorage auth tokens.
+13. Deterministic fakes and fixture-driven tests.
+14. Stateless request-serving processes.
+15. External output is untrusted until validated.
+16. Every external request is bounded.
+17. Provider failure is treated as a normal operating state.
+18. Queues, ClickHouse, multiple regions, orchestration, etc. arrive only when measured need exists.
 
 ---
 
@@ -151,17 +162,47 @@ Database shape and HTTP shape are different contracts.
 
 ---
 
-## 2.3 Separate Valkey by reliability class when playback grows
+## 2.3 Defer Valkey at launch; split it by reliability class when it arrives
 
-Do not eventually put everything in one Valkey instance with one memory policy.
+Do **not** buy or operate Valkey merely because sessions/caches exist.
+
+For the first production topology with one API instance:
+
+```text
+Postgres
+  -> members
+  -> credentials
+  -> server sessions
+  -> durable progress/library/social truth
+
+process memory
+  -> bounded LRU/read-through cache
+  -> single-flight/request coalescing
+  -> short-lived provider health snapshots
+  -> disposable hot data
+```
+
+This is cheaper and removes one network dependency from the critical path.
+
+Introduce Valkey when at least one of these becomes true:
+
+- multiple API/resolver instances need shared state;
+- distributed rate limiting is required;
+- BullMQ or another real queue is introduced;
+- resolver cache must be shared across processes;
+- distributed single-flight/locks are required;
+- Postgres session traffic becomes a measured hot path.
+
+When Valkey is introduced, do not eventually put everything in one instance with one memory
+policy.
 
 ### `Valkey-critical`
 
 Use for:
 
-- sessions;
+- server sessions **after** migration away from Postgres is justified;
 - distributed locks;
-- single-flight coordination that must be predictable;
+- distributed single-flight coordination;
 - BullMQ when queues arrive;
 - critical short-lived coordination.
 
@@ -192,19 +233,52 @@ Recommended operating direction:
 
 ### Why split?
 
-Cache wants eviction.
+Cache wants eviction. Queues and critical coordination do not.
 
-Queues specifically must not have arbitrary key eviction.
-
-Those are conflicting reliability requirements.
-
-At tiny scale, Consumit may temporarily use one managed Valkey for the **critical** use-cases
-while the catalog cache remains in-process. Introduce the cache instance when resolver/shared
-cache pressure actually exists.
+Those are conflicting reliability requirements. One cheap shared instance may be acceptable for
+a short transitional period, but the long-term operating model keeps critical coordination
+separate from disposable cache data.
 
 ---
 
-## 2.4 Treat database migrations as production code
+## 2.4 Cost-control is part of the architecture
+
+The cheapest high-quality system is the one that avoids becoming the bandwidth pipe.
+
+Hard cost rules:
+
+1. **Media bytes are direct-first.** Authorized provider/CDN → browser whenever technically and
+   contractually permitted.
+2. **Lease proxy is an exception.** Proxy only header-locked sources that truly require it.
+3. **Ad creatives are direct.** Ad network/CDN → browser; Consumit owns policy and telemetry, not
+   the creative bandwidth.
+4. **One production compute box first.** Web + API + resolver + tiny worker can share one VPS while
+   load is small.
+5. **Managed Postgres is worth paying for.** Irreplaceable member data gets backups/PITR; cheap
+   stateless compute can be replaced.
+6. **Use free edge/observability/email tiers while they fit.** Do not buy enterprise tooling before
+   usage requires it.
+7. **Cache in layers.** Edge → bounded process memory → shared cache only when necessary → upstream.
+8. **Browser automation is not a default resolver technique.** Prefer HTTP/JSON/HTML parsing;
+   reserve browser pools for integrations that genuinely require execution.
+9. **Telemetry is batched and meaningful.** Never create a database write for every playback tick.
+10. **Scale on a measured bottleneck, not projected DAU.**
+
+Target launch infrastructure budget: **roughly $20–30/month plus domain/tax/IP extras**, subject to
+current vendor pricing and actual database usage.
+
+The target is not the absolute cheapest bill. The target is the lowest bill that still preserves:
+
+- durable member data;
+- secure authentication;
+- good playback startup;
+- clean fallback behavior;
+- useful observability;
+- safe deploy/rollback.
+
+---
+
+## 2.5 Treat database migrations as production code
 
 Never let an agent casually mutate production schema.
 
@@ -239,7 +313,7 @@ A code rollback must remain possible after a normal schema migration.
 
 ---
 
-## 2.5 Real Postgres in integration tests
+## 2.6 Real Postgres in integration tests
 
 Do not use SQLite as a fake Postgres.
 
@@ -261,7 +335,7 @@ thing being tested.
 
 ---
 
-## 2.6 Transactions stay short
+## 2.7 Transactions stay short
 
 Inside a database transaction:
 
@@ -281,7 +355,7 @@ Do not add event sourcing.
 
 ---
 
-## 2.7 Idempotency must be designed, not patched later
+## 2.8 Idempotency must be designed, not patched later
 
 Operations likely to be retried must be safe to repeat.
 
@@ -309,7 +383,7 @@ side effect.
 
 ---
 
-## 2.8 Observability starts small, before production debugging hurts
+## 2.9 Observability starts small, before production debugging hurts
 
 Three signals:
 
@@ -395,6 +469,14 @@ apps/api/src/
     session-store.ts
     *.test.ts
 
+  ads/
+    ads.ts             # ad policy/interface; playback never imports an ad vendor directly
+    routes.ts          # optional client ad config/events boundary
+    policy.ts          # placement, frequency, eligibility, fail-open behavior
+    fake-ads.ts
+    <network>-ads.ts   # real VAST/ad-network adapter only when selected
+    *.test.ts
+
   personalization/
     personalization.ts
     ...
@@ -433,6 +515,7 @@ business/use-case logic
  |
  +--> repository / storage adapter
  +--> upstream adapter
+ +--> ad-network adapter when inside the ads module
  +--> queue port
  +--> telemetry port
 ```
@@ -451,6 +534,10 @@ worker -------X----> page code
 
 A provider gets the minimum information required to resolve playback.
 
+The ads module is equally isolated: the resolver does not know about ads, and the ad network does
+not receive provider internals, member credentials, or social data. The player/controller may
+coordinate an ad break, but **ad availability is never a prerequisite for media availability**.
+
 ---
 
 # 5. Storage ownership
@@ -461,6 +548,7 @@ Owns:
 
 - members;
 - credentials;
+- **server sessions at launch**;
 - profile settings;
 - privacy settings;
 - follows/circle relationships;
@@ -476,19 +564,34 @@ Owns:
 - durable provider aggregates/configuration where required;
 - durable playback audit/history only if product/operations need it.
 
-## Valkey-critical = ephemeral operational state
+Launch-time verification/reset state may also use Postgres if that keeps the first production
+system simpler. Expiry and bounded-attempt rules still apply.
 
-Owns:
+## Process memory = cheap disposable acceleration at launch
 
-- server sessions;
-- auth throttling counters;
+Owns only bounded/rebuildable state:
+
+- LRU/read-through session cache;
+- catalog hot cache;
+- in-process single-flight;
+- short provider-health snapshots;
+- tiny negative/hot caches with TTLs.
+
+A restart may erase this state without corrupting the product.
+
+## Valkey-critical = later shared operational state
+
+Introduced only when measured/shared requirements exist. Then it may own:
+
+- shared server sessions;
+- distributed auth/rate counters;
 - short verification/reset state;
 - distributed locks;
-- single-flight ownership;
-- queues when introduced;
-- short-lived playback session state where losing the state is recoverable.
+- distributed single-flight ownership;
+- queues;
+- short-lived playback coordination.
 
-## Valkey-cache = disposable acceleration
+## Valkey-cache = later disposable acceleration
 
 Owns:
 
@@ -1381,21 +1484,35 @@ Argon2id.
 
 No hashing logic in routes.
 
-## Touch 3.5 — Valkey-critical
+## Touch 3.5 — Launch session persistence
 
-Introduce the critical Valkey connection because real sessions now need it.
+Do **not** introduce Valkey merely because authentication now exists.
 
-Use:
+Create the first session persistence in Postgres.
 
-- ACL/auth;
-- TLS for remote connections;
-- key prefixing by feature;
-- TTLs;
-- reconnect policy;
-- `noeviction` direction;
-- persistence appropriate to session durability.
+Suggested direction:
 
-Do not introduce `Valkey-cache` yet unless another measured/shared-cache need exists.
+```text
+session
+  id / token_hash
+  member_id
+  created_at
+  last_seen_at
+  expires_at
+  auth_version / revoked_at when required
+```
+
+Rules:
+
+- raw bearer token is not stored when a derived/hash representation is practical;
+- expiry is indexed;
+- expired/revoked cleanup is bounded;
+- one member can support multiple device sessions;
+- logout deletes/revokes the server-side session;
+- logout-all invalidates every member session;
+- a small bounded process-memory read-through cache is optional after correctness exists.
+
+Valkey is a later optimization/multi-instance coordination layer, not an identity prerequisite.
 
 ## Touch 3.6 — Session store
 
@@ -1469,7 +1586,7 @@ Rotate after authentication and sensitive changes.
 
 Only if selected for launch.
 
-Short-lived verification/reset state may live in `Valkey-critical` with bounded attempts.
+Short-lived verification/reset state may live in Postgres at launch with expiry and bounded attempts. Move it to `Valkey-critical` only when operationally justified.
 
 Do not store plaintext reset tokens.
 
@@ -1666,7 +1783,22 @@ Private data never appears through another member's route.
 
 # PHASE 6 — Playback contract before real providers
 
+Streaming remains a core Consumit product capability.
+
 Playback remains blocked by the authorized provider decision.
+
+Cost/reliability invariant for every later playback implementation:
+
+```text
+Consumit resolves / validates / ranks / tracks
+                |
+                +---- control-plane KBs ----> browser
+
+Authorized provider/CDN --------------------> browser
+                     media bytes direct-first
+```
+
+Consumit must not become the default video bandwidth pipe.
 
 ## Touch 6.1 — Provider contract
 
@@ -1901,6 +2033,207 @@ Probes feed health.
 
 Synthetic traffic is marked separately from member traffic.
 
+## Touch 8.11 — Media-cost telemetry
+
+Track the economics of the playback path explicitly:
+
+```text
+direct_playback_sessions
+proxied_playback_sessions
+direct_playback_ratio
+proxy_bytes
+proxy_minutes
+proxy_cost_per_watch_hour
+resolver_requests_per_watch
+provider_calls_per_cold_resolve
+```
+
+Target direction: **well above 90% direct delivery**, and ideally materially higher, subject to
+what the authorized provider set technically supports.
+
+A new provider that forces broad video proxying must justify the bandwidth/reliability cost before
+becoming a primary source.
+
+---
+
+# PHASE 9 — Ads & monetization vertical slice
+
+Ads are part of the new Consumit product, but they are **not part of the resolver** and they never
+own media availability.
+
+Core architecture:
+
+```text
+PlaybackController
+      |
+      +--> MediaController ----> authorized media provider/CDN ----> browser
+      |
+      +--> AdController -------> ad network/CDN -------------------> browser
+```
+
+The backend owns ad **policy**, eligibility, coarse frequency rules, consent state where required,
+and safe telemetry. The selected ad platform should serve the creative directly whenever possible.
+
+### Non-negotiable invariant — fail open
+
+```text
+ad request
+   |
+   +--> success -> play eligible ad -> continue media
+   |
+   +--> timeout / empty / malformed / blocked / vendor outage
+                       |
+                       +--> continue media
+```
+
+**Ad failure must never make a movie or episode unavailable.**
+
+## Touch 9.1 — Ads contract + fake
+
+Create an injectable `Ads` interface and deterministic fake before connecting a network.
+
+The contract should answer product questions such as:
+
+- is an ad break eligible now?;
+- what placement type is requested?;
+- what network request/config is safe to return?;
+- what timeout applies?;
+- what client events are accepted?;
+- why was the ad skipped/suppressed?
+
+Do not expose network-specific response shapes to the rest of the product.
+
+## Touch 9.2 — Ad policy
+
+Start conservative.
+
+First practical policy:
+
+```text
+pre-roll first
+mid-roll later only after retention/UX measurements
+display/native placements later and independently
+```
+
+Policy owns:
+
+- signed-in/signed-out eligibility if different;
+- placement rules;
+- session-level frequency;
+- minimum spacing between breaks;
+- content/runtime eligibility;
+- consent/privacy requirements;
+- explicit fail-open timeout.
+
+Do not make the provider resolver decide whether an ad should play.
+
+## Touch 9.3 — AdController integration
+
+Keep the visual/player integration separate from the media engine.
+
+State may include:
+
+```text
+IDLE
+REQUESTING_AD
+PLAYING_AD
+SKIPPABLE
+AD_ENDED
+AD_FAILED
+RETURNING_TO_MEDIA
+```
+
+The media controller retains the authoritative movie/episode playback state and resume position.
+
+## Touch 9.4 — First ad-network adapter
+
+Connect one approved ad network/ad server through an adapter.
+
+Prefer standard VAST-compatible delivery when the selected provider supports it.
+
+Rules:
+
+- bounded request timeout;
+- validate/normalize network output;
+- creative/media is fetched from the ad network/CDN by the client where supported;
+- no ad-network secret in browser bundles;
+- network failure is localized;
+- respect the network's content, traffic-quality, consent, and placement policies.
+
+Do not build a custom ad exchange.
+
+## Touch 9.5 — Ad telemetry
+
+Useful events:
+
+```text
+AD_REQUESTED
+AD_FILLED
+AD_EMPTY
+AD_STARTED
+AD_FIRST_QUARTILE
+AD_MIDPOINT
+AD_THIRD_QUARTILE
+AD_COMPLETED
+AD_SKIPPED
+AD_ERROR
+AD_TIMEOUT
+```
+
+Batch where possible.
+
+Do not write every ad quartile directly to primary Postgres at meaningful scale. Early telemetry
+can use logs/aggregates; later it can move through the telemetry queue/analytics store.
+
+Key business measures:
+
+```text
+ad requests / watch session
+fill rate
+impressions / watch session
+completion rate
+ad error/timeout rate
+revenue per 1,000 watch sessions
+revenue per DAU
+playback abandonment after ad exposure
+```
+
+Revenue is useless if ad load destroys retention.
+
+## Touch 9.6 — Frequency-cap state
+
+At the one-instance stage, coarse Consumit-owned session caps may live in the playback/session
+state or bounded process memory where reset-on-restart is acceptable. The ad network may also apply
+its own advertiser/user caps.
+
+Move cross-instance Consumit caps to `Valkey-critical` only when multiple API/player-policy
+instances require shared enforcement.
+
+## Touch 9.7 — Display/native placements
+
+Add only after the player monetization path is stable.
+
+Eligible surfaces can include:
+
+- Home;
+- Search/Explore;
+- Title detail;
+- Lists;
+- selected discovery rails.
+
+Ads must be visibly distinguishable from editorial/member recommendations and should not poison
+core navigation or create deceptive click targets.
+
+### Phase 9 exit gate
+
+- ads can monetize eligible watch sessions;
+- ad creatives do not flow through Consumit by default;
+- ad outage does not block playback;
+- frequency/consent policy is explicit;
+- player resumes correctly after ad completion/error;
+- ad events are measurable;
+- ad vendor can be replaced behind the module interface.
+
 ---
 
 # 14. Lease proxy security, if a provider truly requires it
@@ -1963,7 +2296,7 @@ When BullMQ arrives:
 
 ## Queue instance
 
-Use `Valkey-critical`.
+If Valkey has not already been introduced, the first real durable queue is a valid trigger to introduce `Valkey-critical`.
 
 Requirements:
 
@@ -2132,22 +2465,112 @@ Track at minimum:
 
 ---
 
+# 18A. Lean production cost architecture
+
+Cost is treated as an engineering metric alongside latency and reliability.
+
+## Launch topology — target ~$20–30/month
+
+The exact vendor bill changes over time, so verify current prices before purchasing. The target
+shape is:
+
+```text
+Cloudflare Free / low-cost edge
+        |
+        v
+One small production VPS
+  - Next.js
+  - Fastify API
+  - resolver
+  - tiny scheduler/worker only if required
+        |
+        +--> managed Postgres
+        |
+        +--> authorized provider/CDN ---- media ----> browser
+        |
+        +--> ad network/CDN ------------ creative --> browser
+
+Free/low-cost tiers where sufficient:
+  - transactional email
+  - error monitoring
+  - logs/metrics/traces
+```
+
+### Spend money here
+
+- managed Postgres;
+- backups/PITR;
+- a VPS with enough CPU/RAM headroom;
+- domain/security essentials;
+- additional resolver/proxy capacity only when measured.
+
+### Do not spend money here at launch
+
+- dedicated Valkey before shared-state need;
+- dedicated worker server before worker load exists;
+- Kubernetes;
+- separate API/resolver services merely for architecture aesthetics;
+- ClickHouse;
+- paid enterprise observability;
+- media CDN bandwidth that an authorized upstream already delivers;
+- self-hosting ad video creatives.
+
+## Cost ladder / triggers
+
+These are **engineering budget targets, not guaranteed provider quotes**:
+
+| Real usage | Likely topology | Target monthly infra |
+|---:|---|---:|
+| Development | local + free services / tiny VPS | $0–15 |
+| 0–1K DAU | one VPS + managed Postgres + free edge | ~$20–30 |
+| 1K–10K DAU | same, possibly Valkey | ~$30–80 |
+| 10K–50K DAU | larger/second compute + shared cache if measured | ~$80–250 |
+| 50K–100K DAU | API/resolver workers separated where hot | ~$200–600 |
+| 100K+ DAU | scale the measured bottleneck | measured |
+
+The economic goal is that 10× DAU does **not** automatically create 10× infrastructure cost.
+Direct media/ad delivery, caching, single-flight, provider health, and batched telemetry are what
+make that possible.
+
+## Cost SLOs to track
+
+Once production traffic exists, add a monthly cost dashboard:
+
+```text
+infra_cost_total
+infra_cost_per_1k_DAU
+infra_cost_per_1k_watch_sessions
+resolver_cost_per_1k_resolves
+proxy_GB
+proxy_cost_per_watch_hour
+database_cost_per_1k_DAU
+ad_revenue_per_1k_watch_sessions
+net_revenue_after_infra
+```
+
+Do not optimize only for the smallest bill. Optimize **cost per successful watch session** while
+preserving retention and playback quality.
+
+---
+
 # 19. Deployment progression
 
 ## Stage A — simple production
 
 Use:
 
-- Cloudflare;
-- web;
-- one API deployment;
-- managed Postgres;
-- `Valkey-critical` once identity ships;
+- Cloudflare/free edge where sufficient;
+- one small VPS running web + Fastify API + resolver;
+- managed Postgres with backups/PITR;
+- Postgres-backed server sessions;
+- bounded in-process cache + single-flight;
 - Docker;
 - structured logs;
-- basic error monitoring.
+- free/basic error monitoring;
+- direct media delivery from authorized provider/CDN;
+- direct ad creative delivery from the selected ad network/CDN.
 
-Catalog may keep in-process cache.
+No dedicated Valkey unless a measured/shared requirement already exists.
 
 No Kubernetes.
 
@@ -2164,7 +2587,7 @@ Add:
 - multiple stateless API instances;
 - pooled Postgres connections;
 - load balancing;
-- shared cache when required;
+- Valkey/shared cache/distributed rate limits when required;
 - worker separation.
 
 ## Stage C — playback/worker scale
@@ -2375,6 +2798,10 @@ Do not add:
 - separate social service;
 - global state in API memory;
 - open media proxy;
+- default full-stream proxying;
+- self-hosted ad creative delivery when the ad network/CDN can deliver it;
+- custom ad exchange / bidding platform;
+- ad logic inside provider resolver code;
 - background queue for work that can safely remain synchronous;
 - caching every endpoint.
 
@@ -2483,7 +2910,9 @@ list_item
   added_at
 ```
 
-Sessions remain outside this durable model unless audit/product needs require otherwise.
+Launch server sessions are durable Postgres records even if the illustrative table list above omits the exact schema. They may migrate to `Valkey-critical` later when shared/session traffic warrants it.
+
+Do not create a heavy ad-event schema in primary Postgres. Persist only ad policy/consent/configuration that the product truly owns; high-volume ad telemetry belongs in logs/queues/analytics as scale requires.
 
 Do not add taste vectors, recommendations, provider score history, notifications, imports, or
 analytics tables before their slices.
@@ -2572,10 +3001,11 @@ Based on the current docs, I would execute:
 STOP if authorized provider decision is still unresolved
 
 7.x 2–3 authorized provider pilot
-8.x resolver hardening
+8.x resolver hardening + direct/proxy cost telemetry
+9.x ads & monetization (fake/policy -> AdController -> first network -> telemetry)
 
-9. personalization only after real member/library/social signals exist
-10. scale only after measurements
+10. personalization only after real member/library/social signals exist
+11. scale only after measurements
 ```
 
 This order keeps the work small while steadily increasing backend authority.
@@ -2600,6 +3030,7 @@ For Consumit it means:
 - external requests are bounded;
 - failure is localized;
 - provider outages do not crash the system;
+- ad-network outages do not block playback;
 - graceful shutdown works;
 - queue/cache/database failure behavior is designed.
 
@@ -2628,7 +3059,26 @@ For Consumit it means:
 - caches bounded;
 - concurrent misses coalesced;
 - provider work capacity-limited;
-- database writes are not spammed by player ticks.
+- direct media delivery is preferred and measured;
+- ad creatives are delivered by the ad network/CDN when possible;
+- database writes are not spammed by player/ad ticks.
+
+### Cost efficiency
+
+- launch topology stays near the ~$20–30/month target while traffic is small;
+- managed Postgres protects irreplaceable data;
+- Valkey/workers/analytics infrastructure arrive only on measured triggers;
+- proxy bandwidth is visible and intentionally minimized;
+- cost per successful watch session is measured;
+- ad revenue scales with watch sessions without making Consumit serve the ad creative bytes.
+
+### Monetization quality
+
+- ads are clearly separated from editorial/member content;
+- ad policy is independent from provider resolution;
+- ad failure always fails open to media;
+- ad load is tuned against abandonment/retention, not only impression count;
+- vendor-specific ad behavior remains behind an adapter.
 
 ### Maintainability
 
@@ -2784,3 +3234,8 @@ If we follow one rule, use this one:
 
 Consumit should become powerful because each slice is proven, not because the architecture
 diagram looks expensive.
+
+And for the economics:
+
+> **Consumit should own the control plane, product state, playback intelligence, and ad policy —
+> not unnecessarily pay to transport every movie byte or ad creative byte.**
