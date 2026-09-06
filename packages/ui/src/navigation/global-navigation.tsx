@@ -31,7 +31,7 @@ export const defaultNavigationItems: readonly NavigationItem[] = [
   { href: '/', label: 'Home' },
   { href: '/movies', label: 'Movies' },
   { href: '/series', label: 'Series' },
-  { href: '/circle', label: 'Circle' },
+  { href: '/friends', label: 'Friends' },
 ]
 
 function Brand({ href, markSrc }: { href: string; markSrc: string }) {

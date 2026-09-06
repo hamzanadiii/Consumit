@@ -57,6 +57,27 @@ export function ConsumitPlayer({
     if (typeof muted === 'boolean') setIsMuted(muted)
   }, [muted])
 
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const syncMediaClock = () => {
+      setCurrentTime(video.currentTime || 0)
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0)
+    }
+
+    syncMediaClock()
+    video.addEventListener('loadedmetadata', syncMediaClock)
+    video.addEventListener('durationchange', syncMediaClock)
+    video.addEventListener('timeupdate', syncMediaClock)
+
+    return () => {
+      video.removeEventListener('loadedmetadata', syncMediaClock)
+      video.removeEventListener('durationchange', syncMediaClock)
+      video.removeEventListener('timeupdate', syncMediaClock)
+    }
+  }, [src])
+
   async function togglePlayback() {
     const video = videoRef.current
     if (!video || !hasSource) return

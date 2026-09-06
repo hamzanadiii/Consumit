@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, EllipsisVertical } from 'lucide-react'
+import { ArrowRight, EllipsisVertical, Eye, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import {
@@ -20,6 +20,7 @@ import {
   SectionHeading,
   TasteSignature,
   Tabs,
+  buttonVariants,
 } from '@consumit/ui'
 
 const artwork = {
@@ -86,39 +87,51 @@ function displayNameFromUsername(username: string) {
     .join(' ') || 'Member'
 }
 
-export function PublicProfileScreen({ username }: { username: string }) {
+function ProfileScreen({ owner = false, username }: { owner?: boolean; username: string }) {
   const [following, setFollowing] = useState(false)
+  const [previewingPublic, setPreviewingPublic] = useState(false)
   const normalizedUsername = username.trim().replace(/^@+/, '') || 'member'
   const name = displayNameFromUsername(normalizedUsername)
   const profilePath = `/profile/${encodeURIComponent(normalizedUsername)}`
+  const ownerView = owner && !previewingPublic
 
   return (
     <>
       <GlobalNavigation
         activeHref={profilePath}
         avatarSrc="/assets/hamza-avatar.svg"
-        profileHref={profilePath}
-        profileName={name}
+        profileHref="/profile/hamza"
+        profileName="Hamza"
         searchPlaceholder="Search titles, people, lists"
         sticky={false}
       />
 
-      <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-public-profile>
-        <h1 className="sr-only">{name}&apos;s public profile</h1>
+      <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-owner-profile={ownerView || undefined} data-consumit-public-profile={!ownerView || undefined}>
+        <h1 className="sr-only">{ownerView ? 'Your profile' : `${name}'s public profile`}</h1>
         <ProfileMasthead
           actions={(
-            <>
-              <Button
-                aria-pressed={following}
-                onClick={() => setFollowing((current) => !current)}
-                variant={following ? 'secondary' : 'primary'}
-              >
-                {following ? 'Following' : 'Follow'}
-              </Button>
-              <Button aria-label="More profile actions" size="icon" variant="secondary">
-                <EllipsisVertical aria-hidden="true" />
-              </Button>
-            </>
+            ownerView ? (
+              <>
+                <a className={buttonVariants({ variant: 'primary' })} href="/settings"><Pencil aria-hidden="true" /> Edit profile</a>
+                <Button onClick={() => setPreviewingPublic(true)} variant="secondary"><Eye aria-hidden="true" /> Preview</Button>
+                <Button aria-label="Create a new list" size="icon" variant="secondary"><Plus aria-hidden="true" /></Button>
+              </>
+            ) : (
+              <>
+                {owner ? <Button onClick={() => setPreviewingPublic(false)} variant="primary">Exit preview</Button> : (
+                  <Button
+                    aria-pressed={following}
+                    onClick={() => setFollowing((current) => !current)}
+                    variant={following ? 'secondary' : 'primary'}
+                  >
+                    {following ? 'Following' : 'Follow'}
+                  </Button>
+                )}
+                <Button aria-label="More profile actions" size="icon" variant="secondary">
+                  <EllipsisVertical aria-hidden="true" />
+                </Button>
+              </>
+            )
           )}
           avatarClassName="size-28 lg:size-36"
           avatarSrc="/assets/hamza-avatar.svg"
@@ -171,14 +184,26 @@ export function PublicProfileScreen({ username }: { username: string }) {
                 </div>
               </div>
 
-              <aside className="space-y-5" aria-label="Taste compatibility and current watch">
-                <CompatibilityPanel
-                  items={mutuals}
-                  memberName={name}
-                  mutuals="12 shared circle members · 46 shared favorites"
-                  reason="You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves."
-                  score={87}
-                />
+              <aside className="space-y-5" aria-label={ownerView ? 'Profile status and current watch' : 'Taste compatibility and current watch'}>
+                {ownerView ? (
+                  <section className="rounded-card border border-border bg-surface p-5">
+                    <h3 className="text-sm font-bold text-ink">Your profile is ready to be found</h3>
+                    <p className="mt-3 font-display text-4xl leading-none text-ink">82% complete</p>
+                    <div aria-label="Profile 82% complete" aria-valuemax={100} aria-valuemin={0} aria-valuenow={82} className="mt-5 h-1 bg-surface-raised" role="progressbar">
+                      <span className="block h-full w-[82%] bg-orange" />
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-muted">Add two favorite titles and a shorter bio to sharpen recommendations.</p>
+                    <a className="mt-4 inline-flex min-h-11 items-center text-xs font-bold text-orange outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href="/settings">Complete profile <ArrowRight aria-hidden="true" className="ml-2 size-4" /></a>
+                  </section>
+                ) : (
+                  <CompatibilityPanel
+                    items={mutuals}
+                    memberName={name}
+                    mutuals="12 shared circle members · 46 shared favorites"
+                    reason="You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves."
+                    score={87}
+                  />
+                )}
                 <div className="rounded-card border border-border bg-surface p-5">
                   <div className="flex items-center justify-between gap-4">
                     <h3 className="text-sm font-bold text-ink">Watching now</h3>
@@ -333,8 +358,8 @@ export function PublicProfileScreen({ username }: { username: string }) {
                 ))}
               </div>
               <aside className="rounded-card border border-border bg-surface p-5">
-                <p className="text-sm font-bold text-ink">Follow {name} to improve your feed</p>
-                <p className="mt-2 text-xs leading-5 text-muted">His ratings will appear beside your recommendations.</p>
+                <p className="text-sm font-bold text-ink">{ownerView ? 'Your profile pulse' : `Follow ${name} to improve your feed`}</p>
+                <p className="mt-2 text-xs leading-5 text-muted">{ownerView ? '14 people found a title through your activity this week.' : 'Their ratings will appear beside your recommendations.'}</p>
               </aside>
             </div>
           </section>
@@ -354,4 +379,12 @@ export function PublicProfileScreen({ username }: { username: string }) {
       />
     </>
   )
+}
+
+export function PublicProfileScreen({ username }: { username: string }) {
+  return <ProfileScreen username={username} />
+}
+
+export function OwnerProfileScreen({ username = 'hamza' }: { username?: string }) {
+  return <ProfileScreen owner username={username} />
 }

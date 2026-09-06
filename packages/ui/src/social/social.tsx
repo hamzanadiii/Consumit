@@ -202,7 +202,7 @@ export function FriendRow({
         aria-pressed={following}
         onClick={onAction}
         size="sm"
-        variant={following ? 'ghost' : 'secondary'}
+        variant={following ? 'secondary' : 'primary'}
       >
         {resolvedActionLabel}
       </Button>

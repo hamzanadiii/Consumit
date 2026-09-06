@@ -46,9 +46,18 @@ describe('social components', () => {
 
     const follow = screen.getByRole('button', { name: 'Follow' })
     expect(follow).toHaveAttribute('aria-pressed', 'false')
+    expect(follow).toHaveClass('bg-ink', 'text-canvas')
     expect(screen.getByText('online')).toHaveClass('sr-only')
     await user.click(follow)
     expect(onAction).toHaveBeenCalledOnce()
+  })
+
+  it('steps an active follow relationship back to the outlined treatment', () => {
+    render(<FriendRow following name="Meriem Rahal" overlap={89} />)
+
+    const following = screen.getByRole('button', { name: 'Following' })
+    expect(following).toHaveAttribute('aria-pressed', 'true')
+    expect(following).toHaveClass('border', 'bg-transparent', 'text-ink')
   })
 
   it('keeps trusted reactions visible and spoilers user-controlled', () => {

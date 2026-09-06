@@ -276,6 +276,7 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 
 Profile surfaces are living taste spaces rather than account summaries.
 
+- **Ownership state:** Public and owner presentations share the canonical `/profile/[username]` route. When the route belongs to the signed-in member, replace public follow and compatibility actions with editing, completion, and public-preview controls instead of creating a separate owner URL.
 - **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then the follow action. Statistics support the person; they do not become the headline. Direct messaging is not part of the product.
 - **Profile composition:** Move from the masthead into horizontally scrollable section tabs, then pair primary section content with contextual evidence on desktop. On mobile, place each evidence block immediately after the content it explains.
 - **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.

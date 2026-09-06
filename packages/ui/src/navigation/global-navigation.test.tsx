@@ -24,9 +24,9 @@ describe('GlobalNavigation', () => {
       }),
     ).toHaveAttribute('name', 'q')
     expect(screen.getByRole('search')).toHaveAttribute('action', '/find')
-    expect(screen.getByRole('link', { name: 'Circle' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Friends' })).toHaveAttribute(
       'href',
-      '/circle',
+      '/friends',
     )
   })
 

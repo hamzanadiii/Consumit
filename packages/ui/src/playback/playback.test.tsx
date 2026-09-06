@@ -25,6 +25,20 @@ describe('playback shell components', () => {
     expect(screen.getByRole('slider', { name: 'Playback position' })).toBeInTheDocument()
   })
 
+  it('synchronizes a finite media duration even when metadata is ready before hydration', () => {
+    const { container } = render(
+      <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
+    )
+    const video = container.querySelector('video')!
+    Object.defineProperty(video, 'duration', { configurable: true, value: 125 })
+    Object.defineProperty(video, 'currentTime', { configurable: true, value: 61 })
+
+    fireEvent.durationChange(video)
+    fireEvent.timeUpdate(video)
+
+    expect(screen.getByText('1:01 / 2:05')).toBeInTheDocument()
+  })
+
   it('keeps source selection native and controlled', () => {
     const onValueChange = vi.fn()
     render(<SourceSelector name="source" onValueChange={onValueChange} sources={[{ label: 'Source 1', value: 'one' }, { label: 'Source 2', value: 'two' }]} value="one" />)
