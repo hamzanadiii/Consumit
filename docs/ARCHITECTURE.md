@@ -101,9 +101,13 @@ TMDB is the canonical metadata source and identifier namespace for movies, serie
 
 Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
 
-Catalog metadata and playback availability are independent. A real TMDB title can exist without an authorized playback source. In that state, the first-party Watch shell identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
+Catalog metadata and playback availability are independent. A real TMDB title can exist without an authorized playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
 
 The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
+
+## Preview session boundary
+
+Before the identity backend exists, the web app uses a clearly named browser-local preview session to review signed-out and signed-in navigation, authentication redirects, and onboarding. It is presentation state only: the API must never trust it for authentication, authorization, privacy, or ownership. The identity slice will replace it with a server-validated session backed by a secure, `HttpOnly` cookie while preserving the navigation-level signed-in interface.
 
 ## Canonical provider contract
 
@@ -343,6 +347,65 @@ Every provider adapter needs contract tests and fixtures for movies, episodes, s
 Load tests cover cache hits and misses, provider outage, cache outage, database latency, worker crashes, slow DNS, and hot-title stampedes. Canary changes through small traffic percentages and roll back on degraded playback measures.
 
 The intended delivery pipeline is lint, typecheck, unit tests, provider contract tests, integration tests, build, staging, smoke test, and production canary. Feature flags isolate risky provider, resolver, scoring, and failover changes.
+
+## Backend standards
+
+These standards generalize the catalog module's established shape (`apps/api/src/catalog/`: injectable interface, route registrar, typed errors, fake/real adapters, interface-level tests) and fold in the lessons of the previous Consumit backend. Every new module — identity, library, social, playback — repeats this pattern instead of inventing its own.
+
+### Kept from the previous backend
+
+- Small injectable module interfaces with deterministic fakes beside the real adapters.
+- JSON error envelope `{ error: { code, message, retryable } }`, typed domain errors carrying status codes, plain-language 400s.
+- Zod validation at the route boundary; shared schemas live in `@consumit/contracts`.
+- Per-route rate limits layered under edge and per-provider limits.
+- Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
+- Resolver discipline for playback: tiered candidates, hedged starts, dedupe, observed-quality ranking, health quarantine (Stage 6).
+- DB-first subtitles with normalization and validation (future slice, when subtitle priorities in OPEN-QUESTIONS.md are decided).
+- Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
+
+### Deliberately different this time
+
+1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by a server-side store, with rotation on privilege change and origin checks on cookie-authed mutations. The browser-local preview session is never trusted (see the preview boundary above).
+2. **Direct-first media with one audited escape hatch.** Providers that require custom request headers cannot play directly from a browser; for exactly those, a narrow lease-scoped fetch proxy is permitted — short-lived leases, explicit domain allowlist, full SSRF guard, no open fetching. This keeps invariant 2 while preserving the old lease model's real lesson.
+3. **No rooms, DMs, watch parties, donations, ads, or checkout.** That scope is excluded; do not scaffold it.
+4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
+5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
+6. **Localized failure.** No global API-down panic: auth/catalog/playback failures stay in their surface with retry or fallback, as the web shell already expects.
+7. **OpenTelemetry over bespoke metrics.** Trace identifiers already travel web to adapter; add OTEL spans for resolve, adapter, and validation work plus `/health` dependency checks before building custom metric singletons.
+
+### Module layout
+
+```text
+apps/api/src/<module>/
+  <module>.ts        # injectable interface — the only thing callers program to
+  routes.ts          # register<Module>Routes(app, deps): validation, status codes, headers
+  errors.ts          # typed domain error + codes (codes also declared in contracts)
+  fake-<module>.ts   # deterministic fake for tests and web fixtures
+  <adapter>.ts       # real implementation (postgres, upstream, provider SDK)
+  *.test.ts          # interface-level tests, network-independent
+```
+
+Adapters own secrets, upstream schemas, retry policy, timeouts, and caching. Page and worker code never imports an adapter directly. Provider adapters additionally live behind the `packages/provider-sdk/` seam with contract tests and fixtures.
+
+### Request lifecycle
+
+Authenticate → rate-limit → validate (Zod, 400 with plain language) → authorize (ownership enforced inside the query, never via client-supplied member ids) → coalesced cached-or-fresh read or bounded write → envelope response → telemetry event with the trace id. GETs set `cache-control` plus a stale marker following the catalog precedent.
+
+### Configuration
+
+Environment is Zod-validated at boot and fails fast (`JWT_SECRET` and store URLs required in production). `.env.example` stays current. CORS uses an explicit allowlist per environment. Secrets never enter logs, responses, or client bundles. Mutating routes accept bodies bounded to 1 MB.
+
+### Sensitive endpoints
+
+Login, register, verify, reset, and import routes get the strictest rate limits and identical responses for existing and non-existing accounts (no enumeration). Pending email codes live in Valkey with short expiry and bounded attempts. Passwords hash with Argon2id via the Bun runtime.
+
+### Background work
+
+Valkey-backed BullMQ arrives with the first queue need (resolver refresh, hot-title warming, telemetry ingestion) — not before. Workers run as separate entry points so API processes stay stateless and horizontally scalable.
+
+### Still blocked
+
+Provider adapters and the resolve/fallback endpoints stay unwritten until OPEN-QUESTIONS.md item 1 (authorized provider set) resolves. The execution order for that work lives in [PROVIDERS.md](./PROVIDERS.md); only the provider contract and its fake may exist before then.
 
 ## Architectural invariants
 

@@ -91,9 +91,11 @@ Exit criterion: the screen is visually reviewable end to end with local fixtures
 
 Add logic in user-valuable slices instead of wiring every backend at once:
 
-The canonical catalog slice is implemented: real TMDB discovery, search, movie and series detail, seasons and episodes, normalized artwork, numeric routes, deterministic social overlays, and explicit unavailable playback. It uses an injectable Fastify adapter, shared contracts, bounded upstream work, and deterministic network-independent tests. Persistence and authorized playback remain separate slices.
+The canonical catalog slice is implemented: real TMDB discovery, search, movie and series detail, seasons and episodes, normalized artwork, numeric routes, deterministic social activity overlays, and explicit unavailable playback. Computed Taste Match, overlap, member scores, and numeric ratings stay hidden until their backing behavior is implemented. Every Watch action opens the dedicated first-party player route. The slice uses an injectable Fastify adapter, shared contracts, bounded upstream work, and deterministic network-independent tests. Persistence and authorized playback remain separate slices.
 
-1. Identity: create account, sign in, session, profile shell.
+The frontend identity preview is also complete: signed-out navigation presents a Sign in action, successful preview sign-in and sign-up reveal the existing member navigation, and Settings can end the local preview session. This browser-local flag is deliberately non-authoritative and exists only to validate the experience before the identity backend replaces it.
+
+1. Identity: create account, sign in, secure server session, profile shell. **Frontend preview states implemented; backend identity remains.**
 2. Catalog: title identity, search, movie and series details. **Implemented for the TMDB metadata slice.**
 3. Library: save, favorite, history, progress, resume.
 4. Social: follow, activity, profile taste, ratings, reviews, lists.

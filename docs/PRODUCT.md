@@ -74,7 +74,7 @@ These screens describe the intended product surface, not an automatic first-rele
 
 The active desktop home reference uses this order:
 
-1. Featured hero with Taste Match
+1. Featured hero with a direct Watch action
 2. From your circle
 3. Continue watching
 4. Personalized editorial feature
@@ -83,13 +83,18 @@ The active desktop home reference uses this order:
 7. Mood entry points
 8. Footer
 
+From your circle and Continue watching are temporarily hidden behind the `SHOW_MEMBER_RAILS` preview flag in `home-screen.tsx` until the member, library, and progress backends land.
+
 ## Confirmed scope constraints
 
 - Watch rooms, co-watching rooms, and watch parties are excluded.
 - Private or direct messaging between members is excluded; follows, profiles, reviews, lists, and circle activity carry the social experience.
 - Streaming-service choices are availability preferences, not connected billing accounts.
-- The active playback design is the focused Watch shell with a first-party Consumit Player.
+- The active playback design is a dedicated, focused screen owned by the first-party Consumit Player.
 - Playback uses authorized direct media sources; iframe and embed delivery are excluded.
+- Every Watch action opens the dedicated first-party player route directly; the player is the screen, not an embedded panel inside a discovery surface.
+- Computed Taste Match, overlap, member scores, and numeric rating presentation are hidden until their product logic is implemented. Written reviews, catalog metadata, and watch progress remain visible.
+- Signed-out navigation keeps public catalog destinations visible and replaces the member avatar with Sign in. A signed-in member sees Friends and the existing profile entry.
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
 - Provider integrations use sources Consumit is legally and contractually permitted to expose.
