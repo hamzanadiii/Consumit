@@ -2,19 +2,13 @@ import { titleHref, type CatalogResponseMeta, type CatalogTitleSummary } from '@
 import { AlertTriangle, RotateCcw } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { Badge, buttonVariants, ContentCard, ErrorState, SectionHeading } from '@consumit/ui'
-
-import { deterministicTaste } from '@/lib/catalog-registry'
+import { buttonVariants, ContentCard, ErrorState, SectionHeading } from '@consumit/ui'
 
 import { ScreenShell } from '../screens/screen-shell'
 
 export function titleMeta(title: CatalogTitleSummary) {
   const kind = title.kind === 'movie' ? 'Film' : 'Series'
   return [title.year, kind, title.genreNames.slice(0, 2).join(' · ')].filter(Boolean).join(' · ')
-}
-
-export function memberRating(title: CatalogTitleSummary) {
-  return title.tmdbRating === null ? 'New' : `${title.tmdbRating.toFixed(1)} TMDB`
 }
 
 export function CatalogStaleNotice({ meta }: { meta: CatalogResponseMeta }) {
@@ -37,14 +31,12 @@ export function CatalogGrid({
   const visible = limit === undefined ? items : items.slice(0, limit)
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {visible.map((title, index) => (
+      {visible.map((title) => (
         <ContentCard
           artworkSrc={title.posterUrl ?? undefined}
-          badge={<Badge tone="lilac">{deterministicTaste(title, index)}% match</Badge>}
           href={titleHref(title)}
           key={`${title.kind}:${title.id}`}
           meta={titleMeta(title)}
-          signal={memberRating(title)}
           title={title.title}
         />
       ))}

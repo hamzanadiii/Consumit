@@ -3,9 +3,8 @@ import { Play } from 'lucide-react'
 
 import { buttonVariants, TitleMasthead } from '@consumit/ui'
 
-import { deterministicTaste } from '@/lib/catalog-registry'
-
 import { CatalogShelf, CatalogStaleNotice, titleMeta } from './catalog-ui'
+import { SaveTitleButton } from './save-title-button'
 import { ScreenShell } from '../screens/screen-shell'
 
 type CatalogBrowseScreenProps = {
@@ -25,13 +24,16 @@ export function CatalogBrowseScreen({ current, hero, kind, popular, topRated }: 
       <main className="mx-auto w-full max-w-[90rem]">
         <h1 className="sr-only">Browse {isMovie ? 'movies' : 'series'}</h1>
         <TitleMasthead
-          actions={<a className={buttonVariants()} href={watchHref(hero)}><Play aria-hidden="true" /> Watch</a>}
+          actions={(
+            <>
+              <a className={buttonVariants()} href={watchHref(hero)}><Play aria-hidden="true" /> Watch</a>
+              <SaveTitleButton title={hero.title} />
+            </>
+          )}
           backgroundSrc={hero.backdropUrl ?? undefined}
           className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[34rem] lg:px-[62px] lg:py-20"
           metadata={titleMeta(hero)}
           synopsis={hero.overview || 'More information will be available soon.'}
-          tasteReason="Selected from your Taste Match and the people you trust."
-          tasteScore={deterministicTaste(hero)}
           title={hero.title}
         />
         <div className="px-5 sm:px-8 lg:px-[62px]">

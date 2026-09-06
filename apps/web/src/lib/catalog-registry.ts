@@ -31,11 +31,3 @@ export function catalogKey(title: CatalogRef) {
 export function catalogMap(items: readonly CatalogTitleSummary[]) {
   return new Map(items.map((item) => [catalogKey(item), item]))
 }
-
-export function deterministicTaste(title: CatalogRef, offset = 0) {
-  return 82 + ((title.id + offset * 7) % 16)
-}
-
-export function deterministicMemberScore(title: CatalogRef, offset = 0) {
-  return 7.7 + ((title.id + offset * 3) % 13) / 10
-}

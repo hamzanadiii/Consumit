@@ -13,10 +13,7 @@ import {
   FilterChip,
   MemberSuggestion,
   SectionHeading,
-  TasteMatch,
 } from '@consumit/ui'
-
-import { deterministicTaste } from '@/lib/catalog-registry'
 
 import { CatalogGrid, CatalogStaleNotice, titleMeta } from '../catalog/catalog-ui'
 import { ScreenShell } from '../screens/screen-shell'
@@ -42,7 +39,7 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
           <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98),rgba(9,9,11,.76)_58%,rgba(9,9,11,.42))]" />
           <div className="max-w-4xl">
             <h1 className="max-w-[13ch] text-balance font-display text-5xl leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-[5.25rem]">Find the thing that stays with you.</h1>
-            <p className="mt-6 max-w-[62ch] text-sm leading-7 text-copy sm:text-base">Search real movies and series, then use Taste Match and your circle to decide what deserves tonight.</p>
+            <p className="mt-6 max-w-[62ch] text-sm leading-7 text-copy sm:text-base">Search real movies and series, explore the details, and choose what deserves tonight.</p>
             <form action="/search" className="relative mt-9 max-w-3xl" method="get" role="search">
               <label className="sr-only" htmlFor="explore-search">Search movies and series</label>
               <Search aria-hidden="true" className="absolute top-1/2 left-5 size-5 -translate-y-1/2 text-muted" />
@@ -57,7 +54,7 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
           {best ? (
             <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="best-match-heading">
               <SectionHeading id="best-match-heading" title={initialQuery.length >= 2 ? `Best match for “${initialQuery}”` : 'A strong place to begin'} />
-              <article className="relative isolate mt-8 grid min-h-[27rem] overflow-hidden rounded-card border border-border lg:grid-cols-[1fr_0.82fr]">
+              <article className="relative isolate mt-8 min-h-[27rem] overflow-hidden rounded-card border border-border">
                 {best.backdropUrl ? <Image alt="" className="-z-20 object-cover" fill sizes="100vw" src={best.backdropUrl} /> : null}
                 <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98)_0%,rgba(9,9,11,.87)_48%,rgba(9,9,11,.3)_100%)]" />
                 <div className="flex flex-col justify-center p-6 sm:p-10 lg:p-14">
@@ -69,9 +66,6 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
                     <a className={buttonVariants({ variant: 'secondary' })} href={watchHref(best)}><Play aria-hidden="true" /> Watch</a>
                   </div>
                 </div>
-                <aside className="flex items-end p-6 sm:p-10 lg:justify-end lg:p-14" aria-label="Why this matches">
-                  <div className="w-full max-w-sm rounded-card border border-border bg-canvas/90 p-5"><TasteMatch detail="Yasmine and Omar gravitate toward this kind of story" reason={best.genreNames.slice(0, 3).join(', ') || 'Strong community response'} score={deterministicTaste(best)} /></div>
-                </aside>
               </article>
             </section>
           ) : null}
@@ -89,12 +83,12 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
           </section>
 
           <section className="border-t border-border py-14 sm:py-16 lg:py-20" id="people" aria-labelledby="people-heading">
-            <SectionHeading description="Follow people whose reasons feel useful, not just popular." id="people-heading" title="People who see films like you do" />
+            <SectionHeading description="Follow people whose reviews and lists make discovery more useful." id="people-heading" title="People worth following" />
             <div className="mt-8 grid gap-4 lg:grid-cols-2">
               {[
-                ['Yasmine El Idrissi', '@yasmineframes', 93, 'Noir, moral fog, patient endings'],
-                ['Omar Benjelloun', '@slowcuts', 87, 'Architecture, memory, long silences'],
-              ].map(([name, handle, overlap, detail]) => <MemberSuggestion detail={String(detail)} films="428 titles" following={Boolean(following[String(name)])} handle={String(handle)} key={String(name)} name={String(name)} onFollowingChange={(value) => setFollowing((current) => ({ ...current, [String(name)]: value }))} overlap={Number(overlap)} />)}
+                ['Yasmine El Idrissi', '@yasmineframes', 'Noir, moral fog, patient endings'],
+                ['Omar Benjelloun', '@slowcuts', 'Architecture, memory, long silences'],
+              ].map(([name, handle, detail]) => <MemberSuggestion detail={String(detail)} films="428 titles" following={Boolean(following[String(name)])} handle={String(handle)} key={String(name)} name={String(name)} onFollowingChange={(value) => setFollowing((current) => ({ ...current, [String(name)]: value }))} />)}
             </div>
           </section>
 

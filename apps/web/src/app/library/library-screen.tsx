@@ -5,9 +5,7 @@ import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import Image from 'next/image'
 
-import { Badge, Button, ContinueCard, CuratedListCard, DiaryRow, FilterChip, LibraryToolbar, RatingRhythm, SavedTitleCard, SectionHeading, SegmentedControl, TasteSignature, Tabs } from '@consumit/ui'
-
-import { deterministicTaste } from '@/lib/catalog-registry'
+import { Badge, Button, ContinueCard, CuratedListCard, DiaryRow, FilterChip, LibraryToolbar, SavedTitleCard, SectionHeading, SegmentedControl, Tabs } from '@consumit/ui'
 
 import { CatalogStaleNotice, titleMeta } from '../catalog/catalog-ui'
 import { ScreenShell } from '../screens/screen-shell'
@@ -55,7 +53,7 @@ export function LibraryScreen({ stale, titles }: { stale: boolean; titles: reado
             <LibraryToolbar action="/library" className="mt-8" controls={<SegmentedControl className="w-28" legend="Library view" name="library-view" onValueChange={setView} options={[{ label: 'Grid', value: 'grid' }, { label: 'List', value: 'list' }]} value={view} />} filters={<><SlidersHorizontal aria-hidden="true" className="size-4 text-muted" />{(['All', 'Movies', 'Series', 'Unwatched'] as const).map((label) => <FilterChip key={label} onClick={() => setFilter(label)} selected={filter === label}>{label}</FilterChip>)}</>} />
             <p aria-live="polite" className="mt-5 text-xs text-muted">Showing {visible.length} {filter.toLowerCase()} titles in {view} view.</p>
             <div className={view === 'grid' ? 'mt-8 grid grid-cols-2 gap-x-4 gap-y-9 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6' : 'mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4'}>
-              {visible.map((title, index) => <SavedTitleCard artworkSrc={title.posterUrl ?? undefined} badge={index === 3 ? <Badge tone="lime">Watched</Badge> : undefined} href={titleHref(title)} key={`${title.kind}:${title.id}`} meta={titleMeta(title)} progress={index % 4 === 0 ? 67 : undefined} signal={<span className="text-lilac">{deterministicTaste(title, index)}% taste match</span>} title={title.title} />)}
+              {visible.map((title, index) => <SavedTitleCard artworkSrc={title.posterUrl ?? undefined} badge={index === 3 ? <Badge tone="lime">Watched</Badge> : undefined} href={titleHref(title)} key={`${title.kind}:${title.id}`} meta={titleMeta(title)} progress={index % 4 === 0 ? 67 : undefined} title={title.title} />)}
             </div>
           </section>
 
@@ -65,7 +63,7 @@ export function LibraryScreen({ stale, titles }: { stale: boolean; titles: reado
           </section>
 
           <section className="border-t border-border py-14 sm:py-16 lg:py-20" id="history" aria-labelledby="history-heading">
-            <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_25rem]"><div><SectionHeading id="history-heading" title="Recently watched" /><div className="mt-6">{titles.slice(2, 5).map((title, index) => <DiaryRow artworkSrc={title.posterUrl ?? undefined} date={['26 Aug', '23 Aug', '14 Aug'][index] ?? 'Recently'} detail={index === 1 ? 'Finished' : 'Rewatched'} href={titleHref(title)} key={`${title.kind}:${title.id}`} note={index === 0 ? 'Still holds up in exactly the right places.' : undefined} rating={5 - index * 0.5} title={title.title} />)}</div></div><aside className="space-y-5" aria-label="Library taste summary"><TasteSignature detail="You finish 72% of the films you start." statement="You keep returning to memory, difficult choices, and patient endings." worlds={[{ label: 'Drama', tone: 'lilac' }, { label: 'Science fiction', tone: 'lime' }, { label: 'Mystery', tone: 'orange' }]} /><RatingRhythm values={[3, 7, 12, 21, 35, 30, 22, 14, 8]} /></aside></div>
+            <div className="max-w-5xl"><SectionHeading id="history-heading" title="Recently watched" /><div className="mt-6">{titles.slice(2, 5).map((title, index) => <DiaryRow artworkSrc={title.posterUrl ?? undefined} date={['26 Aug', '23 Aug', '14 Aug'][index] ?? 'Recently'} detail={index === 1 ? 'Finished' : 'Rewatched'} href={titleHref(title)} key={`${title.kind}:${title.id}`} note={index === 0 ? 'Still holds up in exactly the right places.' : undefined} title={title.title} />)}</div></div>
           </section>
         </div>
       </main>

@@ -1,6 +1,7 @@
 'use client'
 
-import { Download, ExternalLink, Save, Trash2 } from 'lucide-react'
+import { Download, ExternalLink, LogOut, Save, Trash2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import {
@@ -16,15 +17,17 @@ import {
 } from '@consumit/ui'
 
 import { ScreenShell } from '../screens/screen-shell'
+import { usePreviewSession } from '../session/preview-session'
 
-type ToggleKey = 'activity' | 'autoplay' | 'history' | 'ratings' | 'releases' | 'spoilers' | 'subtitles'
+type ToggleKey = 'activity' | 'autoplay' | 'history' | 'releases' | 'spoilers' | 'subtitles'
 
 export function SettingsScreen() {
+  const router = useRouter()
+  const { signOut } = usePreviewSession()
   const [values, setValues] = useState<Record<ToggleKey, boolean>>({
     activity: true,
     autoplay: false,
     history: true,
-    ratings: true,
     releases: true,
     spoilers: true,
     subtitles: true,
@@ -88,6 +91,21 @@ export function SettingsScreen() {
                   <Input className="mt-2 w-full" defaultValue="hamza@example.com" id="settings-email" type="email" />
                 </div>
               </div>
+              <PreferenceRow
+                control={(
+                  <Button
+                    onClick={() => {
+                      signOut()
+                      router.push('/sign-in')
+                    }}
+                    variant="secondary"
+                  >
+                    <LogOut aria-hidden="true" /> Sign out
+                  </Button>
+                )}
+                description="End the local preview session on this browser."
+                label="Session"
+              />
             </SettingsSection>
             <p aria-live="polite" className="-mt-9 text-xs text-lime">{saved ? 'Account preferences saved for this preview.' : ''}</p>
 
@@ -103,8 +121,7 @@ export function SettingsScreen() {
                 label="Profile visibility"
               />
               <PreferenceRow control={<Toggle checked={values.history} label="Show watch history" onCheckedChange={() => toggle('history')} />} description="Include recent watches and diary entries on your profile." label="Show watch history" />
-              <PreferenceRow control={<Toggle checked={values.ratings} label="Show ratings and reviews" onCheckedChange={() => toggle('ratings')} />} description="Let your circle use your ratings as discovery context." label="Show ratings and reviews" />
-              <PreferenceRow control={<Toggle checked={values.activity} label="Share activity with your circle" onCheckedChange={() => toggle('activity')} />} description="Your follows can see asynchronous saves, ratings, and list updates. Consumit has no direct messaging." label="Share activity with your circle" />
+              <PreferenceRow control={<Toggle checked={values.activity} label="Share activity with your circle" onCheckedChange={() => toggle('activity')} />} description="Your follows can see asynchronous saves, reviews, and list updates. Consumit has no direct messaging." label="Share activity with your circle" />
             </SettingsSection>
 
             <SettingsSection
@@ -159,7 +176,7 @@ export function SettingsScreen() {
               <PreferenceRow control={<Toggle checked={values.releases} label="New episode notifications" onCheckedChange={() => toggle('releases')} />} description="Hear when a saved series has a new available episode." label="New episodes" />
               <PreferenceRow
                 control={<SegmentedControl className="w-48" defaultValue="daily" legend="Circle activity summary" name="circle-digest" options={[{ label: 'Daily', value: 'daily' }, { label: 'Off', value: 'off' }]} />}
-                description="A quiet summary of ratings, reviews, and list updates from people you follow."
+                description="A quiet summary of reviews and list updates from people you follow."
                 label="Circle digest"
               />
             </SettingsSection>
@@ -170,8 +187,8 @@ export function SettingsScreen() {
               id="data"
               title="Data & security"
             >
-              <PreferenceRow control={<Button variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Prepare your ratings, reviews, lists, and watch history as a downloadable archive." label="Export your data" />
-              <PreferenceRow control={<Button variant="secondary">Import history</Button>} description="Bring ratings and diary history from Letterboxd without linking a billing account." label="Letterboxd import" />
+              <PreferenceRow control={<Button variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Prepare your reviews, lists, and watch history as a downloadable archive." label="Export your data" />
+              <PreferenceRow control={<Button variant="secondary">Import history</Button>} description="Bring diary history from Letterboxd without linking a billing account." label="Letterboxd import" />
               <PreferenceRow control={<Button variant="secondary">Change password</Button>} description="You’ll be asked to confirm your current password first." label="Password" />
               <PreferenceRow control={<Button variant="danger"><Trash2 aria-hidden="true" /> Delete account</Button>} description="Permanently remove your profile and contributions after a confirmation period." label="Delete account" />
             </SettingsSection>

@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { movieSummary } from '@/test/catalog-fixtures'
+import { renderWithProviders as render } from '@/test/render'
 
 import { CatalogGrid, CatalogStaleNotice, CatalogUnavailableScreen } from './catalog-ui'
 
@@ -10,6 +11,7 @@ describe('catalog UI', () => {
     render(<CatalogGrid items={[movieSummary, { ...movieSummary, id: 329865, posterUrl: null, title: 'Arrival' }]} />)
     expect(screen.getByRole('link', { name: 'Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
     expect(screen.getByRole('img', { name: 'Arrival poster' })).toBeInTheDocument()
+    expect(screen.queryByText(/taste match|% match|TMDB rating/i)).not.toBeInTheDocument()
   })
 
   it('only announces stale catalog data when the response is stale', () => {

@@ -1,20 +1,14 @@
 import type { ReactNode } from 'react'
 
-import { Footer, GlobalNavigation } from '@consumit/ui'
+import { Footer } from '@consumit/ui'
 
 import { CatalogPreviewNotice } from '../catalog/catalog-attribution'
+import { SessionNavigation } from '../session/session-navigation'
 
 export const circle = [
   { name: 'Yasmine' },
   { name: 'Omar' },
   { name: 'Nadia' },
-] as const
-
-const navigationItems = [
-  { href: '/', label: 'Home' },
-  { href: '/movies', label: 'Movies' },
-  { href: '/series', label: 'Series' },
-  { href: '/friends', label: 'Friends' },
 ] as const
 
 const footerLinks = [
@@ -40,10 +34,9 @@ export function ScreenShell({
 }: ScreenShellProps) {
   return (
     <>
-      <GlobalNavigation
+      <SessionNavigation
         activeHref={activeHref}
         avatarSrc="/assets/hamza-avatar.svg"
-        items={navigationItems}
         profileHref="/profile/hamza"
         profileName="Hamza"
         searchPlaceholder="Search titles, people, lists"

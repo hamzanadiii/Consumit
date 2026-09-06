@@ -13,7 +13,7 @@ export default function AboutPage() {
       <main className="mx-auto min-h-[70vh] w-full max-w-4xl px-5 py-16 sm:px-8 lg:py-24">
         <h1 className="text-balance font-display text-[clamp(3rem,8vw,5.5rem)] leading-[0.92] tracking-[-0.025em] text-ink">Made for people who care what they watch.</h1>
         <p className="mt-7 max-w-[68ch] text-base leading-7 text-copy">
-          Consumit brings discovery, taste, memory, and authorized playback into one calm place. Member ratings, Taste Match, saves, progress, and Circle activity belong to Consumit.
+          Consumit brings discovery, memory, and authorized playback into one calm place. Member saves, progress, reviews, and Circle activity belong to Consumit.
         </p>
         <section className="mt-16 border-t border-border pt-10" aria-labelledby="catalog-credit">
           <h2 className="font-display text-3xl text-ink" id="catalog-credit">Catalog credits</h2>

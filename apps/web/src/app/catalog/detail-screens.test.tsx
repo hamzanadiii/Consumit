@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { seriesDetail } from '@/test/catalog-fixtures'
+import { movieDetail, seriesDetail } from '@/test/catalog-fixtures'
+import { renderWithProviders as render } from '@/test/render'
 
-import { SeriesDetailScreen } from './detail-screens'
+import { SeriesDetailScreen, TitleDetailScreen } from './detail-screens'
 
 const meta = { fetchedAt: '2026-09-06T00:00:00.000Z', language: 'en-US', region: 'US', source: 'tmdb' as const, stale: false }
 const firstSeason = {
@@ -15,6 +16,24 @@ const firstSeason = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('series season selection', () => {
+  it('keeps computed taste and numeric scores out of title details', () => {
+    render(<TitleDetailScreen detail={movieDetail} stale={false} />)
+
+    expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
+    expect(screen.queryByText(/taste match|% match|TMDB ratings|TMDB votes|average/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/out of 5/i)).not.toBeInTheDocument()
+  })
+
+  it('toggles the title save action between add and saved states', async () => {
+    const user = userEvent.setup()
+    render(<TitleDetailScreen detail={movieDetail} stale={false} />)
+
+    const save = screen.getByRole('button', { name: 'Save Dune: Part Two to library' })
+    expect(save).toHaveAttribute('aria-pressed', 'false')
+    await user.click(save)
+    expect(screen.getByRole('button', { name: 'Remove Dune: Part Two from library' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('switches through Fastify and preserves the current season when a later load fails', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn()

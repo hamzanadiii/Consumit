@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
 import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
+import { renderWithProviders as render } from '@/test/render'
 
 import { SearchScreen } from './search-screen'
 
@@ -22,5 +23,7 @@ describe('search screen', () => {
     await user.click(screen.getByRole('button', { name: 'Movies' }))
     expect(screen.queryByRole('link', { name: 'Severance' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Dune: Part Two' })[0]).toHaveAttribute('href', '/title/693134')
+    expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
+    expect(screen.queryByText(/taste match|% match|overlap/i)).not.toBeInTheDocument()
   })
 })

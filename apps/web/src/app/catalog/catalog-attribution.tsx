@@ -26,7 +26,7 @@ export function CatalogAttribution() {
 export function CatalogPreviewNotice() {
   return (
     <p className="border-b border-border bg-surface px-5 py-2.5 text-center text-[0.6875rem] leading-5 text-muted sm:px-8" data-consumit-preview-notice role="note">
-      Prototype preview: Taste Match, member activity, ratings, and progress are deterministic sample data.
+      Prototype preview: member activity and progress are deterministic sample data.
     </p>
   )
 }

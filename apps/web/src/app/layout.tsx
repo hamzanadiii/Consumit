@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 import { CatalogAttribution } from './catalog/catalog-attribution'
+import { PreviewSessionProvider } from './session/preview-session'
 
 export const metadata: Metadata = {
   title: 'Consumit',
@@ -15,8 +16,10 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="en">
       <body>
-        {children}
-        <CatalogAttribution />
+        <PreviewSessionProvider>
+          {children}
+          <CatalogAttribution />
+        </PreviewSessionProvider>
       </body>
     </html>
   )

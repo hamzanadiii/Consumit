@@ -3,7 +3,8 @@
 import { Check, Eye, EyeOff } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useState } from 'react'
 import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import {
@@ -14,6 +15,8 @@ import {
   SocialAuthButton,
   TrustNote,
 } from '@consumit/ui'
+
+import { usePreviewSession } from '../session/preview-session'
 
 const circleMembers = [
   { name: 'Yasmine' },
@@ -42,6 +45,16 @@ function AuthDivider() {
       <span aria-hidden="true" className="h-px flex-1 bg-border" />
     </div>
   )
+}
+
+function useCompletePreviewSignIn(destination: string) {
+  const router = useRouter()
+  const { signIn } = usePreviewSession()
+
+  return useCallback(() => {
+    signIn()
+    router.push(destination)
+  }, [destination, router, signIn])
 }
 
 function SignInStoryProof() {
@@ -76,6 +89,7 @@ function PosterFan({ titles }: { titles: readonly CatalogTitleSummary[] }) {
 
 export function SignInScreen({ titles }: { titles: readonly CatalogTitleSummary[] }) {
   const [showPassword, setShowPassword] = useState(false)
+  const completeSignIn = useCompletePreviewSignIn('/')
 
   return (
     <AuthShell
@@ -117,19 +131,24 @@ export function SignInScreen({ titles }: { titles: readonly CatalogTitleSummary[
           <SocialAuthButton
             className="uppercase tracking-[0.04em]"
             label="Continue with Google"
+            onClick={completeSignIn}
             provider="Google"
             tone="light"
           />
           <SocialAuthButton
             className="uppercase tracking-[0.04em]"
             label="Continue with Apple"
+            onClick={completeSignIn}
             provider="Apple"
           />
         </div>
 
         <AuthDivider />
 
-        <form action="/api/auth/sign-in" className="space-y-5" method="post">
+        <form className="space-y-5" onSubmit={(event) => {
+          event.preventDefault()
+          completeSignIn()
+        }}>
           <AuthField
             autoComplete="email"
             defaultValue="hamza@example.com"
@@ -189,6 +208,8 @@ export function SignInScreen({ titles }: { titles: readonly CatalogTitleSummary[
 }
 
 export function SignUpScreen({ titles }: { titles: readonly CatalogTitleSummary[] }) {
+  const completeSignUp = useCompletePreviewSignIn('/onboarding')
+
   return (
     <AuthShell
       asideClassName="bg-[linear-gradient(145deg,#17131a_0%,#3b2531_48%,#765064_76%,#17151d_100%)] lg:px-[62px] lg:pt-[42px] lg:pb-[145px]"
@@ -230,13 +251,17 @@ export function SignUpScreen({ titles }: { titles: readonly CatalogTitleSummary[
         <SocialAuthButton
           className="uppercase tracking-[0.04em]"
           label="Sign up with Google"
+          onClick={completeSignUp}
           provider="Google"
           tone="light"
         />
 
         <AuthDivider />
 
-        <form action="/api/auth/sign-up" className="space-y-3" method="post">
+        <form className="space-y-3" onSubmit={(event) => {
+          event.preventDefault()
+          completeSignUp()
+        }}>
           <AuthField
             autoComplete="name"
             id="sign-up-name"

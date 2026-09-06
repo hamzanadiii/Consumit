@@ -1,15 +1,14 @@
 'use client'
 
 import { titleHref, watchHref, type CatalogMovieDetail, type CatalogPerson, type CatalogSeason, type CatalogSeriesDetail, type CatalogTitleDetail, type CatalogTitleSummary } from '@consumit/contracts'
-import { Check, Play, Plus, RotateCcw } from 'lucide-react'
+import { Play, RotateCcw } from 'lucide-react'
 import { useRef, useState } from 'react'
 
-import { Badge, Button, CastCard, EpisodeRow, MemberPulse, PosterCard, SeasonSelector, SectionHeading, SocialProof, Tabs, TitleMasthead, TrustedReaction, buttonVariants } from '@consumit/ui'
+import { Badge, Button, CastCard, EpisodeRow, PosterCard, SeasonSelector, SectionHeading, SocialProof, Tabs, TitleMasthead, TrustedReaction, buttonVariants } from '@consumit/ui'
 
 import { browserCatalogSeason } from '@/lib/catalog-browser'
-import { deterministicTaste } from '@/lib/catalog-registry'
-
-import { CatalogStaleNotice, memberRating } from './catalog-ui'
+import { CatalogStaleNotice, titleMeta } from './catalog-ui'
+import { SaveTitleButton } from './save-title-button'
 import { ScreenShell } from '../screens/screen-shell'
 
 const circle = [{ name: 'Yasmine' }, { name: 'Omar' }, { name: 'Nadia' }] as const
@@ -25,7 +24,6 @@ function detailMeta(detail: CatalogTitleDetail) {
       {duration ? <span>{duration}</span> : null}
       {detail.genreNames.length ? <span>{detail.genreNames.slice(0, 3).join(' · ')}</span> : null}
       {rating ? <Badge tone="neutral">{rating}</Badge> : null}
-      {detail.tmdbRating !== null ? <span>{detail.tmdbRating.toFixed(1)} TMDB</span> : null}
     </span>
   )
 }
@@ -41,20 +39,20 @@ function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
 function RelatedRail({ items }: { items: readonly CatalogTitleSummary[] }) {
   return (
     <div className="mt-8 grid auto-cols-[minmax(10rem,68vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[12rem] xl:grid-flow-row xl:grid-cols-5 xl:overflow-visible xl:pb-0">
-      {items.slice(0, 5).map((item, index) => <PosterCard badge={<Badge tone="orange">{deterministicTaste(item, index)}% match</Badge>} href={titleHref(item)} key={`${item.kind}:${item.id}`} meta={memberRating(item)} src={item.posterUrl ?? undefined} title={item.title} />)}
+      {items.slice(0, 5).map((item) => <PosterCard href={titleHref(item)} key={`${item.kind}:${item.id}`} meta={titleMeta(item)} src={item.posterUrl ?? undefined} title={item.title} />)}
     </div>
   )
 }
 
 function ReviewGrid({ title }: { title: string }) {
   const reviews = [
-    ['Yasmine', 4.5, `The choices in ${title} kept unfolding after it ended.`],
-    ['Omar', 5, 'Patient, precise, and confident enough to leave space for you.'],
-    ['Nadia', 4, 'A world I wanted to stay inside, even when it hurt.'],
+    ['Yasmine', `The choices in ${title} kept unfolding after it ended.`],
+    ['Omar', 'Patient, precise, and confident enough to leave space for you.'],
+    ['Nadia', 'A world I wanted to stay inside, even when it hurt.'],
   ] as const
   return (
     <div className="mt-8 grid gap-4 lg:grid-cols-3">
-      {reviews.map(([memberName, rating, quote], index) => <TrustedReaction engagement={`${31 + index * 17} likes`} key={memberName} memberHref={`/profile/${memberName.toLowerCase()}`} memberName={memberName} meta="Member review" quote={quote} rating={rating} />)}
+      {reviews.map(([memberName, quote], index) => <TrustedReaction engagement={`${31 + index * 17} likes`} key={memberName} memberHref={`/profile/${memberName.toLowerCase()}`} memberName={memberName} meta="Member review" quote={quote} />)}
     </div>
   )
 }
@@ -67,7 +65,6 @@ function DetailFacts({ detail }: { detail: CatalogTitleDetail }) {
     ['Languages', detail.languages.join(' · ') || 'Not listed'],
     ['Status', detail.status ?? 'Not listed'],
     ['Released', detail.releaseDate ?? 'Not listed'],
-    ['TMDB votes', detail.tmdbVoteCount.toLocaleString('en-US')],
   ]
   return (
     <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-border pt-7 text-xs sm:grid-cols-2 xl:grid-cols-3">
@@ -76,42 +73,36 @@ function DetailFacts({ detail }: { detail: CatalogTitleDetail }) {
   )
 }
 
-function DetailMasthead({ detail, saved, setSaved }: { detail: CatalogTitleDetail; saved: boolean; setSaved: (value: boolean) => void }) {
+function DetailMasthead({ detail }: { detail: CatalogTitleDetail }) {
   return (
     <TitleMasthead
       actions={(
         <>
           <a className={buttonVariants({ size: 'lg' })} href={watchHref(detail)}><Play aria-hidden="true" /> Watch</a>
-          <Button aria-label={saved ? `Remove ${detail.title} from library` : `Save ${detail.title} to library`} aria-pressed={saved} onClick={() => setSaved(!saved)} size="icon" variant="secondary">{saved ? <Check aria-hidden="true" /> : <Plus aria-hidden="true" />}</Button>
+          <SaveTitleButton className="size-12" title={detail.title} />
         </>
       )}
       backgroundSrc={detail.backdropUrl ?? undefined}
       className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[42rem] lg:px-[62px] lg:py-24"
       headingLevel="h1"
       metadata={detailMeta(detail)}
-      socialProof={<aside className="rounded-card border border-border bg-canvas/90 p-5" aria-label={`Your circle on ${detail.title}`}><p className="mb-4 text-xs font-bold text-ink">Your circle on this title</p><SocialProof detail="8 watched · 3 reviewed" items={circle} label="Yasmine, Omar, and Nadia" text={<><strong className="text-ink">4.6 average</strong> from people you trust</>} /></aside>}
+      socialProof={<aside className="rounded-card border border-border bg-canvas/90 p-5" aria-label={`Your circle on ${detail.title}`}><p className="mb-4 text-xs font-bold text-ink">Your circle on this title</p><SocialProof detail="8 watched · 3 reviewed" items={circle} label="Yasmine, Omar, and Nadia" text={<strong className="text-ink">People you trust have been here</strong>} /></aside>}
       synopsis={detail.overview || 'More information will be available soon.'}
-      tasteReason="A strong fit based on your viewing history and the people you trust."
-      tasteScore={deterministicTaste(detail)}
       title={detail.title}
     />
   )
 }
 
 export function TitleDetailScreen({ detail, stale }: { detail: CatalogMovieDetail; stale: boolean }) {
-  const [saved, setSaved] = useState(false)
   return (
     <ScreenShell activeHref="/movies">
       {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
-        <DetailMasthead detail={detail} saved={saved} setSaved={setSaved} />
+        <DetailMasthead detail={detail} />
         <div className="px-5 sm:px-8 lg:px-[62px]">
           <Tabs activeValue="overview" aria-label={`${detail.title} sections`} items={[{ href: '#overview', label: 'Overview', value: 'overview' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#cast', label: 'Cast & crew', value: 'cast' }, { href: '#related', label: 'Related', value: 'related' }]} />
           <section className="py-12 sm:py-14 lg:py-16" id="overview" aria-labelledby="movie-about-heading">
-            <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-20">
-              <div><SectionHeading id="movie-about-heading" title="About the film" />{detail.tagline ? <p className="mt-6 font-display text-2xl text-ink">{detail.tagline}</p> : null}<p className="mt-5 max-w-[70ch] text-sm leading-7 text-copy">{detail.overview || 'No synopsis is currently available.'}</p><DetailFacts detail={detail} /></div>
-              <MemberPulse className="self-start lg:sticky lg:top-7" count={`${detail.tmdbVoteCount.toLocaleString('en-US')} TMDB ratings`} value={detail.tmdbRating === null ? 0 : detail.tmdbRating / 2} />
-            </div>
+            <div className="max-w-5xl"><SectionHeading id="movie-about-heading" title="About the film" />{detail.tagline ? <p className="mt-6 font-display text-2xl text-ink">{detail.tagline}</p> : null}<p className="mt-5 max-w-[70ch] text-sm leading-7 text-copy">{detail.overview || 'No synopsis is currently available.'}</p><DetailFacts detail={detail} /></div>
           </section>
           <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="cast" aria-labelledby="movie-cast-heading"><SectionHeading id="movie-cast-heading" title="Cast & crew" /><CastRail cast={[...detail.cast, ...detail.creators]} /></section>
           <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="movie-reviews-heading"><SectionHeading id="movie-reviews-heading" title="People you trust, on this film" /><ReviewGrid title={detail.title} /></section>
@@ -125,7 +116,6 @@ export function TitleDetailScreen({ detail, stale }: { detail: CatalogMovieDetai
 type SeriesDetailScreenProps = { apiBase: string; detail: CatalogSeriesDetail; initialSeason: CatalogSeason | null; stale: boolean }
 
 export function SeriesDetailScreen({ apiBase, detail, initialSeason, stale }: SeriesDetailScreenProps) {
-  const [saved, setSaved] = useState(false)
   const [season, setSeason] = useState(initialSeason)
   const [failedSeason, setFailedSeason] = useState<number | null>(initialSeason ? null : (detail.seasons[0]?.number ?? 1))
   const [loadingSeason, setLoadingSeason] = useState(false)
@@ -152,7 +142,7 @@ export function SeriesDetailScreen({ apiBase, detail, initialSeason, stale }: Se
     <ScreenShell activeHref="/series">
       {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
-        <DetailMasthead detail={detail} saved={saved} setSaved={setSaved} />
+        <DetailMasthead detail={detail} />
         <div className="px-5 sm:px-8 lg:px-[62px]">
           <Tabs activeValue="episodes" aria-label={`${detail.title} sections`} items={[{ href: '#episodes', label: 'Episodes', value: 'episodes' }, { href: '#overview', label: 'Overview', value: 'overview' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#cast', label: 'Cast & crew', value: 'cast' }]} />
           <section className="py-12 sm:py-14 lg:py-16" id="episodes" aria-labelledby="episodes-heading">
