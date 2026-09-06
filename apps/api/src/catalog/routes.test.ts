@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { buildApp } from '../app.ts'
 import type { Catalog } from './catalog.ts'
+import { createFakeCatalog } from './fake-catalog.ts'
 
 const summary: CatalogTitleSummary = {
   backdropUrl: 'https://image.tmdb.org/t/p/w1280/backdrop.jpg',
@@ -82,7 +83,7 @@ function fakeCatalog(): Catalog {
   }
 }
 
-const openApps: ReturnType<typeof buildApp>[] = []
+const openApps: Awaited<ReturnType<typeof buildApp>>[] = []
 
 afterEach(async () => {
   await Promise.all(openApps.splice(0).map((app) => app.close()))
@@ -91,7 +92,7 @@ afterEach(async () => {
 describe('catalog routes', () => {
   it('exposes discover, search, batch, detail, and season interfaces', async () => {
     const catalog = fakeCatalog()
-    const app = buildApp({ catalog })
+    const app = await buildApp({ catalog })
     openApps.push(app)
 
     const responses = await Promise.all([
@@ -113,7 +114,7 @@ describe('catalog routes', () => {
 
   it('rejects invalid catalog queries before invoking the adapter', async () => {
     const catalog = fakeCatalog()
-    const app = buildApp({ catalog })
+    const app = await buildApp({ catalog })
     openApps.push(app)
 
     const responses = await Promise.all([
@@ -129,7 +130,7 @@ describe('catalog routes', () => {
   })
 
   it('returns a structured configuration error without a token-backed adapter', async () => {
-    const app = buildApp()
+    const app = await buildApp()
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/titles/discover' })
@@ -141,6 +142,19 @@ describe('catalog routes', () => {
         message: 'The catalog is not configured on this server.',
         retryable: false,
       },
+    })
+  })
+
+  it('translates an adapter contract breach into a safe 500 without leaking internals', async () => {
+    const catalog: Catalog = { ...createFakeCatalog(), discover: async () => ({ garbage: true }) as never }
+    const app = await buildApp({ catalog })
+    openApps.push(app)
+
+    const response = await app.inject({ method: 'GET', url: '/v1/titles/discover?kind=all' })
+
+    expect(response.statusCode).toBe(500)
+    expect(response.json()).toEqual({
+      error: { code: 'INTERNAL', message: 'Internal server error.', retryable: false },
     })
   })
 })

@@ -1,14 +1,17 @@
 import {
   catalogFeedSchema,
   catalogKindSchema,
+  catalogPageSchema,
   catalogRefSchema,
   type CatalogErrorResponse,
+  type CatalogPage,
 } from '@consumit/contracts'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 
 import type { Catalog } from './catalog.ts'
 import { CatalogError } from './errors.ts'
+import { ApiError } from '../http/errors.ts'
 
 const pageSchema = z.coerce.number().int().min(1).max(500).optional().default(1)
 const queryKindSchema = z.enum(['all', ...catalogKindSchema.options]).optional().default('all')
@@ -78,13 +81,22 @@ export function registerCatalogRoutes(app: FastifyInstance, catalog: Catalog) {
     const parsed = discoverQuerySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery(reply, 'Use a valid kind, feed, and page between 1 and 500.')
 
+    let result: CatalogPage
     try {
-      const result = await catalog.discover(parsed.data)
-      cacheHeaders(reply, result.meta.stale)
-      return result
+      result = await catalog.discover(parsed.data)
     } catch (error) {
       return sendCatalogError(reply, error)
     }
+    // Adapter output is untrusted: prove the response contract before
+    // sending. A breach is a server bug, so it becomes a safe 500 through
+    // the global handler — never a leak, never a misleading 503.
+    const proven = catalogPageSchema.safeParse(result)
+    if (!proven.success) {
+      request.log.error({ err: proven.error }, 'catalog adapter broke the discover contract')
+      throw new ApiError('INTERNAL', 'Internal server error.')
+    }
+    cacheHeaders(reply, proven.data.meta.stale)
+    return proven.data
   })
 
   app.get('/v1/titles/search', async (request, reply) => {

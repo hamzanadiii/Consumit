@@ -143,10 +143,14 @@ export const catalogSeasonResponseSchema = z.object({
 export type CatalogSeasonResponse = z.infer<typeof catalogSeasonResponseSchema>
 
 export const catalogErrorCodeSchema = z.enum([
+  'BAD_REQUEST',
   'CATALOG_INVALID_QUERY',
   'CATALOG_NOT_CONFIGURED',
   'CATALOG_NOT_FOUND',
   'CATALOG_UNAVAILABLE',
+  'INTERNAL',
+  'NOT_FOUND',
+  'RATE_LIMITED',
 ])
 export type CatalogErrorCode = z.infer<typeof catalogErrorCodeSchema>
 
