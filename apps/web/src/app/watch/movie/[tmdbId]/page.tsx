@@ -9,9 +9,10 @@ import { WatchScreen } from '../../watch-screen'
 type MovieWatchPageProps = { params: Promise<{ tmdbId: string }> }
 
 export async function generateMetadata({ params }: MovieWatchPageProps): Promise<Metadata> {
+  const noindex = { robots: { follow: false, index: false } } as const
   const id = Number((await params).tmdbId)
-  if (!Number.isInteger(id) || id <= 0) return { title: 'Watch · Consumit' }
-  try { const { item } = await getCatalogTitle('movie', id); return { title: `Watch ${item.title} · Consumit` } } catch { return { title: 'Watch · Consumit' } }
+  if (!Number.isInteger(id) || id <= 0) return { ...noindex, title: 'Watch · Consumit' }
+  try { const { item } = await getCatalogTitle('movie', id); return { ...noindex, title: `Watch ${item.title} · Consumit` } } catch { return { ...noindex, title: 'Watch · Consumit' } }
 }
 
 export default async function MovieWatchPage({ params }: MovieWatchPageProps) {

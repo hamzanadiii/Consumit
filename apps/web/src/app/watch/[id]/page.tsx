@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation'
 export const metadata: Metadata = {
   title: 'Watch · Consumit',
   description: 'Watch with the first-party Consumit Player.',
+  robots: { follow: false, index: false },
 }
 
 type WatchPageProps = {

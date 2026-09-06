@@ -9,6 +9,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 export const metadata: Metadata = {
   title: 'Circle Activity · Consumit',
   description: 'Asynchronous activity from people whose taste you trust.',
+  robots: { follow: false, index: false },
 }
 
 export default async function FriendsPage() {

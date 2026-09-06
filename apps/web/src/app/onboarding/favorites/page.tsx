@@ -8,6 +8,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 
 export const metadata: Metadata = {
   description: 'Choose five favorites to seed your Consumit taste.',
+  robots: { follow: false, index: false },
   title: 'Choose Your Favorites | Consumit',
 }
 

@@ -7,6 +7,7 @@ import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 
 export const metadata: Metadata = {
   description: 'Follow trusted members to seed your Consumit Circle.',
+  robots: { follow: false, index: false },
   title: 'Build Your Circle | Consumit',
 }
 

@@ -9,6 +9,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 export const metadata: Metadata = {
   title: 'My Library · Consumit',
   description: 'Your saved titles, favorites, lists, and watch history.',
+  robots: { follow: false, index: false },
 }
 
 export default async function LibraryPage() {

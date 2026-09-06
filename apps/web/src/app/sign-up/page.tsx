@@ -9,6 +9,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 export const metadata: Metadata = {
   title: 'Create account · Consumit',
   description: 'Create a private-by-default Consumit taste space.',
+  robots: { follow: false, index: false },
 }
 
 export default async function SignUpPage() {

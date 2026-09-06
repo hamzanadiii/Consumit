@@ -13,6 +13,7 @@ type PublicProfilePageProps = {
 export const metadata: Metadata = {
   title: 'Profile · Consumit',
   description: 'A living record of taste, history, reviews, and lists.',
+  robots: { follow: false, index: false },
 }
 
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {

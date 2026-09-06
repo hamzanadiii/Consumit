@@ -8,6 +8,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 
 export const metadata: Metadata = {
   description: 'Bring your existing watch history into your Consumit library.',
+  robots: { follow: false, index: false },
   title: 'Bring Your History | Consumit',
 }
 

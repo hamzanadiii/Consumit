@@ -9,6 +9,7 @@ import { editorialRefs } from '@/lib/catalog-registry'
 export const metadata: Metadata = {
   title: 'Sign in · Consumit',
   description: 'Return to your Consumit library and circle.',
+  robots: { follow: false, index: false },
 }
 
 export default async function SignInPage() {

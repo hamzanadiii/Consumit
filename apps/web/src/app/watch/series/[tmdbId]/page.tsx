@@ -12,9 +12,10 @@ type SeriesWatchPageProps = {
 }
 
 export async function generateMetadata({ params }: SeriesWatchPageProps): Promise<Metadata> {
+  const noindex = { robots: { follow: false, index: false } } as const
   const id = Number((await params).tmdbId)
-  if (!Number.isInteger(id) || id <= 0) return { title: 'Watch · Consumit' }
-  try { const { item } = await getCatalogTitle('series', id); return { title: `Watch ${item.title} · Consumit` } } catch { return { title: 'Watch · Consumit' } }
+  if (!Number.isInteger(id) || id <= 0) return { ...noindex, title: 'Watch · Consumit' }
+  try { const { item } = await getCatalogTitle('series', id); return { ...noindex, title: `Watch ${item.title} · Consumit` } } catch { return { ...noindex, title: 'Watch · Consumit' } }
 }
 
 export default async function SeriesWatchPage({ params, searchParams }: SeriesWatchPageProps) {

@@ -16,7 +16,12 @@ export async function generateMetadata({ params }: SeriesDetailPageProps): Promi
   if (!Number.isInteger(id) || id <= 0) return { title: 'Series not found · Consumit' }
   try {
     const { item } = await getCatalogTitle('series', id)
-    return { description: item.overview, openGraph: { images: item.backdropUrl ? [item.backdropUrl] : [], title: item.title }, title: `${item.title} · Consumit` }
+    return {
+      alternates: { canonical: `/series/${id}` },
+      description: item.overview,
+      openGraph: { images: item.backdropUrl ? [item.backdropUrl] : [], title: item.title, type: 'video.tv_show', url: `/series/${id}` },
+      title: `${item.title} · Consumit`,
+    }
   } catch { return { title: 'Series · Consumit' } }
 }
 
@@ -32,7 +37,24 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
     return <CatalogUnavailableScreen activeHref="/series" error={error} />
   }
   if (response.item.kind !== 'series') notFound()
+  const item = response.item
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TVSeries',
+    ...(item.contentRating ? { contentRating: item.contentRating } : {}),
+    ...(item.releaseDate ? { datePublished: item.releaseDate } : {}),
+    ...(item.overview ? { description: item.overview } : {}),
+    ...(item.genreNames.length ? { genre: item.genreNames } : {}),
+    ...(item.backdropUrl ?? item.posterUrl ? { image: item.backdropUrl ?? item.posterUrl } : {}),
+    name: item.title,
+    ...(item.seasons.length ? { numberOfSeasons: item.seasons.length } : {}),
+  }
   const firstSeason = response.item.seasons[0]?.number
   const seasonResponse = firstSeason ? await getCatalogSeason(id, firstSeason).catch(() => null) : null
-  return <SeriesDetailScreen apiBase={publicCatalogApiUrl()} detail={response.item} initialSeason={seasonResponse?.item ?? null} stale={response.meta.stale || Boolean(seasonResponse?.meta.stale)} />
+  return (
+    <>
+      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} type="application/ld+json" />
+      <SeriesDetailScreen apiBase={publicCatalogApiUrl()} detail={response.item} initialSeason={seasonResponse?.item ?? null} stale={response.meta.stale || Boolean(seasonResponse?.meta.stale)} />
+    </>
+  )
 }
