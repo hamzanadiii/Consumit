@@ -47,23 +47,23 @@ export function TitleMasthead({
         <img alt="" className="absolute inset-0 -z-20 size-full object-cover" src={backgroundSrc} />
       ) : null}
       <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98)_0%,rgba(9,9,11,.84)_48%,rgba(9,9,11,.16)_100%)]" />
-      <div className="max-w-2xl">
+      <div className="min-w-0 max-w-2xl">
         {context ? (
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-copy">{context}</p>
         ) : null}
-        <Heading className={cn('text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.9] tracking-[-0.025em] text-ink', context && 'mt-5')}>
+        <Heading className={cn('max-w-full break-words text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.9] tracking-[-0.025em] text-ink', context && 'mt-5')}>
           {title}
         </Heading>
         <div className="mt-5 text-sm text-copy">{metadata}</div>
-        <p className="mt-5 max-w-[60ch] text-sm leading-6 text-copy">{synopsis}</p>
+        <p className="mt-5 max-w-[60ch] break-words text-sm leading-6 text-copy">{synopsis}</p>
         {actions ? <div className="mt-6 flex flex-wrap gap-2">{actions}</div> : null}
         {safeScore !== undefined ? (
           <div className="mt-7 flex max-w-xl items-start gap-4 border-t border-border pt-5">
-            <div className="shrink-0 border-l border-orange pl-3">
+            <div className="shrink-0 border-l border-lilac pl-3">
               <span className="block font-display text-3xl leading-none tabular-nums text-ink">{safeScore}%</span>
-              <span className="mt-1 block text-[0.625rem] font-bold uppercase tracking-[0.12em] text-orange">Taste match</span>
+              <span className="mt-1 block text-[0.625rem] font-bold uppercase tracking-[0.12em] text-lilac">Taste match</span>
             </div>
-            {tasteReason ? <p className="text-xs leading-5 text-muted">{tasteReason}</p> : null}
+            {tasteReason ? <p className="min-w-0 flex-1 break-words text-xs leading-5 text-muted">{tasteReason}</p> : null}
           </div>
         ) : null}
       </div>

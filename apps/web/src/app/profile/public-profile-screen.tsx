@@ -1,390 +1,46 @@
 'use client'
 
-import { ArrowRight, EllipsisVertical, Eye, Pencil, Plus } from 'lucide-react'
+import { titleHref, watchHref, type CatalogTitleSummary } from '@consumit/contracts'
+import { EllipsisVertical, Eye, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 
-import {
-  Badge,
-  Button,
-  CompatibilityPanel,
-  ContentCard,
-  ContinueCard,
-  CuratedListCard,
-  DiaryRow,
-  Footer,
-  GlobalNavigation,
-  MemberByline,
-  ProfileMasthead,
-  ProfileReviewCard,
-  RatingRhythm,
-  SectionHeading,
-  TasteSignature,
-  Tabs,
-  buttonVariants,
-} from '@consumit/ui'
+import { Badge, Button, CompatibilityPanel, ContentCard, ContinueCard, CuratedListCard, DiaryRow, MemberByline, ProfileMasthead, ProfileReviewCard, RatingRhythm, SectionHeading, TasteSignature, Tabs, buttonVariants } from '@consumit/ui'
 
-const artwork = {
-  backdrop: '/assets/cinematic-backdrop.svg',
-  northbound: '/assets/posters/northbound.svg',
-  saltwater: '/assets/posters/saltwater.svg',
-  thirdSun: '/assets/posters/third-sun.svg',
-  violetHours: '/assets/posters/violet-hours.svg',
-} as const
+import { CatalogStaleNotice, titleMeta } from '../catalog/catalog-ui'
+import { ScreenShell } from '../screens/screen-shell'
 
-const mutuals = [
-  { name: 'Yasmine' },
-  { name: 'Omar' },
-  { name: 'Nadia' },
-] as const
+const mutuals = [{ name: 'Yasmine' }, { name: 'Omar' }, { name: 'Nadia' }] as const
+const circleMembers = [{ name: 'Yasmine', overlap: 91 }, { name: 'Omar', overlap: 84 }, { name: 'Nadia', overlap: 82 }, { name: 'Adam', overlap: 79 }] as const
 
-const favoriteTitles = [
-  { artworkSrc: artwork.northbound, kind: 'Film', meta: '2019 · ★★★★★', title: 'Northbound' },
-  { artworkSrc: artwork.violetHours, kind: 'Series', meta: '2022– · ★★★★½', title: 'Violet Hours' },
-  { artworkSrc: artwork.thirdSun, kind: 'Film', meta: '2021 · ★★★★★', title: 'Third Sun' },
-  { artworkSrc: artwork.saltwater, kind: 'Series', meta: '2024– · ★★★★★', title: 'Saltwater' },
-] as const
-
-const diaryEntries = [
-  { artworkSrc: artwork.northbound, date: '26 Aug', detail: 'Rewatched', note: 'Still hurts in exactly the right places.', rating: 4.5, title: 'Atlas Motel' },
-  { artworkSrc: artwork.saltwater, date: '23 Aug', detail: 'Watched with Yasmine and Omar', rating: 5, title: 'Sea of Names' },
-  { artworkSrc: artwork.violetHours, date: '19 Aug', detail: 'First watch · Liked', rating: 3.5, title: 'The Returning' },
-  { artworkSrc: artwork.thirdSun, date: '14 Aug', detail: 'Rewatched · Favorite', rating: 5, title: 'Third Sun' },
-] as const
-
-const circleMembers = [
-  { name: 'Yasmine', overlap: 91 },
-  { name: 'Omar', overlap: 84 },
-  { name: 'Nadia', overlap: 82 },
-  { name: 'Adam', overlap: 79 },
-] as const
-
-const profileTabs = [
-  { href: '#overview', label: 'Overview', value: 'overview' },
-  { href: '#diary', label: 'Diary', value: 'diary' },
-  { href: '#favorites', label: 'Favorites', value: 'favorites' },
-  { href: '#reviews', label: 'Reviews', value: 'reviews' },
-  { href: '#lists', label: 'Lists', value: 'lists' },
-  { href: '#circle', label: 'Circle', value: 'circle' },
-] as const
-
-function SectionAction({ href, label }: { href: string; label: string }) {
-  return (
-    <a
-      className="inline-flex min-h-11 items-center gap-2 rounded-control px-1 text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none"
-      href={href}
-    >
-      {label}
-      <ArrowRight aria-hidden="true" className="size-3.5" />
-    </a>
-  )
+function displayName(username: string) {
+  return username.split(/[-_.]+/).filter(Boolean).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' ') || 'Member'
 }
 
-function displayNameFromUsername(username: string) {
-  return username
-    .split(/[-_.]+/)
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(' ') || 'Member'
-}
-
-function ProfileScreen({ owner = false, username }: { owner?: boolean; username: string }) {
+function ProfileScreen({ owner = false, stale, titles, username }: { owner?: boolean; stale: boolean; titles: readonly CatalogTitleSummary[]; username: string }) {
   const [following, setFollowing] = useState(false)
-  const [previewingPublic, setPreviewingPublic] = useState(false)
-  const normalizedUsername = username.trim().replace(/^@+/, '') || 'member'
-  const name = displayNameFromUsername(normalizedUsername)
-  const profilePath = `/profile/${encodeURIComponent(normalizedUsername)}`
-  const ownerView = owner && !previewingPublic
-
+  const [previewing, setPreviewing] = useState(false)
+  const normalized = username.trim().replace(/^@+/, '') || 'member'
+  const name = displayName(normalized)
+  const ownerView = owner && !previewing
+  const featured = titles[6] ?? titles[0]
   return (
-    <>
-      <GlobalNavigation
-        activeHref={profilePath}
-        avatarSrc="/assets/hamza-avatar.svg"
-        profileHref="/profile/hamza"
-        profileName="Hamza"
-        searchPlaceholder="Search titles, people, lists"
-        sticky={false}
-      />
-
+    <ScreenShell activeHref={`/profile/${encodeURIComponent(normalized)}`}>
+      {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
       <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-owner-profile={ownerView || undefined} data-consumit-public-profile={!ownerView || undefined}>
         <h1 className="sr-only">{ownerView ? 'Your profile' : `${name}'s public profile`}</h1>
-        <ProfileMasthead
-          actions={(
-            ownerView ? (
-              <>
-                <a className={buttonVariants({ variant: 'primary' })} href="/settings"><Pencil aria-hidden="true" /> Edit profile</a>
-                <Button onClick={() => setPreviewingPublic(true)} variant="secondary"><Eye aria-hidden="true" /> Preview</Button>
-                <Button aria-label="Create a new list" size="icon" variant="secondary"><Plus aria-hidden="true" /></Button>
-              </>
-            ) : (
-              <>
-                {owner ? <Button onClick={() => setPreviewingPublic(false)} variant="primary">Exit preview</Button> : (
-                  <Button
-                    aria-pressed={following}
-                    onClick={() => setFollowing((current) => !current)}
-                    variant={following ? 'secondary' : 'primary'}
-                  >
-                    {following ? 'Following' : 'Follow'}
-                  </Button>
-                )}
-                <Button aria-label="More profile actions" size="icon" variant="secondary">
-                  <EllipsisVertical aria-hidden="true" />
-                </Button>
-              </>
-            )
-          )}
-          avatarClassName="size-28 lg:size-36"
-          avatarSrc="/assets/hamza-avatar.svg"
-          backgroundSrc="/assets/cinematic-backdrop.svg"
-          bio="Chasing films that feel like memories I never had."
-          className="rounded-none border-x-0 border-t-0 lg:min-h-[24.75rem] lg:px-[62px]"
-          contentClassName="lg:inset-x-[62px]"
-          handle={`@${normalizedUsername}`}
-          joined="Joined 2024"
-          location="Rabat, Morocco"
-          name={name}
-          stats={[
-            { label: 'films', value: 284 },
-            { label: 'series', value: 39 },
-            { label: 'lists', value: 23 },
-            { label: 'followers', value: 186 },
-          ]}
-          status="online"
-        />
-        <Tabs
-          activeValue="overview"
-          aria-label={`${name} profile sections`}
-          className="bg-navigation px-5 sm:px-8 lg:px-[62px]"
-          items={profileTabs}
-        />
+        <ProfileMasthead actions={ownerView ? <><a className={buttonVariants()} href="/settings"><Pencil aria-hidden="true" /> Edit profile</a><Button onClick={() => setPreviewing(true)} variant="secondary"><Eye aria-hidden="true" /> Preview</Button><Button aria-label="Create a new list" size="icon" variant="secondary"><Plus aria-hidden="true" /></Button></> : <>{owner ? <Button onClick={() => setPreviewing(false)}>Exit preview</Button> : <Button aria-pressed={following} onClick={() => setFollowing((value) => !value)} variant={following ? 'secondary' : 'primary'}>{following ? 'Following' : 'Follow'}</Button>}<Button aria-label="More profile actions" size="icon" variant="secondary"><EllipsisVertical aria-hidden="true" /></Button></>} avatarClassName="size-28 lg:size-36" avatarSrc="/assets/hamza-avatar.svg" backgroundSrc={titles.find((title) => title.backdropUrl)?.backdropUrl ?? undefined} bio="Chasing stories that feel like memories I never had." className="rounded-none border-x-0 border-t-0 lg:min-h-[24.75rem] lg:px-[62px]" contentClassName="lg:inset-x-[62px]" handle={`@${normalized}`} joined="Joined 2024" location="Rabat, Morocco" name={name} stats={[{ label: 'films', value: 284 }, { label: 'series', value: 39 }, { label: 'lists', value: 23 }, { label: 'followers', value: 186 }]} status="online" />
+        <Tabs activeValue="overview" aria-label={`${name} profile sections`} className="bg-navigation px-5 sm:px-8 lg:px-[62px]" items={[{ href: '#overview', label: 'Overview', value: 'overview' }, { href: '#diary', label: 'Diary', value: 'diary' }, { href: '#favorites', label: 'Favorites', value: 'favorites' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#lists', label: 'Lists', value: 'lists' }, { href: '#circle', label: 'Circle', value: 'circle' }]} />
         <div className="px-5 sm:px-8 lg:px-[62px]" id="overview">
-          <section
-            aria-labelledby="favorites-heading"
-            className="scroll-mt-20 py-14 sm:py-16 lg:py-20"
-            id="favorites"
-          >
-            <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_26.5rem]">
-              <div className="min-w-0">
-                <SectionHeading
-                  description="Favorite movies and series, mixed together"
-                  id="favorites-heading"
-                  title="The four that explain me"
-                />
-                <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  {favoriteTitles.map((item) => (
-                    <ContentCard
-                      artworkSrc={item.artworkSrc}
-                      badge={<Badge tone="neutral">{item.kind}</Badge>}
-                      href={`#${item.title.toLowerCase().replaceAll(' ', '-')}`}
-                      key={item.title}
-                      meta={item.meta}
-                      title={item.title}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <aside className="space-y-5" aria-label={ownerView ? 'Profile status and current watch' : 'Taste compatibility and current watch'}>
-                {ownerView ? (
-                  <section className="rounded-card border border-border bg-surface p-5">
-                    <h3 className="text-sm font-bold text-ink">Your profile is ready to be found</h3>
-                    <p className="mt-3 font-display text-4xl leading-none text-ink">82% complete</p>
-                    <div aria-label="Profile 82% complete" aria-valuemax={100} aria-valuemin={0} aria-valuenow={82} className="mt-5 h-1 bg-surface-raised" role="progressbar">
-                      <span className="block h-full w-[82%] bg-orange" />
-                    </div>
-                    <p className="mt-4 text-xs leading-5 text-muted">Add two favorite titles and a shorter bio to sharpen recommendations.</p>
-                    <a className="mt-4 inline-flex min-h-11 items-center text-xs font-bold text-orange outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href="/settings">Complete profile <ArrowRight aria-hidden="true" className="ml-2 size-4" /></a>
-                  </section>
-                ) : (
-                  <CompatibilityPanel
-                    items={mutuals}
-                    memberName={name}
-                    mutuals="12 shared circle members · 46 shared favorites"
-                    reason="You both love slow science fiction, uneasy cities, and endings that refuse to explain themselves."
-                    score={87}
-                  />
-                )}
-                <div className="rounded-card border border-border bg-surface p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <h3 className="text-sm font-bold text-ink">Watching now</h3>
-                    <span className="inline-flex items-center gap-2 text-xs text-muted">
-                      <span aria-hidden="true" className="size-2 rounded-full bg-lime" />
-                      <span className="sr-only">{name} is online</span>
-                    </span>
-                  </div>
-                  <ContinueCard
-                    artworkSrc={artwork.violetHours}
-                    className="mt-4"
-                    href="#fault-lines"
-                    layout="compact"
-                    meta="Season 1 · Episode 6 · This show is cooking."
-                    progress={37}
-                    title="Fault Lines"
-                  />
-                </div>
-              </aside>
-            </div>
-          </section>
-
-          <section
-            aria-labelledby="diary-heading"
-            className="scroll-mt-20 border-t border-border py-14 sm:py-16 lg:py-20"
-            id="diary"
-          >
-            <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_26.5rem]">
-              <div className="min-w-0">
-                <SectionHeading
-                  action={<SectionAction href="#full-diary" label="Full diary" />}
-                  id="diary-heading"
-                  title="Recent diary"
-                />
-                <div className="mt-6">
-                  {diaryEntries.map((entry, index) => (
-                    <DiaryRow
-                      action={index === 0 ? <a className="inline-flex min-h-11 items-center text-xs text-muted outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange" href="#atlas-review">Review</a> : undefined}
-                      artworkSrc={entry.artworkSrc}
-                      date={entry.date}
-                      detail={entry.detail}
-                      href={`#diary-${entry.title.toLowerCase().replaceAll(' ', '-')}`}
-                      key={`${entry.date}-${entry.title}`}
-                      note={'note' in entry ? entry.note : undefined}
-                      rating={entry.rating}
-                      title={entry.title}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <aside className="space-y-5" aria-label={`${name} taste summary`}>
-                <TasteSignature
-                  detail="Rates fewer titles than 82% of members · Average 4.1"
-                  statement="Restless futures. Quiet dread. People trying to come home."
-                  worlds={[
-                    { label: 'Sci-fi', tone: 'orange' },
-                    { label: 'Mystery', tone: 'lilac' },
-                    { label: 'Slow cinema', tone: 'lime' },
-                  ]}
-                />
-                <RatingRhythm values={[5, 10, 18, 24, 31, 21, 14, 8]} />
-              </aside>
-            </div>
-          </section>
-
-          <section
-            aria-labelledby="reviews-heading"
-            className="scroll-mt-20 border-t border-border py-14 sm:py-16 lg:py-20"
-            id="reviews"
-          >
-            <SectionHeading
-              action={<SectionAction href="#all-reviews" label="All reviews" />}
-              id="reviews-heading"
-              title="Reviews that stayed with people"
-            />
-            <div className="mt-8 grid gap-5 lg:grid-cols-2">
-              <ProfileReviewCard
-                artworkSrc={artwork.northbound}
-                excerpt="Some movies explain loneliness. This one just leaves the door open and lets it sit beside you."
-                href="#atlas-motel"
-                likes="73"
-                rating={5}
-                reviewedOn="26 August"
-                title="Atlas Motel"
-              />
-              <ProfileReviewCard
-                artworkSrc={artwork.thirdSun}
-                excerpt="I understood maybe half of it. Unfortunately, the half I understood changed my entire week."
-                href="#third-sun"
-                likes="119"
-                rating={5}
-                reviewedOn="14 August"
-                title="Third Sun"
-              />
-            </div>
-          </section>
-
-          <section
-            aria-labelledby="lists-heading"
-            className="scroll-mt-20 border-t border-border py-14 sm:py-16 lg:py-20"
-            id="lists"
-          >
-            <SectionHeading
-              action={<SectionAction href="#all-lists" label="All lists" />}
-              id="lists-heading"
-              title={`${name}’s lists`}
-            />
-            <div className="mt-8 grid gap-5 md:grid-cols-3">
-              <CuratedListCard
-                artworkSources={[artwork.northbound, artwork.thirdSun, artwork.saltwater, artwork.violetHours]}
-                curator={name}
-                href="#films-like-memory"
-                saves="426"
-                title="Films that feel like a memory"
-              />
-              <CuratedListCard
-                artworkSources={[artwork.saltwater, artwork.northbound, artwork.thirdSun, artwork.violetHours]}
-                curator={name}
-                href="#quiet-breakdown"
-                saves="319"
-                title="Movies for a quiet breakdown"
-              />
-              <CuratedListCard
-                artworkSources={[artwork.violetHours, artwork.saltwater, artwork.northbound, artwork.thirdSun]}
-                curator={name}
-                href="#beautifully-strange"
-                saves="588"
-                title="Beautifully strange and worth it"
-              />
-            </div>
-          </section>
-
-          <section
-            aria-labelledby="circle-heading"
-            className="scroll-mt-20 border-t border-border py-14 sm:py-16 lg:py-20"
-            id="circle"
-          >
-            <SectionHeading
-              action={<span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">186 followers</span>}
-              id="circle-heading"
-              title={`People in ${name}’s circle`}
-            />
-            <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-center">
-              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-                {circleMembers.map((member) => (
-                  <MemberByline
-                    key={member.name}
-                    meta={`${member.overlap}% taste overlap`}
-                    name={member.name}
-                  />
-                ))}
-              </div>
-              <aside className="rounded-card border border-border bg-surface p-5">
-                <p className="text-sm font-bold text-ink">{ownerView ? 'Your profile pulse' : `Follow ${name} to improve your feed`}</p>
-                <p className="mt-2 text-xs leading-5 text-muted">{ownerView ? '14 people found a title through your activity this week.' : 'Their ratings will appear beside your recommendations.'}</p>
-              </aside>
-            </div>
-          </section>
+          <section className="py-12 sm:py-14 lg:py-16" id="favorites" aria-labelledby="favorites-heading"><div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_26.5rem]"><div><SectionHeading description="Favorite movies and series, mixed together" id="favorites-heading" title="The four that explain me" /><div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">{titles.slice(0, 4).map((title) => <ContentCard artworkSrc={title.posterUrl ?? undefined} badge={<Badge tone="neutral">{title.kind === 'movie' ? 'Film' : 'Series'}</Badge>} href={titleHref(title)} key={`${title.kind}:${title.id}`} meta={titleMeta(title)} title={title.title} />)}</div></div><aside className="space-y-5">{ownerView ? <section className="rounded-card border border-border bg-surface p-5"><h2 className="text-sm font-bold text-ink">Your profile is ready to be found</h2><p className="mt-3 font-display text-4xl leading-none text-ink">82% complete</p><div aria-label="Profile 82% complete" aria-valuemax={100} aria-valuemin={0} aria-valuenow={82} className="mt-5 h-1 bg-surface-raised" role="progressbar"><span className="block h-full w-[82%] bg-orange" /></div><p className="mt-4 text-xs leading-5 text-muted">Add two favorites and a shorter bio to sharpen recommendations.</p></section> : <CompatibilityPanel items={mutuals} memberName={name} mutuals="12 shared circle members · 46 shared favorites" reason="You both love patient stories and endings that refuse to over-explain." score={87} />}{featured ? <div className="rounded-card border border-border bg-surface p-5"><h2 className="text-sm font-bold text-ink">Watching now</h2><ContinueCard artworkSrc={featured.backdropUrl ?? featured.posterUrl ?? undefined} className="mt-4" href={watchHref(featured)} layout="compact" meta={featured.kind === 'series' ? 'Season 1 · Episode 3' : '42 minutes left'} progress={37} title={featured.title} /></div> : null}</aside></div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="diary" aria-labelledby="diary-heading"><div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_26.5rem]"><div><SectionHeading id="diary-heading" title="Recent diary" /><div className="mt-6">{titles.slice(4, 8).map((title, index) => <DiaryRow artworkSrc={title.posterUrl ?? undefined} date={['26 Aug', '23 Aug', '19 Aug', '14 Aug'][index] ?? 'Recently'} detail={index === 1 ? 'Watched with Yasmine and Omar' : 'Finished'} href={titleHref(title)} key={`${title.kind}:${title.id}`} note={index === 0 ? 'Still holds up in exactly the right places.' : undefined} rating={5 - index * 0.5} title={title.title} />)}</div></div><aside className="space-y-5"><TasteSignature detail="Rates fewer titles than 82% of members · Average 4.1" statement="Restless futures. Quiet dread. People trying to come home." worlds={[{ label: 'Science fiction', tone: 'orange' }, { label: 'Mystery', tone: 'lilac' }, { label: 'Drama', tone: 'lime' }]} /><RatingRhythm values={[5, 10, 18, 24, 31, 21, 14, 8]} /></aside></div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="reviews-heading"><SectionHeading id="reviews-heading" title="Reviews that stayed with people" /><div className="mt-8 grid gap-5 lg:grid-cols-2">{titles.slice(8, 10).map((title, index) => <ProfileReviewCard artworkSrc={title.posterUrl ?? undefined} excerpt={index === 0 ? 'Some stories explain loneliness. This one lets it sit beside you.' : 'I understood only half of it. That half changed my week.'} href={titleHref(title)} key={`${title.kind}:${title.id}`} likes={String(73 + index * 46)} rating={5} reviewedOn={index === 0 ? '26 August' : '14 August'} title={title.title} />)}</div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="lists" aria-labelledby="lists-heading"><SectionHeading id="lists-heading" title={`${name}’s lists`} /><div className="mt-8 grid gap-5 md:grid-cols-3">{['Films that feel like a memory', 'Movies for a quiet breakdown', 'Beautifully strange and worth it'].map((list, index) => <CuratedListCard artworkSources={titles.slice(index, index + 4).map((title) => title.posterUrl ?? undefined)} curator={name} href="/lists/films-that-feel-like-a-memory" key={list} saves={String(319 + index * 107)} title={list} />)}</div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="circle" aria-labelledby="circle-heading"><SectionHeading action={<span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">186 followers</span>} id="circle-heading" title={`People in ${name}’s circle`} /><div className="mt-8 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">{circleMembers.map((member) => <MemberByline key={member.name} meta={`${member.overlap}% taste overlap`} name={member.name} />)}</div></section>
         </div>
       </main>
-
-      <Footer
-        copyright="© 2026 Consumit"
-        links={[
-          { href: '#about', label: 'About' },
-          { href: '#help', label: 'Help' },
-          { href: '#apps', label: 'Apps' },
-          { href: '#terms', label: 'Terms' },
-          { href: '#privacy', label: 'Privacy' },
-          { href: '/components', label: 'Components' },
-        ]}
-      />
-    </>
+    </ScreenShell>
   )
 }
 
-export function PublicProfileScreen({ username }: { username: string }) {
-  return <ProfileScreen username={username} />
-}
-
-export function OwnerProfileScreen({ username = 'hamza' }: { username?: string }) {
-  return <ProfileScreen owner username={username} />
-}
+export function PublicProfileScreen(props: { stale: boolean; titles: readonly CatalogTitleSummary[]; username: string }) { return <ProfileScreen {...props} /> }
+export function OwnerProfileScreen(props: { stale: boolean; titles: readonly CatalogTitleSummary[]; username?: string }) { return <ProfileScreen owner stale={props.stale} titles={props.titles} username={props.username ?? 'hamza'} /> }

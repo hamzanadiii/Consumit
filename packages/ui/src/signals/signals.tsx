@@ -147,7 +147,7 @@ export function TasteMatch({
       <span className="relative w-1 shrink-0 overflow-hidden bg-surface-raised">
         <span
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 bg-orange"
+          className="absolute inset-x-0 bottom-0 bg-lilac"
           style={{ height: `${safeScore}%` }}
         />
       </span>
@@ -156,7 +156,7 @@ export function TasteMatch({
           <strong className="font-display text-3xl font-normal text-ink">
             {safeScore}%
           </strong>
-          <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">
+          <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-lilac">
             {label}
           </span>
         </span>

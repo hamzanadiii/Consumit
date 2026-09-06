@@ -18,6 +18,12 @@
 - Fastify 5.12.1 on Bun.
 - `@fastify/cors`, `@fastify/helmet`, and `@fastify/rate-limit` establish the HTTP boundary baseline.
 - API modules expose an app factory so tests do not need to bind a network port.
+- Native `fetch` is the TMDB transport. No provider wrapper is used, keeping retry, timeout, validation, and normalization policy inside the catalog adapter.
+
+## Catalog contracts
+
+- Zod 4 defines the shared public catalog schemas in `@consumit/contracts` and validates every TMDB response before normalization.
+- The contracts package owns catalog kinds, summaries, movie and series detail shapes, seasons, pages, structured errors, and canonical route helpers.
 
 ## Shared interface
 
@@ -32,6 +38,6 @@
 
 ## Deliberately deferred
 
-Do not add these until a named vertical slice needs them: database ORM, Postgres client, Valkey client, schema library, authentication, state manager, data-fetching layer, forms, queues, telemetry SDKs, Storybook, and monorepo task runners.
+Do not add these until a named vertical slice needs them: database ORM, Postgres client, Valkey client, authentication, state manager, forms, queues, telemetry SDKs, Storybook, and monorepo task runners.
 
 When shared dependency versions become repetitive across more workspaces, introduce Bun catalogs. When lint or TypeScript configuration needs reuse beyond the root baseline, create explicit config packages rather than duplicating configuration.

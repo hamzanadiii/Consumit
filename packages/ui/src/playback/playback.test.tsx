@@ -39,6 +39,16 @@ describe('playback shell components', () => {
     expect(screen.getByText('1:01 / 2:05')).toBeInTheDocument()
   })
 
+  it('does not present an unavailable source as healthy', () => {
+    const { container } = render(
+      <ConsumitPlayer status="No authorized source available" statusTone="unavailable" title="Sea of Names" />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('No authorized source available')
+    expect(container.querySelector('[role="status"] span')).toHaveClass('bg-danger')
+    expect(container.querySelector('[role="status"] span')).not.toHaveClass('bg-lime')
+  })
+
   it('keeps source selection native and controlled', () => {
     const onValueChange = vi.fn()
     render(<SourceSelector name="source" onValueChange={onValueChange} sources={[{ label: 'Source 1', value: 'one' }, { label: 'Source 2', value: 'two' }]} value="one" />)

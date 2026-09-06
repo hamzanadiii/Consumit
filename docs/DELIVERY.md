@@ -91,8 +91,10 @@ Exit criterion: the screen is visually reviewable end to end with local fixtures
 
 Add logic in user-valuable slices instead of wiring every backend at once:
 
+The canonical catalog slice is implemented: real TMDB discovery, search, movie and series detail, seasons and episodes, normalized artwork, numeric routes, deterministic social overlays, and explicit unavailable playback. It uses an injectable Fastify adapter, shared contracts, bounded upstream work, and deterministic network-independent tests. Persistence and authorized playback remain separate slices.
+
 1. Identity: create account, sign in, session, profile shell.
-2. Catalog: title identity, search, movie and series details.
+2. Catalog: title identity, search, movie and series details. **Implemented for the TMDB metadata slice.**
 3. Library: save, favorite, history, progress, resume.
 4. Social: follow, activity, profile taste, ratings, reviews, lists.
 5. Playback: resolve, session, source selection, reporting, fallback.

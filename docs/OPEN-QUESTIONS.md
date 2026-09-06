@@ -11,6 +11,7 @@ These questions are intentionally unresolved. They are ordered by how soon they 
 - The first implementation slice is the visual token layer and shared Button primitive, presented in a local component catalog.
 - Playback uses a first-party Consumit Player with authorized direct media sources; iframe and embed delivery are excluded.
 - Social relationships use one-way Follow and Circle semantics; reciprocal friend requests and private or direct messaging are excluded.
+- TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, people, and artwork. Anime is classified as a movie or series, not a separate title kind. Catalog metadata uses English (`en-US`), the US market, and excludes adult results.
 
 ## Blocking playback work
 
@@ -18,30 +19,26 @@ These questions are intentionally unresolved. They are ordered by how soon they 
 
 Name the providers and content rights Consumit may legally and contractually use, including regional restrictions and which direct HLS, DASH, or native-media sources are permitted.
 
-### 2. Catalog identity
-
-Decide the canonical metadata source and identifiers for movies, series, seasons, episodes, people, and anime. Clarify whether anime is a separate title kind or a classification of movies/series.
-
 ## Blocking social and account work
 
-### 3. Privacy defaults
+### 2. Privacy defaults
 
 The create-account design says private by default, while profiles, diary, lists, and activity support public social discovery. Define defaults and visibility rules for profile, history/diary, ratings, reviews, lists, follows, and activity.
 
-### 4. Authentication and imports
+### 3. Authentication and imports
 
 Choose launch authentication methods and permitted sources/formats for history import. Define account recovery, email verification, deletion, and data export expectations.
 
 ## Before launch planning
 
-### 5. Initial market and localization
+### 4. Initial market and localization
 
 Confirm launch countries, primary language(s), subtitle priorities, age/content requirements, and hosting region. Morocco/Europe and Frankfurt/Amsterdam appear as examples in the architecture brief, not confirmed commitments.
 
-### 6. First-release boundary
+### 5. First-release boundary
 
 The screen inventory is broader than a small MVP. Decide which member loop must be complete for the first release and which screens remain reference-only.
 
-### 7. Success measures
+### 6. Success measures
 
 Set the first product measures in addition to playback reliability: for example, time to first useful recommendation, play-through rate, save/favorite conversion, week-one return, and discovery from circle activity.

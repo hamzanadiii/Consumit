@@ -2,13 +2,7 @@ import type { ReactNode } from 'react'
 
 import { Footer, GlobalNavigation } from '@consumit/ui'
 
-export const artwork = {
-  backdrop: '/assets/cinematic-backdrop.svg',
-  northbound: '/assets/posters/northbound.svg',
-  saltwater: '/assets/posters/saltwater.svg',
-  thirdSun: '/assets/posters/third-sun.svg',
-  violetHours: '/assets/posters/violet-hours.svg',
-} as const
+import { CatalogPreviewNotice } from '../catalog/catalog-attribution'
 
 export const circle = [
   { name: 'Yasmine' },
@@ -24,7 +18,7 @@ const navigationItems = [
 ] as const
 
 const footerLinks = [
-  { href: '#about', label: 'About' },
+  { href: '/about', label: 'About' },
   { href: '#help', label: 'Help' },
   { href: '#terms', label: 'Terms' },
   { href: '#privacy', label: 'Privacy' },
@@ -56,6 +50,7 @@ export function ScreenShell({
         sticky={false}
         {...(searchDefaultValue === undefined ? {} : { searchDefaultValue })}
       />
+      <CatalogPreviewNotice />
       {children}
       {withFooter ? (
         <Footer

@@ -23,6 +23,7 @@ export type ConsumitPlayerProps = Omit<
   className?: string | undefined
   posterSrc?: string | undefined
   status?: ReactNode | undefined
+  statusTone?: 'healthy' | 'neutral' | 'unavailable' | undefined
   title: string
   videoClassName?: string | undefined
 }
@@ -41,6 +42,7 @@ export function ConsumitPlayer({
   preload = 'metadata',
   src,
   status,
+  statusTone = 'neutral',
   title,
   videoClassName,
   ...props
@@ -124,7 +126,15 @@ export function ConsumitPlayer({
           className="flex min-h-11 items-center gap-2 border-b border-border bg-canvas px-4 text-xs text-copy"
           role="status"
         >
-          <span aria-hidden="true" className="size-2 rounded-full bg-lime" />
+          <span
+            aria-hidden="true"
+            className={cn(
+              'size-2 rounded-full',
+              statusTone === 'healthy' && 'bg-lime',
+              statusTone === 'neutral' && 'bg-copy',
+              statusTone === 'unavailable' && 'bg-danger',
+            )}
+          />
           {status}
         </div>
       ) : null}

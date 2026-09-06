@@ -113,6 +113,7 @@ The system pairs decisive controls with restrained surfaces. It should feel aliv
 - Charter display type paired with compact DejaVu Sans controls
 - Square-to-gently-rounded geometry and warm-white hairlines
 - Rare orange action signals with semantically reserved lilac and lime
+- Visible provenance for external catalog data and visibly labeled prototype-only member signals
 - Purposeful composition that becomes distinct on mobile
 
 ## Colors
@@ -125,12 +126,12 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 ### Secondary
 
-- **Social Lilac:** Taste overlap and social context only.
+- **Social Lilac:** Taste Match, taste overlap, and social context only.
 
 ### Tertiary
 
 - **Positive Lime:** Presence and healthy status only.
-- **Quiet Danger:** Destructive actions without alarmist saturation.
+- **Quiet Danger:** Destructive actions, invalid fields, and first-party playback states blocked by the absence of an authorized source.
 
 ### Neutral
 
@@ -146,7 +147,7 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 **The Semantic Accent Rule.** Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.
 
-**The Operational Status Rule.** Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present.
+**The Operational Status Rule.** Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present; Quiet Danger marks a blocked first-party task, not routine metadata absence.
 
 ## Typography
 
@@ -217,6 +218,19 @@ Global navigation is the stable wayfinding shell for catalog and social surfaces
 - **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
 - **Scope:** Exclude this shell from Watch and from the reduced authentication, onboarding, and report headers.
 
+### Catalog Transparency
+
+Catalog provenance and prototype honesty are persistent interface chrome, not optional campaign copy.
+
+- **Preview-data notice:** Place one full-width, flat Surface band directly below both the global navigation and the reduced Watch header. Use centered 11px Muted Metadata text, a subtle lower hairline, and `role="note"`; keep it visible at every width.
+- **Disclosure scope:** Name Taste Match, member activity, ratings, and progress as deterministic sample data. Do not shorten this to a vague “demo” label or imply those signals came from real members.
+- **Catalog attribution:** Keep the low-emphasis TMDB attribution band at the application boundary on standard and reduced-shell screens. Link the TMDB wordmark to TMDB and “Catalog credits” to About, where the metadata scope and non-endorsement statement remain readable.
+- **Source labels:** Label source-specific catalog evidence in place—for example, “TMDB ratings” and TMDB recommendations—so it cannot be mistaken for Consumit member evidence.
+
+**The Catalog Boundary Rule.** TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.
+
+**The Preview Honesty Rule.** Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.
+
 ### Label and Input
 
 Labels and inputs form one quiet, native-first control contract while remaining independently composable.
@@ -244,7 +258,9 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 ### Media and Content Cards
 
-- Supplied artwork leads the composition. Poster, landscape, missing-art, and editorial frames preserve deliberate aspect ratios rather than stretching media.
+- Supplied and TMDB catalog artwork leads the composition. Poster, landscape, missing-art, and editorial frames preserve deliberate aspect ratios rather than stretching media.
+- When a catalog record has no artwork, keep the existing geometric missing-art state inside the requested aspect ratio with an accessible title-specific label. Do not substitute a TMDB logo, a blank rectangle, or a new placeholder style.
+- Treat external titles, names, descriptions, and image URLs as untrusted variable content: contain them inside Consumit-owned typography and media frames, preserve the surrounding hierarchy, and never allow catalog content to inject markup, controls, or styling.
 - Card APIs separate image, metadata, social context, progress, and action content so screens can compose the right density without duplicating card internals.
 - Gradients belong to artwork legibility only; ordinary card surfaces stay flat.
 
@@ -267,7 +283,9 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 ### Editorial and Social
 
 - Section headings establish a clear editorial opening before controls or grids.
+- Taste Match badges, meters, and reasons use Social Lilac consistently. Signal Orange remains the action and active-progress accent; it is not a substitute color for taste semantics.
 - Social proof explains why a title matters through named people, reactions, and taste context rather than anonymous engagement totals.
+- Deterministic preview reactions, activity, ratings, and progress remain visibly disclosed by the persistent preview-data notice and must not use copy that implies live freshness or verified member behavior.
 - Spoilers use native disclosure behavior. Member status and reaction state remain announced independently of their visual treatment.
 
 **The Social Boundary Rule.** Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.
@@ -293,6 +311,8 @@ Profile surfaces are living taste spaces rather than account summaries.
 ### Title and Series Surfaces
 
 - **Title masthead:** Make one cinematic promise with artwork, context, display title, metadata, synopsis, and a compact action cluster. Taste match and named social proof support that promise without competing with it.
+- **Catalog identity:** TMDB-backed cards, details, seasons, episodes, and Watch actions preserve their canonical numeric catalog routes while the interface continues to show human titles rather than provider identifiers.
+- **Catalog evidence:** Explicitly label TMDB ratings and recommendations. Keep them visually separate from the sample member or Circle evidence governed by the preview-data notice.
 - **Detail priority:** Title Detail opens on Overview. Series Detail opens on Episodes and foregrounds season choice, episode state, progress, and the next available action.
 - **Responsive evidence:** On narrow screens, supporting evidence follows the content it explains. Cast and related-title collections become horizontal discovery rails instead of compressed grids.
 - **Member pulse:** Present the numeric rating and count accessibly; the distribution is secondary evidence and remains decorative to assistive technology.
@@ -332,16 +352,17 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Playback Shell
 
-Component 17 is UI-shell-only. Provider ranking, health determination, entitlement checks, streaming adapters, and switching behavior remain application logic behind the provider-adapter seam.
+Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster or backdrop, but never a media source. Provider ranking, health determination, entitlement checks, streaming adapters, and switching behavior remain application logic behind the provider-adapter seam.
 
 - **Watch header:** Use the supplied Consumit mark, back destination, title context, active source status, and an explicit exit. Do not restore global navigation inside watch.
 - **Consumit Player:** Render a semantic native video surface with first-party play, seek, volume, and fullscreen controls. Authorized providers supply direct HLS, DASH, or native-media sources through the later adapter seam; iframe and embed surfaces are excluded.
-- **Source selector:** Use controlled native radio rows. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable.
-- **Composition contract:** The selected source, watch-header status, player status, and active source detail update from the same application state. A visual selection must never disagree with the source reported as selected.
+- **Unavailable state:** When no authorized direct-media source exists, keep the first-party player visible with the catalog poster or established missing-art fallback, show an explicit Quiet Danger status, disable unavailable playback controls, and pair the state with a plain-language lock explanation and a route back to the title. Never substitute a demo clip, trailer, iframe, or embed.
+- **Source selector:** Render controlled native radio rows only when authorized sources exist. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable; do not render an empty or invented source list.
+- **Composition contract:** The selected source, watch-header status, player status, and active source detail update from the same application state. The no-source branch must say so consistently, and a visual selection must never disagree with the source reported as selected.
 
-**The Player Ownership Rule.** Consumit owns the playback controls and media surface; providers supply authorized direct media through an adapter boundary and never replace the interface with an embed.
+**The Player Ownership Rule.** Consumit owns the playback controls and media surface; authorized providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.
 
-**The Synchronized Watch State Rule.** Source selection, watch status, player status, and active detail always describe the same application state.
+**The Synchronized Watch State Rule.** Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any authorized source.
 
 ### Global Finish
 
@@ -349,6 +370,7 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 - **Loading state:** Announce the affected content through a status role, keep placeholders subordinate, and stop spinners and pulses when reduced motion is requested.
 - **Error state:** Name what failed, protect the member’s understanding of what remains safe, add useful diagnostic detail, and provide a direct recovery action.
 - **Footer:** End standard pages with the supplied Consumit mark and wordmark, support and legal destinations, and copyright; keep every link touch-safe and keyboard-visible.
+- **Catalog credit:** End every application page, including reduced Watch, with the quiet TMDB attribution band and its direct path to About catalog credits.
 
 **The Honest Recovery Rule.** Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.
 
@@ -363,6 +385,8 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 - **Do** keep Home’s section order and responsive discovery rails specific to Home.
 - **Do** keep playback selection, header status, player status, and active source detail synchronized from one application state.
 - **Do** explain empty, loading, and error states in terms of member impact and the next useful recovery.
+- **Do** keep the preview-data notice directly below global and Watch headers, and keep TMDB attribution and About credits globally reachable.
+- **Do** label TMDB-derived evidence and preserve the established geometric fallback whenever its artwork is missing.
 
 ### Don't:
 
@@ -372,4 +396,6 @@ Component 17 is UI-shell-only. Provider ranking, health determination, entitleme
 - **Don't** treat mobile as a scaled-down desktop composition.
 - **Don't** reuse Home’s editorial cadence as a universal page template.
 - **Don't** synthesize the Consumit mark with styled text in reduced branded headers or hide onboarding skip on mobile.
+- **Don't** present deterministic Taste Match, member activity, ratings, reviews, or progress as live member data.
+- **Don't** let TMDB attribution imply endorsement or treat catalog metadata and artwork as permission to play a title.
 - **Don't** put provider ranking, health, entitlement, streaming-adapter, or switching logic inside Component 17, and don't introduce iframe or embed playback.

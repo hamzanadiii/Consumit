@@ -3,9 +3,13 @@ import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify from 'fastify'
 
+import type { Catalog } from './catalog/catalog.ts'
+import { registerCatalogRoutes } from './catalog/routes.ts'
+import { unavailableCatalogAdapter } from './catalog/unavailable-catalog.ts'
+
 const localWebOrigin = 'http://localhost:3000'
 
-export function buildApp() {
+export function buildApp({ catalog = unavailableCatalogAdapter }: { catalog?: Catalog } = {}) {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
   })
@@ -28,6 +32,8 @@ export function buildApp() {
     },
     async () => ({ status: 'ok' as const }),
   )
+
+  registerCatalogRoutes(app, catalog)
 
   return app
 }

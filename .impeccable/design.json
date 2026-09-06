@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-04T00:55:19Z",
+  "generatedAt": "2026-09-06T18:14:26Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -221,30 +221,30 @@
       "Charter display type paired with compact DejaVu Sans controls",
       "Square-to-gently-rounded geometry and warm-white hairlines",
       "Rare orange action signals with semantically reserved lilac and lime",
+      "Visible provenance for external catalog data and visibly labeled prototype-only member signals",
       "Purposeful composition that becomes distinct on mobile"
     ],
     "rules": [
       { "name": "The Scarce Signal Rule", "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.", "section": "colors" },
       { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.", "section": "colors" },
-      { "name": "The Operational Status Rule", "body": "Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present.", "section": "colors" },
+      { "name": "The Operational Status Rule", "body": "Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present; Quiet Danger marks a blocked first-party task, not routine metadata absence.", "section": "colors" },
       { "name": "The Two Voices Rule", "body": "Serif type tells the story; sans-serif type helps the member act.", "section": "typography" },
       { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" },
-      { "name": "The Perceptible Control Rule", "body": "Interactive boundaries use the dedicated control outline and keep a minimum 44px target; faint separators only divide passive content.", "section": "components" },
-      { "name": "The Human Signal Rule", "body": "Presence, save state, status, rank, and compatibility are expressed in text as well as color or iconography.", "section": "components" },
-      { "name": "The Artwork Leads Rule", "body": "Supplied artwork preserves its intended aspect ratio and leads media compositions; gradients exist only to protect artwork legibility.", "section": "components" },
-      { "name": "The Social Context Rule", "body": "Taste and social components explain why content matters through named people and readable context rather than anonymous engagement totals.", "section": "components" },
+      { "name": "The Catalog Boundary Rule", "body": "TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.", "section": "components" },
+      { "name": "The Preview Honesty Rule", "body": "Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.", "section": "components" },
       { "name": "The Home Cadence Rule", "body": "Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.", "section": "components" },
       { "name": "The Rank Behind the Poster Rule", "body": "A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.", "section": "components" },
+      { "name": "The Social Boundary Rule", "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.", "section": "components" },
       { "name": "The Human Reason Rule", "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.", "section": "components" },
       { "name": "The Related Evidence Rule", "body": "Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.", "section": "components" },
       { "name": "The Rating Evidence Rule", "body": "Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.", "section": "components" },
       { "name": "The Single Promise Rule", "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.", "section": "components" },
+      { "name": "The Detail Priority Rule", "body": "Overview leads Title Detail; actionable episode state leads Series Detail. Social evidence remains supporting context at every width.", "section": "components" },
       { "name": "The State, Evidence, Action Rule", "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.", "section": "components" },
       { "name": "The Reduced Shell Rule", "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.", "section": "components" },
       { "name": "The Heading Carries the Story Rule", "body": "Authentication story panels use brand, artwork, a headline, description, and optional proof; never add a kicker or eyebrow above the story headline.", "section": "components" },
-      { "name": "The Player Ownership Rule", "body": "Consumit owns the playback controls and media surface; providers supply authorized direct media through an adapter boundary and never replace the interface with an embed.", "section": "components" },
-      { "name": "The Synchronized Watch State Rule", "body": "Source selection, watch status, player status, and active detail always describe the same application state.", "section": "components" },
-      { "name": "The Social Boundary Rule", "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.", "section": "components" },
+      { "name": "The Player Ownership Rule", "body": "Consumit owns the playback controls and media surface; authorized providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.", "section": "components" },
+      { "name": "The Synchronized Watch State Rule", "body": "Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any authorized source.", "section": "components" },
       { "name": "The Honest Recovery Rule", "body": "Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.", "section": "components" }
     ],
     "dos": [
@@ -254,7 +254,9 @@
       "Do finish each shared component and its states before composing the next screen.",
       "Do keep Home’s section order and responsive discovery rails specific to Home.",
       "Do keep playback selection, header status, player status, and active source detail synchronized from one application state.",
-      "Do explain empty, loading, and error states in terms of member impact and the next useful recovery."
+      "Do explain empty, loading, and error states in terms of member impact and the next useful recovery.",
+      "Do keep the preview-data notice directly below global and Watch headers, and keep TMDB attribution and About credits globally reachable.",
+      "Do label TMDB-derived evidence and preserve the established geometric fallback whenever its artwork is missing."
     ],
     "donts": [
       "Don't introduce large pills, routine gradients, glass effects, or floating dashboard cards.",
@@ -263,8 +265,9 @@
       "Don't treat mobile as a scaled-down desktop composition.",
       "Don't reuse Home’s editorial cadence as a universal page template.",
       "Don't synthesize the Consumit mark with styled text in reduced branded headers or hide onboarding skip on mobile.",
-      "Don't put provider ranking, health, entitlement, streaming-adapter, or switching logic inside Component 17, and don't introduce iframe or embed playback.",
-      "Don't add private or direct messaging actions to member profiles or suggestions."
+      "Don't present deterministic Taste Match, member activity, ratings, reviews, or progress as live member data.",
+      "Don't let TMDB attribution imply endorsement or treat catalog metadata and artwork as permission to play a title.",
+      "Don't put provider ranking, health, entitlement, streaming-adapter, or switching logic inside Component 17, and don't introduce iframe or embed playback."
     ]
   }
 }

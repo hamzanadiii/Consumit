@@ -4,6 +4,7 @@ import { Check, Eye, EyeOff } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useState } from 'react'
+import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import {
   AuthField,
@@ -57,41 +58,29 @@ function SignInStoryProof() {
   )
 }
 
-function PosterFan() {
+function PosterFan({ titles }: { titles: readonly CatalogTitleSummary[] }) {
   return (
     <div aria-hidden="true" className="relative mt-12 h-[25rem] w-full max-w-[36rem]">
-      <Image
+      {titles.slice(0, 3).map((title, index) => title.posterUrl ? <Image
         alt=""
-        className="absolute top-5 left-7 h-[23rem] w-[15.5rem] -rotate-[7deg] rounded-card border border-ink/15 object-cover shadow-2xl shadow-canvas/35"
+        className="absolute h-[23rem] w-[15.5rem] rounded-card border border-ink/15 object-cover shadow-2xl shadow-canvas/35"
         height={368}
-        src="/assets/posters/northbound.svg"
+        key={`${title.kind}:${title.id}`}
+        src={title.posterUrl}
+        style={{ left: `${1.75 + index * 10.75}rem`, top: `${1.25 + index * 1.9}rem`, transform: `rotate(${-7 + index * 8}deg)`, zIndex: index }}
         width={248}
-      />
-      <Image
-        alt=""
-        className="absolute top-10 left-[12.5rem] h-[23.5rem] w-[16rem] rotate-[4deg] rounded-card border border-ink/15 object-cover shadow-2xl shadow-canvas/40"
-        height={376}
-        src="/assets/posters/violet-hours.svg"
-        width={256}
-      />
-      <Image
-        alt=""
-        className="absolute top-20 right-1 h-[21rem] w-[14rem] rotate-[10deg] rounded-card border border-ink/15 object-cover shadow-2xl shadow-canvas/45"
-        height={336}
-        src="/assets/posters/saltwater.svg"
-        width={224}
-      />
+      /> : null)}
     </div>
   )
 }
 
-export function SignInScreen() {
+export function SignInScreen({ titles }: { titles: readonly CatalogTitleSummary[] }) {
   const [showPassword, setShowPassword] = useState(false)
 
   return (
     <AuthShell
       artworkOverlayClassName="bg-transparent"
-      artworkSrc="/assets/auth-sign-in-artwork.svg"
+      artworkSrc={titles.find((title) => title.backdropUrl)?.backdropUrl ?? undefined}
       asideClassName="lg:p-[62px]"
       asideContent={<SignInStoryProof />}
       asideDescription="Return to the films, people, and lists that know what your next night should feel like."
@@ -199,7 +188,7 @@ export function SignInScreen() {
   )
 }
 
-export function SignUpScreen() {
+export function SignUpScreen({ titles }: { titles: readonly CatalogTitleSummary[] }) {
   return (
     <AuthShell
       asideClassName="bg-[linear-gradient(145deg,#17131a_0%,#3b2531_48%,#765064_76%,#17151d_100%)] lg:px-[62px] lg:pt-[42px] lg:pb-[145px]"
@@ -231,7 +220,7 @@ export function SignUpScreen() {
       header={(
         <div>
           <AuthBrand />
-          <PosterFan />
+          <PosterFan titles={titles} />
         </div>
       )}
       title="Create your taste space."

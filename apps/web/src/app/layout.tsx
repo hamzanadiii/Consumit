@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 
 import './globals.css'
 
+import { CatalogAttribution } from './catalog/catalog-attribution'
+
 export const metadata: Metadata = {
   title: 'Consumit',
   description:
@@ -12,7 +14,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <CatalogAttribution />
+      </body>
     </html>
   )
 }

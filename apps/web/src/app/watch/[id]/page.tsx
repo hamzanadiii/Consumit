@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-
-import { WatchScreen } from '../watch-screen'
+import { notFound, redirect } from 'next/navigation'
 
 export const metadata: Metadata = {
   title: 'Watch · Consumit',
@@ -13,6 +12,7 @@ type WatchPageProps = {
 
 export default async function WatchPage({ params }: WatchPageProps) {
   const { id } = await params
-
-  return <WatchScreen id={id} />
+  const tmdbId = Number(id)
+  if (!Number.isInteger(tmdbId) || tmdbId <= 0) notFound()
+  redirect(`/watch/movie/${tmdbId}`)
 }

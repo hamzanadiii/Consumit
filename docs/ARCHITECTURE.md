@@ -2,7 +2,7 @@
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, and shared-UI workspace shells now exist; the product, data, playback, and operations systems described here do not. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, and canonical catalog module now exist; member persistence, playback resolution, and operations systems remain future work. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
 
 ## System shape
 
@@ -33,6 +33,7 @@ The selected foundation is:
 - Next.js 16 web application with React 19 and Tailwind CSS 4
 - Bun/Fastify 5 API
 - Shared React UI package with Lucide icons and typed variants
+- Shared Zod catalog contracts consumed by Fastify and Next.js
 
 The longer-term direction remains:
 
@@ -94,14 +95,24 @@ Product and social modules consume stable title and playback results; they do no
 
 Prefer deep modules with small interfaces that hide scheduling, validation, expiry, and recovery. Create a seam when implementations genuinely vary, not only because they might vary someday.
 
+## Canonical catalog
+
+TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. Anime remains a movie or series classification rather than a separate catalog kind. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
+
+Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
+
+Catalog metadata and playback availability are independent. A real TMDB title can exist without an authorized playback source. In that state, the first-party Watch shell identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
+
+The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
+
 ## Canonical provider contract
 
 Every provider adapter exposes the same conceptual input and result.
 
 ### Input
 
-- Title kind: movie or series episode; anime classification remains an open catalog decision.
-- Stable catalog identifiers when available, such as TMDB, IMDb, or AniList.
+- Title kind: movie or series episode; anime follows the underlying movie or series kind.
+- Stable TMDB catalog identifier.
 - Title and release year as fallback identification.
 - Season and episode for episodic playback.
 - Context required for region, language, and safe provider selection.
@@ -276,7 +287,11 @@ These are target SLOs, not launch claims. Establish baselines before treating th
 Candidate public routes from the founding brief:
 
 ```text
-GET  /v1/titles/:id
+GET  /v1/titles/discover
+GET  /v1/titles/search
+GET  /v1/titles/batch
+GET  /v1/titles/:kind/:id
+GET  /v1/titles/series/:id/seasons/:season
 POST /v1/playback/resolve
 POST /v1/playback/:session/fallback
 POST /v1/playback/:session/events
