@@ -1,10 +1,13 @@
-import { titleHref, type CatalogResponseMeta, type CatalogTitleSummary } from '@consumit/contracts'
+import { titleHref, watchHref, type CatalogResponseMeta, type CatalogTitleSummary } from '@consumit/contracts'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { buttonVariants, ContentCard, ErrorState, SectionHeading } from '@consumit/ui'
+import { buttonVariants, ErrorState, SectionHeading, WatchCard } from '@consumit/ui'
 
 import { ScreenShell } from '../screens/screen-shell'
+
+import { SaveTitleButton } from './save-title-button'
 
 export function titleMeta(title: CatalogTitleSummary) {
   const kind = title.kind === 'movie' ? 'Film' : 'Series'
@@ -32,12 +35,16 @@ export function CatalogGrid({
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {visible.map((title) => (
-        <ContentCard
+        <WatchCard
           artworkSrc={title.posterUrl ?? undefined}
-          href={titleHref(title)}
+          bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />}
+          href={watchHref(title)}
           key={`${title.kind}:${title.id}`}
+          linkComponent={Link}
           meta={titleMeta(title)}
+          rating={title.tmdbRating ?? undefined}
           title={title.title}
+          titleHref={titleHref(title)}
         />
       ))}
     </div>

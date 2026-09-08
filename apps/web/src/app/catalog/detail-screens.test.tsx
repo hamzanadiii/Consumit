@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { movieDetail, seriesDetail } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
+import { SessionProvider } from '../session/session'
 import { SeriesDetailScreen, TitleDetailScreen } from './detail-screens'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}))
 
 const meta = { fetchedAt: '2026-09-06T00:00:00.000Z', language: 'en-US', region: 'US', source: 'tmdb' as const, stale: false }
 const firstSeason = {
@@ -26,12 +31,15 @@ describe('series season selection', () => {
 
   it('toggles the title save action between add and saved states', async () => {
     const user = userEvent.setup()
-    render(<TitleDetailScreen detail={movieDetail} stale={false} />)
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], saved: [], watched: [] }), { status: 200 })))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<SessionProvider initialMember={{ avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-09-07T12:00:00.000Z', displayName: null, email: 'member@example.com', emailVerified: true, id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca', username: 'cinema_fan' }} initialStatus="authenticated"><TitleDetailScreen detail={movieDetail} stale={false} /></SessionProvider>)
 
     const save = screen.getByRole('button', { name: 'Save Dune: Part Two to library' })
     expect(save).toHaveAttribute('aria-pressed', 'false')
     await user.click(save)
-    expect(screen.getByRole('button', { name: 'Remove Dune: Part Two from library' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByRole('button', { name: 'Remove Dune: Part Two from library' })).toHaveAttribute('aria-pressed', 'true')
+    expect(fetchMock).toHaveBeenCalledWith('/v1/me/library/titles/movie/693134', expect.objectContaining({ method: 'PUT' }))
   })
 
   it('switches through Fastify and preserves the current season when a later load fails', async () => {
@@ -40,7 +48,7 @@ describe('series season selection', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ item: { ...firstSeason, episodes: [{ ...firstSeason.episodes[0], episodeNumber: 2, id: 11, seasonNumber: 2, title: 'Second Season Premiere' }], name: 'Season 2', seasonNumber: 2 }, meta }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'CATALOG_UNAVAILABLE', message: 'TMDB is unavailable.', retryable: true } }), { status: 503 }))
     vi.stubGlobal('fetch', fetchMock)
-    render(<SeriesDetailScreen apiBase="http://api.test" detail={seriesDetail} initialSeason={firstSeason} stale={false} />)
+    render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} stale={false} />)
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Season' }), '2')
     expect(await screen.findByText('Second Season Premiere')).toBeInTheDocument()

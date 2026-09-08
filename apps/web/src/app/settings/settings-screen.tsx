@@ -1,10 +1,13 @@
 'use client'
 
-import { Download, ExternalLink, LogOut, Save, Trash2 } from 'lucide-react'
+import type { MemberProfile } from '@consumit/contracts'
+import { Download, ExternalLink, LogOut, RefreshCw, Save, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
 
 import {
+  Avatar,
   Button,
   Input,
   Label,
@@ -17,26 +20,100 @@ import {
 } from '@consumit/ui'
 
 import { ScreenShell } from '../screens/screen-shell'
-import { usePreviewSession } from '../session/preview-session'
+import { useSession } from '../session/session'
+import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, invalidateMemberLibraryCache, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
+import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
 
-type ToggleKey = 'activity' | 'autoplay' | 'history' | 'releases' | 'spoilers' | 'subtitles'
+type ToggleKey = 'autoplay' | 'releases' | 'spoilers' | 'subtitles'
 
-export function SettingsScreen() {
+export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
   const router = useRouter()
-  const { signOut } = usePreviewSession()
+  const session = useSession()
   const [values, setValues] = useState<Record<ToggleKey, boolean>>({
-    activity: true,
     autoplay: false,
-    history: true,
     releases: true,
     spoilers: true,
     subtitles: true,
   })
-  const [saved, setSaved] = useState(false)
+  const [profile, setProfile] = useState(initialProfile)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
+  const [profileSaved, setProfileSaved] = useState(false)
+  const [accountAction, setAccountAction] = useState<'delete' | 'password' | null>(null)
+  const [accountError, setAccountError] = useState<string | null>(null)
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setAccountError(null)
+    setProfileSaved(false)
+    try {
+      const updated = await updateMemberProfile({
+        avatarUrl,
+        bio: String(data.get('bio')).trim() || null,
+        displayName: String(data.get('displayName')).trim() || null,
+        location: String(data.get('location')).trim() || null,
+        username: String(data.get('username')),
+        visibility: data.get('visibility') === 'public' ? 'public' : 'private',
+      })
+      setProfile(updated)
+      if (session.member) session.setMember({ ...session.member, avatarUrl: updated.avatarUrl, displayName: updated.displayName, username: updated.username })
+      setProfileSaved(true)
+      router.refresh()
+    } catch (error) {
+      setAccountError(error instanceof IdentityApiError ? error.message : 'The profile could not be saved.')
+    }
+  }
+
+  async function signOut() {
+    setAccountError(null)
+    try {
+      await logoutMember()
+      invalidateMemberLibraryCache()
+      session.clearMember()
+      router.push('/sign-in')
+      router.refresh()
+    } catch (error) {
+      setAccountError(error instanceof IdentityApiError ? error.message : 'Sign out could not finish.')
+    }
+  }
+
+  async function changePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    setAccountError(null)
+    try {
+      await changeMemberPassword({ currentPassword: String(data.get('currentPassword')), newPassword: String(data.get('newPassword')) })
+      setAccountAction(null)
+      router.refresh()
+    } catch (error) {
+      setAccountError(error instanceof IdentityApiError ? error.message : 'The password could not be changed.')
+    }
+  }
+
+  async function deleteAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setAccountError(null)
+    try {
+      await deleteMemberAccount(String(new FormData(event.currentTarget).get('password')))
+      session.clearMember()
+      router.push('/')
+      router.refresh()
+    } catch (error) {
+      setAccountError(error instanceof IdentityApiError ? error.message : 'The account could not be deleted.')
+    }
+  }
+
+  async function exportAccount() {
+    setAccountError(null)
+    try {
+      await downloadMemberExport()
+    } catch (error) {
+      setAccountError(error instanceof IdentityApiError ? error.message : 'The export could not be prepared.')
+    }
+  }
 
   function toggle(key: ToggleKey) {
     setValues((current) => ({ ...current, [key]: !current[key] }))
-    setSaved(false)
   }
 
   return (
@@ -51,9 +128,10 @@ export function SettingsScreen() {
           <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
             <SettingsRail
               activeHref="/settings"
-              avatarSrc="/assets/hamza-avatar.svg"
+              avatarSrc={session.member ? memberAvatarSrc(session.member.avatarUrl, session.member.id) : '/assets/hamza-avatar.svg'}
+              avatarTreatment={session.member?.avatarStyle ?? profile.avatarStyle}
               className="min-w-0 max-w-full overflow-hidden [&_nav]:w-full [&_nav]:max-w-full [&_nav]:overflow-x-auto [&_ul]:flex [&_ul]:w-max [&_ul]:gap-2 [&_a]:whitespace-nowrap lg:[&_nav]:overflow-visible lg:[&_ul]:block lg:[&_ul]:w-auto lg:[&_ul]:space-y-1"
-              handle="@hamza"
+              username={`@${profile.username}`}
               items={[
                 { href: '/settings', label: 'Account' },
                 { href: '#privacy', label: 'Privacy & social' },
@@ -62,7 +140,7 @@ export function SettingsScreen() {
                 { href: '#notifications', label: 'Notifications' },
                 { href: '#data', label: 'Data & security' },
               ]}
-              memberName="Hamza"
+              memberName={profile.displayName ?? profile.username}
             />
             <aside className="hidden rounded-card border border-border bg-surface p-5 lg:block">
               <h2 className="text-sm font-bold text-ink">Need a hand?</h2>
@@ -73,55 +151,71 @@ export function SettingsScreen() {
 
           <div className="space-y-12">
             <SettingsSection
-              action={<Button onClick={() => setSaved(true)} variant="accent"><Save aria-hidden="true" /> Save changes</Button>}
+              action={<Button form="profile-settings-form" type="submit" variant="accent"><Save aria-hidden="true" /> Save changes</Button>}
               description="The identity people see across your profile, reviews, and lists."
               title="Account"
             >
-              <div className="grid gap-5 py-5 sm:grid-cols-2">
+              <form className="grid gap-5 py-5 sm:grid-cols-2" id="profile-settings-form" onSubmit={saveProfile}>
+                <div className="sm:col-span-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-copy" id="settings-avatar-label">Avatar portrait</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-5">
+                    <Avatar imageAlt={`${profile.displayName ?? profile.username} portrait preview`} name={profile.displayName ?? profile.username} size="lg" src={memberAvatarSrc(avatarUrl, session.member?.id ?? profile.username)} treatment={profile.avatarStyle} />
+                    <div className="flex flex-wrap gap-3">
+                      <Button onClick={() => setAvatarUrl(dicebearAvatarUrl(randomAvatarSeed()))} type="button" variant="secondary">
+                        <RefreshCw aria-hidden="true" /> Randomize
+                      </Button>
+                      {avatarUrl ? (
+                        <Button onClick={() => setAvatarUrl(null)} type="button" variant="ghost">Use generated tile</Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted">Portraits come from generated Notionists artwork. Randomize until one feels like you, then save.</p>
+                </div>
                 <div>
                   <Label htmlFor="settings-name">Display name</Label>
-                  <Input className="mt-2 w-full" defaultValue="Hamza" id="settings-name" />
+                  <Input className="mt-2 w-full" defaultValue={profile.displayName ?? ''} id="settings-name" maxLength={80} name="displayName" />
                 </div>
                 <div>
-                  <Label htmlFor="settings-handle">Username</Label>
-                  <Input className="mt-2 w-full" defaultValue="hamza" id="settings-handle" />
+                  <Label htmlFor="settings-username">Username</Label>
+                  <Input autoCapitalize="none" className="mt-2 w-full" defaultValue={profile.username} id="settings-username" maxLength={30} minLength={3} name="username" pattern="[a-z0-9_]{3,30}" required />
+                  {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
                 </div>
+                <div><Label htmlFor="settings-location">Location</Label><Input className="mt-2 w-full" defaultValue={profile.location ?? ''} id="settings-location" maxLength={100} name="location" /></div>
+                <div><Label htmlFor="settings-visibility">Profile visibility</Label><select className="mt-2 h-11 w-full rounded-control border border-control-outline bg-field px-3 text-sm text-ink" defaultValue={profile.visibility} id="settings-visibility" name="visibility"><option value="private">Private</option><option value="public">Public</option></select></div>
+                <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>
-                  <Input className="mt-2 w-full" defaultValue="hamza@example.com" id="settings-email" type="email" />
+                  <Input className="mt-2 w-full" defaultValue={session.member?.email ?? ''} id="settings-email" readOnly type="email" />
                 </div>
-              </div>
+              </form>
               <PreferenceRow
                 control={(
                   <Button
-                    onClick={() => {
-                      signOut()
-                      router.push('/sign-in')
-                    }}
+                    onClick={signOut}
                     variant="secondary"
                   >
                     <LogOut aria-hidden="true" /> Sign out
                   </Button>
                 )}
-                description="End the local preview session on this browser."
+                description="End the current server session on this browser."
                 label="Session"
               />
             </SettingsSection>
-            <p aria-live="polite" className="-mt-9 text-xs text-lime">{saved ? 'Account preferences saved for this preview.' : ''}</p>
+            {accountError ? <p aria-live="assertive" className="-mt-9 text-xs text-coral">{accountError}</p> : null}
+            <p aria-live="polite" className="-mt-9 text-xs text-lime">{profileSaved ? 'Profile saved.' : ''}</p>
 
             <SettingsSection
               className="scroll-mt-8"
-              description="Choose what others can learn from your taste and watch history."
+              description="Your profile visibility is stored with your account. Social controls will appear only when the social system exists."
               id="privacy"
               title="Privacy & social"
             >
               <PreferenceRow
-                control={<SegmentedControl className="w-44" defaultValue="public" legend="Profile visibility" name="profile-visibility" options={[{ label: 'Public', value: 'public' }, { label: 'Private', value: 'private' }]} />}
-                description="A public profile lets other members discover your reviews and lists."
+                control={<span className="rounded-control border border-control-outline px-4 py-2 text-sm font-bold capitalize text-ink">{profile.visibility}</span>}
+                description="Change this saved value in the Account form above. Imported lists remain private until explicitly published."
                 label="Profile visibility"
               />
-              <PreferenceRow control={<Toggle checked={values.history} label="Show watch history" onCheckedChange={() => toggle('history')} />} description="Include recent watches and diary entries on your profile." label="Show watch history" />
-              <PreferenceRow control={<Toggle checked={values.activity} label="Share activity with your circle" onCheckedChange={() => toggle('activity')} />} description="Your follows can see asynchronous saves, reviews, and list updates. Consumit has no direct messaging." label="Share activity with your circle" />
+              <PreferenceRow control={<span className="text-xs font-bold uppercase tracking-[0.1em] text-muted">Not available</span>} description="Follows and activity sharing are not implemented, so no activity is published. Consumit has no direct messaging." label="Social sharing" />
             </SettingsSection>
 
             <SettingsSection
@@ -187,10 +281,24 @@ export function SettingsScreen() {
               id="data"
               title="Data & security"
             >
-              <PreferenceRow control={<Button variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Prepare your reviews, lists, and watch history as a downloadable archive." label="Export your data" />
-              <PreferenceRow control={<Button variant="secondary">Import history</Button>} description="Bring diary history from Letterboxd without linking a billing account." label="Letterboxd import" />
-              <PreferenceRow control={<Button variant="secondary">Change password</Button>} description="You’ll be asked to confirm your current password first." label="Password" />
-              <PreferenceRow control={<Button variant="danger"><Trash2 aria-hidden="true" /> Delete account</Button>} description="Permanently remove your profile and contributions after a confirmation period." label="Delete account" />
+              <PreferenceRow control={<Button onClick={exportAccount} variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Download the member and profile data currently held for your account." label="Export your data" />
+              <PreferenceRow control={<Link className="inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-ink hover:bg-ink hover:text-canvas" href="/settings/imports/letterboxd">Import history</Link>} description="Bring diary history from Letterboxd without linking an account." label="Letterboxd import" />
+              <PreferenceRow control={<Button onClick={() => setAccountAction(accountAction === 'password' ? null : 'password')} variant="secondary">Change password</Button>} description="You will be asked to confirm your current password first." label="Password" />
+              {accountAction === 'password' ? (
+                <form className="grid gap-4 border-t border-border py-5 sm:grid-cols-2" onSubmit={changePassword}>
+                  <div><Label htmlFor="current-password">Current password</Label><Input autoComplete="current-password" className="mt-2 w-full" id="current-password" name="currentPassword" required type="password" /></div>
+                  <div><Label htmlFor="new-password">New password</Label><Input autoComplete="new-password" className="mt-2 w-full" id="new-password" minLength={12} name="newPassword" required type="password" /></div>
+                  <Button className="sm:col-span-2 sm:justify-self-start" type="submit">Update password</Button>
+                </form>
+              ) : null}
+              <PreferenceRow control={<Button onClick={() => setAccountAction(accountAction === 'delete' ? null : 'delete')} variant="danger"><Trash2 aria-hidden="true" /> Delete account</Button>} description="Tombstone and anonymize the account after password confirmation." label="Delete account" />
+              {accountAction === 'delete' ? (
+                <form className="border-t border-border py-5" onSubmit={deleteAccount}>
+                  <Label htmlFor="delete-password">Confirm your password</Label>
+                  <Input autoComplete="current-password" className="mt-2 w-full max-w-md" id="delete-password" name="password" required type="password" />
+                  <Button className="mt-4" type="submit" variant="danger"><Trash2 aria-hidden="true" /> Permanently delete account</Button>
+                </form>
+              ) : null}
             </SettingsSection>
 
             <section className="rounded-card border border-border bg-surface p-6" id="support">

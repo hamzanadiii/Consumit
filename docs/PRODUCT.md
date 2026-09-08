@@ -72,18 +72,25 @@ These screens describe the intended product surface, not an automatic first-rele
 
 ## Home composition
 
-The active desktop home reference uses this order:
+The live catalog Home currently uses this order:
 
 1. Featured hero with a direct Watch action
-2. From your circle
-3. Continue watching
-4. Personalized editorial feature
-5. Trending tonight
-6. Lists worth stealing
-7. Mood entry points
-8. Footer
+2. Trending tonight
+3. Popular now
+4. Top rated
+5. Editorial selection
+6. Browse by genre
+7. Footer
 
-From your circle and Continue watching are temporarily hidden behind the `SHOW_MEMBER_RAILS` preview flag in `home-screen.tsx` until the member, library, and progress backends land.
+Circle activity, continue-watching progress, and community lists return only when their real backing behavior exists. Live routes never fill those sections with invented member evidence.
+
+## Movies and Series browsing
+
+Movies (`/movies`) and Series (`/series`) help a member choose a title through a current-release rail followed by a filterable catalog. Movies labels its rail “Now playing”; Series uses “On air”. Opening artwork leads to the title detail.
+
+The main catalog starts with Popular and offers genre, year, and Top rated controls. Available genre choices come from the initial current and popular titles; they are not an exhaustive genre directory. A chosen filter queries the catalog beyond the titles already shown, while the current-release rail remains independent. Reset returns to the default Popular catalog.
+
+Scrolling near the end appends another page without duplicate titles. A keyboard-accessible Load more action remains available. Filter changes start a fresh result set; loading announces progress, failed requests offer Try again while retaining previously loaded titles, and stale results are identified. An empty result offers Clear filters; the final page explains that the member has reached the end.
 
 ## Confirmed scope constraints
 
@@ -94,6 +101,9 @@ From your circle and Continue watching are temporarily hidden behind the `SHOW_M
 - Playback uses authorized direct media sources; iframe and embed delivery are excluded.
 - Every Watch action opens the dedicated first-party player route directly; the player is the screen, not an embedded panel inside a discovery surface.
 - Computed Taste Match, overlap, member scores, and numeric rating presentation are hidden until their product logic is implemented. Written reviews, catalog metadata, and watch progress remain visible.
+- Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
+- Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Four ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.
+- Profile, Library, and List screens render stored member records. Unsupported presence, follows, activity, and engagement counts render zero or honest empty states.
 - Signed-out navigation keeps public catalog destinations visible and replaces the member avatar with Sign in. A signed-in member sees Friends and the existing profile entry.
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
@@ -125,7 +135,8 @@ The durable visual system and page grammar live in [`DESIGN.md`](../DESIGN.md). 
 ## Near-term product gaps
 
 - Notifications and release tracking
-- Import history management and migration states
+- Native diary, review, and list authoring
+- Follows and real Circle activity
 - Create/edit list flows
 - Password recovery and verification states
 

@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
+import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import { ListDetailScreen } from '../list-detail-screen'
-import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
+import { notFound } from 'next/navigation'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
-import { editorialRefs } from '@/lib/catalog-registry'
+import { getMemberList, MemberApiError } from '@/lib/member-server'
 
 export const metadata: Metadata = {
   title: 'List · Consumit',
@@ -17,11 +18,15 @@ type ListPageProps = {
 
 export default async function ListPage({ params }: ListPageProps) {
   const { slug } = await params
-  let response
+  let list
   try {
-    response = await getCatalogBatch(refsKey(editorialRefs))
+    list = await getMemberList(slug)
   } catch (error) {
-    return <CatalogUnavailableScreen error={error} />
+    if (error instanceof MemberApiError && error.status === 404) notFound()
+    throw error
   }
-  return <ListDetailScreen slug={slug} stale={response.meta.stale} titles={response.items} />
+  let titles: CatalogTitleSummary[] = []
+  let catalogUnavailable = false
+  try { titles = list.items.length ? (await getCatalogBatch(refsKey(list.items))).items : [] } catch { catalogUnavailable = true }
+  return <ListDetailScreen catalogUnavailable={catalogUnavailable} data={list} titles={titles} />
 }

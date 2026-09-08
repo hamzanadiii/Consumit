@@ -20,6 +20,7 @@ import {
   FilterChip,
   Footer,
   HealthSummary,
+  HeroSpotlight,
   ImportOption,
   LibraryToolbar,
   LoadingState,
@@ -36,7 +37,6 @@ import {
   SelectableTitle,
   SettingsRail,
   SettingsSection,
-  SocialAuthButton,
   SocialProof,
   SourceSelector,
   TasteSignature,
@@ -113,11 +113,11 @@ export function ComponentFamiliesCatalog1118() {
     )
   }
 
-  function setMemberFollowing(handle: string, following: boolean) {
+  function setMemberFollowing(username: string, following: boolean) {
     setFollowedMembers((current) =>
       following
-        ? Array.from(new Set([...current, handle]))
-        : current.filter((member) => member !== handle),
+        ? Array.from(new Set([...current, username]))
+        : current.filter((member) => member !== username),
     )
   }
 
@@ -136,7 +136,7 @@ export function ComponentFamiliesCatalog1118() {
               avatarSrc="/assets/hamza-avatar.svg"
               backgroundSrc={artwork.backdrop}
               bio="Chasing films that feel like memories I never had."
-              handle="@hamza"
+              username="@hamza"
               joined="Joined 2024"
               location="Rabat, Morocco"
               name="Hamza"
@@ -190,6 +190,29 @@ export function ComponentFamiliesCatalog1118() {
               tasteReason="Strong fit: slow mysteries, hostile cities, and endings that refuse to explain themselves."
               tasteScore={92}
               title="The Last City After Rain"
+            />
+          </Specimen>
+          <Specimen label="Hero spotlight">
+            <HeroSpotlight
+              items={[
+                {
+                  actions: <><Button><Play aria-hidden="true" /> Play now</Button><Button variant="secondary">View title</Button></>,
+                  backgroundSrc: artwork.backdrop,
+                  key: 'last-city',
+                  metadata: '2026 · 2h 08m · Drama · Mystery · 4K',
+                  synopsis: 'A cartographer returns to a city that has erased every street she remembers.',
+                  title: 'The Last City After Rain',
+                },
+                {
+                  actions: <><Button><Play aria-hidden="true" /> Play now</Button><Button variant="secondary">View title</Button></>,
+                  backgroundSrc: artwork.saltwater,
+                  key: 'saltwater',
+                  metadata: '2025 · 1h 47m · Drama · 4K',
+                  synopsis: 'Three siblings divide a house that is slowly filling with seawater.',
+                  title: 'Saltwater House',
+                },
+              ]}
+              label="New this week"
             />
           </Specimen>
           <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
@@ -262,12 +285,12 @@ export function ComponentFamiliesCatalog1118() {
 
       <section className={familyClasses} data-component-family="14">
         <FamilyHeader
-          description="Authentication uses a reduced shell, explicit field states, familiar providers, and plain privacy language."
+          description="Authentication uses a reduced shell, explicit field states, email verification, and plain privacy language."
           number="14"
           title="Authentication"
         />
         <div className="mt-8 min-w-0 lg:mt-0">
-          <Specimen label="Auth shell + fields + provider + trust">
+          <Specimen label="Auth shell + fields + trust">
             <AuthShell
               artworkSrc={artwork.backdrop}
               asideDescription="Return to the films, people, and lists that know what your next night should feel like."
@@ -276,11 +299,6 @@ export function ComponentFamiliesCatalog1118() {
               footer={<>New to Consumit? <a className="font-bold text-ink" href="#create">Create your taste space</a></>}
               title="Welcome back."
             >
-              <div className="space-y-3">
-                <SocialAuthButton label="Continue with Google" provider="Google" tone="light" />
-                <SocialAuthButton label="Continue with Apple" provider="Apple" />
-              </div>
-              <div className="my-6 flex items-center gap-4 text-[0.6875rem] uppercase tracking-[0.12em] text-muted"><span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" /></div>
               <form className="space-y-5">
                 <AuthField autoComplete="email" defaultValue="hamza@example.com" id="auth-email" label="Email" type="email" />
                 <AuthField action={<a className="font-bold text-orange" href="#forgot">Forgot password?</a>} autoComplete="current-password" defaultValue="password" id="auth-password" label="Password" type="password" />
@@ -329,8 +347,8 @@ export function ComponentFamiliesCatalog1118() {
           </Specimen>
           <Specimen label="Member suggestions">
             <div className="grid gap-3 lg:grid-cols-2">
-              <MemberSuggestion detail="Noir, moral fog, patient endings" films="428 films" following={followedMembers.includes('@yasmineframes')} handle="@yasmineframes" name="Yasmine El Idrissi" onFollowingChange={(following) => setMemberFollowing('@yasmineframes', following)} overlap={93} />
-              <MemberSuggestion detail="Architecture, memory, long silences" films="612 films" following={followedMembers.includes('@slowcuts')} handle="@slowcuts" name="Omar Benjelloun" onFollowingChange={(following) => setMemberFollowing('@slowcuts', following)} overlap={87} />
+              <MemberSuggestion detail="Noir, moral fog, patient endings" films="428 films" following={followedMembers.includes('@yasmineframes')} name="Yasmine El Idrissi" onFollowingChange={(following) => setMemberFollowing('@yasmineframes', following)} overlap={93} username="@yasmineframes" />
+              <MemberSuggestion detail="Architecture, memory, long silences" films="612 films" following={followedMembers.includes('@slowcuts')} name="Omar Benjelloun" onFollowingChange={(following) => setMemberFollowing('@slowcuts', following)} overlap={87} username="@slowcuts" />
             </div>
           </Specimen>
         </div>
@@ -347,7 +365,7 @@ export function ComponentFamiliesCatalog1118() {
             <SettingsRail
               activeHref="#privacy"
               avatarSrc="/assets/hamza-avatar.svg"
-              handle="@hamza"
+              username="@hamza"
               items={[{ href: '#account', label: 'Account' }, { href: '#profile', label: 'Profile' }, { href: '#privacy', label: 'Privacy & social' }, { href: '#playback', label: 'Streaming services' }, { href: '#notifications', label: 'Notifications' }, { href: '#security', label: 'Data & security' }]}
               memberName="Hamza"
             />

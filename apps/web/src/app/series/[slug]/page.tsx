@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { SeriesDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
-import { CatalogApiError, getCatalogSeason, getCatalogTitle, publicCatalogApiUrl } from '@/lib/catalog-api'
+import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
 
 type SeriesDetailPageProps = {
   params: Promise<{ slug: string }>
@@ -54,7 +54,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} type="application/ld+json" />
-      <SeriesDetailScreen apiBase={publicCatalogApiUrl()} detail={response.item} initialSeason={seasonResponse?.item ?? null} stale={response.meta.stale || Boolean(seasonResponse?.meta.stale)} />
+      <SeriesDetailScreen detail={response.item} initialSeason={seasonResponse?.item ?? null} stale={response.meta.stale || Boolean(seasonResponse?.meta.stale)} />
     </>
   )
 }

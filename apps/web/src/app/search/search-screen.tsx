@@ -4,14 +4,14 @@ import { titleHref, watchHref, type CatalogPage } from '@consumit/contracts'
 import { ArrowRight, Play, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 
 import {
   buttonVariants,
   Button,
-  CuratedListCard,
   EmptyState,
   FilterChip,
-  MemberSuggestion,
+  MoodSelector,
   SectionHeading,
 } from '@consumit/ui'
 
@@ -24,9 +24,17 @@ type SearchScreenProps = {
   queryTooShort: boolean
 }
 
+const moodOptions = [
+  { label: 'Slow & beautiful', tone: 'orange', value: 'slow' },
+  { label: 'Mess with my head', tone: 'lilac', value: 'strange' },
+  { label: 'Easy comfort', tone: 'lime', value: 'comfort' },
+  { label: 'Laugh with friends', tone: 'orange', value: 'funny' },
+  { label: 'Pure tension', tone: 'rose', value: 'tense' },
+] as const
+
 export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreenProps) {
   const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series'>('all')
-  const [following, setFollowing] = useState<Record<string, boolean>>({ Omar: true })
+  const [mood, setMood] = useState<string>()
   const results = useMemo(() => activeKind === 'all' ? page.items : page.items.filter((item) => item.kind === activeKind), [activeKind, page.items])
   const best = results[0] ?? page.items[0]
 
@@ -62,8 +70,8 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
                   <p className="mt-4 text-sm text-copy">{titleMeta(best)}</p>
                   <p className="mt-6 max-w-[54ch] text-sm leading-7 text-copy">{best.overview || 'More information will be available soon.'}</p>
                   <div className="mt-7 flex flex-wrap gap-3">
-                    <a className={buttonVariants()} href={titleHref(best)}>View title <ArrowRight aria-hidden="true" /></a>
-                    <a className={buttonVariants({ variant: 'secondary' })} href={watchHref(best)}><Play aria-hidden="true" /> Watch</a>
+                    <Link className={buttonVariants()} href={titleHref(best)}>View title <ArrowRight aria-hidden="true" /></Link>
+                    <Link className={buttonVariants({ variant: 'secondary' })} href={watchHref(best)}><Play aria-hidden="true" /> Watch</Link>
                   </div>
                 </div>
               </article>
@@ -82,24 +90,15 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
             </div>
           </section>
 
-          <section className="border-t border-border py-14 sm:py-16 lg:py-20" id="people" aria-labelledby="people-heading">
-            <SectionHeading description="Follow people whose reviews and lists make discovery more useful." id="people-heading" title="People worth following" />
-            <div className="mt-8 grid gap-4 lg:grid-cols-2">
-              {[
-                ['Yasmine El Idrissi', '@yasmineframes', 'Noir, moral fog, patient endings'],
-                ['Omar Benjelloun', '@slowcuts', 'Architecture, memory, long silences'],
-              ].map(([name, handle, detail]) => <MemberSuggestion detail={String(detail)} films="428 titles" following={Boolean(following[String(name)])} handle={String(handle)} key={String(name)} name={String(name)} onFollowingChange={(value) => setFollowing((current) => ({ ...current, [String(name)]: value }))} />)}
+          <section className="border-t border-border py-14 sm:py-16 lg:py-20" id="people" aria-labelledby="people-heading"><SectionHeading description="Member discovery arrives with the social slice." id="people-heading" title="People" /><EmptyState description="No member suggestions yet. Consumit does not fabricate profiles, follows, or activity." title="Social discovery is not available" /></section>
+
+          <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="mood-heading">
+            <SectionHeading description="Pick a lane and jump back to the results." id="mood-heading" title="What kind of night is it?" />
+            <div className="mt-7 flex flex-col gap-4 xl:flex-row xl:items-start">
+              <MoodSelector className="flex-1" label="Choose tonight’s mood" onValueChange={setMood} options={moodOptions} value={mood} />
+              <a className={`${buttonVariants({ size: 'lg' })} justify-between xl:min-w-[19rem]`} href="#results">Surprise me tonight<ArrowRight aria-hidden="true" /></a>
             </div>
           </section>
-
-          {page.items.length >= 4 ? (
-            <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="lists-heading">
-              <SectionHeading description="Ordered by people, with a reason for every inclusion." id="lists-heading" title="Lists worth following home" />
-              <div className="mt-8 grid gap-5 md:grid-cols-3">
-                {['Yasmine', 'Omar', 'Nadia'].map((curator, index) => <CuratedListCard artworkSources={page.items.slice(index, index + 4).map((title) => title.posterUrl ?? undefined)} curator={curator} href="/lists/films-that-feel-like-a-memory" key={curator} saves={String(633 + index * 213)} title={['Films that feel like a memory', 'Quiet mysteries for late nights', 'Cities that remember too much'][index] ?? 'A member list'} />)}
-              </div>
-            </section>
-          ) : null}
         </div>
       </main>
     </ScreenShell>

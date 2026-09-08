@@ -1,15 +1,9 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 
 import { Footer } from '@consumit/ui'
 
-import { CatalogPreviewNotice } from '../catalog/catalog-attribution'
 import { SessionNavigation } from '../session/session-navigation'
-
-export const circle = [
-  { name: 'Yasmine' },
-  { name: 'Omar' },
-  { name: 'Nadia' },
-] as const
 
 const footerLinks = [
   { href: '/about', label: 'About' },
@@ -36,18 +30,15 @@ export function ScreenShell({
     <>
       <SessionNavigation
         activeHref={activeHref}
-        avatarSrc="/assets/hamza-avatar.svg"
-        profileHref="/profile/hamza"
-        profileName="Hamza"
-        searchPlaceholder="Search titles, people, lists"
+        searchPlaceholder="Search movies and series"
         sticky={false}
         {...(searchDefaultValue === undefined ? {} : { searchDefaultValue })}
       />
-      <CatalogPreviewNotice />
       {children}
       {withFooter ? (
         <Footer
           copyright="© 2026 Consumit"
+          linkComponent={Link}
           links={footerLinks}
         />
       ) : null}

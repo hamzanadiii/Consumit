@@ -14,7 +14,7 @@ colors:
   signal-orange: "#ff5d38"
   social-lilac: "#a79cff"
   positive-lime: "#b8d86d"
-  danger: "#8e5450"
+  danger: "#b76d66"
   separator: "rgba(255, 255, 255, 0.10)"
   control-outline: "rgba(244, 240, 232, 0.40)"
 typography:
@@ -173,9 +173,11 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 Desktop compositions use a 62px content edge and an 84px global navigation shell. The base unit is 4px, with the established rhythm progressing through 8, 12, 18, 24, 32, 48, and 64px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
 
-The current catalog responds at 640px and 1024px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
+The current catalog responds at 640px, 1024px, and 1280px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
 
 On Home, poster-led circle and trending collections become horizontal discovery rails on narrow screens. Continue-watching cards, the editorial feature, curated lists, and the mood action stack instead, preserving a readable sequence and full-width actions without compressing their content.
+
+Movies and Series use a compact opening within a centered content width (1440px maximum), followed by a landscape rail and a portrait grid. The grid grows from two columns below 640px to three at 640px, four at 1024px, and six at 1280px. The rail retains horizontal scrolling at every width. Below 360px, Genre spans a full control row above Year and sort; wider mobile layouts fit all three controls in one row.
 
 Authentication, onboarding, report, and Watch use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 44px high.
 
@@ -223,13 +225,13 @@ Global navigation is the stable wayfinding shell for catalog and social surfaces
 Catalog provenance and prototype honesty are persistent interface chrome, not optional campaign copy.
 
 - **Preview-data notice:** Place one full-width, flat Surface band directly below both the global navigation and the reduced Watch header. Use centered 11px Muted Metadata text, a subtle lower hairline, and `role="note"`; keep it visible at every width.
-- **Disclosure scope:** Name Taste Match, member activity, ratings, and progress as deterministic sample data. Do not shorten this to a vague “demo” label or imply those signals came from real members.
+- **Disclosure scope:** Internal component-gallery specimens name Taste Match, member activity, ratings, and progress as deterministic sample data. Live product routes use real records or empty states and never imply fixture signals came from members.
 - **Catalog attribution:** Keep the low-emphasis TMDB attribution band at the application boundary on standard and reduced-shell screens. Link the TMDB wordmark to TMDB and “Catalog credits” to About, where the metadata scope and non-endorsement statement remain readable.
 - **Source labels:** Label source-specific catalog evidence in place—for example, “TMDB ratings” and TMDB recommendations—so it cannot be mistaken for Consumit member evidence.
 
 **The Catalog Boundary Rule.** TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.
 
-**The Preview Honesty Rule.** Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.
+**The Preview Honesty Rule.** Deterministic member-facing signals belong only in the internal component gallery and tests. Product routes show stored member data or an explicit empty state; a polished composition never makes fixture evidence pass as live activity.
 
 ### Label and Input
 
@@ -253,6 +255,7 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 ### Identity and Signals
 
 - Avatars identify people once. Decorative portraits are hidden from assistive technology when the adjacent byline already names the member.
+- A member may pick a generated portrait from random seeds or keep a geometric initials tile (dusk, dawn, noir, halo). Portrait addresses must be http(s); seeds must never be emails or other private identifiers. A portrait that fails to load falls back to initials.
 - Presence, save state, status, rank, and compatibility always include explicit text for assistive technology; color and iconography only reinforce that meaning.
 - Lilac is reserved for taste overlap and social affinity. Lime remains reserved for presence and healthy states.
 
@@ -266,15 +269,24 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 ### Home Composition
 
-Home at `/` follows one deliberate discovery sequence: featured hero with Taste Match; From your circle with friend activity; Continue watching; a personalized editorial feature; Trending tonight; Lists worth stealing; mood entry points; then the footer. This order belongs to Home and is not a default strategy for title, profile, library, or operational surfaces.
+Home at `/` follows one deliberate live-catalog sequence: featured hero; Trending tonight; Popular now; Top rated; an editorial selection; Browse by genre; then the footer. Circle, progress, and community-list sections join that cadence only after real backing behavior exists.
 
 The pacing alternates emotional and practical decisions. A broad cinematic opening leads into trusted social discovery, a compact return-to-watch section, an editorial interruption, ranked member evidence, human curation, and a final low-friction mood choice.
 
 **The Home Cadence Rule.** Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.
 
+### Movies and Series Browsing
+
+- **Opening:** Keep the Movies or Series heading in ivory Charter with its small orange full stop, a brief muted description, and compact native genre, year, and sort controls. Use the established global shell and control geometry.
+- **Controls:** Native selects remain 44px high with the control outline, dark surface, readable selected values, and visible orange keyboard focus. Reset is a subordinate ghost action.
+- **Artwork:** The landscape rail keeps title and year visible over a legibility gradient. Poster titles appear on hover and keyboard focus and remain visible on touch devices. Missing artwork retains the shared geometric fallback and visible title. Artwork loads lazily; reduced motion removes decorative transitions and smooth rail movement.
+- **Continuation:** Loading placeholders preserve poster proportions. The result count, loading, recovery, and terminal copy remain quiet supporting information below the compact section heading or grid; Load more and Try again use the shared outlined action.
+
+**The Browse Composition Rule.** Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Cinema After Midnight palette, typography, global navigation, and compact corners throughout.
+
 ### Trending Card
 
-- **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral quiet in Raised Surface so it reads as one ranked silhouette with the artwork rather than a competing badge.
+- **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral a quiet warm-ivory silhouette with the artwork rather than a competing badge.
 - **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable.
 - **Responsive behavior:** Trending remains a horizontal discovery rail on narrow screens and resolves to the five-card desktop row at the established wide breakpoint.
 
@@ -295,7 +307,7 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 Profile surfaces are living taste spaces rather than account summaries.
 
 - **Ownership state:** Public and owner presentations share the canonical `/profile/[username]` route. When the route belongs to the signed-in member, replace public follow and compatibility actions with editing, completion, and public-preview controls instead of creating a separate owner URL.
-- **Profile masthead:** Layer a supplied cinematic backdrop and legibility gradient behind one identity block: avatar and presence, name, handle and context, short bio, compact history statistics, then the follow action. Statistics support the person; they do not become the headline. Direct messaging is not part of the product.
+- **Profile masthead:** Layer real Favorite artwork and a legibility gradient behind one identity block: initials avatar, name, username and context, optional bio, and compact history statistics. Statistics support the person; they do not become the headline. Presence, follower counts, and direct messaging are not fabricated.
 - **Profile composition:** Move from the masthead into horizontally scrollable section tabs, then pair primary section content with contextual evidence on desktop. On mobile, place each evidence block immediately after the content it explains.
 - **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.
 - **Diary row:** Keep date, artwork, title, rating, watch context, optional personal note, and destination action in separate readable slots. On narrow screens the action follows the content instead of compressing it.
@@ -334,7 +346,7 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Authentication and Onboarding
 
-- **Authentication shell:** At large widths, place reference-authored focal artwork, narrative, and optional proof in a dedicated story panel beside the focused form. Below desktop, remove that story panel rather than shrinking it or moving it behind the form. Keep the shell's dark artwork overlay as the safe default; a caller may weaken or remove it only when the supplied artwork already preserves content legibility. Ask only for account essentials, preserve email access beside social providers, and place privacy or control language beside the decision it explains.
+- **Authentication shell:** At large widths, place reference-authored focal artwork and narrative in a dedicated story panel beside the focused form. Below desktop, remove that story panel rather than shrinking it or moving it behind the form. Keep the shell's dark artwork overlay as the safe default; a caller may weaken or remove it only when supplied artwork already preserves content legibility. Ask only for Username, email, and password; OAuth controls are excluded. Place privacy or control language beside the decision it explains.
 - **Authentication field:** Keep a persistent label, optional contextual action, native input, and a single associated helper or error line. Validation text uses Warm Copy rather than turning the entire form into an alarm.
 - **Onboarding header:** Use the supplied mark, semantic step count, progress rail, and optional skip. The short mobile label may change to “Skip,” but visibility and touch-safe height do not.
 - **Onboarding choices:** Import options name what moves, the expected effort, and privacy implications. Selectable titles remain native checkboxes; member suggestions explain overlap and taste before asking for a follow. “Follow” uses the confident ivory primary treatment; “Following” steps back to the outlined secondary treatment.

@@ -16,6 +16,10 @@ _Avoid_: Member, profile
 A member's public or private expression of taste, including favorites, diary entries, ratings, reviews, lists, and circle.
 _Avoid_: Account page
 
+**Username**:
+A member-chosen, unique public identifier used in profile links. A username may change, while the member identity remains stable.
+_Avoid_: Handle, member ID
+
 **Circle**:
 The members a member chooses to trust for social discovery; their activity can influence recommendations and feeds. A circle is not a reciprocal friendship or a private communication channel.
 _Avoid_: Friend list, network, chat
@@ -85,6 +89,10 @@ _Avoid_: Watch history, activity log
 **Library**:
 A member's personal home for saved titles, favorites, watch history, and lists.
 _Avoid_: Catalog, collection
+
+**Import**:
+A member-initiated transfer of records from an exported service archive into their Consumit profile and library.
+_Avoid_: Account link, synchronization
 
 ## Discovery and playback
 

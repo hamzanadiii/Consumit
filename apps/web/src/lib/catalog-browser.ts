@@ -1,8 +1,9 @@
 import {
-  catalogErrorResponseSchema,
+  apiErrorResponseSchema,
   catalogPageSchema,
   catalogSeasonResponseSchema,
   type CatalogKind,
+  type CatalogFeed,
 } from '@consumit/contracts'
 
 export class BrowserCatalogError extends Error {
@@ -15,20 +16,32 @@ export class BrowserCatalogError extends Error {
   }
 }
 
-async function request(url: URL, signal?: AbortSignal) {
+function errorName(error: unknown) {
+  return typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string'
+    ? error.name
+    : undefined
+}
+
+async function request(path: string, signal?: AbortSignal) {
   let response: Response
   try {
-    response = await fetch(url, {
+    const timeout = AbortSignal.timeout(8_000)
+    response = await fetch(path, {
       headers: { accept: 'application/json' },
-      ...(signal ? { signal } : {}),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
   } catch (cause) {
-    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
-    throw new BrowserCatalogError('The catalog could not be reached.')
+    const name = errorName(cause)
+    if (name === 'AbortError') throw cause
+    throw new BrowserCatalogError(
+      name === 'TimeoutError'
+        ? 'The catalog took too long to respond.'
+        : 'The catalog could not be reached.',
+    )
   }
 
   if (!response.ok) {
-    const parsed = catalogErrorResponseSchema.safeParse(await response.json().catch(() => null))
+    const parsed = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
     throw new BrowserCatalogError(
       parsed.success ? parsed.data.error.message : 'The catalog is temporarily unavailable.',
       parsed.success ? parsed.data.error.retryable : response.status >= 500,
@@ -38,27 +51,40 @@ async function request(url: URL, signal?: AbortSignal) {
 }
 
 export async function browserSearchCatalog(
-  apiBase: string,
   query: string,
   kind: CatalogKind | 'all' = 'all',
   signal?: AbortSignal,
 ) {
-  const url = new URL('/v1/titles/search', `${apiBase}/`)
-  url.searchParams.set('q', query.trim().slice(0, 100))
-  url.searchParams.set('kind', kind)
-  const parsed = catalogPageSchema.safeParse(await request(url, signal))
+  const params = new URLSearchParams({ kind, q: query.trim().slice(0, 100) })
+  const parsed = catalogPageSchema.safeParse(await request(`/v1/titles/search?${params}`, signal))
   if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid search response.')
   return parsed.data
 }
 
 export async function browserCatalogSeason(
-  apiBase: string,
   seriesId: number,
   season: number,
   signal?: AbortSignal,
 ) {
-  const url = new URL(`/v1/titles/series/${seriesId}/seasons/${season}`, `${apiBase}/`)
-  const parsed = catalogSeasonResponseSchema.safeParse(await request(url, signal))
+  const parsed = catalogSeasonResponseSchema.safeParse(await request(`/v1/titles/series/${seriesId}/seasons/${season}`, signal))
   if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid season response.')
+  return parsed.data
+}
+
+export type BrowseCatalogQuery = {
+  kind: CatalogKind
+  feed: CatalogFeed
+  genre?: string | undefined
+  year?: number | undefined
+}
+
+export async function browserDiscoverCatalog(query: BrowseCatalogQuery, page: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ kind: query.kind, feed: query.feed, page: String(page) })
+  if (query.genre) params.set('genre', query.genre)
+  if (query.year) params.set('year', String(query.year))
+  const parsed = catalogPageSchema.safeParse(await request(`/v1/titles/discover?${params}`, signal))
+  if (!parsed.success || parsed.data.page !== page || parsed.data.items.some((title) => title.kind !== query.kind)) {
+    throw new BrowserCatalogError('The catalog returned an invalid discovery response.')
+  }
   return parsed.data
 }

@@ -1,45 +1,45 @@
-'use client'
+import { titleHref, type CatalogRef, type CatalogTitleSummary, type MemberProfileData } from '@consumit/contracts'
+import { Pencil } from 'lucide-react'
+import Link from 'next/link'
 
-import { titleHref, watchHref, type CatalogTitleSummary } from '@consumit/contracts'
-import { EllipsisVertical, Eye, Pencil, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { Badge, ContentCard, CuratedListCard, DiaryRow, ProfileMasthead, SectionHeading, Tabs, buttonVariants } from '@consumit/ui'
 
-import { Badge, Button, ContentCard, ContinueCard, CuratedListCard, DiaryRow, MemberByline, ProfileMasthead, ProfileReviewCard, SectionHeading, Tabs, buttonVariants } from '@consumit/ui'
-
-import { CatalogStaleNotice, titleMeta } from '../catalog/catalog-ui'
+import { FavoritesEditor } from './favorites-editor'
+import { BannerEditor } from './banner-editor'
+import { EditBannerButton, EditFavoritesButton, ProfileEditProvider } from './profile-edit'
 import { ScreenShell } from '../screens/screen-shell'
+import { SaveTitleButton } from '../catalog/save-title-button'
 
-const circleMembers = [{ name: 'Yasmine' }, { name: 'Omar' }, { name: 'Nadia' }, { name: 'Adam' }] as const
+import { memberAvatarSrc } from '@/lib/avatar'
 
-function displayName(username: string) {
-  return username.split(/[-_.]+/).filter(Boolean).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' ') || 'Member'
+function refKey(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
+
+function EmptyState({ children }: { children: string }) {
+  return <div className="rounded-card border border-dashed border-border bg-surface px-6 py-10 text-sm leading-6 text-muted">{children}</div>
 }
 
-function ProfileScreen({ owner = false, stale, titles, username }: { owner?: boolean; stale: boolean; titles: readonly CatalogTitleSummary[]; username: string }) {
-  const [following, setFollowing] = useState(false)
-  const [previewing, setPreviewing] = useState(false)
-  const normalized = username.trim().replace(/^@+/, '') || 'member'
-  const name = displayName(normalized)
-  const ownerView = owner && !previewing
-  const featured = titles[6] ?? titles[0]
+export function ProfileScreen({ catalogUnavailable = false, data, owner = false, titles }: { catalogUnavailable?: boolean; data: MemberProfileData; owner?: boolean; titles: readonly CatalogTitleSummary[] }) {
+  const titleMap = new Map(titles.map((title) => [refKey(title), title]))
+  const name = data.profile.displayName ?? data.profile.username
+  const favoriteTitles = data.favorites.map((favorite) => titleMap.get(refKey(favorite))).filter((title): title is CatalogTitleSummary => Boolean(title))
   return (
-    <ScreenShell activeHref={`/profile/${encodeURIComponent(normalized)}`}>
-      {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
-      <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-owner-profile={ownerView || undefined} data-consumit-public-profile={!ownerView || undefined}>
-        <h1 className="sr-only">{ownerView ? 'Your profile' : `${name}'s public profile`}</h1>
-        <ProfileMasthead actions={ownerView ? <><a className={buttonVariants()} href="/settings"><Pencil aria-hidden="true" /> Edit profile</a><Button onClick={() => setPreviewing(true)} variant="secondary"><Eye aria-hidden="true" /> Preview</Button><Button aria-label="Create a new list" size="icon" variant="secondary"><Plus aria-hidden="true" /></Button></> : <>{owner ? <Button onClick={() => setPreviewing(false)}>Exit preview</Button> : <Button aria-pressed={following} onClick={() => setFollowing((value) => !value)} variant={following ? 'secondary' : 'primary'}>{following ? 'Following' : 'Follow'}</Button>}<Button aria-label="More profile actions" size="icon" variant="secondary"><EllipsisVertical aria-hidden="true" /></Button></>} avatarClassName="size-28 lg:size-36" avatarSrc="/assets/hamza-avatar.svg" backgroundSrc={titles.find((title) => title.backdropUrl)?.backdropUrl ?? undefined} bio="Chasing stories that feel like memories I never had." className="rounded-none border-x-0 border-t-0 lg:min-h-[24.75rem] lg:px-[62px]" contentClassName="lg:inset-x-[62px]" handle={`@${normalized}`} joined="Joined 2024" location="Rabat, Morocco" name={name} stats={[{ label: 'films', value: 284 }, { label: 'series', value: 39 }, { label: 'lists', value: 23 }, { label: 'followers', value: 186 }]} status="online" />
-        <Tabs activeValue="overview" aria-label={`${name} profile sections`} className="bg-navigation px-5 sm:px-8 lg:px-[62px]" items={[{ href: '#overview', label: 'Overview', value: 'overview' }, { href: '#diary', label: 'Diary', value: 'diary' }, { href: '#favorites', label: 'Favorites', value: 'favorites' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#lists', label: 'Lists', value: 'lists' }, { href: '#circle', label: 'Circle', value: 'circle' }]} />
+    <ScreenShell activeHref={`/profile/${data.profile.username}`}>
+      <ProfileEditProvider>
+      <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-owner-profile={owner || undefined} data-consumit-public-profile={!owner || undefined}>
+        <h1 className="sr-only">{owner ? 'Your profile' : `${name}'s public profile`}</h1>
+        <ProfileMasthead actions={owner ? <span className="flex flex-wrap gap-3"><Link className={buttonVariants()} href="/settings"><Pencil aria-hidden="true" /> Edit profile</Link><EditBannerButton /></span> : undefined} avatarClassName="size-28 lg:size-36" avatarSrc={memberAvatarSrc(data.profile.avatarUrl, data.profile.username)} avatarTreatment={data.profile.avatarStyle} backgroundSrc={data.profile.bannerUrl ?? favoriteTitles.find((title) => title.backdropUrl)?.backdropUrl ?? favoriteTitles.find((title) => title.posterUrl)?.posterUrl ?? undefined} bio={data.profile.bio ?? undefined} className="rounded-none border-x-0 border-t-0 lg:min-h-[24.75rem] lg:px-[62px]" contentClassName="lg:inset-x-[62px]" joined={`Joined ${new Date(data.profile.createdAt).getUTCFullYear()}`} location={data.profile.location ?? undefined} name={name} stats={[{ label: 'watched', value: data.statistics.watched }, { label: 'diary', value: data.statistics.diaryEntries }, { label: 'reviews', value: data.statistics.reviews }, { label: 'lists', value: data.statistics.lists }]} username={`@${data.profile.username}`} />
+        {owner ? <div className="px-5 sm:px-8 lg:px-[62px]"><BannerEditor currentBannerUrl={data.profile.bannerUrl} /></div> : null}
+        <Tabs activeValue="overview" aria-label={`${name} profile sections`} className="bg-navigation px-5 sm:px-8 lg:px-[62px]" items={[{ href: '#overview', label: 'Overview', value: 'overview' }, { href: '#diary', label: 'Diary', value: 'diary' }, { href: '#favorites', label: 'Favorites', value: 'favorites' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#lists', label: 'Lists', value: 'lists' }]} />
         <div className="px-5 sm:px-8 lg:px-[62px]" id="overview">
-          <section className="py-12 sm:py-14 lg:py-16" id="favorites" aria-labelledby="favorites-heading"><div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_26.5rem]"><div><SectionHeading description="Favorite movies and series, mixed together" id="favorites-heading" title="The four that explain me" /><div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">{titles.slice(0, 4).map((title) => <ContentCard artworkSrc={title.posterUrl ?? undefined} badge={<Badge tone="neutral">{title.kind === 'movie' ? 'Film' : 'Series'}</Badge>} href={titleHref(title)} key={`${title.kind}:${title.id}`} meta={titleMeta(title)} title={title.title} />)}</div></div>{featured ? <aside className="self-start rounded-card border border-border bg-surface p-5"><h2 className="text-sm font-bold text-ink">Watching now</h2><ContinueCard artworkSrc={featured.backdropUrl ?? featured.posterUrl ?? undefined} className="mt-4" href={watchHref(featured)} layout="compact" meta={featured.kind === 'series' ? 'Season 1 · Episode 3' : '42 minutes left'} progress={37} title={featured.title} /></aside> : null}</div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="diary" aria-labelledby="diary-heading"><div className="max-w-5xl"><SectionHeading id="diary-heading" title="Recent diary" /><div className="mt-6">{titles.slice(4, 8).map((title, index) => <DiaryRow artworkSrc={title.posterUrl ?? undefined} date={['26 Aug', '23 Aug', '19 Aug', '14 Aug'][index] ?? 'Recently'} detail={index === 1 ? 'Watched with Yasmine and Omar' : 'Finished'} href={titleHref(title)} key={`${title.kind}:${title.id}`} note={index === 0 ? 'Still holds up in exactly the right places.' : undefined} title={title.title} />)}</div></div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="reviews-heading"><SectionHeading id="reviews-heading" title="Reviews that stayed with people" /><div className="mt-8 grid gap-5 lg:grid-cols-2">{titles.slice(8, 10).map((title, index) => <ProfileReviewCard artworkSrc={title.posterUrl ?? undefined} excerpt={index === 0 ? 'Some stories explain loneliness. This one lets it sit beside you.' : 'I understood only half of it. That half changed my week.'} href={titleHref(title)} key={`${title.kind}:${title.id}`} likes={String(73 + index * 46)} reviewedOn={index === 0 ? '26 August' : '14 August'} title={title.title} />)}</div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="lists" aria-labelledby="lists-heading"><SectionHeading id="lists-heading" title={`${name}’s lists`} /><div className="mt-8 grid gap-5 md:grid-cols-3">{['Films that feel like a memory', 'Movies for a quiet breakdown', 'Beautifully strange and worth it'].map((list, index) => <CuratedListCard artworkSources={titles.slice(index, index + 4).map((title) => title.posterUrl ?? undefined)} curator={name} href="/lists/films-that-feel-like-a-memory" key={list} saves={String(319 + index * 107)} title={list} />)}</div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="circle" aria-labelledby="circle-heading"><SectionHeading action={<span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">186 followers</span>} id="circle-heading" title={`People in ${name}’s circle`} /><div className="mt-8 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">{circleMembers.map((member) => <MemberByline key={member.name} meta="In the circle" name={member.name} />)}</div></section>
+          {catalogUnavailable ? <p className="mt-8 rounded-control border border-border bg-surface p-4 text-xs text-muted">Your profile is available, but TMDB artwork and title details could not load.</p> : null}
+          <section className="py-12 sm:py-14 lg:py-16" id="favorites" aria-labelledby="favorites-heading"><SectionHeading action={owner ? <EditFavoritesButton /> : undefined} description="Four ordered Favorites from your real library" id="favorites-heading" title="Favorites" />{data.favorites.length === 0 ? <div className="mt-8"><EmptyState>{owner ? 'No favorites yet. Use Edit favorites to pick up to four titles.' : 'This member has not picked favorites yet.'}</EmptyState></div> : <div className="mt-8 grid grid-cols-3 gap-3 sm:grid-cols-4">{data.favorites.map((favorite) => { const title = titleMap.get(refKey(favorite)); const kindLabel = favorite.kind === 'movie' ? 'Movie' : 'Series'; return <ContentCard action={<SaveTitleButton id={favorite.id} kind={favorite.kind} title={title?.title ?? `${kindLabel} #${favorite.id}`} />} artworkSrc={title?.posterUrl ?? undefined} badge={<Badge tone="neutral">{kindLabel}</Badge>} href={titleHref(favorite)} key={refKey(favorite)} meta={title?.year ? String(title.year) : 'Catalog details unavailable'} title={title?.title ?? `${kindLabel} #${favorite.id}`} /> })}</div>}{owner ? <FavoritesEditor current={data.favorites} initialTitles={favoriteTitles} /> : null}</section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="diary" aria-labelledby="diary-heading"><SectionHeading id="diary-heading" title="Recent diary" /><div className="mt-6 max-w-5xl">{data.diary.length === 0 ? <EmptyState>No diary entries yet. Confirm a Letterboxd import to bring watched dates and rewatches here.</EmptyState> : data.diary.map((entry) => { const title = titleMap.get(refKey(entry)); return <DiaryRow artworkSrc={title?.posterUrl ?? undefined} date={new Date(`${entry.watchedOn}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })} detail={entry.rewatch ? 'Rewatched' : 'Watched'} href={titleHref(entry)} key={entry.entryId} title={title?.title ?? `Movie #${entry.id}`} /> })}</div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="reviews-heading"><SectionHeading id="reviews-heading" title="Reviews" /><div className="mt-8 grid gap-5 lg:grid-cols-2">{data.reviews.length === 0 ? <div className="lg:col-span-2"><EmptyState>No reviews yet. Consumit will show only reviews this member actually wrote.</EmptyState></div> : data.reviews.map((review) => { const title = titleMap.get(refKey(review)); return <article className="rounded-card border border-border bg-surface p-6" key={review.reviewId}><Link className="font-display text-2xl text-ink hover:text-orange" href={titleHref(review)}>{title?.title ?? `Movie #${review.id}`}</Link>{review.reviewedOn ? <p className="mt-2 text-xs text-muted">Reviewed {new Date(`${review.reviewedOn}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}<p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-copy">{review.body}</p></article> })}</div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="lists" aria-labelledby="lists-heading"><SectionHeading id="lists-heading" title={`${name}'s lists`} /><div className="mt-8 grid gap-5 md:grid-cols-3">{data.lists.length === 0 ? <div className="md:col-span-3"><EmptyState>No lists yet. Imported lists remain private until this member publishes them.</EmptyState></div> : data.lists.map((list) => <CuratedListCard artworkSources={[]} curator={name} href={`/lists/${list.slug}`} key={list.id} meta={`${list.itemCount} titles`} title={list.name} />)}</div></section>
+          <section className="border-t border-border py-12 sm:py-14 lg:py-16"><SectionHeading id="social-heading" title="Social" /><div className="mt-8"><EmptyState>Following and Circle activity are not available yet. Follower counts and online status are never fabricated.</EmptyState></div></section>
         </div>
       </main>
+      </ProfileEditProvider>
     </ScreenShell>
   )
 }
-
-export function PublicProfileScreen(props: { stale: boolean; titles: readonly CatalogTitleSummary[]; username: string }) { return <ProfileScreen {...props} /> }
-export function OwnerProfileScreen(props: { stale: boolean; titles: readonly CatalogTitleSummary[]; username?: string }) { return <ProfileScreen owner stale={props.stale} titles={props.titles} username={props.username ?? 'hamza'} /> }

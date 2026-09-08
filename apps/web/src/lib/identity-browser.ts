@@ -1,0 +1,135 @@
+import {
+  acceptedResponseSchema,
+  apiErrorResponseSchema,
+  profileSchema,
+  favoriteSelectionRequestSchema,
+  memberLibrarySchema,
+  sessionMemberResponseSchema,
+  updateProfileRequestSchema,
+  usernameAvailabilityResponseSchema,
+  type AcceptedResponse,
+  type PasswordChangeRequest,
+  type LoginRequest,
+  type CatalogRef,
+  type MemberLibrary,
+  type RecoveryConfirmRequest,
+  type RegisterRequest,
+  type SafeMember,
+  type UpdateProfileRequest,
+  type VerifyEmailRequest,
+} from '@consumit/contracts'
+import type { ZodType } from 'zod'
+
+export class IdentityApiError extends Error {
+  readonly code: string
+  readonly requestId: string | null
+  readonly retryable: boolean
+  readonly status: number
+
+  constructor(message: string, options: { code: string; requestId?: string; retryable: boolean; status: number }) {
+    super(message)
+    this.name = 'IdentityApiError'
+    this.code = options.code
+    this.requestId = options.requestId ?? null
+    this.retryable = options.retryable
+    this.status = options.status
+  }
+}
+
+async function request<T>(path: string, options: RequestInit, schema?: ZodType<T>): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(path, {
+      ...options,
+      credentials: 'same-origin',
+      headers: { accept: 'application/json', ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers },
+    })
+  } catch {
+    throw new IdentityApiError('The account service could not be reached.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })
+  }
+  if (!response.ok) {
+    const parsed = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
+    throw new IdentityApiError(parsed.success ? parsed.data.error.message : 'The account request failed.', {
+      code: parsed.success ? parsed.data.error.code : 'INTERNAL',
+      ...(parsed.success ? { requestId: parsed.data.error.requestId } : {}),
+      retryable: parsed.success ? parsed.data.error.retryable : response.status >= 500,
+      status: response.status,
+    })
+  }
+  if (!schema) return undefined as T
+  const parsed = schema.safeParse(await response.json().catch(() => null))
+  if (!parsed.success) throw new IdentityApiError('The account service returned an invalid response.', { code: 'INTERNAL', retryable: true, status: 503 })
+  return parsed.data
+}
+
+const body = (value: unknown) => JSON.stringify(value)
+
+export const registerMember = (input: RegisterRequest): Promise<AcceptedResponse> => request('/v1/auth/register', { body: body(input), method: 'POST' }, acceptedResponseSchema)
+export const requestEmailVerification = (email: string): Promise<AcceptedResponse> => request('/v1/auth/verification/request', { body: body({ email }), method: 'POST' }, acceptedResponseSchema)
+export const verifyMemberEmail = async (input: VerifyEmailRequest): Promise<SafeMember> => (await request('/v1/auth/verify-email', { body: body(input), method: 'POST' }, sessionMemberResponseSchema)).member
+export const loginMember = async (input: LoginRequest): Promise<SafeMember> => (await request('/v1/auth/login', { body: body(input), method: 'POST' }, sessionMemberResponseSchema)).member
+export const getMemberProfile = () => request('/v1/me/profile', { method: 'GET' }, profileSchema)
+export const updateMemberProfile = (input: UpdateProfileRequest) => request('/v1/me/profile', { body: body(updateProfileRequestSchema.parse(input)), method: 'PATCH' }, profileSchema)
+export const getUsernameAvailability = (username: string) => request(`/v1/usernames/${encodeURIComponent(username)}/availability`, { method: 'GET' }, usernameAvailabilityResponseSchema)
+export const saveMemberFavorites = (favorites: readonly CatalogRef[]) => request('/v1/me/favorites', { body: body(favoriteSelectionRequestSchema.parse({ favorites })), method: 'PUT' }, memberLibrarySchema)
+export const setMemberSaved = (title: CatalogRef, saved: boolean) => request(`/v1/me/library/titles/${title.kind}/${title.id}`, { method: saved ? 'PUT' : 'DELETE' }, memberLibrarySchema)
+export const getMemberLibrary = () => request('/v1/me/library', { method: 'GET' }, memberLibrarySchema)
+
+const libraryByMember = new Map<string, Promise<MemberLibrary>>()
+
+/**
+ * One shared library fetch per signed-in member so every save button on the
+ * page hydrates from the same request instead of each firing its own.
+ */
+export function getCachedMemberLibrary(memberId: string): Promise<MemberLibrary> {
+  const cached = libraryByMember.get(memberId)
+  if (cached) return cached
+  const pending = getMemberLibrary().then(
+    (library) => library,
+    (error: unknown) => {
+      if (libraryByMember.get(memberId) === pending) libraryByMember.delete(memberId)
+      throw error
+    },
+  )
+  libraryByMember.set(memberId, pending)
+  return pending
+}
+
+export function replaceCachedMemberLibrary(memberId: string, library: MemberLibrary): void {
+  libraryByMember.set(memberId, Promise.resolve(library))
+}
+
+export function invalidateMemberLibraryCache(): void {
+  libraryByMember.clear()
+}
+export const logoutMember = (): Promise<void> => request('/v1/auth/logout', { method: 'POST' })
+export const logoutEverywhere = (): Promise<void> => request('/v1/auth/logout-all', { method: 'POST' })
+export const requestPasswordRecovery = (email: string): Promise<AcceptedResponse> => request('/v1/auth/recovery/request', { body: body({ email }), method: 'POST' }, acceptedResponseSchema)
+export const confirmPasswordRecovery = (input: RecoveryConfirmRequest): Promise<void> => request('/v1/auth/recovery/confirm', { body: body(input), method: 'POST' })
+export const changeMemberPassword = async (input: PasswordChangeRequest): Promise<void> => request('/v1/auth/password/change', { body: body(input), method: 'POST' })
+export const deleteMemberAccount = (password: string): Promise<void> => request('/v1/me', { body: body({ password }), method: 'DELETE' })
+
+export async function downloadMemberExport(): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch('/v1/me/export', { credentials: 'same-origin', headers: { accept: 'application/json' } })
+  } catch {
+    throw new IdentityApiError('The account service could not be reached.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })
+  }
+  if (!response.ok) {
+    const parsed = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
+    throw new IdentityApiError(parsed.success ? parsed.data.error.message : 'The export could not be prepared.', {
+      code: parsed.success ? parsed.data.error.code : 'INTERNAL',
+      ...(parsed.success ? { requestId: parsed.data.error.requestId } : {}),
+      retryable: parsed.success ? parsed.data.error.retryable : response.status >= 500,
+      status: response.status,
+    })
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = 'consumit-member-export.json'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}

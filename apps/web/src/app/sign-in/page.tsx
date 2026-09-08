@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
+import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import { SignInScreen } from '../auth/auth-screens'
-import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
@@ -12,12 +12,16 @@ export const metadata: Metadata = {
   robots: { follow: false, index: false },
 }
 
-export default async function SignInPage() {
-  let response
+function internalNextPath(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return candidate && candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : '/'
+}
+
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {
+  const { next } = await searchParams
+  let titles: CatalogTitleSummary[] = []
   try {
-    response = await getCatalogBatch(refsKey(editorialRefs.slice(0, 4)))
-  } catch (error) {
-    return <CatalogUnavailableScreen error={error} />
-  }
-  return <SignInScreen titles={response.items} />
+    titles = (await getCatalogBatch(refsKey(editorialRefs.slice(0, 4)))).items
+  } catch {}
+  return <SignInScreen nextPath={internalNextPath(next)} titles={titles} />
 }

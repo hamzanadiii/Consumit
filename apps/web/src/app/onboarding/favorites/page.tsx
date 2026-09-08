@@ -3,11 +3,11 @@ import type { Metadata } from 'next'
 import { FavoritesOnboardingScreen } from '../onboarding-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
-import { getCatalogBatch, publicCatalogApiUrl, refsKey } from '@/lib/catalog-api'
+import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
 
 export const metadata: Metadata = {
-  description: 'Choose five favorites to seed your Consumit taste.',
+  description: 'Choose four Favorites for your Consumit profile.',
   robots: { follow: false, index: false },
   title: 'Choose Your Favorites | Consumit',
 }
@@ -19,5 +19,5 @@ export default async function OnboardingFavoritesPage() {
   } catch (error) {
     return <CatalogUnavailableScreen error={error} />
   }
-  return <FavoritesOnboardingScreen apiBase={publicCatalogApiUrl()} initialTitles={response.items} />
+  return <FavoritesOnboardingScreen initialTitles={response.items} />
 }

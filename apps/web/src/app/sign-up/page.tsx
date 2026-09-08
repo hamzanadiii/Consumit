@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
+import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import { SignUpScreen } from '../auth/auth-screens'
-import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
@@ -13,11 +13,9 @@ export const metadata: Metadata = {
 }
 
 export default async function SignUpPage() {
-  let response
+  let titles: CatalogTitleSummary[] = []
   try {
-    response = await getCatalogBatch(refsKey(editorialRefs.slice(0, 4)))
-  } catch (error) {
-    return <CatalogUnavailableScreen error={error} />
-  }
-  return <SignUpScreen titles={response.items} />
+    titles = (await getCatalogBatch(refsKey(editorialRefs.slice(0, 4)))).items
+  } catch {}
+  return <SignUpScreen titles={titles} />
 }

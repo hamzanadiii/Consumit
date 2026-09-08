@@ -1,11 +1,15 @@
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
 import { SearchScreen } from './search-screen'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}))
 
 const page = {
   items: [movieSummary, seriesSummary],
@@ -25,5 +29,12 @@ describe('search screen', () => {
     expect(screen.getAllByRole('link', { name: 'Dune: Part Two' })[0]).toHaveAttribute('href', '/title/693134')
     expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
     expect(screen.queryByText(/taste match|% match|overlap/i)).not.toBeInTheDocument()
+  })
+
+  it('hosts the mood picker relocated from Home', () => {
+    render(<SearchScreen initialQuery="dune" page={page} queryTooShort={false} />)
+
+    expect(screen.getByRole('heading', { name: 'What kind of night is it?' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Surprise me tonight/ })).toHaveAttribute('href', '#results')
   })
 })

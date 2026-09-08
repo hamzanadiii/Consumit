@@ -2,7 +2,7 @@
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, and canonical catalog module now exist; member persistence, playback resolution, and operations systems remain future work. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, real member read models, and Letterboxd import worker now exist. Playback resolution and social relationships remain future work. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
 
 ## System shape
 
@@ -33,12 +33,12 @@ The selected foundation is:
 - Next.js 16 web application with React 19 and Tailwind CSS 4
 - Bun/Fastify 5 API
 - Shared React UI package with Lucide icons and typed variants
-- Shared Zod catalog contracts consumed by Fastify and Next.js
+- Shared Zod application contracts consumed by Fastify and Next.js
 
 The longer-term direction remains:
 
-- Postgres, initially a managed option such as Neon — durable truth plus launch-time sessions
-- Valkey later, only when shared coordination, queues, distributed limits, or shared cache become measured needs
+- PostgreSQL 17 for durable members, credentials, profiles, aliases, library records, lists, and import staging
+- Valkey 9 for opaque sessions, temporary authentication challenges, username reservations, and rate-limit state
 - Cloudflare for DNS, WAF, CDN, and edge rate limiting
 - A simple Docker-based deployment on infrastructure such as Hetzner
 - OpenTelemetry, Prometheus, Grafana, Loki, and Sentry for initial observability
@@ -105,9 +105,11 @@ Catalog metadata and playback availability are independent. A real TMDB title ca
 
 The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
 
-## Preview session boundary
+## Identity and import boundaries
 
-Before the identity backend exists, the web app uses a clearly named browser-local preview session to review signed-out and signed-in navigation, authentication redirects, and onboarding. It is presentation state only: the API must never trust it for authentication, authorization, privacy, or ownership. The identity slice will replace it with a server-validated session backed by a secure, `HttpOnly` cookie while preserving the navigation-level signed-in interface.
+The browser authenticates through one same-origin opaque `HttpOnly` session cookie. Only its SHA-256 token hash is stored in Valkey; no authentication token is written to browser storage. PostgreSQL owns durable members, Argon2id credentials, profiles, permanent username aliases, library data, and import records. A verified email is required before the durable account and first session are issued.
+
+Letterboxd upload handling is one deep module: ZIP/CSV parsing, resource limits, normalization, provenance, TMDB matching, review state, idempotent confirmation, and imported-data deletion stay behind the importer interface. Uploaded archive bytes are discarded after normalized staging. The worker claims PostgreSQL jobs with `FOR UPDATE SKIP LOCKED`; TMDB remains the title metadata authority and Letterboxd URLs are provenance keys only.
 
 ## Canonical provider contract
 
@@ -189,16 +191,17 @@ The cache path is browser/edge, process memory, shared Valkey, then resolver.
 |---|---|---|
 | Browser/edge | Publicly safe responses and static assets | Policy depends on privacy and expiry |
 | Process memory | Extremely hot resolution data | 10–60 seconds |
-| Valkey | Main shared resolver cache | 5–30 minutes when the source permits |
+| Valkey-cache (later) | Optional shared resolver cache | 5–30 minutes when measured need and source policy permit |
 | Negative cache | Known provider/title misses | 30 seconds–5 minutes |
 
 Provider discovery and temporary playback access are separate cache records. Expiring access uses its provider expiry minus a 30–120 second safety margin.
 
-Use single-flight/request coalescing so one resolver refresh serves concurrent misses for the same title. Serve slightly stale safe results within a stale-while-revalidate window while a worker refreshes them. Warm popular titles and episodes in the background.
+Use single-flight/request coalescing so one resolver refresh serves concurrent misses for the same title. Serve slightly stale safe results within a stale-while-revalidate window while a worker refreshes them. Warm only a bounded hot-title set (views, title opens, watch intent, playback demand) in the background — never every detail view, and never through unbounded provider fan-out.
 
 ## Background work
 
-Keep non-user-blocking work out of HTTP requests. An initial Valkey-backed queue can run:
+Keep non-user-blocking work out of HTTP requests. The active Letterboxd worker claims durable
+Postgres jobs directly. A later shared queue may run:
 
 - Resolver refresh jobs
 - Metadata synchronization
@@ -238,9 +241,13 @@ The Consumit Player owns the playback controls and native media surface. A playb
 - Playback-session history when durable retention is needed
 - Provider configuration and aggregates
 
-### Valkey (later, on measured need)
+### Valkey authentication state
 
-Introduced only when shared coordination, queues, distributed limits, or shared cache are required. Then it owns resolution and negative caches, distributed locks and single-flight coordination, rate counters, provider health and hot scores, and queues. Launch-time sessions live in Postgres.
+A dedicated Valkey instance or namespace owns opaque sessions, verification and recovery
+challenges, pending Username reservations, and authentication rate-limit state. It runs with
+`noeviction`, AOF every second, and no catalog-cache mixing. Total loss safely logs members out
+and invalidates pending codes without removing durable member data. Shared catalog/resolver cache
+remains a later, separate reliability class introduced only on measured need.
 
 ### Analytics store, later
 
@@ -319,7 +326,11 @@ This is an interface inventory, not route-level implementation approval. Contrac
 
 ### Stage 1: simple production
 
-Cloudflare fronts one small VPS running the web app, API, and resolver; managed Postgres with backups provides durable truth including launch-time sessions; bounded process memory covers disposable cache and single-flight. Docker provides repeatable operation. Valkey and worker separation arrive on measured need. Named vendors are candidates, not mandatory commitments.
+Cloudflare fronts one small VPS running the web app, API, resolver, and Letterboxd worker; managed
+Postgres with backups provides durable member/product truth, and dedicated Valkey provides
+authentication state. Bounded process memory covers disposable cache and single-flight. Docker
+provides repeatable operation. Additional worker capacity and shared disposable cache arrive on
+measured need. Named infrastructure vendors remain candidates, not mandatory commitments.
 
 ### Stage 2: measured horizontal growth
 
@@ -360,7 +371,7 @@ These standards generalize the catalog module's established shape (`apps/api/src
 
 ### Deliberately different this time
 
-1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by a server-side store, with rotation on privilege change and origin checks on cookie-authed mutations. The browser-local preview session is never trusted (see the preview boundary above).
+1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
 2. **Direct-first media with one audited escape hatch.** Providers that require custom request headers cannot play directly from a browser; for exactly those, a narrow lease-scoped fetch proxy is permitted — short-lived leases, explicit domain allowlist, full SSRF guard, no open fetching. This keeps invariant 2 while preserving the old lease model's real lesson.
 3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
@@ -388,7 +399,13 @@ Authenticate → rate-limit → validate (Zod, 400 with plain language) → auth
 
 ### Configuration
 
-Environment is Zod-validated at boot and fails fast (`JWT_SECRET` and store URLs required in production). `.env.example` stays current. CORS uses an explicit allowlist per environment. Secrets never enter logs, responses, or client bundles. Mutating routes accept bodies bounded to 1 MB.
+Environment is Zod-validated at boot and fails fast in production when `DATABASE_URL`,
+`VALKEY_URL`, `APP_ORIGIN`, `AUTH_CODE_PEPPER`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, or required
+catalog settings are missing. `.env.example` stays current. Browser API traffic is same-origin;
+CORS is disabled and mutations require the exact configured Origin plus valid Fetch Metadata when
+present. Secrets never enter logs, responses, or client bundles. General bodies stay tightly
+bounded while the Letterboxd multipart route permits a 25 MiB archive under parser-level expanded
+size and row limits.
 
 ### Sensitive endpoints
 
@@ -396,7 +413,9 @@ Login, register, verify, reset, and import routes get the strictest rate limits 
 
 ### Background work
 
-Valkey-backed BullMQ arrives with the first queue need (resolver refresh, hot-title warming, telemetry ingestion) — not before. Workers run as separate entry points so API processes stay stateless and horizontally scalable.
+The Letterboxd import worker is an active separate entry point and claims durable Postgres jobs
+with `FOR UPDATE SKIP LOCKED`, ownership checks, and lease renewal. BullMQ remains deferred until a
+different shared queue need such as resolver warming or telemetry ingestion is measured.
 
 ### Still blocked
 

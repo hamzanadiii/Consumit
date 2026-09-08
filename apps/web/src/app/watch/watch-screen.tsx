@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { titleHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
 import { LockKeyhole } from 'lucide-react'
+import Link from 'next/link'
 
 import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
 
@@ -35,9 +36,9 @@ export function WatchScreen({ demo, episode, title }: WatchScreenProps) {
 
   return (
     <main className="flex min-h-screen flex-col bg-black" data-consumit-player-screen data-consumit-watch-screen data-tmdb-id={title.id}>
-      <WatchHeader backHref={titleHref(title)} className="border-white/10 bg-black" exitHref={titleHref(title)} meta={meta} status={hasDemo ? <strong className="text-copy">Preview source ready</strong> : <strong className="text-muted">Source unavailable</strong>} title={displayTitle} />
-      <section aria-label={`${displayTitle} playback`} className="mx-auto flex w-full max-w-[100rem] flex-1 flex-col px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
-        <div className="flex min-h-0 flex-1 items-start pt-3 lg:items-center lg:pt-0">
+      <WatchHeader backHref={titleHref(title)} className="border-white/10 bg-black" exitHref={titleHref(title)} linkComponent={Link} meta={meta} status={hasDemo ? <strong className="text-copy">Preview source ready</strong> : <strong className="text-muted">Source unavailable</strong>} title={displayTitle} />
+      <section aria-label={`${displayTitle} playback`} className={`mx-auto flex w-full max-w-[100rem] flex-col px-3 py-3 sm:px-6 sm:py-5 lg:px-8 ${hasDemo ? 'flex-1' : ''}`}>
+        <div className={hasDemo ? 'flex min-h-0 flex-1 items-start pt-3 lg:items-center lg:pt-0' : 'pt-3'}>
           {hasDemo && demo ? (
             <ConsumitPlayer
               caption={demo.caption}
@@ -65,8 +66,8 @@ export function WatchScreen({ demo, episode, title }: WatchScreenProps) {
             )}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            <a className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(title)}>Return to title</a>
-            <a className={buttonVariants({ size: 'sm', variant: 'ghost' })} href="/settings#support">Report an issue</a>
+            <Link className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(title)}>Return to title</Link>
+            <Link className={buttonVariants({ size: 'sm', variant: 'ghost' })} href="/settings#support">Report an issue</Link>
           </div>
         </div>
       </section>

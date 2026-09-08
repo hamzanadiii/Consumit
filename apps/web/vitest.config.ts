@@ -9,6 +9,9 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Full-screen component tests are CPU-heavy in jsdom. Bounding workers
+    // prevents normal interactions from timing out under contention.
+    maxWorkers: 2,
     setupFiles: ['./src/test/setup.ts'],
   },
 })

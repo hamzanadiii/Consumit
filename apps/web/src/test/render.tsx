@@ -1,10 +1,10 @@
 import { render, type RenderOptions } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 
-import { PreviewSessionProvider } from '@/app/session/preview-session'
+import { SessionProvider } from '@/app/session/session'
 
 function TestProviders({ children }: { children: ReactNode }) {
-  return <PreviewSessionProvider>{children}</PreviewSessionProvider>
+  return <SessionProvider>{children}</SessionProvider>
 }
 
 export function renderWithProviders(

@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 
 const tmdbLogo = 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_long_2-9665a76b1ae401a510ec1e0ca40ddcb3b0cfe45f1d51b77a308fea0845885648.svg'
 
@@ -15,18 +16,10 @@ export function CatalogAttribution() {
         >
           <Image alt="The Movie Database (TMDB)" className="h-4 w-auto" height={37} src={tmdbLogo} width={94} />
         </a>
-        <a className="ml-auto text-[0.6875rem] text-muted underline decoration-border underline-offset-4 hover:text-ink" href="/about">
+        <Link className="ml-auto text-[0.6875rem] text-muted underline decoration-border underline-offset-4 hover:text-ink" href="/about">
           Catalog credits
-        </a>
+        </Link>
       </div>
     </aside>
-  )
-}
-
-export function CatalogPreviewNotice() {
-  return (
-    <p className="border-b border-border bg-surface px-5 py-2.5 text-center text-[0.6875rem] leading-5 text-muted sm:px-8" data-consumit-preview-notice role="note">
-      Prototype preview: member activity and progress are deterministic sample data.
-    </p>
   )
 }

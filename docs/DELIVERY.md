@@ -91,14 +91,14 @@ Exit criterion: the screen is visually reviewable end to end with local fixtures
 
 Add logic in user-valuable slices instead of wiring every backend at once:
 
-The canonical catalog slice is implemented: real TMDB discovery, search, movie and series detail, seasons and episodes, normalized artwork, numeric routes, deterministic social activity overlays, and explicit unavailable playback. Computed Taste Match, overlap, member scores, and numeric ratings stay hidden until their backing behavior is implemented. Every Watch action opens the dedicated first-party player route. The slice uses an injectable Fastify adapter, shared contracts, bounded upstream work, and deterministic network-independent tests. Persistence and authorized playback remain separate slices.
+The canonical catalog slice is implemented: real TMDB discovery, search, movie and series detail, seasons and episodes, normalized artwork, numeric routes, and explicit unavailable playback. Computed Taste Match, overlap, member scores, and numeric ratings stay hidden until their backing behavior is implemented. Every Watch action opens the dedicated first-party player route. The slice uses an injectable Fastify adapter, shared contracts, bounded upstream work, and deterministic network-independent tests.
 
-The frontend identity preview is also complete: signed-out navigation presents a Sign in action, successful preview sign-in and sign-up reveal the existing member navigation, and Settings can end the local preview session. This browser-local flag is deliberately non-authoritative and exists only to validate the experience before the identity backend replaces it.
+Identity and the first durable member-data slice are implemented: verified email/password registration requires a chosen Username, opaque sessions live in Valkey, profiles and aliases live in Postgres, Settings performs real account mutations, and protected screens are server-authorized. Letterboxd ZIP/CSV imports are staged, matched through TMDB by a separate worker, reviewed, confirmed idempotently, and surfaced through real Profile, Library, and List screens. Unsupported social evidence renders zero or empty rather than fixtures.
 
-1. Identity: create account, sign in, secure server session, profile shell. **Frontend preview states implemented; backend identity remains.**
+1. Identity: create account, verification, sign in, secure server session, recovery, profile, export, and deletion. **Implemented.**
 2. Catalog: title identity, search, movie and series details. **Implemented for the TMDB metadata slice.**
-3. Library: save, favorite, history, progress, resume.
-4. Social: follow, activity, profile taste, ratings, reviews, lists.
+3. Library: native saves and Favorites plus imported watchlist, history, diary, ratings, reviews, and lists. **Durable import/read slice implemented; native authoring (diary/list/review edits), Top-4 favorites editing, profile/banner/avatar customization, and member-keyed playback progress with resume are implemented.** Playback-driven history and the native player remain.
+4. Social: follow, activity, public reviews, and list collaboration. **Not implemented; product screens use honest empty states.**
 5. Playback: resolve, session, source selection, reporting, fallback.
 6. Personalization: Taste Match, circle signals, ranking, onboarding seeds.
 

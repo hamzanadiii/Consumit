@@ -1,10 +1,14 @@
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
 import { CatalogGrid, CatalogStaleNotice, CatalogUnavailableScreen } from './catalog-ui'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}))
 
 describe('catalog UI', () => {
   it('renders real title data with a numeric canonical link and missing-artwork fallback', () => {

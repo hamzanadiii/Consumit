@@ -22,6 +22,10 @@ These patterns recur across the complete active screen set and should be preserv
 - **Assets:** reuse the supplied lockup, mark, cinematic backdrop, poster motifs, member avatar treatment, and neutral service identifiers. Do not recreate those assets with generic iconography.
 - **Depth:** interface surfaces are flat and separated by tone or border. Shadows belong to artwork separation, not routine controls or panels.
 
+## Application composition boundary
+
+Movies and Series browsing composes the shared `ArtworkFrame`, `Button`, and global shell in `apps/web/src/app/catalog/catalog-browse-content.tsx`. Its native filter selects, landscape rail, and poster grid remain application-specific. `use-catalog-feed.ts` owns query-scoped cancellation, deduplicated page appends, scroll loading, and retry state; `apps/web/src/lib/catalog-browser.ts` validates browser discovery responses. These catalog behaviors do not belong in shared media or selection primitives. The member flow lives in [PRODUCT.md](./PRODUCT.md#movies-and-series-browsing), and its visual composition lives in [DESIGN.md](../DESIGN.md#movies-and-series-browsing).
+
 ## Build order
 
 | Order | Family | Components | Status |
@@ -39,7 +43,7 @@ These patterns recur across the complete active screen set and should be preserv
 | 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature, rating rhythm, profile review card | Complete |
 | 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Complete |
 | 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Complete |
-| 14 | Authentication | Auth shell, auth field, social auth button, trust note | Complete |
+| 14 | Authentication | Auth shell, auth field, verification/recovery states, trust note | Complete |
 | 15 | Onboarding | Onboarding header, import option, selectable title, member suggestion | Complete |
 | 16 | Settings and support | Settings rail/section, preference row, health summary, dropzone | Complete |
 | 17 | Playback shell | Watch header, Consumit Player, source selector, report, trust note | Complete (UI shell) |
@@ -72,6 +76,7 @@ Included behavior:
 - Supplied Consumit mark, primary destinations, and orange active-route line
 - Native GET search form with an accessible search label
 - Supplied member portrait with component-owned visual and announced presence state
+- Signed-in member menu with identity header, profile/library/settings destination rows in that order, active-route selection, caller-owned sign out, and optional help/report rows
 - Dedicated mobile menu with trapped focus, Escape dismissal, and trigger focus restoration
 - Optional sticky positioning and caller-owned route/search/profile destinations
 - Reduced-motion handling for the mobile overlay and panel entrance
@@ -113,6 +118,7 @@ Source references: Global Navigation, Friends Activity, Settings, Public Profile
 Included behavior:
 
 - Supplied-image or initials-fallback avatars at four scales
+- Member-chosen generated portraits (Notionists addresses with random seeds, http(s) only) with initials-tile fallback; member-chosen geometric tile treatments (dusk, dawn, noir, halo) frame the fallback, defaulting to dusk
 - Online, away, and offline presence with explicit standalone labeling
 - Capped avatar groups with a readable overflow count and group summary
 - Member bylines with optional profile destination, context, presence, and action
@@ -148,6 +154,7 @@ Source references: Home, Search / Explore, Library, Friends Activity, and Public
 Included behavior:
 
 - Default, saved, and watched poster cards with contextual badges and friend rings
+- Watch-forward cards with a centered play action and overlaid title, year, and rating
 - Continue cards with one explicit playback destination and remaining progress, in stacked rail or compact sidebar layouts
 - Ranked trending cards with member score and completion proof
 - Curated-list cards with supplied artwork collage, curator identity, and save count
@@ -194,6 +201,7 @@ Source references: Title Detail and Series Detail.
 Included behavior:
 
 - Cinematic title masthead with metadata, synopsis, action hierarchy, Taste Match reason, and social proof
+- Rotating hero spotlight with newest titles, crossfading backdrops, dots with prev/next controls, pause on hover and focus, and reduced-motion support
 - Member pulse with a single accessible rating label and decorative distribution histogram
 - Cast cards with supplied portrait support and a restrained geometric identity fallback
 - Native season selection with caller-owned state
@@ -221,7 +229,7 @@ Included behavior:
 - Caller-owned artwork and overlay treatment, with the dark overlay retained as the safe default
 - Persistent auth fields with helper or error association and caller-owned native attributes
 - Optional trailing field actions for accessible password visibility controls
-- Named provider actions with light and dark action treatments
+- Email/password fields, verification, and recovery actions without OAuth/provider controls
 - Plain-language trust notes using semantic signals without relying on color alone
 
 ## Component 15 — Onboarding
@@ -233,7 +241,7 @@ Included behavior:
 - Reduced onboarding header with clamped step progress and optional skip destination
 - Import and start-fresh options with benefits, state, and caller-owned actions
 - Native-checkbox selectable title cards with supplied artwork and visible keyboard state
-- Member suggestions with identity, handle, overlap, taste explanation, an ivory Follow action, and an outlined Following state; direct messaging is excluded
+- Member suggestions use the canonical Username term. They remain gallery specimens until real social data exists; product screens render an honest empty state instead of fixture members.
 
 ## Component 16 — Settings and support
 

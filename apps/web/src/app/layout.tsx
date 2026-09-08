@@ -4,9 +4,10 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 import { siteUrl } from '@/lib/site'
+import { getServerSession } from '@/lib/identity-server'
 
 import { CatalogAttribution } from './catalog/catalog-attribution'
-import { PreviewSessionProvider } from './session/preview-session'
+import { SessionProvider } from './session/session'
 
 const siteDescription = 'Watch immediately, remember what you love, and discover through people whose taste you trust.'
 
@@ -30,14 +31,15 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+  const session = await getServerSession()
   return (
     <html lang="en">
       <body>
-        <PreviewSessionProvider>
+        <SessionProvider initialMember={session.member} initialStatus={session.status}>
           {children}
           <CatalogAttribution />
-        </PreviewSessionProvider>
+        </SessionProvider>
       </body>
     </html>
   )

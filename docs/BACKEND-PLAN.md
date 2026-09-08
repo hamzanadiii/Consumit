@@ -40,11 +40,11 @@ Fastify API
    +--> ads
    +--> personalization
    |
-   +--> Postgres          durable truth + launch sessions
+   +--> Postgres          durable member and product truth
    +--> process memory    bounded cache / single-flight / hot health
-   +--> Valkey            only when shared coordination / queues / cache justify it
+   +--> Valkey-auth       sessions, auth challenges, reservations, auth limits
    |
-   +--> workers           only when real background work exists
+   +--> import worker     durable Letterboxd matching jobs claimed from Postgres
    |
    +--> authorized media providers/CDNs ---- media bytes ----> browser
    +--> ad network/CDN ---------------------- ad creative ----> browser
@@ -74,8 +74,8 @@ These existing decisions are good and should stay:
 2. Next.js web + Fastify API.
 3. Shared Zod contracts.
 4. TMDB as canonical metadata identity.
-5. Postgres for durable member/product data and launch-time server sessions.
-6. Valkey only when shared coordination, queues, distributed limits, or shared cache become real needs.
+5. Postgres for durable member/product data; it does not store sessions.
+6. Dedicated Valkey authentication state for opaque sessions, challenges, Username reservations, and authentication rate limits.
 7. Provider quirks hidden behind adapters.
 8. First-party Consumit Player.
 9. Streaming remains a core product path, with direct provider/CDN → browser delivery preferred.
@@ -162,18 +162,26 @@ Database shape and HTTP shape are different contracts.
 
 ---
 
-## 2.3 Defer Valkey at launch; split it by reliability class when it arrives
+## 2.3 Keep authentication Valkey separate from disposable caching
 
-Do **not** buy or operate Valkey merely because sessions/caches exist.
+The active identity design requires Valkey even with one API instance because sessions,
+verification/recovery challenges, Username reservations, and authentication limits are
+recoverable-but-ephemeral state with atomic operations and expiry.
 
-For the first production topology with one API instance:
+For the first production topology:
 
 ```text
 Postgres
   -> members
   -> credentials
-  -> server sessions
+  -> profiles and aliases
   -> durable progress/library/social truth
+
+Valkey-auth
+  -> opaque server sessions (hashed tokens only)
+  -> verification and recovery challenges (code HMACs only)
+  -> pending Username reservations
+  -> authentication rate-limit state
 
 process memory
   -> bounded LRU/read-through cache
@@ -182,39 +190,27 @@ process memory
   -> disposable hot data
 ```
 
-This is cheaper and removes one network dependency from the critical path.
+Do not mix disposable catalog/resolver cache into the authentication instance. Add a separate
+cache reliability class only when shared catalog or playback acceleration is measured as useful.
 
-Introduce Valkey when at least one of these becomes true:
-
-- multiple API/resolver instances need shared state;
-- distributed rate limiting is required;
-- BullMQ or another real queue is introduced;
-- resolver cache must be shared across processes;
-- distributed single-flight/locks are required;
-- Postgres session traffic becomes a measured hot path.
-
-When Valkey is introduced, do not eventually put everything in one instance with one memory
-policy.
-
-### `Valkey-critical`
+### `Valkey-auth`
 
 Use for:
 
-- server sessions **after** migration away from Postgres is justified;
-- distributed locks;
-- distributed single-flight coordination;
-- BullMQ when queues arrive;
-- critical short-lived coordination.
+- server sessions;
+- verification and recovery challenges;
+- pending Username reservations;
+- authentication rate limits.
 
 Recommended operating direction:
 
 - `maxmemory-policy=noeviction`;
 - authentication / ACLs;
 - TLS when remote;
-- persistence when session/queue durability matters;
+- AOF every second;
 - explicit memory limit + alerts.
 
-### `Valkey-cache`
+### `Valkey-cache` (later)
 
 Use later for:
 
@@ -233,11 +229,9 @@ Recommended operating direction:
 
 ### Why split?
 
-Cache wants eviction. Queues and critical coordination do not.
-
-Those are conflicting reliability requirements. One cheap shared instance may be acceptable for
-a short transitional period, but the long-term operating model keeps critical coordination
-separate from disposable cache data.
+Cache wants eviction. Authentication state does not. Use separate instances or rigorously
+isolated namespaces and memory policies. Total loss of `Valkey-auth` safely logs members out and
+invalidates pending codes; it never removes durable member data.
 
 ---
 
@@ -415,15 +409,15 @@ Keep the existing module style instead of creating a giant enterprise hierarchy.
 ```text
 apps/api/src/
   app.ts
-  server.ts
+  index.ts
 
   config/
     env.ts
 
   http/
-    error-handler.ts
+    errors.ts
     request-context.ts
-    security.ts
+    csrf.ts
 
   catalog/
     catalog.ts
@@ -438,9 +432,9 @@ apps/api/src/
     routes.ts
     errors.ts
     fake-identity.ts
-    postgres-identity.ts
+    postgres-repository.ts
     password.ts
-    session-store.ts
+    valkey-auth-state.ts
     *.test.ts
 
   library/
@@ -466,7 +460,7 @@ apps/api/src/
     fake-playback.ts
     resolver.ts
     scheduler.ts
-    session-store.ts
+    valkey-auth-state.ts
     *.test.ts
 
   ads/
@@ -548,7 +542,6 @@ Owns:
 
 - members;
 - credentials;
-- **server sessions at launch**;
 - profile settings;
 - privacy settings;
 - follows/circle relationships;
@@ -564,14 +557,13 @@ Owns:
 - durable provider aggregates/configuration where required;
 - durable playback audit/history only if product/operations need it.
 
-Launch-time verification/reset state may also use Postgres if that keeps the first production
-system simpler. Expiry and bounded-attempt rules still apply.
+Postgres does not own sessions, verification challenges, recovery challenges, Username
+reservations, or authentication rate-limit state.
 
 ## Process memory = cheap disposable acceleration at launch
 
 Owns only bounded/rebuildable state:
 
-- LRU/read-through session cache;
 - catalog hot cache;
 - in-process single-flight;
 - short provider-health snapshots;
@@ -579,17 +571,16 @@ Owns only bounded/rebuildable state:
 
 A restart may erase this state without corrupting the product.
 
-## Valkey-critical = later shared operational state
+## Valkey-auth = active recoverable authentication state
 
-Introduced only when measured/shared requirements exist. Then it may own:
+Owns:
 
-- shared server sessions;
-- distributed auth/rate counters;
-- short verification/reset state;
-- distributed locks;
-- distributed single-flight ownership;
-- queues;
-- short-lived playback coordination.
+- hashed opaque server sessions;
+- verification and recovery challenges;
+- pending Username reservations;
+- authentication rate limits.
+
+Run it with `noeviction`, AOF every second, and no catalog-cache mixing.
 
 ## Valkey-cache = later disposable acceleration
 
@@ -836,9 +827,8 @@ SameSite is defense-in-depth, not the entire CSRF strategy.
 
 For cookie-authenticated mutations:
 
-- verify `Origin` / expected site;
-- use Fetch Metadata where supported;
-- use a CSRF token/header pattern if the deployment topology requires it;
+- require exact `Origin === APP_ORIGIN`; reject missing or cross-site origins;
+- when present, require `Sec-Fetch-Site` to be `same-origin` or `none`;
 - never mutate state through `GET`.
 
 ## 8.3 Passwords
@@ -1213,7 +1203,7 @@ Ensure:
 
 ```text
 buildApp(deps/options) -> FastifyInstance
-server.ts -> listen only
+index.ts -> listen only
 ```
 
 Tests use the app factory.
@@ -1277,7 +1267,7 @@ A failing request can be found in logs from one ID without exposing secrets.
 Confirm/configure:
 
 - helmet;
-- CORS explicit allowlist;
+- CORS disabled for the one-origin browser architecture;
 - body limit;
 - trusted proxy rules;
 - rate-limit base plugin.
@@ -1342,7 +1332,9 @@ Use Postgres.
 
 The current architecture recommends Prisma.
 
-As of this research, Prisma 8 is current and has official Bun guidance.
+Keep Prisma pinned to the installed stable `7.10.x` line for this slice, matching Prisma's Bun
+guidance. Track the Prisma 8 upgrade separately rather than adopting a release candidate while
+identity persistence is being established.
 
 Before committing it:
 
@@ -1419,25 +1411,15 @@ This slice replaces the browser-only preview session with real server authority.
 
 Before route implementation, explicitly decide:
 
-- email/password?
-- OAuth providers?
-- email verification?
-- recovery?
-- session lifetime?
-- account deletion/export?
-- privacy defaults?
+- email/password: yes;
+- OAuth providers: excluded from the active product;
+- email verification: mandatory before account creation and session issuance;
+- recovery: six-digit, ten-minute email challenge;
+- sessions: Valkey-backed, 30-day idle and 90-day absolute lifetime;
+- account deletion/export: supported;
+- privacy defaults: private.
 
-Recommended simple launch direction if you want minimal complexity:
-
-```text
-email + password
-email verification
-password reset
-server-side sessions
-OAuth later
-```
-
-But treat that as a product decision, not an architecture assumption.
+These are resolved product and architecture decisions, not deferred options.
 
 ## Touch 3.2 — Identity contract
 
@@ -1469,7 +1451,7 @@ credential
 profile
 ```
 
-Add verification/recovery persistence only when the selected auth flow needs it.
+Durable member, credential, and profile rows are created transactionally only after verification.
 
 ## Touch 3.4 — Password service
 
@@ -1486,20 +1468,12 @@ No hashing logic in routes.
 
 ## Touch 3.5 — Launch session persistence
 
-Do **not** introduce Valkey merely because authentication now exists.
-
-Create the first session persistence in Postgres.
+Use the dedicated authentication Valkey instance.
 
 Suggested direction:
 
 ```text
-session
-  id / token_hash
-  member_id
-  created_at
-  last_seen_at
-  expires_at
-  auth_version / revoked_at when required
+session key -> member id, created/last-seen/absolute expiry, authVersion
 ```
 
 Rules:
@@ -1510,9 +1484,8 @@ Rules:
 - one member can support multiple device sessions;
 - logout deletes/revokes the server-side session;
 - logout-all invalidates every member session;
-- a small bounded process-memory read-through cache is optional after correctness exists.
-
-Valkey is a later optimization/multi-instance coordination layer, not an identity prerequisite.
+- keep at most 20 active sessions per member;
+- enforce idle and absolute expiry atomically.
 
 ## Touch 3.6 — Session store
 
@@ -1541,13 +1514,13 @@ POST register
  -> throttle
  -> normalize email
  -> hash password
- -> insert member + credential atomically
- -> create session
- -> set secure cookie
- -> return safe member shape
+ -> reserve Username and store the pending challenge in Valkey
+ -> send verification email through the notifier seam
+ -> return the enumeration-safe generic 202 response
 ```
 
-Test duplicate/invalid paths.
+Verification atomically consumes the challenge, creates member + credential + profile in
+Postgres, then issues the first session. Unverified registrations never receive sessions.
 
 ## Touch 3.8 — Login
 
@@ -1584,9 +1557,8 @@ Rotate after authentication and sensitive changes.
 
 ## Touch 3.12 — Recovery/verification
 
-Only if selected for launch.
-
-Short-lived verification/reset state may live in Postgres at launch with expiry and bounded attempts. Move it to `Valkey-critical` only when operationally justified.
+Verification and recovery are required at launch. Their challenge HMACs, attempts, resend
+cooldowns, and expiry live in `Valkey-auth`.
 
 Do not store plaintext reset tokens.
 
@@ -2482,9 +2454,10 @@ One small production VPS
   - Next.js
   - Fastify API
   - resolver
-  - tiny scheduler/worker only if required
+  - Letterboxd import worker
         |
         +--> managed Postgres
+        +--> dedicated Valkey-auth
         |
         +--> authorized provider/CDN ---- media ----> browser
         |
@@ -2506,8 +2479,8 @@ Free/low-cost tiers where sufficient:
 
 ### Do not spend money here at launch
 
-- dedicated Valkey before shared-state need;
-- dedicated worker server before worker load exists;
+- disposable catalog/cache Valkey before measured shared-cache need;
+- a second worker server before import load requires it;
 - Kubernetes;
 - separate API/resolver services merely for architecture aesthetics;
 - ClickHouse;
@@ -2562,7 +2535,7 @@ Use:
 - Cloudflare/free edge where sufficient;
 - one small VPS running web + Fastify API + resolver;
 - managed Postgres with backups/PITR;
-- Postgres-backed server sessions;
+- dedicated Valkey-backed server sessions and authentication challenges;
 - bounded in-process cache + single-flight;
 - Docker;
 - structured logs;
@@ -2570,7 +2543,7 @@ Use:
 - direct media delivery from authorized provider/CDN;
 - direct ad creative delivery from the selected ad network/CDN.
 
-No dedicated Valkey unless a measured/shared requirement already exists.
+Keep the authentication Valkey isolated from any later disposable cache.
 
 No Kubernetes.
 
@@ -2830,7 +2803,7 @@ credential
 
 profile
   member_id
-  handle
+  username
   display_name
   bio
   visibility
@@ -2910,12 +2883,13 @@ list_item
   added_at
 ```
 
-Launch server sessions are durable Postgres records even if the illustrative table list above omits the exact schema. They may migrate to `Valkey-critical` later when shared/session traffic warrants it.
+Launch sessions and authentication challenges live in `Valkey-auth`; Postgres retains only
+durable member, credential, profile, alias, library, and import truth.
 
 Do not create a heavy ad-event schema in primary Postgres. Persist only ad policy/consent/configuration that the product truly owns; high-volume ad telemetry belongs in logs/queues/analytics as scale requires.
 
-Do not add taste vectors, recommendations, provider score history, notifications, imports, or
-analytics tables before their slices.
+Do not add taste vectors, recommendations, provider score history, notifications, or analytics
+tables before their slices. Letterboxd import tables exist because the import slice is active.
 
 ---
 
@@ -3067,7 +3041,8 @@ For Consumit it means:
 
 - launch topology stays near the ~$20–30/month target while traffic is small;
 - managed Postgres protects irreplaceable data;
-- Valkey/workers/analytics infrastructure arrive only on measured triggers;
+- disposable cache and analytics infrastructure arrive only on measured triggers; the auth
+  Valkey and import worker are active product requirements;
 - proxy bandwidth is visible and intentionally minimized;
 - cost per successful watch session is measured;
 - ad revenue scales with watch sessions without making Consumit serve the ad creative bytes.
@@ -3133,7 +3108,7 @@ Research implications used here:
 
 Research implications used here:
 
-- Prisma 8 is the current release at research time;
+- this slice intentionally remains on stable Prisma `7.10.x`; Prisma 8 is a separately tracked upgrade;
 - Prisma publishes a Bun-specific guide;
 - migrations are versioned/reviewable artifacts;
 - production migrations should be a controlled deployment step.

@@ -2,7 +2,7 @@ import 'server-only'
 
 import {
   catalogBatchSchema,
-  catalogErrorResponseSchema,
+  apiErrorResponseSchema,
   catalogPageSchema,
   catalogSeasonResponseSchema,
   catalogTitleResponseSchema,
@@ -52,7 +52,7 @@ async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
   }
 
   if (!response.ok) {
-    const parsed = catalogErrorResponseSchema.safeParse(await response.json().catch(() => null))
+    const parsed = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
     throw new CatalogApiError(
       parsed.success ? parsed.data.error.message : 'The Consumit catalog is temporarily unavailable.',
       {
@@ -106,8 +106,4 @@ export function searchCatalog(queryValue: string, kind: CatalogKind | 'all' = 'a
 
 export function refsKey(refs: readonly CatalogRef[]) {
   return refs.map((reference) => `${reference.kind}:${reference.id}`).join(',')
-}
-
-export function publicCatalogApiUrl() {
-  return (process.env.NEXT_PUBLIC_CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
 }

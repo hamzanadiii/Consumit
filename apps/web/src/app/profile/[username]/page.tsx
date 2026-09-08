@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
+import type { CatalogTitleSummary, MemberProfileData } from '@consumit/contracts'
 
-import { OwnerProfileScreen, PublicProfileScreen } from '../public-profile-screen'
-import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
+import { ProfileScreen } from '../public-profile-screen'
+import { notFound, redirect } from 'next/navigation'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
-import { editorialRefs } from '@/lib/catalog-registry'
+import { getServerSession } from '@/lib/identity-server'
+import { getPublicProfile, MemberApiError } from '@/lib/member-server'
 
 type PublicProfilePageProps = {
   params: Promise<{ username: string }>
@@ -19,14 +21,18 @@ export const metadata: Metadata = {
 export default async function PublicProfilePage({ params }: PublicProfilePageProps) {
   const { username } = await params
   const normalizedUsername = username.trim().replace(/^@+/, '').toLowerCase()
-  let response
+  const session = await getServerSession()
+  let profile: MemberProfileData
   try {
-    response = await getCatalogBatch(refsKey(editorialRefs))
+    profile = await getPublicProfile(normalizedUsername)
   } catch (error) {
-    return <CatalogUnavailableScreen error={error} />
+    if (error instanceof MemberApiError && error.status === 404) notFound()
+    throw error
   }
-
-  return normalizedUsername === 'hamza'
-    ? <OwnerProfileScreen stale={response.meta.stale} titles={response.items} username={username} />
-    : <PublicProfileScreen stale={response.meta.stale} titles={response.items} username={username} />
+  if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}`)
+  const refs = [...profile.favorites, ...profile.diary, ...profile.reviews]
+  let titles: CatalogTitleSummary[] = []
+  let catalogUnavailable = false
+  try { titles = refs.length ? (await getCatalogBatch(refsKey(refs))).items : [] } catch { catalogUnavailable = true }
+  return <ProfileScreen catalogUnavailable={catalogUnavailable} data={profile} owner={session.status === 'authenticated' && session.member.username === profile.canonicalUsername} titles={titles} />
 }
