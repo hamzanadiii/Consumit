@@ -61,8 +61,15 @@ export function createFakeCatalog({
       return catalogBatchSchema.parse({ items: found, meta, missing })
     },
     async discover(query) {
-      const items = titles.filter((title) => query.kind === 'all' || title.kind === query.kind).map(summary)
+      const items = titles
+        .filter((title) => query.kind === 'all' || title.kind === query.kind)
+        .filter((title) => !query.genre || title.genreNames.includes(query.genre))
+        .filter((title) => !query.year || title.year === query.year)
+        .map(summary)
       return page(items, query.page)
+    },
+    async movieByExternalId() {
+      return null
     },
     async search(query) {
       const needle = query.query.trim().toLocaleLowerCase('en-US')

@@ -1,12 +1,12 @@
-import type { CatalogErrorCode } from '@consumit/contracts'
+import type { ApiErrorCode } from '@consumit/contracts'
 
 export class CatalogError extends Error {
-  readonly code: CatalogErrorCode
+  readonly code: ApiErrorCode
   readonly retryable: boolean
   readonly statusCode: number
 
   constructor(
-    code: CatalogErrorCode,
+    code: ApiErrorCode,
     message: string,
     options: { cause?: unknown; retryable?: boolean; statusCode?: number } = {},
   ) {

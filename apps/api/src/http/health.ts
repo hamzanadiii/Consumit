@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 
 export type HealthState = {
   catalogConfigured: boolean
+  identityConfigured: boolean
 }
 
 const noLimit = { config: { rateLimit: false } }
@@ -15,11 +16,15 @@ const noLimit = { config: { rateLimit: false } }
  */
 export function registerHealthRoutes(app: FastifyInstance, state: HealthState) {
   const live = async () => ({ status: 'ok' as const })
-  const ready = async () => (
-    state.catalogConfigured
-      ? { dependencies: { catalog: 'ok' as const }, status: 'ok' as const }
-      : { dependencies: { catalog: 'unavailable' as const }, status: 'degraded' as const }
-  )
+  const ready = async () => {
+    const dependencies = {
+      catalog: state.catalogConfigured ? 'ok' as const : 'unavailable' as const,
+      identity: state.identityConfigured ? 'ok' as const : 'unavailable' as const,
+    }
+    return Object.values(dependencies).every((value) => value === 'ok')
+      ? { dependencies, status: 'ok' as const }
+      : { dependencies, status: 'degraded' as const }
+  }
 
   app.get('/health', noLimit, live)
   app.get('/health/live', noLimit, live)

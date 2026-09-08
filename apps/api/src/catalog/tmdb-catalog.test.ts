@@ -58,6 +58,30 @@ function supportingResponse(url: URL) {
 }
 
 describe('TMDB catalog adapter', () => {
+  it.each(['movie', 'series'] as const)('maps %s filters to discovery and isolates cached queries', async (kind) => {
+    const requests: URL[] = []
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname.startsWith('/3/discover/')) {
+        requests.push(url)
+        return json({ page: 2, results: [kind === 'movie' ? movieSummary : seriesSummary], total_pages: 3, total_results: 50 })
+      }
+      return supportingResponse(url)
+    })
+    const catalog = createTmdbCatalog({ fetch: fetchMock, token: 'test-token' })
+    const query = { kind, feed: 'top-rated' as const, genre: 'Drama', page: 2, year: 2024 }
+    expect((await catalog.discover(query)).page).toBe(2)
+    await catalog.discover(query)
+    await catalog.discover({ ...query, year: 2023 })
+    expect(requests).toHaveLength(2)
+    expect(requests[0]?.pathname).toBe(`/3/discover/${kind === 'movie' ? 'movie' : 'tv'}`)
+    expect(Object.fromEntries(requests[0]!.searchParams)).toMatchObject({
+      include_adult: 'false', page: '2', sort_by: 'vote_average.desc', 'vote_count.gte': '200', with_genres: '18',
+      [kind === 'movie' ? 'primary_release_year' : 'first_air_date_year']: '2024',
+    })
+    await expect(catalog.discover({ ...query, genre: 'Unknown genre' })).rejects.toMatchObject({ code: 'CATALOG_INVALID_QUERY' })
+  })
+
   it('normalizes real movie search data and filters adult results', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
@@ -132,6 +156,32 @@ describe('TMDB catalog adapter', () => {
     expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('append_to_response=aggregate_credits%2Crecommendations%2Ccontent_ratings')
   })
 
+  it('treats an empty upstream homepage as no homepage', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/3/movie/38047') {
+        return json({
+          ...movieSummary,
+          credits: { cast: [], crew: [] },
+          genres: [{ id: 18, name: 'Drama' }],
+          homepage: '',
+          id: 38047,
+          recommendations: { page: 1, results: [], total_pages: 0, total_results: 0 },
+          release_dates: { results: [] },
+          runtime: 218,
+          status: 'Released',
+          tagline: '',
+        })
+      }
+      return supportingResponse(url)
+    })
+    const catalog = createTmdbCatalog({ fetch: fetchMock, token: 'test-token' })
+
+    const result = await catalog.title('movie', 38047)
+
+    expect(result.item.kind === 'movie' ? result.item.homepageUrl : null).toBeNull()
+  })
+
   it('normalizes episode data for a season', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))
@@ -163,6 +213,17 @@ describe('TMDB catalog adapter', () => {
       stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg',
       title: 'Winter Is Coming',
     }))
+  })
+
+  it('resolves an IMDb identifier through TMDB find and excludes adult movies', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/3/find/tt0117500') return json({ movie_results: [{ ...movieSummary, id: 77 }, { ...movieSummary, adult: true, id: 78 }] })
+      return supportingResponse(url)
+    })
+    const catalog = createTmdbCatalog({ fetch: fetchMock, token: 'test-token' })
+    await expect(catalog.movieByExternalId('tt0117500')).resolves.toMatchObject({ id: 77, kind: 'movie' })
+    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('external_source=imdb_id')
   })
 
   it('retries throttled requests once', async () => {

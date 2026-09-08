@@ -5,6 +5,7 @@ import type {
   CatalogPage,
   CatalogRef,
   CatalogSeasonResponse,
+  CatalogTitleSummary,
   CatalogTitleResponse,
 } from '@consumit/contracts'
 
@@ -15,6 +16,8 @@ export type CatalogQuery = {
 
 export type DiscoverCatalogQuery = CatalogQuery & {
   feed: CatalogFeed
+  genre?: string | undefined
+  year?: number | undefined
 }
 
 export type SearchCatalogQuery = CatalogQuery & {
@@ -24,6 +27,7 @@ export type SearchCatalogQuery = CatalogQuery & {
 export interface Catalog {
   batch(refs: readonly CatalogRef[]): Promise<CatalogBatch>
   discover(query: DiscoverCatalogQuery): Promise<CatalogPage>
+  movieByExternalId(imdbId: string): Promise<CatalogTitleSummary | null>
   search(query: SearchCatalogQuery): Promise<CatalogPage>
   season(seriesId: number, seasonNumber: number): Promise<CatalogSeasonResponse>
   title(kind: CatalogKind, id: number): Promise<CatalogTitleResponse>

@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { buildApp } from '../app.ts'
 import { createFakeCatalog } from '../catalog/fake-catalog.ts'
+import { createFakeIdentity } from '../identity/fake-identity.ts'
+import { unavailableIdentity } from '../identity/unavailable-identity.ts'
 
 const openApps: Awaited<ReturnType<typeof buildApp>>[] = []
 
@@ -21,22 +23,22 @@ describe('health endpoints', () => {
   })
 
   it('reports degraded readiness when catalog has no adapter', async () => {
-    const app = await buildApp()
+    const app = await buildApp({ identity: unavailableIdentity })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/health/ready' })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ dependencies: { catalog: 'unavailable' }, status: 'degraded' })
+    expect(response.json()).toEqual({ dependencies: { catalog: 'unavailable', identity: 'unavailable' }, status: 'degraded' })
   })
 
   it('reports ready when catalog is configured', async () => {
-    const app = await buildApp({ catalog: createFakeCatalog() })
+    const app = await buildApp({ catalog: createFakeCatalog(), identity: createFakeIdentity() })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/health/ready' })
 
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ dependencies: { catalog: 'ok' }, status: 'ok' })
+    expect(response.json()).toEqual({ dependencies: { catalog: 'ok', identity: 'ok' }, status: 'ok' })
   })
 })

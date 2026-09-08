@@ -9,6 +9,7 @@ export default defineConfig([
     '**/.next/**',
     '**/coverage/**',
     '**/dist/**',
+    '**/generated/**',
     '**/node_modules/**',
     'design/**',
   ]),

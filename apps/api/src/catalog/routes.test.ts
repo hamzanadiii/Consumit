@@ -77,6 +77,7 @@ function fakeCatalog(): Catalog {
   return {
     batch: vi.fn(async () => batchResponse),
     discover: vi.fn(async () => page),
+    movieByExternalId: vi.fn(async () => null),
     search: vi.fn(async () => page),
     season: vi.fn(async () => seasonResponse),
     title: vi.fn(async () => titleResponse),
@@ -90,6 +91,20 @@ afterEach(async () => {
 })
 
 describe('catalog routes', () => {
+  it('validates discovery filters before invoking the adapter', async () => {
+    const catalog = fakeCatalog()
+    const app = await buildApp({ catalog })
+    openApps.push(app)
+    const valid = await app.inject({ method: 'GET', url: '/v1/titles/discover?kind=movie&feed=popular&genre=Drama&year=2024&page=2' })
+    expect(valid.statusCode).toBe(200)
+    expect(catalog.discover).toHaveBeenCalledWith({ kind: 'movie', feed: 'popular', genre: 'Drama', year: 2024, page: 2 })
+    vi.mocked(catalog.discover).mockClear()
+    for (const query of ['kind=all&genre=Drama', 'kind=movie&feed=now-playing&year=2024', 'kind=series&feed=popular&year=no', 'kind=movie&feed=popular&page=501']) {
+      expect((await app.inject({ method: 'GET', url: `/v1/titles/discover?${query}` })).statusCode).toBe(400)
+    }
+    expect(catalog.discover).not.toHaveBeenCalled()
+  })
+
   it('exposes discover, search, batch, detail, and season interfaces', async () => {
     const catalog = fakeCatalog()
     const app = await buildApp({ catalog })
@@ -140,6 +155,7 @@ describe('catalog routes', () => {
       error: {
         code: 'CATALOG_NOT_CONFIGURED',
         message: 'The catalog is not configured on this server.',
+        requestId: expect.any(String),
         retryable: false,
       },
     })
@@ -154,7 +170,7 @@ describe('catalog routes', () => {
 
     expect(response.statusCode).toBe(500)
     expect(response.json()).toEqual({
-      error: { code: 'INTERNAL', message: 'Internal server error.', retryable: false },
+      error: { code: 'INTERNAL', message: 'Internal server error.', requestId: expect.any(String), retryable: false },
     })
   })
 })

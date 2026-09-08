@@ -17,7 +17,7 @@ describe('global error translation', () => {
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({
-      error: { code: 'NOT_FOUND', message: 'Route not found.', retryable: false },
+      error: { code: 'NOT_FOUND', message: 'Route not found.', requestId: expect.any(String), retryable: false },
     })
   })
 
@@ -32,7 +32,7 @@ describe('global error translation', () => {
 
     expect(response.statusCode).toBe(429)
     expect(response.json()).toEqual({
-      error: { code: 'RATE_LIMITED', message: expect.any(String), retryable: true },
+      error: { code: 'RATE_LIMITED', message: expect.any(String), requestId: expect.any(String), retryable: true },
     })
   })
 })

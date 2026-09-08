@@ -36,7 +36,7 @@ const nonNegativeNumber = z.number().nonnegative().catch(0)
 const nonNegativeInteger = z.number().int().nonnegative().catch(0)
 
 const tmdbMovieSchema = z.object({
-  adult: z.boolean().catch(false),
+  adult: z.boolean(),
   backdrop_path: nullableString,
   genre_ids: z.array(z.number().int()).catch([]),
   id: z.number().int().positive(),
@@ -51,7 +51,7 @@ const tmdbMovieSchema = z.object({
 })
 
 const tmdbSeriesSchema = z.object({
-  adult: z.boolean().catch(false),
+  adult: z.boolean(),
   backdrop_path: nullableString,
   first_air_date: nullableString,
   genre_ids: z.array(z.number().int()).catch([]),
@@ -71,6 +71,8 @@ const tmdbPageSchema = z.object({
   total_pages: nonNegativeInteger,
   total_results: nonNegativeInteger,
 })
+
+const tmdbFindSchema = z.object({ movie_results: z.array(z.unknown()) })
 
 const tmdbImageConfigurationSchema = z.object({
   images: z.object({
@@ -291,6 +293,7 @@ export function createTmdbCatalog({
       if (value !== undefined) url.searchParams.set(key, String(value))
     }
 
+    const deadline = Date.now() + requestTimeoutMs
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let response: Response
       try {
@@ -299,10 +302,10 @@ export function createTmdbCatalog({
             accept: 'application/json',
             authorization: `Bearer ${token}`,
           },
-          signal: AbortSignal.timeout(requestTimeoutMs),
+          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
         })
       } catch (error) {
-        if (attempt === 0) {
+        if (attempt === 0 && deadline - Date.now() > 250) {
           await sleep(250)
           continue
         }
@@ -333,12 +336,16 @@ export function createTmdbCatalog({
 
       const retryable = response.status === 429 || response.status >= 500
       if (retryable && attempt === 0) {
-        const retryAfterSeconds = Number(response.headers.get('retry-after'))
+        const retryAfter = response.headers.get('retry-after')
+        const retryAfterSeconds = Number(retryAfter)
+        const retryAfterDate = retryAfter ? Date.parse(retryAfter) : Number.NaN
         const delay = Number.isFinite(retryAfterSeconds)
-          ? Math.min(Math.max(retryAfterSeconds * 1_000, 0), 2_000)
-          : 250
-        await sleep(delay)
-        continue
+          ? Math.max(retryAfterSeconds * 1_000, 0)
+          : Number.isFinite(retryAfterDate) ? Math.max(retryAfterDate - Date.now(), 0) : 250
+        if (delay < deadline - Date.now()) {
+          await sleep(delay)
+          continue
+        }
       }
 
       throw new CatalogError(
@@ -475,6 +482,27 @@ export function createTmdbCatalog({
   }
 
   async function discoverOne(kind: CatalogKind, query: DiscoverCatalogQuery) {
+    if (query.genre || query.year) {
+      if (query.feed !== 'popular' && query.feed !== 'top-rated') {
+        throw new CatalogError('CATALOG_INVALID_QUERY', 'Filters require popular or top-rated sorting.', { statusCode: 400 })
+      }
+      const genres = query.genre ? await genreMap(kind) : null
+      const genreId = genres ? [...genres.value].find(([, name]) => name === query.genre)?.[0] : undefined
+      if (query.genre && !genreId) {
+        throw new CatalogError('CATALOG_INVALID_QUERY', 'Choose a genre from the catalog.', { statusCode: 400 })
+      }
+      const raw = await requestJson(`/discover/${kind === 'movie' ? 'movie' : 'tv'}`, {
+        include_adult: false,
+        language,
+        page: query.page,
+        sort_by: query.feed === 'top-rated' ? 'vote_average.desc' : 'popularity.desc',
+        'vote_count.gte': query.feed === 'top-rated' ? 200 : undefined,
+        with_genres: genreId,
+        primary_release_year: kind === 'movie' ? query.year : undefined,
+        first_air_date_year: kind === 'series' ? query.year : undefined,
+      })
+      return normalizePage(kind, raw)
+    }
     const raw = await requestJson(discoverPath(kind, query.feed), {
       language,
       page: query.page,
@@ -536,7 +564,9 @@ export function createTmdbCatalog({
         .slice(0, 8)
         .map((credit) => person(credit, images.value)),
       genreNames: value.genres.map((genre) => genre.name),
-      homepageUrl: value.homepage,
+      // TMDB sends "" when no homepage exists; the contract only accepts a
+      // real URL or null, so blank strings normalize to null here.
+      homepageUrl: value.homepage || null,
       id: value.id,
       kind: 'movie',
       languages: value.spoken_languages.map((item) => item.english_name),
@@ -592,7 +622,9 @@ export function createTmdbCatalog({
       creators: value.created_by.slice(0, 8).map((credit) => person(credit, images.value, { role: 'Creator' })),
       episodeRuntimeMinutes: value.episode_run_time[0] ?? null,
       genreNames: value.genres.map((genre) => genre.name),
-      homepageUrl: value.homepage,
+      // TMDB sends "" when no homepage exists; the contract only accepts a
+      // real URL or null, so blank strings normalize to null here.
+      homepageUrl: value.homepage || null,
       id: value.id,
       kind: 'series',
       languages: value.spoken_languages.map((item) => item.english_name),
@@ -667,7 +699,7 @@ export function createTmdbCatalog({
     },
 
     async discover(query: DiscoverCatalogQuery) {
-      const key = `tmdb:discover:${query.kind}:${query.feed}:${query.page}:${language}:${region}`
+      const key = `tmdb:discover:${query.kind}:${query.feed}:${query.page}:${language}:${region}:${encodeURIComponent(query.genre ?? '')}:${query.year ?? ''}`
       const cached = await cache.get(key, cachePolicies.discover, async () => {
         if (query.kind !== 'all') return discoverOne(query.kind, query)
         if (query.feed === 'now-playing' || query.feed === 'on-air') {
@@ -693,6 +725,25 @@ export function createTmdbCatalog({
       })
     },
 
+    async movieByExternalId(imdbId: string) {
+      const cached = await cache.get(`tmdb:external:imdb:${imdbId}:${language}:${region}`, cachePolicies.detail, async () => {
+        const parsed = tmdbFindSchema.safeParse(await requestJson(`/find/${encodeURIComponent(imdbId)}`, {
+          external_source: 'imdb_id',
+          language,
+        }))
+        if (!parsed.success) {
+          throw new CatalogError('CATALOG_UNAVAILABLE', 'TMDB returned invalid external-ID data.', {
+            cause: parsed.error,
+            retryable: true,
+            statusCode: 503,
+          })
+        }
+        const normalized = await Promise.all(parsed.data.movie_results.map((item) => normalizeSummary('movie', item)))
+        return normalized.find((item): item is CatalogTitleSummary => item !== null) ?? null
+      })
+      return cached.value
+    },
+
     async search(query: SearchCatalogQuery) {
       const normalizedQuery = query.query.trim().slice(0, 100)
       const key = `tmdb:search:${query.kind}:${query.page}:${language}:${normalizedQuery.toLowerCase()}`
@@ -703,7 +754,7 @@ export function createTmdbCatalog({
           language,
           page: query.page,
           query: normalizedQuery,
-          region: query.kind === 'movie' ? region : undefined,
+          region,
         })
         return query.kind === 'all'
           ? normalizeMixedPage(raw)
