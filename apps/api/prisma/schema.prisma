@@ -1,0 +1,327 @@
+// Tables arrive with their slice, starting with the identity migration
+// (Touch 2.3). No model lands here without a reviewed migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Identity slice (Phase 3). Emails are stored normalized (lowercase, trimmed)
+// by the module; the unique constraint enforces one account per address.
+model Member {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  emailVerifiedAt DateTime?
+  authVersion     Int          @default(1)
+  status          MemberStatus @default(ACTIVE)
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  credential      Credential?
+  profile         Profile?
+  usernameAliases UsernameAlias[]
+  watchedTitles   WatchedTitle[]
+  diaryEntries    DiaryEntry[]
+  ratings         Rating[]
+  reviews         Review[]
+  savedTitles     SavedTitle[]
+  favorites       Favorite[]
+  progress        PlaybackProgress[]
+  lists           MemberList[]
+  importBatches   ImportBatch[]
+}
+
+enum MemberStatus {
+  ACTIVE
+  DELETED
+}
+
+model Credential {
+  memberId     String   @id
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}
+
+model Profile {
+  memberId          String    @id
+  member            Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  username          String    @unique
+  displayName       String?
+  bio               String?
+  location          String?
+  usernameChangedAt DateTime?
+  avatarStyle       String    @default("dusk")
+  avatarUrl         String?
+  bannerUrl         String?
+  displayNameOrigin DataOrigin @default(NATIVE)
+  bioOrigin         DataOrigin @default(NATIVE)
+  locationOrigin    DataOrigin @default(NATIVE)
+  // Private by default (OPEN-QUESTIONS.md). Per-surface visibility arrives
+  // with the social slice; nothing reads this as public until then.
+  visibility  String  @default("private")
+}
+
+model UsernameAlias {
+  username  String   @id
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+}
+
+enum CatalogKind {
+  MOVIE
+  SERIES
+}
+
+enum DataOrigin {
+  NATIVE
+  LETTERBOXD
+}
+
+enum ImportBatchStatus {
+  UPLOADED
+  PROCESSING
+  NEEDS_REVIEW
+  READY
+  CONFIRMED
+  FAILED
+}
+
+enum ImportMatchStatus {
+  EXACT
+  CONFIDENT
+  NEEDS_REVIEW
+  UNMATCHED
+  SKIPPED
+}
+
+enum ImportRowKind {
+  PROFILE
+  WATCHED
+  DIARY
+  RATING
+  REVIEW
+  WATCHLIST
+  FAVORITE
+  LIST_ITEM
+}
+
+model WatchedTitle {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model DiaryEntry {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  watchedOn     DateTime    @db.Date
+  rewatch       Boolean     @default(false)
+  tags          String[]    @default([])
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, origin, sourceKey])
+  @@index([memberId, watchedOn])
+}
+
+model Rating {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  value         Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  body          String
+  reviewedOn    DateTime?   @db.Date
+  tags          String[]    @default([])
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, origin, sourceKey])
+  @@index([memberId, reviewedOn])
+}
+
+model SavedTitle {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+// Resume position by member and title/episode. Never keyed by provider or
+// source: switching sources must preserve progress. Season and episode are
+// zero for movies so the uniqueness constraint stays NULL-safe.
+model PlaybackProgress {
+  id              String      @id @default(cuid())
+  memberId        String
+  member          Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind     CatalogKind @default(MOVIE)
+  tmdbId          Int
+  season          Int         @default(0)
+  episode         Int         @default(0)
+  positionSeconds Int         @default(0)
+  durationSeconds Int?
+  completed       Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId, season, episode])
+  @@index([memberId, updatedAt(sort: Desc)])
+}
+
+model Favorite {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  position      Int
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, position])
+  @@unique([memberId, catalogKind, tmdbId])
+}
+
+model MemberList {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String      @unique
+  description   String?
+  visibility    String      @default("private")
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         ListItem[]
+
+  @@unique([memberId, origin, sourceKey])
+  @@index([memberId])
+}
+
+model ListItem {
+  id          String      @id @default(cuid())
+  listId      String
+  list        MemberList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  position    Int
+  catalogKind CatalogKind @default(MOVIE)
+  tmdbId      Int
+  note        String?
+  origin      DataOrigin  @default(NATIVE)
+  sourceKey   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([listId, position])
+  @@unique([listId, origin, sourceKey])
+}
+
+model ImportBatch {
+  id             String            @id @default(cuid())
+  memberId       String
+  member         Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status         ImportBatchStatus @default(UPLOADED)
+  archiveSha256  String
+  sourceFilename String
+  profileDraft   Json?
+  totalCount     Int               @default(0)
+  exactCount     Int               @default(0)
+  confidentCount Int               @default(0)
+  reviewCount    Int               @default(0)
+  unmatchedCount Int               @default(0)
+  skippedCount   Int               @default(0)
+  failedReason   String?
+  workerId       String?
+  claimedAt      DateTime?
+  attempts       Int               @default(0)
+  confirmedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  records        ImportStagedRecord[]
+
+  @@index([memberId, createdAt])
+  @@index([status, claimedAt])
+}
+
+model ImportStagedRecord {
+  id              String            @id @default(cuid())
+  importBatchId   String
+  importBatch     ImportBatch       @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  rowKind         ImportRowKind
+  sourceKey       String
+  sourceFile      String
+  rowNumber       Int
+  payload         Json
+  title           String?
+  normalizedTitle String?
+  year            Int?
+  tmdbId          Int?
+  imdbId          String?
+  matchStatus     ImportMatchStatus @default(UNMATCHED)
+  selectedTmdbId  Int?
+  candidates      Json?
+  matchedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([importBatchId, rowKind, sourceKey])
+  @@index([importBatchId, matchStatus])
+}
