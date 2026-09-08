@@ -1,0 +1,170 @@
+# Development overlay: live-reload application servers.
+#
+# The base compose.yaml bakes source code into production images, so edits are
+# invisible until the next rebuild. This overlay instead builds the api, web,
+# and worker services from the `source` stage (repository + Linux dependencies)
+# and runs their watch-mode dev servers. File changes are pushed into the
+# running containers with `develop.watch` sync — plain bind mounts are
+# deliberately not used because Windows bind mounts do not reliably emit the
+# file events the dev servers watch for. Every saved change reaches
+# http://localhost:8080 within seconds. Postgres, Valkey, and the migrate job
+# are unchanged.
+#
+# Usage:
+#   bun run docker:dev
+#   # ... edit code, refresh the browser ...
+#   docker compose -f compose.yaml -f compose.dev.yaml down
+#
+# Back to production-like images:
+#   docker compose up --build
+#
+# Notes:
+# - Dependency or Dockerfile changes (package.json, bun.lock, Dockerfile,
+#   dev-entrypoint.sh) trigger an automatic image rebuild via watch rules.
+# - The gateway serves a dev nginx config with websocket support so Next.js
+#   hot updates work through http://localhost:8080.
+
+services:
+  # Host-run dev servers (`bun run dev`) reach the data stores through these
+  # published ports. Containerized services keep using the internal network.
+  # Postgres sits on 5434 (not 5432) because this machine already runs a
+  # native PostgreSQL on 5432.
+  postgres:
+    ports:
+      - "5434:5432"
+
+  valkey:
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      target: source
+    image: consumit-dev-source
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/app/infra/docker/dev-entrypoint.sh"]
+    command: ["bun", "--filter", "@consumit/api", "dev"]
+    environment:
+      GENERATE_PRISMA: "1"
+    ports:
+      - "3001:3001"
+    develop:
+      watch:
+        - path: ./apps/api
+          target: /app/apps/api
+          action: sync
+          ignore:
+            - node_modules/
+            - generated/
+        - path: ./packages/contracts
+          target: /app/packages/contracts
+          action: sync
+          ignore:
+            - node_modules/
+        - path: ./package.json
+          action: rebuild
+        - path: ./bun.lock
+          action: rebuild
+        - path: ./apps/api/package.json
+          action: rebuild
+        - path: ./packages/contracts/package.json
+          action: rebuild
+        - path: ./Dockerfile
+          action: rebuild
+        - path: ./infra/docker/dev-entrypoint.sh
+          action: rebuild
+
+  letterboxd-worker:
+    build:
+      context: .
+      target: source
+    image: consumit-dev-source
+    working_dir: /app/apps/api
+    entrypoint: ["/bin/sh", "/app/infra/docker/dev-entrypoint.sh"]
+    # Absolute script path: the entrypoint runs from /app, so a relative
+    # path would resolve against the wrong directory.
+    command: ["bun", "--watch", "/app/apps/api/src/import-worker.ts"]
+    environment:
+      GENERATE_PRISMA: "1"
+    develop:
+      watch:
+        - path: ./apps/api
+          target: /app/apps/api
+          action: sync
+          ignore:
+            - node_modules/
+            - generated/
+        - path: ./packages/contracts
+          target: /app/packages/contracts
+          action: sync
+          ignore:
+            - node_modules/
+        - path: ./package.json
+          action: rebuild
+        - path: ./bun.lock
+          action: rebuild
+        - path: ./apps/api/package.json
+          action: rebuild
+        - path: ./packages/contracts/package.json
+          action: rebuild
+        - path: ./Dockerfile
+          action: rebuild
+        - path: ./infra/docker/dev-entrypoint.sh
+          action: rebuild
+
+  web:
+    build:
+      context: .
+      target: source
+    image: consumit-dev-source
+    working_dir: /app
+    entrypoint: ["/bin/sh", "/app/infra/docker/dev-entrypoint.sh"]
+    command: ["bun", "--filter", "@consumit/web", "dev"]
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:8080}
+    ports:
+      - "3000:3000"
+    develop:
+      watch:
+        - path: ./apps/web
+          target: /app/apps/web
+          action: sync
+          ignore:
+            - node_modules/
+            - .next/
+        - path: ./packages/ui
+          target: /app/packages/ui
+          action: sync
+          ignore:
+            - node_modules/
+        - path: ./packages/contracts
+          target: /app/packages/contracts
+          action: sync
+          ignore:
+            - node_modules/
+        - path: ./package.json
+          action: rebuild
+        - path: ./bun.lock
+          action: rebuild
+        - path: ./apps/web/package.json
+          action: rebuild
+        - path: ./packages/ui/package.json
+          action: rebuild
+        - path: ./packages/contracts/package.json
+          action: rebuild
+        - path: ./Dockerfile
+          action: rebuild
+        - path: ./infra/docker/dev-entrypoint.sh
+          action: rebuild
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:3000/'); if (!response.ok) process.exit(1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+  gateway:
+    volumes:
+      - ./infra/nginx/consumit.dev.conf:/etc/nginx/conf.d/default.conf:ro

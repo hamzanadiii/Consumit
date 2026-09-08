@@ -1,0 +1,173 @@
+name: consumit
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: consumit
+      POSTGRES_PASSWORD: ${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}
+      POSTGRES_USER: consumit
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U consumit -d consumit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    volumes:
+      - consumit-postgres:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:9.1.1-alpine
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    volumes:
+      - consumit-valkey:/data
+
+  migrate:
+    build:
+      context: .
+      target: api-migrate
+    environment:
+      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: api
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./apps/api/.env
+        required: false
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+      DATABASE_SSL_MODE: disable
+      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
+      PORT: 3001
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      VALKEY_URL: valkey://valkey:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:3001/health/ready'); if (!response.ok) process.exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  letterboxd-worker:
+    build:
+      context: .
+      target: api
+    command: ["bun", "worker.js"]
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./apps/api/.env
+        required: false
+    environment:
+      DATABASE_SSL_MODE: disable
+      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:8080}
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./apps/web/.env
+        required: false
+    environment:
+      CONSUMIT_API_URL: http://api:3001
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      target: gateway
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "${CONSUMIT_PORT:-8080}:80"
+    restart: unless-stopped
+
+  postgres-test:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: consumit_test
+      POSTGRES_PASSWORD: consumit
+      POSTGRES_USER: consumit
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U consumit -d consumit_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  valkey-test:
+    image: valkey/valkey:9.1.1-alpine
+    profiles: ["test"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6380:6379"
+    tmpfs:
+      - /data
+
+volumes:
+  consumit-postgres:
+  consumit-valkey:

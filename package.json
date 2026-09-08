@@ -8,6 +8,10 @@
   ],
   "scripts": {
     "dev": "bun run --parallel --workspaces --if-present dev",
+    "docker:build": "docker compose build",
+    "docker:down": "docker compose down",
+    "docker:up": "docker compose up --build",
+    "docker:dev": "docker compose -f compose.yaml -f compose.dev.yaml up --watch",
     "build": "bun run --sequential --workspaces --if-present build",
     "lint": "bun run --sequential --workspaces --if-present lint",
     "typecheck": "bun run --sequential --workspaces --if-present typecheck",

@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
+  outputFileTracingRoot: `${process.cwd()}/../..`,
   images: {
     remotePatterns: [
       {
@@ -15,7 +17,17 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    if (process.env.NODE_ENV !== 'development') return []
+    const api = (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
+    return [{ destination: `${api}/v1/:path*`, source: '/v1/:path*' }]
+  },
   transpilePackages: ['@consumit/contracts', '@consumit/ui'],
+  // Development only: accept HMR and dev-asset requests when browsing
+  // through the Docker gateway origin instead of the dev server directly.
+  ...(process.env.NODE_ENV !== 'production'
+    ? { allowedDevOrigins: ['localhost:8080', '127.0.0.1:8080'] }
+    : {}),
 }
 
 export default nextConfig

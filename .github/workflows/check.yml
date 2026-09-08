@@ -1,0 +1,47 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: consumit_test
+          POSTGRES_PASSWORD: consumit
+          POSTGRES_USER: consumit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U consumit -d consumit_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:9.1.1-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      AUTH_CODE_PEPPER: ci-auth-code-pepper-at-least-32-characters
+      DATABASE_SSL_MODE: disable
+      DATABASE_URL: postgresql://consumit:consumit@127.0.0.1:5432/consumit_test?schema=public
+      VALKEY_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun --filter @consumit/api db:migrate:deploy
+      - run: bun run check
+      - run: bun --filter @consumit/api test:integration

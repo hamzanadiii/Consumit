@@ -35,6 +35,34 @@ bun run dev
 
 Run the complete local quality gate with `bun run check`.
 
+## Docker stack
+
+The complete application runs behind one local origin with Docker Compose. Compose automatically loads the ignored `apps/api/.env` and `apps/web/.env` files when they exist, while keeping container-only database and Valkey addresses internal:
+
+```bash
+docker compose up --build
+```
+
+Configure the API secrets in `apps/api/.env`. You may also copy `.env.docker.example` to a root `.env` for Docker-specific overrides such as the public port, origin, or local database password. Then open `http://localhost:8080`. Nginx sends `/v1/*` directly to Fastify and all other requests to Next.js; Postgres and Valkey stay on the private Compose network.
+
+The `migrate` container applies reviewed Prisma migrations before the API becomes healthy. The API itself never runs migrations during startup. Integration-only stores remain opt-in:
+
+```bash
+docker compose --profile test up postgres-test valkey-test
+```
+
+Build individual Consumit images with `docker build --target api`, `--target web`, or `--target gateway` when a full Compose deployment is not needed.
+
+### Live updates in Docker
+
+Production images bake the source in at build time, so edits stay invisible until the next `docker compose up --build`. For development, run the dev overlay instead: it builds the `api`, `web`, and `letterboxd-worker` services from source and runs their watch-mode dev servers, syncing every saved change into the running containers (bind mounts alone are not used because Windows mounts do not reliably emit the file events the dev servers watch for). Edits reach `http://localhost:8080` within seconds, including Next.js hot updates through the gateway. Postgres, Valkey, migrations, and the gateway stay exactly as in production:
+
+```bash
+bun run docker:dev
+```
+
+Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and production stacks share the same Postgres and Valkey volumes, so run only one at a time. Return to production-like images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart.
+
 ## Project guide
 
 | Document | Purpose |

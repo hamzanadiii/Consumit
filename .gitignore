@@ -2,9 +2,11 @@
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # Dependencies and generated output
 node_modules/
+apps/api/generated/
 .next/
 dist/
 build/
