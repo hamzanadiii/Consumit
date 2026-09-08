@@ -129,40 +129,6 @@ export function AuthField({
   )
 }
 
-export type SocialAuthButtonProps = Omit<ComponentProps<'button'>, 'children'> & {
-  label: string
-  provider: string
-  tone?: 'dark' | 'light' | undefined
-}
-
-export function SocialAuthButton({
-  className,
-  label,
-  provider,
-  tone = 'dark',
-  type = 'button',
-  ...props
-}: SocialAuthButtonProps) {
-  return (
-    <button
-      aria-label={`${label} using ${provider}`}
-      className={cn(
-        'flex h-12 w-full items-center gap-4 rounded-control border px-4 text-left text-sm font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none',
-        tone === 'light'
-          ? 'border-ink bg-ink text-canvas hover:bg-white'
-          : 'border-control-outline bg-surface text-ink hover:bg-surface-raised',
-        className,
-      )}
-      data-consumit-social-auth-button
-      type={type}
-      {...props}
-    >
-      <span aria-hidden="true" className={cn('size-4 rounded-full', provider.toLowerCase() === 'google' ? 'bg-orange' : tone === 'light' ? 'bg-canvas' : 'bg-ink')} />
-      <span>{label}</span>
-    </button>
-  )
-}
-
 export type TrustNoteProps = Omit<ComponentProps<'aside'>, 'children' | 'title'> & {
   children: ReactNode
   title: string

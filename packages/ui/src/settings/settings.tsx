@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Upload } from 'lucide-react'
 
-import { Avatar } from '../identity/identity'
+import { Avatar, type AvatarTreatment } from '../identity/identity'
 import { cn } from '../lib/cn'
 
 export type SettingsRailItem = {
@@ -12,7 +12,8 @@ export type SettingsRailItem = {
 export type SettingsRailProps = Omit<ComponentProps<'aside'>, 'children'> & {
   activeHref?: string | undefined
   avatarSrc?: string | undefined
-  handle?: string | undefined
+  avatarTreatment?: AvatarTreatment | undefined
+  username?: string | undefined
   items: readonly SettingsRailItem[]
   memberName?: string | undefined
 }
@@ -20,8 +21,9 @@ export type SettingsRailProps = Omit<ComponentProps<'aside'>, 'children'> & {
 export function SettingsRail({
   activeHref,
   avatarSrc,
+  avatarTreatment = 'dusk',
   className,
-  handle,
+  username,
   items,
   memberName,
   ...props
@@ -30,10 +32,10 @@ export function SettingsRail({
     <aside className={cn('rounded-card border border-border bg-surface p-4', className)} data-consumit-settings-rail {...props}>
       {memberName ? (
         <div className="flex items-center gap-3 border-b border-border pb-4">
-          <Avatar name={memberName} size="md" src={avatarSrc} />
+          <Avatar name={memberName} size="md" src={avatarSrc} treatment={avatarTreatment} />
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-ink">{memberName}</p>
-            {handle ? <p className="mt-0.5 truncate text-xs text-muted">{handle}</p> : null}
+            {username ? <p className="mt-0.5 truncate text-xs text-muted">{username}</p> : null}
           </div>
         </div>
       ) : null}

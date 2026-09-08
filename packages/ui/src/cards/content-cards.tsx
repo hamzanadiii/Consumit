@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, ElementType, ReactNode } from 'react'
 import { Bookmark, Check } from 'lucide-react'
 
 import {
@@ -17,11 +17,13 @@ import { Badge, RatingDisplay } from '../signals/signals'
 export type ContentCardState = 'default' | 'saved' | 'watched'
 
 export type ContentCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  action?: ReactNode | undefined
   alt?: string | undefined
   artworkSrc?: string | undefined
   badge?: ReactNode | undefined
   friends?: readonly AvatarGroupItem[] | undefined
   href?: string | undefined
+  linkComponent?: ElementType | undefined
   meta?: ReactNode | undefined
   signal?: ReactNode | undefined
   state?: ContentCardState | undefined
@@ -29,12 +31,14 @@ export type ContentCardProps = Omit<ComponentProps<'article'>, 'children'> & {
 }
 
 export function ContentCard({
+  action,
   alt,
   artworkSrc,
   badge,
   className,
   friends,
   href,
+  linkComponent: LinkComponent = 'a',
   meta,
   signal,
   state = 'default',
@@ -43,25 +47,36 @@ export function ContentCard({
 }: ContentCardProps) {
   return (
     <article
-      className={cn('group min-w-0', className)}
+      className={cn('group relative min-w-0', className)}
       data-consumit-content-card
       data-state={state}
       {...props}
     >
+      {href ? (
+        <LinkComponent
+          aria-hidden="true"
+          className="absolute inset-0 outline-none"
+          href={href}
+          tabIndex={-1}
+        />
+      ) : null}
       <ArtworkFrame alt={alt ?? `${title} poster`} src={artworkSrc}>
         {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
-        {state === 'watched' ? (
-          <Badge className="absolute top-3 right-3" tone="lime">
-            <Check aria-hidden="true" className="mr-1 size-3" /> Watched
-          </Badge>
-        ) : null}
-        {state === 'saved' ? (
-          <span
-            className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-canvas/85 text-orange"
-          >
-            <Bookmark aria-hidden="true" className="size-4 fill-current" />
-            <span className="sr-only">Saved</span>
-          </span>
+        {state === 'watched' || state === 'saved' || action ? (
+          <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+            {state === 'watched' ? (
+              <Badge tone="lime">
+                <Check aria-hidden="true" className="mr-1 size-3" /> Watched
+              </Badge>
+            ) : null}
+            {state === 'saved' && !action ? (
+              <span className="grid size-8 place-items-center rounded-full bg-canvas/85 text-orange">
+                <Bookmark aria-hidden="true" className="size-4 fill-current" />
+                <span className="sr-only">Saved</span>
+              </span>
+            ) : null}
+            {action}
+          </div>
         ) : null}
         {friends && friends.length > 0 ? (
           <AvatarGroup
@@ -74,12 +89,12 @@ export function ContentCard({
       </ArtworkFrame>
       <div className="mt-3 min-w-0">
         {href ? (
-          <a
-            className="inline-flex min-h-11 items-center font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-            href={href}
-          >
+            <LinkComponent
+              className="mt-1 flex min-h-11 items-center font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+              href={href}
+            >
             {title}
-          </a>
+          </LinkComponent>
         ) : (
           <h3 className="font-interface text-sm font-bold text-ink">{title}</h3>
         )}
@@ -146,21 +161,25 @@ export function ContinueCard({
 }
 
 export type TrendingCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  action?: ReactNode | undefined
   alt?: string | undefined
   artworkSrc?: string | undefined
   completionProof?: string | undefined
   href?: string | undefined
+  linkComponent?: ElementType | undefined
   memberScore?: number | undefined
   rank: number
   title: string
 }
 
 export function TrendingCard({
+  action,
   alt,
   artworkSrc,
   className,
   completionProof,
   href,
+  linkComponent: LinkComponent = 'a',
   memberScore,
   rank,
   title,
@@ -172,6 +191,14 @@ export function TrendingCard({
       data-consumit-trending-card
       {...props}
     >
+      {href ? (
+        <LinkComponent
+          aria-hidden="true"
+          className="absolute inset-0 outline-none"
+          href={href}
+          tabIndex={-1}
+        />
+      ) : null}
       <span className="sr-only">Rank {rank}</span>
       <div
         className="relative min-w-0 pl-10 sm:pl-12"
@@ -179,14 +206,14 @@ export function TrendingCard({
       >
         <span
           aria-hidden="true"
-          className="absolute top-1/2 left-2 -translate-y-1/2 font-display text-[6.25rem] leading-[0.76] text-surface-raised"
+          className="absolute top-1/2 left-2 -translate-y-1/2 font-display text-[6.25rem] leading-[0.76] text-ink/15"
           data-consumit-trending-rank
         >
           {rank}
         </span>
         <ArtworkFrame
           alt={alt ?? `${title} poster`}
-          className="relative z-10"
+          className="relative"
           src={artworkSrc}
         >
           {memberScore === undefined ? null : (
@@ -194,16 +221,17 @@ export function TrendingCard({
               {memberScore.toFixed(1)} member
             </Badge>
           )}
+          {action ? <div className="absolute top-3 right-3 z-10">{action}</div> : null}
         </ArtworkFrame>
       </div>
       <div className="min-w-0 pl-10 sm:pl-12">
         {href ? (
-          <a
+          <LinkComponent
             className="mt-1 inline-flex min-h-11 items-center text-sm font-bold text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             href={href}
           >
             {title}
-          </a>
+          </LinkComponent>
         ) : (
           <h3 className="mt-3 text-sm font-bold text-ink">{title}</h3>
         )}
@@ -218,7 +246,8 @@ export type CuratedListCardProps = Omit<ComponentProps<'article'>, 'children'> &
   curator: string
   curatorAvatarSrc?: string | undefined
   href?: string | undefined
-  saves: string
+  meta?: string | undefined
+  saves?: string | undefined
   title: string
 }
 
@@ -228,6 +257,7 @@ export function CuratedListCard({
   curator,
   curatorAvatarSrc,
   href,
+  meta,
   saves,
   title,
   ...props
@@ -235,12 +265,20 @@ export function CuratedListCard({
   return (
     <article
       className={cn(
-        'group overflow-hidden rounded-card border border-border bg-surface p-4',
+        'group relative overflow-hidden rounded-card border border-border bg-surface p-4',
         className,
       )}
       data-consumit-curated-list-card
       {...props}
     >
+      {href ? (
+        <a
+          aria-hidden="true"
+          className="absolute inset-0 outline-none"
+          href={href}
+          tabIndex={-1}
+        />
+      ) : null}
       <div className="grid grid-cols-4 gap-1.5 overflow-hidden rounded-control">
         {artworkSources.slice(0, 4).map((src, index) => (
           <div className="aspect-[2/3] overflow-hidden" key={`${src ?? 'missing'}-${index}`}>
@@ -274,7 +312,7 @@ export function CuratedListCard({
               {title}
             </h3>
           )}
-          <p className="mt-2 text-xs text-muted">{saves} saves</p>
+          {meta || saves ? <p className="mt-2 text-xs text-muted">{meta ?? `${saves} saves`}</p> : null}
         </div>
         <Avatar name={curator} size="sm" src={curatorAvatarSrc} />
       </div>
@@ -284,4 +322,82 @@ export function CuratedListCard({
 
 export function ContentRating({ value }: { value: number }) {
   return <RatingDisplay value={value} />
+}
+
+export type WatchCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  artworkSrc?: string | undefined
+  bookmark?: ReactNode | undefined
+  href: string
+  linkComponent?: ElementType | undefined
+  meta?: ReactNode | undefined
+  rating?: number | null | undefined
+  title: string
+  titleHref?: string | undefined
+}
+
+export function WatchCard({
+  artworkSrc,
+  bookmark,
+  className,
+  href,
+  linkComponent: LinkComponent = 'a',
+  meta,
+  rating,
+  title,
+  titleHref = href,
+  ...props
+}: WatchCardProps) {
+  return (
+    <article
+      className={cn('group relative min-w-0', className)}
+      data-consumit-watch-card
+      {...props}
+    >
+      <ArtworkFrame alt={`${title} poster`} src={artworkSrc}>
+        {titleHref ? (
+          <LinkComponent
+            aria-hidden="true"
+            className="absolute inset-0 outline-none"
+            href={titleHref}
+            tabIndex={-1}
+          />
+        ) : null}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-canvas/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+        />
+        {bookmark ? (
+          <div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+            {bookmark}
+          </div>
+        ) : null}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,transparent_0%,rgba(9,9,11,0.72)_55%,rgba(9,9,11,0.94)_100%)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+        />
+        <div className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-[opacity,transform] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 motion-reduce:transition-none">
+          {titleHref ? (
+            <LinkComponent
+              className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+              href={titleHref}
+            >
+              {title}
+            </LinkComponent>
+          ) : (
+            <h3 className="font-interface text-sm font-bold text-ink">{title}</h3>
+          )}
+          <p className="mt-1 flex items-center gap-2 text-xs text-muted">
+            {meta ? <span>{meta}</span> : null}
+            {rating === undefined || rating === null ? null : (
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true" className="text-orange">★</span>
+                <span className="sr-only">Rated {rating.toFixed(1)} out of 10.</span>
+                <span aria-hidden="true">{rating.toFixed(1)}</span>
+              </span>
+            )}
+          </p>
+        </div>
+      </ArtworkFrame>
+    </article>
+  )
 }

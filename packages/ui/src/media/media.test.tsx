@@ -21,8 +21,15 @@ describe('media components', () => {
     ).toBeInTheDocument()
   })
 
+  it('keeps poster actions clickable above the stretched destination', () => {
+    render(<PosterCard action={<button type="button">Save Northbound</button>} href="/titles/northbound" title="Northbound" />)
+
+    expect(screen.getByRole('button', { name: 'Save Northbound' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Northbound' })).toHaveAttribute('href', '/titles/northbound')
+  })
+
   it('exposes poster destinations and viewing progress', () => {
-    render(
+    const { container } = render(
       <>
         <PosterCard href="/titles/northbound" title="Northbound" />
         <LandscapeStill
@@ -37,6 +44,9 @@ describe('media components', () => {
       'href',
       '/titles/northbound',
     )
+    const overlay = container.querySelector('[data-consumit-poster-card] > a[aria-hidden="true"]')
+    expect(overlay).toHaveAttribute('href', '/titles/northbound')
+    expect(overlay).toHaveAttribute('tabindex', '-1')
     expect(screen.getByRole('link', { name: 'Continue watching' })).toHaveAttribute(
       'href',
       '/watch/fault-lines',

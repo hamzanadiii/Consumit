@@ -157,7 +157,7 @@ export type MemberSuggestionProps = Omit<ComponentProps<'article'>, 'children'> 
   detail?: string | undefined
   films?: string | undefined
   following?: boolean | undefined
-  handle: string
+  username: string
   name: string
   onFollowingChange?: ((following: boolean) => void) | undefined
   overlap?: number | undefined
@@ -170,7 +170,7 @@ export function MemberSuggestion({
   detail,
   films,
   following = false,
-  handle,
+  username,
   name,
   onFollowingChange,
   overlap,
@@ -185,7 +185,7 @@ export function MemberSuggestion({
       <Avatar name={name} size="lg" src={avatarSrc} />
       <div className="min-w-0 flex-1">
         <h3 className="text-base font-bold text-ink">{name}</h3>
-        <p className="mt-1 text-xs text-muted">{handle}{films ? ` · ${films}` : ''}</p>
+        <p className="mt-1 text-xs text-muted">{username}{films ? ` · ${films}` : ''}</p>
         <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
           {safeOverlap === undefined ? null : <p className="text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>}
           {detail ? <p className="text-xs leading-5 text-muted">{detail}</p> : null}

@@ -17,7 +17,7 @@
   --consumit-orange: #ff5d38;
   --consumit-lilac: #a79cff;
   --consumit-lime: #b8d86d;
-  --consumit-danger: #8e5450;
+  --consumit-danger: #b76d66;
   --consumit-border: rgb(255 255 255 / 10%);
   --consumit-control-outline: rgb(244 240 232 / 40%);
 
@@ -99,4 +99,12 @@
   box-shadow: 0 0 0 1000px var(--consumit-field) inset;
   -webkit-text-fill-color: var(--consumit-ink);
   caret-color: var(--consumit-orange);
+}
+
+[data-consumit-tabs] {
+  scrollbar-width: none;
+}
+
+[data-consumit-tabs]::-webkit-scrollbar {
+  display: none;
 }

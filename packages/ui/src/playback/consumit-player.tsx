@@ -222,6 +222,7 @@ export function ConsumitPlayer({
   const videoRef = useRef<HTMLVideoElement>(null)
   const hideTimer = useRef<number | undefined>(undefined)
   const detachRef = useRef<(() => void) | undefined>(undefined)
+  const attachmentTaskRef = useRef<Promise<void>>(Promise.resolve())
   const menuRef = useRef<HTMLDivElement>(null)
 
   const mediaSrc = source?.src ?? (typeof src === 'string' ? src : undefined)
@@ -306,15 +307,19 @@ export function ConsumitPlayer({
     const video = videoRef.current
     if (!video || !source) return
     let cancelled = false
-    setHasError(false)
-    setErrorMessage(null)
-    attachDirectMedia(video, source)
-      .then((detach) => {
+    const attach = attachmentTaskRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (cancelled) return
+        detachRef.current?.()
+        detachRef.current = undefined
+        setHasError(false)
+        setErrorMessage(null)
+        const detach = await attachDirectMedia(video, source)
         if (cancelled) {
           detach()
           return
         }
-        detachRef.current?.()
         detachRef.current = detach
       })
       .catch((error: unknown) => {
@@ -322,6 +327,7 @@ export function ConsumitPlayer({
         setHasError(true)
         setErrorMessage(error instanceof Error ? error.message : 'This source could not be attached.')
       })
+    attachmentTaskRef.current = attach
     return () => {
       cancelled = true
     }

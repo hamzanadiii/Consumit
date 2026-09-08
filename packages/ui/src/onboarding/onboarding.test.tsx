@@ -35,11 +35,11 @@ describe('onboarding components', () => {
       <>
         <MemberSuggestion
           following
-          handle="@yasmineframes"
+          username="@yasmineframes"
           name="Yasmine El Idrissi"
           overlap={93}
         />
-        <MemberSuggestion handle="@slowcuts" name="Omar Benjelloun" overlap={87} />
+        <MemberSuggestion name="Omar Benjelloun" overlap={87} username="@slowcuts" />
       </>,
     )
 

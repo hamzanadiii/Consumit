@@ -5,11 +5,13 @@ export {
   ContinueCard,
   CuratedListCard,
   TrendingCard,
+  WatchCard,
   type ContentCardProps,
   type ContentCardState,
   type ContinueCardProps,
   type CuratedListCardProps,
   type TrendingCardProps,
+  type WatchCardProps,
 } from './cards/content-cards'
 export {
   EditorialFeature,
@@ -29,10 +31,12 @@ export {
   AvatarGroup,
   MemberByline,
   ServiceMark,
+  avatarTreatmentClasses,
   type AvatarGroupItem,
   type AvatarGroupProps,
   type AvatarProps,
   type AvatarSize,
+  type AvatarTreatment,
   type MemberBylineProps,
   type PresenceState,
   type ServiceMarkProps,
@@ -51,9 +55,11 @@ export {
 } from './media/media'
 export {
   GlobalNavigation,
+  ProfileMenu,
   defaultNavigationItems,
   type GlobalNavigationProps,
   type NavigationItem,
+  type ProfileMenuProps,
 } from './navigation/global-navigation'
 export {
   FilterChip,
@@ -95,11 +101,9 @@ export {
 export {
   AuthField,
   AuthShell,
-  SocialAuthButton,
   TrustNote,
   type AuthFieldProps,
   type AuthShellProps,
-  type SocialAuthButtonProps,
   type TrustNoteProps,
 } from './auth/auth'
 export {
@@ -206,3 +210,8 @@ export {
   type SeasonSelectorProps,
   type TitleMastheadProps,
 } from './title/title'
+export {
+  HeroSpotlight,
+  type HeroSpotlightItem,
+  type HeroSpotlightProps,
+} from './title/hero-spotlight'

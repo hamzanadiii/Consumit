@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ConsumitPlayer } from './consumit-player'
@@ -47,6 +47,26 @@ describe('playback shell components', () => {
     expect(container.querySelector('iframe')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: 'Playback position' })).toBeInTheDocument()
+  })
+
+  it('keeps the replacement media attached when a source changes', async () => {
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
+    const first = { src: 'https://cdn.consumit.example/first.mp4', type: 'native' as const }
+    const second = { src: 'https://cdn.consumit.example/second.mp4', type: 'native' as const }
+    const { container, rerender } = render(
+      <ConsumitPlayer source={first} title="Sea of Names" />,
+    )
+    const video = container.querySelector('video')!
+    await waitFor(() => expect(video.src).toBe(first.src))
+    await act(async () => { await Promise.resolve() })
+
+    await act(async () => {
+      rerender(<ConsumitPlayer source={second} title="Sea of Names" />)
+      await Promise.resolve()
+    })
+
+    await waitFor(() => expect(video.src).toBe(second.src))
+    load.mockRestore()
   })
 
   it('synchronizes a finite media duration even when metadata is ready before hydration', () => {

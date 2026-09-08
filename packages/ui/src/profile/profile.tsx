@@ -5,6 +5,7 @@ import {
   AvatarGroup,
   type AvatarGroupItem,
   type AvatarSize,
+  type AvatarTreatment,
 } from '../identity/identity'
 import { cn } from '../lib/cn'
 import { ArtworkFrame } from '../media/media'
@@ -20,10 +21,11 @@ export type ProfileMastheadProps = Omit<ComponentProps<'header'>, 'children'> & 
   avatarClassName?: string | undefined
   avatarSize?: AvatarSize | undefined
   avatarSrc?: string | undefined
+  avatarTreatment?: AvatarTreatment | undefined
   backgroundSrc?: string | undefined
   bio?: string | undefined
   contentClassName?: string | undefined
-  handle: string
+  username: string
   joined?: string | undefined
   location?: string | undefined
   name: string
@@ -36,11 +38,12 @@ export function ProfileMasthead({
   avatarClassName,
   avatarSize = 'xl',
   avatarSrc,
+  avatarTreatment = 'dusk',
   backgroundSrc,
   bio,
   className,
   contentClassName,
-  handle,
+  username,
   joined,
   location,
   name,
@@ -48,7 +51,7 @@ export function ProfileMasthead({
   status,
   ...props
 }: ProfileMastheadProps) {
-  const context = [handle, location, joined].filter(Boolean).join(' · ')
+  const context = [username, location, joined].filter(Boolean).join(' · ')
 
   return (
     <header
@@ -84,6 +87,7 @@ export function ProfileMasthead({
           size={avatarSize}
           src={avatarSrc}
           status={status}
+          treatment={avatarTreatment}
         />
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-4xl leading-none tracking-[-0.025em] text-ink sm:text-5xl">

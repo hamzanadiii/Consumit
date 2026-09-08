@@ -26,7 +26,7 @@ export function Tabs({
   return (
     <nav
       aria-label={ariaLabel}
-      className={cn('overflow-x-auto border-b border-border', className)}
+      className={cn('overscroll-x-contain overflow-x-auto border-b border-border scroll-smooth', className)}
       data-consumit-tabs
       {...props}
     >
@@ -46,7 +46,7 @@ export function Tabs({
               >
                 {item.label}
                 {item.count === undefined ? null : (
-                  <span className="text-xs font-normal text-faint">
+                  <span className="text-xs font-normal text-muted">
                     {item.count}
                   </span>
                 )}

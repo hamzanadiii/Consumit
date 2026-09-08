@@ -48,6 +48,7 @@ export function LibraryToolbar({
 }
 
 export type SavedTitleCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  action?: ReactNode | undefined
   artworkSrc?: string | undefined
   badge?: ReactNode | undefined
   footer?: ReactNode | undefined
@@ -60,6 +61,7 @@ export type SavedTitleCardProps = Omit<ComponentProps<'article'>, 'children'> & 
 }
 
 export function SavedTitleCard({
+  action,
   artworkSrc,
   badge,
   className,
@@ -75,15 +77,24 @@ export function SavedTitleCard({
   const safeProgress = progress === undefined ? undefined : Math.min(Math.max(progress, 0), 100)
 
   return (
-    <article className={cn('group min-w-0', className)} data-consumit-saved-title-card {...props}>
+    <article className={cn('group relative min-w-0', className)} data-consumit-saved-title-card {...props}>
+      {href ? (
+        <a
+          aria-hidden="true"
+          className="absolute inset-0 outline-none"
+          href={href}
+          tabIndex={-1}
+        />
+      ) : null}
       <ArtworkFrame alt={`${title} poster`} src={artworkSrc}>
         {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
-        {saved ? (
+        {saved && !action ? (
           <span className="absolute top-3 right-3 grid size-8 place-items-center rounded-full bg-canvas/85 text-orange">
             <Check aria-hidden="true" className="size-4" />
             <span className="sr-only">Saved</span>
           </span>
         ) : null}
+        {action ? <div className="absolute top-3 right-3 z-10">{action}</div> : null}
         {safeProgress !== undefined ? (
           <span className="absolute inset-x-0 bottom-0 h-1 bg-surface-raised">
             <span className="block h-full bg-orange" style={{ width: `${safeProgress}%` }} />
@@ -99,7 +110,7 @@ export function SavedTitleCard({
         )}
         <div className="mt-1 text-xs text-muted">{meta}</div>
         {signal ? <div className="mt-2 text-xs text-copy">{signal}</div> : null}
-        {footer ? <div className="mt-3">{footer}</div> : null}
+        {footer ? <div className="relative z-10 mt-3">{footer}</div> : null}
       </div>
     </article>
   )

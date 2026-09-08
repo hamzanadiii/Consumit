@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, ElementType, ReactNode } from 'react'
 import { Play } from 'lucide-react'
 
 import { cn } from '../lib/cn'
@@ -89,21 +89,25 @@ export function ArtworkFrame({
 }
 
 export type PosterCardProps = Omit<ComponentProps<'article'>, 'children'> & {
+  action?: ReactNode | undefined
   alt?: string | undefined
   badge?: ReactNode | undefined
   footer?: ReactNode | undefined
   href?: string | undefined
+  linkComponent?: ElementType | undefined
   meta?: ReactNode | undefined
   src?: string | undefined
   title: string
 }
 
 export function PosterCard({
+  action,
   alt,
   badge,
   className,
   footer,
   href,
+  linkComponent: LinkComponent = 'a',
   meta,
   src,
   title,
@@ -117,21 +121,30 @@ export function PosterCard({
 
   return (
     <article
-      className={cn('group min-w-0', className)}
+      className={cn('group relative min-w-0', className)}
       data-consumit-poster-card
       {...props}
     >
+      {href ? (
+        <LinkComponent
+          aria-hidden="true"
+          className="absolute inset-0 outline-none"
+          href={href}
+          tabIndex={-1}
+        />
+      ) : null}
       <ArtworkFrame alt={alt ?? `${title} poster`} src={src}>
         {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
+        {action ? <div className="absolute top-3 right-3 z-10">{action}</div> : null}
       </ArtworkFrame>
       <div className="mt-3 min-w-0">
         {href ? (
-          <a
+          <LinkComponent
             className="rounded-micro outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             href={href}
           >
             {titleText}
-          </a>
+          </LinkComponent>
         ) : (
           titleText
         )}

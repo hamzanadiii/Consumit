@@ -6,12 +6,14 @@ import { ProgressRail, RatingDisplay } from '../signals/signals'
 
 export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
   actions?: ReactNode | undefined
+  backgroundClassName?: string | undefined
   backgroundSrc?: string | undefined
   context?: string | undefined
   headingLevel?: 'h1' | 'h2' | undefined
   metadata: ReactNode
   socialProof?: ReactNode | undefined
   synopsis: string
+  synopsisClassName?: string | undefined
   tasteReason?: string | undefined
   tasteScore?: number | undefined
   title: string
@@ -19,6 +21,7 @@ export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
 
 export function TitleMasthead({
   actions,
+  backgroundClassName,
   backgroundSrc,
   className,
   context,
@@ -26,6 +29,7 @@ export function TitleMasthead({
   metadata,
   socialProof,
   synopsis,
+  synopsisClassName,
   tasteReason,
   tasteScore,
   title,
@@ -44,7 +48,7 @@ export function TitleMasthead({
       {...props}
     >
       {backgroundSrc ? (
-        <img alt="" className="absolute inset-0 -z-20 size-full object-cover" src={backgroundSrc} />
+        <img alt="" className={cn('absolute inset-0 -z-20 size-full object-cover', backgroundClassName)} src={backgroundSrc} />
       ) : null}
       <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98)_0%,rgba(9,9,11,.84)_48%,rgba(9,9,11,.16)_100%)]" />
       <div className="min-w-0 max-w-2xl">
@@ -55,7 +59,7 @@ export function TitleMasthead({
           {title}
         </Heading>
         <div className="mt-5 text-sm text-copy">{metadata}</div>
-        <p className="mt-5 max-w-[60ch] break-words text-sm leading-6 text-copy">{synopsis}</p>
+        <p className={cn('mt-5 max-w-[60ch] break-words text-sm leading-6 text-copy', synopsisClassName)}>{synopsis}</p>
         {actions ? <div className="mt-6 flex flex-wrap gap-2">{actions}</div> : null}
         {safeScore !== undefined ? (
           <div className="mt-7 flex max-w-xl items-start gap-4 border-t border-border pt-5">

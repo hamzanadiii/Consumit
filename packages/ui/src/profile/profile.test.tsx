@@ -17,7 +17,7 @@ describe('profile components', () => {
         actions={<button type="button">Follow</button>}
         avatarClassName="lg:size-36"
         contentClassName="lg:inset-x-[62px]"
-        handle="@hamza"
+        username="@hamza"
         location="Rabat"
         name="Hamza"
         stats={[{ label: 'films', value: 284 }]}

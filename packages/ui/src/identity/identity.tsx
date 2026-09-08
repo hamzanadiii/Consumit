@@ -1,6 +1,8 @@
 import type { ComponentProps, ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
+import { AvatarImage } from './avatar-image'
+import { getInitials } from './initials'
 
 const avatarSizeClasses = {
   lg: 'size-16 text-base',
@@ -12,19 +14,19 @@ const avatarSizeClasses = {
 export type AvatarSize = keyof typeof avatarSizeClasses
 export type PresenceState = 'away' | 'offline' | 'online'
 
+export type AvatarTreatment = 'dusk' | 'dawn' | 'noir' | 'halo'
+
+export const avatarTreatmentClasses: Record<AvatarTreatment, string> = {
+  dusk: 'bg-[linear-gradient(135deg,#e29a72_0_48%,#382c43_49%_100%)] text-canvas',
+  dawn: 'bg-[linear-gradient(135deg,#f4f0e8_0%,#eab98c_55%,#8a4f3a_100%)] text-[#121215]',
+  noir: 'bg-surface-raised text-ink',
+  halo: 'bg-[linear-gradient(135deg,#e29a72_0_48%,#382c43_49%_100%)] text-canvas',
+}
+
 const presenceClasses: Record<PresenceState, string> = {
   away: 'bg-orange',
   offline: 'bg-muted',
   online: 'bg-lime',
-}
-
-function getInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('')
 }
 
 export type AvatarProps = Omit<ComponentProps<'span'>, 'children'> & {
@@ -34,6 +36,7 @@ export type AvatarProps = Omit<ComponentProps<'span'>, 'children'> & {
   size?: AvatarSize | undefined
   src?: string | undefined
   status?: PresenceState | undefined
+  treatment?: AvatarTreatment | undefined
 }
 
 export function Avatar({
@@ -44,6 +47,7 @@ export function Avatar({
   size = 'md',
   src,
   status,
+  treatment = 'dusk',
   ...props
 }: AvatarProps) {
   const label = status ? `${name}, ${status}` : name
@@ -53,23 +57,20 @@ export function Avatar({
       aria-hidden={decorative || undefined}
       aria-label={decorative ? undefined : label}
       className={cn(
-        'relative inline-grid shrink-0 place-items-center rounded-full border border-ink/20 bg-[linear-gradient(135deg,#e29a72_0_48%,#382c43_49%_100%)] font-bold text-canvas',
+        'relative inline-grid shrink-0 place-items-center rounded-full border border-ink/20 font-bold',
+        src ? 'bg-surface-raised text-ink' : (avatarTreatmentClasses[treatment] ?? avatarTreatmentClasses.dusk),
         avatarSizeClasses[size],
         className,
       )}
       data-consumit-avatar
+      data-treatment={treatment}
       role={decorative ? undefined : 'img'}
       {...props}
     >
-      {src ? (
-        <img
-          alt={imageAlt}
-          className="size-full rounded-full object-cover"
-          src={src}
-        />
-      ) : (
-        <span aria-hidden="true">{getInitials(name) || 'C'}</span>
-      )}
+      {treatment === 'halo' ? (
+        <span aria-hidden="true" className="pointer-events-none absolute inset-[7%] rounded-full border border-ink/50" />
+      ) : null}
+      <AvatarImage alt={imageAlt} name={name} src={src} />
       {status ? (
         <span
           aria-hidden="true"
