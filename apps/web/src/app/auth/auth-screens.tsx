@@ -66,7 +66,7 @@ function AuthFrame({ children, description, title, titles = [] }: {
 }) {
   return (
     <AuthShell
-      asideClassName="bg-[linear-gradient(145deg,#17131a_0%,#3b2531_48%,#765064_76%,#17151d_100%)] lg:px-[62px] lg:pt-[42px] lg:pb-[145px]"
+      asideClassName="bg-[linear-gradient(145deg,#17131a_0%,#3b2531_48%,#765064_76%,#17151d_100%)] lg:px-[50px] lg:pt-[34px] lg:pb-[116px]"
       asideDescription="Build a library, remember every watch, and discover through people whose taste means something to you."
       asideTitle="Keep what you love. Find who gets it."
       className="min-h-screen rounded-none border-0 lg:grid-cols-[54.86%_45.14%]"

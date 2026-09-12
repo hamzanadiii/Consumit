@@ -14,8 +14,8 @@ This roadmap records Consumit’s buildable component families, implementation o
 
 These patterns recur across the complete active screen set and should be preserved as components are added:
 
-- **Global shell:** an 84px desktop bar with the Consumit lockup, four primary destinations, universal search, and the member avatar. Active routes use a thin orange underline. Authentication, onboarding, reporting, and Watch use purpose-specific reduced headers.
-- **Page structure:** a 62px desktop edge, broad editorial hero, warm-white hairline separators, and a main-content/side-rail split for dense decision surfaces. Mobile gets a separate composition rather than a scaled desktop grid.
+- **Global shell:** a 68px desktop bar with the Consumit lockup, four primary destinations, universal search, and the member avatar. Active routes use a thin orange underline. Authentication, onboarding, reporting, and Watch use purpose-specific reduced headers.
+- **Page structure:** a 50px desktop edge, broad editorial hero, warm-white hairline separators, and a main-content/side-rail split for dense decision surfaces. Mobile gets a separate composition rather than a scaled desktop grid.
 - **Action hierarchy:** ivory means the confident immediate action (play, view, accept); orange advances a committed flow (submit, continue, create); outlines hold secondary actions; ghost text handles low-emphasis destinations.
 - **Semantic signals:** orange marks brand, selection, ratings, and active progress; lilac is reserved for social/taste context; lime is reserved for presence, health, and success.
 - **Geometry:** controls and panels stay square to gently rounded at 4–8px. Circles are reserved for people, presence, progress, and recurring celestial artwork.
@@ -72,7 +72,7 @@ Source references: Home / Discover, Search, Movies, Series, Friends, Profile, Se
 
 Included behavior:
 
-- Exact 84px desktop shell and sparse 64px brand-and-menu shell
+- Exact 68px desktop shell and sparse 52px brand-and-menu shell
 - Supplied Consumit mark, primary destinations, and orange active-route line
 - Native GET search form with an accessible search label
 - Supplied member portrait with component-owned visual and announced presence state

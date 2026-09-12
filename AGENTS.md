@@ -6,7 +6,7 @@
 - **Product:** read [`docs/PRODUCT.md`](./docs/PRODUCT.md) before changing scope, experience flows, or active surfaces.
 - **Platform:** read [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) before changing providers, playback, contracts, data, security, infrastructure, or deployment.
 - **Delivery:** read [`docs/DELIVERY.md`](./docs/DELIVERY.md) before selecting or expanding an implementation slice.
-- **Decisions:** read [`docs/OPEN-QUESTIONS.md`](./docs/OPEN-QUESTIONS.md) before acting on an unresolved foundation.
+- **Decisions:** read the relevant ADR and [`docs/PROVIDER-POLICY.md`](./docs/PROVIDER-POLICY.md) before acting on playback or provider foundations.
 - **UI:** read [`DESIGN.md`](./DESIGN.md) and [`docs/COMPONENTS.md`](./docs/COMPONENTS.md), then use the shipped shared components and current screen implementation as visual authority.
 
 ## Execution rules

@@ -11,7 +11,7 @@ export default function AboutPage() {
   return (
     <ScreenShell activeHref="">
       <main className="mx-auto min-h-[70vh] w-full max-w-4xl px-5 py-16 sm:px-8 lg:py-24">
-        <h1 className="text-balance font-display text-[clamp(3rem,8vw,5.5rem)] leading-[0.92] tracking-[-0.025em] text-ink">Made for people who care what they watch.</h1>
+        <h1 className="text-balance font-display text-[clamp(2.75rem,6.5vw,5rem)] leading-[0.92] tracking-[-0.025em] text-ink">Made for people who care what they watch.</h1>
         <p className="mt-7 max-w-[68ch] text-base leading-7 text-copy">
           Consumit brings discovery, memory, and authorized playback into one calm place. Member saves, progress, reviews, and Circle activity belong to Consumit.
         </p>

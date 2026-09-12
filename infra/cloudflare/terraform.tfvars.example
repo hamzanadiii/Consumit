@@ -1,0 +1,4 @@
+account_id = "replace-me"
+zone_id    = "replace-me"
+hostname   = "consumit.example.com"
+# Supply cloudflare_api_token through TF_VAR_cloudflare_api_token.

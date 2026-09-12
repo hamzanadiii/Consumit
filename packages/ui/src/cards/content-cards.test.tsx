@@ -74,6 +74,12 @@ describe('content cards', () => {
     expect(screen.getByText("Yasmine's list")).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Films that feel like a memory' })).toHaveClass('min-h-11')
   })
+
+  it('shows a one-line catalog meta under trending titles', () => {
+    render(<TrendingCard meta="★ 8.3 · 2026 · Series" rank={3} title="Lanterns" />)
+
+    expect(screen.getByText('★ 8.3 · 2026 · Series')).toBeInTheDocument()
+  })
   it('covers each card with a keyboard-silent destination overlay', () => {
     const { container } = render(
       <>

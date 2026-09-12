@@ -21,6 +21,7 @@ import {
   PictureInPicture2,
   RotateCcw,
   RotateCw,
+  Server,
   SunMedium,
   TriangleAlert,
   Volume2,
@@ -30,13 +31,13 @@ import {
 import { cn } from '../lib/cn'
 import { MissingArtwork } from '../media/media'
 import {
-  attachDirectMedia,
   formatPlaybackTime,
   type ChapterCue,
   type DirectMediaSource,
 } from './media-source'
+import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
 
-export type PlayerMenuId = 'audio' | 'display' | 'subtitles'
+export type PlayerMenuId = 'audio' | 'display' | 'server' | 'subtitles'
 
 export type PlayerOption = {
   detail?: string | undefined
@@ -63,14 +64,17 @@ export type ConsumitPlayerProps = Omit<
   topMeta?: ReactNode | undefined
   brandSrc?: string | undefined
   chapters?: readonly ChapterCue[] | undefined
-  /** Small label beside the volume slider, e.g. "English audio". */
-  audioLabel?: string | undefined
+
   audioOptions?: readonly PlayerOption[] | undefined
   selectedAudio?: string | undefined
   onAudioChange?: ((value: string) => void) | undefined
   subtitleOptions?: readonly PlayerOption[] | undefined
   selectedSubtitle?: string | undefined
   onSubtitleChange?: ((value: string) => void) | undefined
+  /** Caption tracks arriving after first frame (e.g. other providers'
+   *  subtitles from the server list). They join the menu live via the
+   *  controller without reloading media. */
+  extraSubtitles?: readonly { id: string; label: string; language: string; url: string }[] | undefined
   /** Current cue text rendered in the prototype subtitle bar. Native <track> cues still render natively. */
   caption?: string | undefined
   qualityOptions?: readonly PlayerOption[] | undefined
@@ -83,7 +87,15 @@ export type ConsumitPlayerProps = Omit<
   onBrightnessChange?: ((value: number) => void) | undefined
   /** Inactivity delay before the control chrome fades. */
   autoHideMs?: number | undefined
+  /** Alternative playback providers for manual source switching. */
+  serverOptions?: readonly PlayerOption[] | undefined
+  selectedServer?: string | undefined
+  onServerChange?: ((value: string) => void) | undefined
   onRetry?: (() => void) | undefined
+  resumeAt?: number | undefined
+  resumePlaying?: boolean | undefined
+  onSourceError?: ((reason: 'network' | 'media') => void) | undefined
+  onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
 }
 
 const DEFAULT_SUBTITLES: readonly PlayerOption[] = [
@@ -134,6 +146,25 @@ function storeValue(key: string, value: string) {
   }
 }
 
+/**
+ * Menus are keyed by `option.value`. Upstream subtitle sessions have produced
+ * duplicate values (e.g. two `external:consumit-external-stellar-sub-0`
+ * entries from a carried lease track plus its fresh twin), which React
+ * reports as "Encountered two children with the same key". Dedupe by value
+ * so a bad payload can never break menu identity; first occurrence wins to
+ * keep selection stable.
+ */
+function dedupePlayerOptions(options: readonly PlayerOption[]): PlayerOption[] {
+  const seen = new Set<string>()
+  const unique: PlayerOption[] = []
+  for (const option of options) {
+    if (seen.has(option.value)) continue
+    seen.add(option.value)
+    unique.push(option)
+  }
+  return unique
+}
+
 function PlayerIconButton({
   active,
   children,
@@ -177,8 +208,7 @@ function PlayerIconButton({
 
 export function ConsumitPlayer({
   autoPlay,
-  audioLabel,
-  audioOptions = DEFAULT_AUDIO,
+  audioOptions: suppliedAudioOptions,
   autoHideMs = 3000,
   backHref,
   brandSrc = '/assets/consumit-mark.svg',
@@ -187,6 +217,7 @@ export function ConsumitPlayer({
   chapters,
   children,
   className,
+  extraSubtitles,
   muted,
   onAudioChange,
   onBack,
@@ -197,13 +228,20 @@ export function ConsumitPlayer({
   onQualityChange,
   onRateChange,
   onRetry,
+  onSourceError,
+  onPlaybackEvent,
+  resumeAt = 0,
+  resumePlaying = false,
+  serverOptions,
+  selectedServer,
+  onServerChange,
   onSubtitleChange,
   onTimeUpdate,
   onVolumeChange,
   playbackRates = DEFAULT_RATES,
   posterSrc,
   preload = 'metadata',
-  qualityOptions = DEFAULT_QUALITIES,
+  qualityOptions: suppliedQualityOptions,
   selectedAudio: controlledAudio,
   selectedQuality: controlledQuality,
   selectedRate: controlledRate,
@@ -212,17 +250,36 @@ export function ConsumitPlayer({
   src,
   status,
   statusTone = 'neutral',
-  subtitleOptions = DEFAULT_SUBTITLES,
+  subtitleOptions: suppliedSubtitleOptions,
   title,
   topMeta,
   videoClassName,
   ...props
 }: ConsumitPlayerProps) {
+  const [engineState, setEngineState] = useState<ControllerSnapshot | null>(null)
+  const audioOptions: readonly PlayerOption[] = useMemo(
+    () => dedupePlayerOptions(suppliedAudioOptions ?? (source ? engineState?.audio ?? [] : DEFAULT_AUDIO)),
+    [suppliedAudioOptions, source, engineState?.audio],
+  )
+  const qualityOptions: readonly PlayerOption[] = useMemo(
+    () => dedupePlayerOptions(suppliedQualityOptions ?? (source ? engineState?.qualities ?? [{ value: 'auto', label: 'Auto' }] : DEFAULT_QUALITIES)),
+    [suppliedQualityOptions, source, engineState?.qualities],
+  )
+  const subtitleOptions: readonly PlayerOption[] = useMemo(
+    () => dedupePlayerOptions(suppliedSubtitleOptions ?? (source ? [...(engineState?.subtitles ?? []), { value: 'off', label: 'Off' }] : DEFAULT_SUBTITLES)),
+    [suppliedSubtitleOptions, source, engineState?.subtitles],
+  )
+  const dedupedServerOptions = useMemo(
+    () => (serverOptions ? dedupePlayerOptions(serverOptions) : undefined),
+    [serverOptions],
+  )
+  const dedupedRates = useMemo(() => [...new Set(playbackRates)], [playbackRates])
   const shellRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hideTimer = useRef<number | undefined>(undefined)
-  const detachRef = useRef<(() => void) | undefined>(undefined)
-  const attachmentTaskRef = useRef<Promise<void>>(Promise.resolve())
+  const controllerRef = useRef<ReturnType<typeof createPlaybackController> | null>(null)
+  const playbackCallbacks = useRef({ onSourceError, onPlaybackEvent, resumeAt, resumePlaying })
+  useEffect(() => { playbackCallbacks.current = { onSourceError, onPlaybackEvent, resumeAt, resumePlaying } }, [onSourceError, onPlaybackEvent, resumeAt, resumePlaying])
   const menuRef = useRef<HTMLDivElement>(null)
 
   const mediaSrc = source?.src ?? (typeof src === 'string' ? src : undefined)
@@ -263,9 +320,9 @@ export function ConsumitPlayer({
     typeof window === 'undefined' ? 1 : readStoredNumber('consumit.player.brightness', 1, 0.6, 1.3),
   )
 
-  const selectedAudio = controlledAudio ?? internalAudio
-  const selectedSubtitle = controlledSubtitle ?? internalSubtitle
-  const selectedQuality = controlledQuality ?? internalQuality
+  const selectedAudio = controlledAudio ?? (source ? engineState?.audioTrack : undefined) ?? internalAudio
+  const selectedSubtitle = controlledSubtitle ?? (source ? engineState?.subtitleTrack : undefined) ?? internalSubtitle
+  const selectedQuality = controlledQuality ?? (source ? engineState?.quality : undefined) ?? internalQuality
   const selectedRate = controlledRate ?? internalRate
   const brightness = controlledBrightness ?? internalBrightness
   const captionsOn = selectedSubtitle !== 'off'
@@ -286,9 +343,8 @@ export function ConsumitPlayer({
 
   const progressRatio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
   const bufferedRatio = duration > 0 ? Math.min(1, Math.max(0, bufferedEnd / duration)) : 0
-  const selectedAudioLabel = audioOptions.find((option) => option.value === selectedAudio)?.label
-  const volumeLabel = audioLabel ?? (selectedAudioLabel ? `${selectedAudioLabel} audio` : undefined)
-  const pipSupported = typeof window !== 'undefined' && typeof document !== 'undefined' && 'pictureInPictureEnabled' in document
+
+  const pipSupported = typeof window !== 'undefined' && typeof document !== 'undefined' && (document.pictureInPictureEnabled === true || 'webkitSetPresentationMode' in HTMLVideoElement.prototype)
 
   const pokeControls = useCallback(() => {
     setControlsVisible(true)
@@ -301,45 +357,31 @@ export function ConsumitPlayer({
     hideTimer.current = window.setTimeout(() => setControlsVisible(false), autoHideMs)
   }, [autoHideMs])
 
-  /* Attach an authorized source through the adapter seam. The legacy `src`
-     prop stays a caller-owned passthrough for deterministic fixtures. */
+  /* Visual controls subscribe to a headless controller; fixtures may still use src. */
   useEffect(() => {
     const video = videoRef.current
-    if (!video || !source) return
-    let cancelled = false
-    const attach = attachmentTaskRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (cancelled) return
-        detachRef.current?.()
-        detachRef.current = undefined
-        setHasError(false)
-        setErrorMessage(null)
-        const detach = await attachDirectMedia(video, source)
-        if (cancelled) {
-          detach()
-          return
-        }
-        detachRef.current = detach
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        setHasError(true)
-        setErrorMessage(error instanceof Error ? error.message : 'This source could not be attached.')
-      })
-    attachmentTaskRef.current = attach
-    return () => {
-      cancelled = true
-    }
+    if (!video) return
+    const controller = createPlaybackController(video, {
+      change(snapshot) {
+        setEngineState(snapshot)
+        setIsBuffering(snapshot.phase === 'loading' || snapshot.phase === 'buffering' || snapshot.phase === 'switching')
+        setHasError(snapshot.phase === 'failed')
+        if (snapshot.needsGesture) { setIsPlaying(false); setControlsVisible(true) }
+      },
+      fatal(reason) { setErrorMessage('This source could not keep playing.'); playbackCallbacks.current.onSourceError?.(reason) },
+      event(event) { playbackCallbacks.current.onPlaybackEvent?.(event) },
+    })
+    controllerRef.current = controller
+    return () => { controller.destroy(); controllerRef.current = null }
+  }, [])
+
+  useEffect(() => {
+    if (source) void controllerRef.current?.load(source, playbackCallbacks.current.resumeAt, playbackCallbacks.current.resumePlaying)
   }, [source])
 
-  useEffect(
-    () => () => {
-      detachRef.current?.()
-      detachRef.current = undefined
-    },
-    [],
-  )
+  useEffect(() => {
+    controllerRef.current?.externalSubtitles(extraSubtitles ?? [])
+  }, [extraSubtitles])
 
   useEffect(() => {
     if (typeof muted === 'boolean') setIsMuted(muted)
@@ -377,7 +419,7 @@ export function ConsumitPlayer({
 
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || source) return
     try {
       for (const track of Array.from(video.textTracks)) {
         if (track.kind === 'subtitles' || track.kind === 'captions') track.mode = captionsOn ? 'showing' : 'hidden'
@@ -385,7 +427,7 @@ export function ConsumitPlayer({
     } catch {
       /* subtitle tracks are enhancement-only */
     }
-  }, [captionsOn, children])
+  }, [captionsOn, children, source])
 
   useEffect(() => {
     const video = videoRef.current
@@ -428,8 +470,17 @@ export function ConsumitPlayer({
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    const video = videoRef.current
+    const entered = () => setIsFullscreen(true)
+    const exited = () => setIsFullscreen(false)
     document.addEventListener('fullscreenchange', onFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+    video?.addEventListener('webkitbeginfullscreen', entered)
+    video?.addEventListener('webkitendfullscreen', exited)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      video?.removeEventListener('webkitbeginfullscreen', entered)
+      video?.removeEventListener('webkitendfullscreen', exited)
+    }
   }, [])
 
   useEffect(() => {
@@ -482,7 +533,8 @@ export function ConsumitPlayer({
     pokeControls()
     if (video.paused || video.ended) {
       try {
-        await video.play()
+        if (source) await controllerRef.current?.play()
+        else await video.play()
       } catch {
         setIsPlaying(false)
       }
@@ -541,8 +593,7 @@ export function ConsumitPlayer({
         return
       }
       if (shell.requestFullscreen) {
-        await shell.requestFullscreen()
-        return
+        try { await shell.requestFullscreen(); return } catch { /* Try native video fullscreen on Apple devices. */ }
       }
       const webkitVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void } | null
       webkitVideo?.webkitEnterFullscreen?.()
@@ -559,11 +610,15 @@ export function ConsumitPlayer({
       const pipVideo = video as HTMLVideoElement & {
         disablePictureInPicture?: boolean
         requestPictureInPicture?: () => Promise<void>
+        webkitPresentationMode?: string
+        webkitSetPresentationMode?: (mode: string) => void
       }
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture()
       } else if (pipVideo.requestPictureInPicture && !pipVideo.disablePictureInPicture) {
         await pipVideo.requestPictureInPicture()
+      } else if (pipVideo.webkitSetPresentationMode) {
+        pipVideo.webkitSetPresentationMode(pipVideo.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture')
       }
     } catch {
       /* PiP denial keeps inline playback */
@@ -576,19 +631,27 @@ export function ConsumitPlayer({
   }
 
   function chooseAudio(value: string) {
+    controllerRef.current?.audio(value)
     if (!controlledAudio) setInternalAudio(value)
     onAudioChange?.(value)
     setActiveMenu(null)
   }
 
   function chooseSubtitle(value: string) {
+    controllerRef.current?.subtitle(value)
     if (!controlledSubtitle) setInternalSubtitle(value)
     storeValue('consumit.player.subtitles', value)
     onSubtitleChange?.(value)
     setActiveMenu(null)
   }
 
+  function chooseServer(value: string) {
+    onServerChange?.(value)
+    setActiveMenu(null)
+  }
+
   function chooseQuality(value: string) {
+    controllerRef.current?.quality(value)
     if (!controlledQuality) setInternalQuality(value)
     onQualityChange?.(value)
     setActiveMenu(null)
@@ -734,7 +797,7 @@ export function ConsumitPlayer({
       ) : null}
       <div
         aria-label={`${title} player controls`}
-        className="relative aspect-video overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange"
+        className="relative m-auto aspect-video max-h-full w-full overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange"
         onKeyDown={onShellKeyDown}
         onMouseMove={pokeControls}
         onPointerDown={pokeControls}
@@ -763,7 +826,7 @@ export function ConsumitPlayer({
             props.onEnded?.(event)
           }}
           onError={(event) => {
-            if (hasSource) {
+            if (hasSource && !source) {
               setHasError(true)
               setIsBuffering(false)
               setErrorMessage('The current source could not play this title.')
@@ -805,35 +868,37 @@ export function ConsumitPlayer({
         {showTopBar ? (
           <div
             className={cn(
-              'pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 bg-[linear-gradient(180deg,rgba(9,9,11,0.78),transparent)] px-4 pt-4 pb-10 transition-opacity motion-reduce:transition-none sm:px-6',
+              'pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-4 bg-[linear-gradient(180deg,rgba(9,9,11,0.78),transparent)] px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-12 transition-opacity motion-reduce:transition-none sm:px-6',
               chromeVisible ? 'opacity-100' : 'opacity-0',
             )}
           >
-            <div className="pointer-events-auto flex min-w-0 items-start gap-3">
+            <div className="pointer-events-auto grid w-11 shrink-0 place-items-center">
               {onBack ? (
                 <button
                   aria-label="Back"
-                  className="grid size-11 shrink-0 place-items-center rounded-control text-ink outline-none hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-orange"
+                  className="grid size-11 place-items-center rounded-control border border-white/10 bg-black/70 text-ink backdrop-blur-md outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
                   onClick={onBack}
                   type="button"
                 >
-                  <ChevronLeft aria-hidden="true" className="size-7" strokeWidth={1.5} />
+                  <ChevronLeft aria-hidden="true" className="size-6" strokeWidth={1.5} />
                 </button>
               ) : backHref ? (
                 <a
                   aria-label="Back"
-                  className="grid size-11 shrink-0 place-items-center rounded-control text-ink outline-none hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-orange"
+                  className="grid size-11 place-items-center rounded-control border border-white/10 bg-black/70 text-ink backdrop-blur-md outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
                   href={backHref}
                 >
-                  <ChevronLeft aria-hidden="true" className="size-7" strokeWidth={1.5} />
+                  <ChevronLeft aria-hidden="true" className="size-6" strokeWidth={1.5} />
                 </a>
               ) : null}
-              <div className="min-w-0 pt-1">
-                <p className="truncate text-sm font-bold text-ink">{title}</p>
-                {topMeta ? <p className="mt-1 truncate text-[11px] text-muted">{topMeta}</p> : null}
-              </div>
             </div>
-            <img alt="" aria-hidden="true" className="size-7 shrink-0" src={brandSrc} />
+            <div className="min-w-0 flex-1 px-4 text-center">
+              <p className="truncate text-sm leading-6 font-bold tracking-wide text-ink">{title}</p>
+              {topMeta ? <p className="mt-0.5 truncate text-[11px] leading-4 tracking-wider text-muted">{topMeta}</p> : null}
+            </div>
+            <div className="grid w-11 shrink-0 place-items-center">
+              <img alt="" aria-hidden="true" className="size-7" src={brandSrc} />
+            </div>
           </div>
         ) : null}
 
@@ -842,6 +907,10 @@ export function ConsumitPlayer({
             <span className="sr-only">Buffering video</span>
             <Loader2 aria-hidden="true" className="size-10 animate-spin text-ink motion-reduce:animate-none" />
           </div>
+        ) : null}
+
+        {engineState?.needsGesture && hasSource && !hasError ? (
+          <div className="pointer-events-none absolute inset-x-0 top-1/3 text-center text-sm font-bold text-ink" role="status">Tap play to start watching</div>
         ) : null}
 
         {hasError && hasSource ? (
@@ -977,6 +1046,30 @@ export function ConsumitPlayer({
                     })}
                   </>
                 ) : null}
+                {activeMenu === 'server' && dedupedServerOptions ? (
+                  <>
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Server</p>
+                    {dedupedServerOptions.map((option) => {
+                      const selected = (selectedServer ?? dedupedServerOptions[0]?.value) === option.value
+                      return (
+                        <button
+                          aria-checked={selected}
+                          className="flex min-h-11 w-full items-center gap-3 rounded-micro px-3 text-left text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
+                          key={option.value}
+                          onClick={() => chooseServer(option.value)}
+                          role="menuitemradio"
+                          type="button"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{option.label}</span>
+                            {option.detail ? <span className="mt-0.5 block text-xs text-muted">{option.detail}</span> : null}
+                          </span>
+                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                        </button>
+                      )
+                    })}
+                  </>
+                ) : null}
                 {activeMenu === 'display' ? (
                   <div className="max-h-80 overflow-y-auto">
                     <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Quality</p>
@@ -1001,7 +1094,7 @@ export function ConsumitPlayer({
                     })}
                     <p className="px-3 pt-3 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Speed</p>
                     <div className="flex flex-wrap gap-1 px-3 pb-2" role="group" aria-label="Playback speed">
-                      {playbackRates.map((rate) => {
+                      {dedupedRates.map((rate) => {
                         const selected = selectedRate === rate
                         return (
                           <button
@@ -1086,7 +1179,6 @@ export function ConsumitPlayer({
                 type="range"
                 value={isMuted ? 0 : volume}
               />
-              {volumeLabel ? <span className="ml-1 hidden truncate text-xs text-muted lg:block">{volumeLabel}</span> : null}
             </div>
             <div className="flex shrink-0 items-start gap-1 sm:gap-2">
               <span className="flex flex-col items-center">
@@ -1101,11 +1193,6 @@ export function ConsumitPlayer({
                 >
                   {captionsOn ? <Captions aria-hidden="true" className="size-6" strokeWidth={1.5} /> : <CaptionsOff aria-hidden="true" className="size-6" strokeWidth={1.5} />}
                 </PlayerIconButton>
-                {captionsOn ? (
-                  <span aria-hidden="true" className="pb-1 text-[9px] font-bold tracking-[0.12em] text-orange uppercase">
-                    Subtitles
-                  </span>
-                ) : null}
               </span>
               <span className="hidden md:contents">
                 <PlayerIconButton
@@ -1118,6 +1205,17 @@ export function ConsumitPlayer({
                   <AudioLines aria-hidden="true" className="size-6" strokeWidth={1.5} />
                 </PlayerIconButton>
               </span>
+              {dedupedServerOptions && dedupedServerOptions.length > 1 ? (
+                <PlayerIconButton
+                  disabled={!hasSource}
+                  expanded={activeMenu === 'server'}
+                  label="Change server"
+                  menuId="server"
+                  onClick={() => toggleMenu('server')}
+                >
+                  <Server aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                </PlayerIconButton>
+              ) : null}
               <PlayerIconButton
                 active={activeMenu === 'display'}
                 disabled={!hasSource}

@@ -179,8 +179,7 @@ export type RatingDisplayProps = Omit<ComponentProps<'span'>, 'children'> & {
   value: number
 }
 
-export function RatingDisplay({
-  className,
+export function RatingDisplay({  className,
   max = 5,
   showValue = false,
   value,

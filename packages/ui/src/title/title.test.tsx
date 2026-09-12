@@ -61,17 +61,20 @@ describe('title and series components', () => {
 })
 
 describe('hero spotlight', () => {
-  it('opens on the first title with carousel semantics', () => {
-    render(<HeroSpotlight items={spotlightItems} label="New this week" />)
+  it('opens on the first title with a progress rail and no arrows', () => {
+    const { container } = render(<HeroSpotlight items={spotlightItems} label="New this week" />)
 
     expect(screen.getByRole('region', { name: 'New this week' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Second Harbor' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Show Second Harbor' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show First Light' })).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByRole('button', { name: 'Show Second Harbor' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByRole('button', { name: /previous|next/i })).not.toBeInTheDocument()
+    expect(container.querySelector('[data-consumit-hero-dot]')).toHaveAttribute('style', expect.stringContaining('animation-duration'))
     expect(screen.getByText('First story.').className).toMatch(/line-clamp-3/)
   })
 
-  it('advances on a timer and wraps through dots and arrows', () => {
+  it('advances on a timer, wraps, and jumps through dots', () => {
     vi.useFakeTimers()
     render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
 
@@ -83,14 +86,18 @@ describe('hero spotlight', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show Third Meridian' }))
     expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next featured title' }))
+    act(() => {
+      vi.advanceTimersByTime(7000)
+    })
     expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Previous featured title' }))
-    expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(7000)
+    })
+    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
   })
 
-  it('pauses rotation on hover while dots and arrows stay clickable', () => {
+  it('never pauses on hover so the loop cannot strand', () => {
     vi.useFakeTimers()
     render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
 
@@ -98,9 +105,9 @@ describe('hero spotlight', () => {
 
     fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
     act(() => {
-      vi.advanceTimersByTime(21_000)
+      vi.advanceTimersByTime(8000)
     })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
   })
 
   it('resumes rotation after the focus grace period', () => {
@@ -130,6 +137,39 @@ describe('hero spotlight', () => {
 
     expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Featured titles' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Next featured title' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('prefers the TMDB artwork logo over the serif title', () => {
+    render(
+      <TitleMasthead
+        headingLevel="h1"
+        logoUrl="https://image.tmdb.org/t/p/w500/city-logo.png"
+        metadata="2026 · Drama"
+        synopsis="A city erased every street."
+        title="The Last City After Rain"
+      />,
+    )
+
+    expect(screen.getByRole('img', { name: 'The Last City After Rain' })).toHaveAttribute(
+      'src',
+      'https://image.tmdb.org/t/p/w500/city-logo.png',
+    )
+    expect(screen.getByRole('heading', { level: 1, name: 'The Last City After Rain' })).toBeInTheDocument()
+  })
+
+  it('reads tagline and maker credits as hero lede and byline', () => {    render(
+      <TitleMasthead
+        byline="Directed by Denis Villeneuve"
+        lede="Long live the fighters."
+        metadata="2024 · Film"
+        synopsis="Paul unites with the Fremen."
+        title="Dune: Part Two"
+      />,
+    )
+
+    expect(screen.getByText('Long live the fighters.')).toBeInTheDocument()
+    expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
   })
 })

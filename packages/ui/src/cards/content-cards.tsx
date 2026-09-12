@@ -168,6 +168,7 @@ export type TrendingCardProps = Omit<ComponentProps<'article'>, 'children'> & {
   href?: string | undefined
   linkComponent?: ElementType | undefined
   memberScore?: number | undefined
+  meta?: string | undefined
   rank: number
   title: string
 }
@@ -181,6 +182,7 @@ export function TrendingCard({
   href,
   linkComponent: LinkComponent = 'a',
   memberScore,
+  meta,
   rank,
   title,
   ...props
@@ -236,6 +238,7 @@ export function TrendingCard({
           <h3 className="mt-3 text-sm font-bold text-ink">{title}</h3>
         )}
         {completionProof ? <p className="mt-1 text-xs text-muted">{completionProof}</p> : null}
+        {meta ? <p className="mt-1 text-xs text-muted">{meta}</p> : null}
       </div>
     </article>
   )

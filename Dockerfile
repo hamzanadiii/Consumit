@@ -7,6 +7,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 RUN bun install --frozen-lockfile
 
@@ -17,7 +18,10 @@ FROM oven/bun:1.4.0-alpine AS api-dependencies
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
+COPY packages/ui/package.json packages/ui/package.json
 RUN bun install --frozen-lockfile --filter @consumit/api
 
 FROM source AS api-build

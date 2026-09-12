@@ -13,21 +13,19 @@ import {
   HeroSpotlight,
   SectionHeading,
   TitleMasthead,
-  TrendingCard,
   WatchCard,
 } from '@consumit/ui'
 
-import { CatalogStaleNotice, titleMeta } from '../catalog/catalog-ui'
+import { CatalogStaleNotice, detailMeta, makerByline, titleMeta, type HeroDetail } from '../catalog/catalog-ui'
 import { SaveTitleButton } from '../catalog/save-title-button'
-import { TitleActions } from '../catalog/title-actions'
 import { SessionNavigation } from '../session/session-navigation'
 
 type HomeScreenProps = {
   curated: readonly CatalogTitleSummary[]
   editorial: CatalogTitleSummary
-  hero: CatalogTitleSummary
+  hero: HeroDetail
   popular?: readonly CatalogTitleSummary[] | undefined
-  spotlight?: readonly CatalogTitleSummary[] | undefined
+  spotlight?: readonly HeroDetail[] | undefined
   stale: boolean
   topRated?: readonly CatalogTitleSummary[] | undefined
   trending: readonly CatalogTitleSummary[]
@@ -75,44 +73,41 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
               actions: (
                 <>
                   <Link className={buttonVariants()} href={watchHref(item)}><Play aria-hidden="true" /> Watch</Link>
-                  <TitleActions id={item.id} kind={item.kind} title={item.title} titleHref={titleHref(item)} />
+                  <Link className={buttonVariants({ variant: 'secondary' })} href={titleHref(item)}>More info</Link>
                 </>
               ),
               backgroundSrc: item.backdropUrl ?? undefined,
+              byline: makerByline(item),
               key: `${item.kind}:${item.id}`,
-              metadata: titleMeta(item),
+              lede: item.tagline ?? undefined,
+              logoUrl: item.logoUrl ?? undefined,
+              metadata: detailMeta(item),
               synopsis: item.overview || 'More information will be available soon.',
               title: item.title,
             }))}
             label="New this week"
-            mastheadClassName="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[62px] lg:py-20"
+            mastheadClassName="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[50px] lg:py-20"
           />
         ) : (
           <TitleMasthead
             actions={(
               <>
                 <Link className={buttonVariants()} href={watchHref(hero)}><Play aria-hidden="true" /> Watch</Link>
-                <TitleActions id={hero.id} kind={hero.kind} title={hero.title} titleHref={titleHref(hero)} />
+                <Link className={buttonVariants({ variant: 'secondary' })} href={titleHref(hero)}>More info</Link>
               </>
             )}
             backgroundSrc={hero.backdropUrl ?? undefined}
-            className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[62px] lg:py-20"
-            metadata={titleMeta(hero)}
+            byline={makerByline(hero)}
+            className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[50px] lg:py-20"
+            lede={hero.tagline ?? undefined}
+            logoUrl={hero.logoUrl ?? undefined}
+            metadata={detailMeta(hero)}
             synopsis={hero.overview || 'More information will be available soon.'}
             title={hero.title}
           />
         )}
 
-        <div className="px-5 sm:px-8 lg:px-[62px]">
-          <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="trending-heading">
-            <SectionHeading action={<SectionAction href="/search" />} description="Live titles people are discovering right now" id="trending-heading" title="Trending tonight" />
-            <div className="mt-8 grid auto-cols-[minmax(11rem,72vw)] grid-flow-col gap-5 overflow-x-auto pb-4 sm:auto-cols-[13rem] xl:grid-flow-row xl:grid-cols-5 xl:overflow-visible xl:pb-0">
-              {trending.slice(0, 5).map((title, index) => (
-                <TrendingCard artworkSrc={title.posterUrl ?? undefined} href={titleHref(title)} key={`${title.kind}:${title.id}`} linkComponent={Link} rank={index + 1} title={title.title} />
-              ))}
-            </div>
-          </section>
-
+        <div className="px-5 sm:px-8 lg:px-[50px]">
           {popular.length > 0 ? (
             <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="popular-heading">
               <SectionHeading action={<SectionAction href="/search" />} description="What viewers are discovering across the catalog" id="popular-heading" title="Popular now" />
@@ -150,7 +145,7 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
 
           {genrePool.length > 0 ? (
             <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="genre-heading">
-              <SectionHeading description="Explore the current catalog by genre" id="genre-heading" title="Browse by genre" />
+              <SectionHeading description="Find something by mood" id="genre-heading" title="Browse by genre" />
               <div aria-label="Filter by genre" className="mt-6 flex flex-wrap gap-2" role="group">
                 {topGenres.map(([name]) => (
                   <FilterChip key={name} onClick={() => setGenre(name)} selected={name === activeGenre}>{name}</FilterChip>

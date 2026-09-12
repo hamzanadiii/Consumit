@@ -21,5 +21,5 @@ export default async function MovieWatchPage({ params }: MovieWatchPageProps) {
   let response
   try { response = await getCatalogTitle('movie', id) } catch (error) { if (error instanceof CatalogApiError && error.status === 404) notFound(); return <CatalogUnavailableScreen error={error} /> }
   if (response.item.kind !== 'movie') notFound()
-  return <WatchScreen title={response.item} />
+  return <WatchScreen interactive title={response.item} />
 }

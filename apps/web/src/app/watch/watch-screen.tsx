@@ -5,6 +5,7 @@ import { LockKeyhole } from 'lucide-react'
 import Link from 'next/link'
 
 import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
+import { WatchPlayback } from './watch-playback'
 
 export type WatchDemoPlayback = {
   caption?: string | undefined
@@ -15,6 +16,8 @@ export type WatchDemoPlayback = {
 }
 
 type WatchScreenProps = {
+  interactive?: boolean
+  nextHref?: string | undefined
   demo?: WatchDemoPlayback | undefined
   episode?: CatalogEpisode | undefined
   title: CatalogTitleDetail
@@ -25,7 +28,8 @@ type WatchScreenProps = {
  * pass `demo`: with no authorized source the screen stays in its honest
  * unavailable branch and loads no media, demo clip, trailer, or embed.
  */
-export function WatchScreen({ demo, episode, title }: WatchScreenProps) {
+export function WatchScreen({ demo, episode, title, interactive = false, nextHref }: WatchScreenProps) {
+  if (interactive && !demo) return <WatchPlayback key={`${title.kind}:${title.id}:${episode?.seasonNumber}:${episode?.episodeNumber}`} title={title} episode={episode} nextHref={nextHref} />
   const displayTitle = episode ? `${title.title} · ${episode.title}` : title.title
   const meta = episode
     ? `Season ${episode.seasonNumber} · Episode ${episode.episodeNumber}${episode.runtimeMinutes ? ` · ${episode.runtimeMinutes} min` : ''}`
@@ -50,10 +54,9 @@ export function WatchScreen({ demo, episode, title }: WatchScreenProps) {
               statusTone="healthy"
               title={displayTitle}
               topMeta={demoMeta}
-              videoClassName="max-h-[calc(100svh-13rem)]"
             />
           ) : (
-            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No authorized source available" statusTone="unavailable" title={displayTitle} videoClassName="max-h-[calc(100svh-13rem)]" />
+            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No authorized source available" statusTone="unavailable" title={displayTitle} />
           )}
         </div>
         <div className="flex flex-col gap-4 border-t border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between" role="status">

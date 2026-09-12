@@ -131,12 +131,13 @@ describe('playback shell components', () => {
     expect(screen.getByRole('button', { name: 'Forward 10 seconds' })).toBeEnabled()
     expect(screen.getByRole('slider', { name: 'Volume' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Subtitles on. Change subtitles' })).toBeInTheDocument()
+    expect(screen.queryByText('Subtitles')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Audio tracks' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Display, quality, and speed' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enter picture in picture' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enter fullscreen' })).toBeInTheDocument()
     expect(screen.getByText('Some places disappear long before anyone leaves them.')).toBeInTheDocument()
-    expect(screen.getByText('Subtitles')).toBeInTheDocument()
+    expect(screen.queryByText('Subtitles')).not.toBeInTheDocument()
   })
 
   it('opens the subtitles menu and switches captions off', () => {
@@ -151,6 +152,31 @@ describe('playback shell components', () => {
     expect(screen.queryByText('Some places disappear long before anyone leaves them.')).not.toBeInTheDocument()
   })
 
+  it('lists servers and switches on selection', () => {
+    const onServerChange = vi.fn()
+    render(
+      <ConsumitPlayer
+        title="The Last City After Rain"
+        src="/movie.mp4"
+        serverOptions={[
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
+          { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
+        ]}
+        selectedServer="vixsrc"
+        onServerChange={onServerChange}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
+    const menu = screen.getByRole('menu', { name: 'server options' })
+    expect(within(menu).getByRole('menuitemradio', { name: /vidlink/ })).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /vidlink/ }))
+    expect(onServerChange).toHaveBeenCalledWith('vidlink')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+  it('hides the server switcher when there is nothing to switch to', () => {
+    render(<ConsumitPlayer title="The Last City After Rain" src="/movie.mp4" serverOptions={[{ label: 'vixsrc', value: 'vixsrc' }]} />)
+    expect(screen.queryByRole('button', { name: 'Change server' })).not.toBeInTheDocument()
+  })
   it('opens the display menu with quality, speed, and brightness controls', () => {
     prototypePlayer()
 

@@ -1,0 +1,88 @@
+import { playbackRefSchema } from '@consumit/contracts'
+import { z } from 'zod'
+import type { ProviderAdapter, ProviderInput, ProviderSource } from '../index.ts'
+
+/** The host application supplies bounded, DNS-pinned HTTP; adapters never call global fetch. */
+export type ProviderHttpRequest = { method?: 'POST'; body?: string }
+export type ProviderHttpResponse = { status: number; text: string; url: string; headers?: Headers }
+export type ProviderHttp = (url: string, headers: Record<string, string>, signal: AbortSignal, init?: ProviderHttpRequest) => Promise<ProviderHttpResponse>
+export const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
+
+export class ProviderFailure extends Error {
+  constructor(readonly code: 'empty' | 'malformed' | 'unavailable') { super(code) }
+}
+
+export function adapter(id: string, resolve: (input: ProviderInput, signal: AbortSignal) => Promise<ProviderSource[]>): ProviderAdapter {
+  return { id, async resolve(input, signal) {
+    try {
+      signal.throwIfAborted()
+      playbackRefSchema.parse(input.ref)
+      const sources = await resolve(input, signal)
+      signal.throwIfAborted()
+      return sources.length ? { ok: true, sources } : { ok: false, code: 'empty', retryable: false }
+    } catch (error) {
+      const code = signal.aborted ? (signal.reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled')
+        : error instanceof ProviderFailure ? error.code : error instanceof z.ZodError || error instanceof SyntaxError ? 'malformed' : 'unavailable'
+      return { ok: false, code, retryable: code === 'timeout' || code === 'unavailable' }
+    }
+  } }
+}
+
+export function titlePath({ ref }: ProviderInput) {
+  return ref.kind === 'movie' ? `/movie/${ref.id}` : `/tv/${ref.id}/${ref.season}/${ref.episode}`
+}
+
+export async function document(http: ProviderHttp, url: string, signal: AbortSignal, headers: Record<string, string> = {}, init?: ProviderHttpRequest) {
+  const response = await http(url, { 'user-agent': userAgent, ...headers }, signal, init)
+  if (response.status === 404) throw new ProviderFailure('empty')
+  if (response.status < 200 || response.status >= 300) throw new ProviderFailure('unavailable')
+  return response
+}
+
+/** Unknown upstream expiry gets a conservative refresh deadline, never a durable cache entry. */
+export function accessDeadline(url: string, now: number, explicit?: number) {
+  const query = new URL(url).searchParams
+  // Some upstreams sign `expire` in seconds or milliseconds instead of the
+  // `expires`/`exp` names; values at/above 1e12 are already milliseconds.
+  const expireRaw = Number(query.get('expire') ?? 0)
+  const expireMs = expireRaw >= 1e12 ? expireRaw : expireRaw * 1000
+  const expiry = explicit ?? (expireMs > 0 ? expireMs : Number(query.get('expires') ?? query.get('exp') ?? 0) * 1000)
+  const until = expiry > 0 ? Math.min(expiry, now + 1_800_000) : now + 300_000
+  if (!Number.isFinite(until) || until <= now + 30_000) throw new ProviderFailure('empty')
+  return new Date(until).toISOString()
+}
+
+export function mediaType(url: string, hint?: string): ProviderSource['type'] | undefined {
+  // Proxy-wrapped delivery (e.g. `https://proxy.site/https%3A%2F%2Fcdn…%2Ffile.mp4%3Fsign%3D…`)
+  // buries the real extension mid-path behind percent-encoding, so classify the
+  // decoded stem too. Query and fragment never participate in classification.
+  const candidates = [url]
+  try {
+    const decoded = decodeURIComponent(url)
+    if (decoded !== url) candidates.push(decoded)
+  } catch { /* keep the raw URL */ }
+  const stem = (value: string) => value.split(/[?#]/)[0] ?? value
+  if (candidates.some((candidate) => /\.m3u8$/i.test(stem(candidate))) || hint === 'hls') return 'hls'
+  if (candidates.some((candidate) => /\.mp4$/i.test(stem(candidate))) || hint === 'mp4') return 'native'
+  return undefined
+}
+
+/** Verify HLS roots before selection so dead provider URLs never become sessions. */
+export async function verifiedPlaybackSources(http: ProviderHttp, candidates: readonly ProviderSource[], signal: AbortSignal) {
+  const verified: Array<ProviderSource | undefined> = new Array(candidates.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < candidates.length) {
+      const index = cursor++
+      const source = candidates[index]!
+      if (source.type !== 'hls') { verified[index] = source; continue }
+      try {
+        const response = await document(http, source.url, signal, source.headers)
+        if (!response.text.trimStart().startsWith('#EXTM3U') || !/#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE):/.test(response.text)) continue
+        verified[index] = { ...source, url: response.url }
+      } catch { signal.throwIfAborted() }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(2, candidates.length) }, worker))
+  return verified.filter((source): source is ProviderSource => source !== undefined)
+}

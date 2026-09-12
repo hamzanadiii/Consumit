@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  playbackProviderListSchema,
   catalogTitleSummarySchema,
   accountDeletionRequestSchema,
   apiErrorResponseSchema,
@@ -15,6 +16,7 @@ import {
   recoveryConfirmRequestSchema,
   registerRequestSchema,
   safeMemberSchema,
+  setRatingRequestSchema,
   updateDiaryEntryRequestSchema,
   updateMemberListRequestSchema,
   updateMemberReviewRequestSchema,
@@ -115,8 +117,14 @@ describe('catalog contracts', () => {
     expect(updateMemberListRequestSchema.safeParse({}).success).toBe(false)
   })
 
-  it('bounds playback progress writes to sane ranges', () => {
-    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })
+  it('bounds member ratings to whole points between 1 and 10', () => {
+    expect(setRatingRequestSchema.parse({ id: 693134, kind: 'movie', value: 9 })).toMatchObject({ value: 9 })
+    expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 0 }).success).toBe(false)
+    expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 11 }).success).toBe(false)
+    expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 4.5 }).success).toBe(false)
+  })
+
+  it('bounds playback progress writes to sane ranges', () => {    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })
     expect(progressWriteRequestSchema.parse({ completed: true, durationSeconds: 3600, episode: 3, id: 95396, kind: 'series', positionSeconds: 3599, season: 1 })).toMatchObject({ completed: true, season: 1 })
     expect(progressWriteRequestSchema.safeParse({ id: 693134, kind: 'movie', positionSeconds: -5 }).success).toBe(false)
     expect(progressWriteRequestSchema.safeParse({ durationSeconds: 0, id: 693134, kind: 'movie', positionSeconds: 10 }).success).toBe(false)
@@ -124,5 +132,14 @@ describe('catalog contracts', () => {
   })
 
   it('requires request correlation on stable errors', () => {    expect(apiErrorResponseSchema.safeParse({ error: { code: 'BAD_REQUEST', message: 'Bad request.', requestId: 'request-1234', retryable: false } }).success).toBe(true)
+  })
+
+  it('carries direct caption tracks on listed providers', () => {
+    const parsed = playbackProviderListSchema.parse({ providers: [
+      { id: 'primary', label: 'primary', subtitles: [{ id: 'en', label: 'English', language: 'en', url: 'https://media.example/en.vtt', format: 'vtt' }] },
+      { id: 'backup', label: 'backup' },
+    ] })
+    expect(parsed.providers[0]?.subtitles).toMatchObject([{ id: 'en', format: 'vtt' }])
+    expect(parsed.providers[1]?.subtitles).toEqual([])
   })
 })

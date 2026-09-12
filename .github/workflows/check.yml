@@ -41,7 +41,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
       - run: bun install --frozen-lockfile
       - run: bun --filter @consumit/api db:migrate:deploy
       - run: bun run check
       - run: bun --filter @consumit/api test:integration
+      - run: bun run infra:validate
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:playback -- --project=chrome

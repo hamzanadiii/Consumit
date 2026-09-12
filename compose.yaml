@@ -1,6 +1,16 @@
 name: consumit
 
 services:
+  playback-valkey:
+    image: valkey/valkey:9.1.1-alpine
+    profiles: [playback]
+    command: ["valkey-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   postgres:
     image: postgres:17-alpine
     environment:

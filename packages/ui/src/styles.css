@@ -24,12 +24,12 @@
   --consumit-font-display: 'Charter', 'Bitstream Charter', Georgia, serif;
   --consumit-font-interface: 'DejaVu Sans', Arial, sans-serif;
 
-  --consumit-radius-micro: 4px;
-  --consumit-radius-control: 6px;
-  --consumit-radius-card: 8px;
-  --consumit-content-margin-desktop: 62px;
-  --consumit-nav-height-mobile: 64px;
-  --consumit-nav-height-desktop: 84px;
+  --consumit-radius-micro: 3px;
+  --consumit-radius-control: 5px;
+  --consumit-radius-card: 6px;
+  --consumit-content-margin-desktop: 50px;
+  --consumit-nav-height-mobile: 52px;
+  --consumit-nav-height-desktop: 68px;
 }
 
 @theme inline {
@@ -79,6 +79,16 @@
   }
 }
 
+@keyframes consumit-hero-dot-fill {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
 [data-consumit-nav-overlay][data-state='open'] {
   animation: consumit-nav-overlay-in 180ms ease-out;
 }
@@ -107,4 +117,29 @@
 
 [data-consumit-tabs]::-webkit-scrollbar {
   display: none;
+}
+
+/*
+ * Hero progress rail. The live indicator falls top-down over one rotation
+ * period; pausing the spotlight pauses the fall through the same state.
+ */
+[data-consumit-hero-dot] {
+  animation: consumit-hero-dot-fill linear;
+  transform-origin: top;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-consumit-hero-dot] {
+    animation: none;
+  }
+}
+
+/*
+ * Keyboard-only focus ring for rating stars. :focus-visible keeps pointer
+ * clicks ring-free while keyboard users keep a visible target; only the
+ * star wrapper matches because the half labels nest one level deeper.
+ */
+[data-consumit-rating-input] > span:has(input:focus-visible) {
+  outline: 2px solid var(--consumit-orange);
+  outline-offset: 2px;
 }

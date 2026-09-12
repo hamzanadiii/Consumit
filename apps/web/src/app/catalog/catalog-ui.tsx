@@ -1,9 +1,9 @@
-import { titleHref, watchHref, type CatalogResponseMeta, type CatalogTitleSummary } from '@consumit/contracts'
+import { titleHref, watchHref, type CatalogPerson, type CatalogResponseMeta, type CatalogTitleSummary } from '@consumit/contracts'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { buttonVariants, ErrorState, SectionHeading, WatchCard } from '@consumit/ui'
+import { Badge, buttonVariants, ErrorState, SectionHeading, WatchCard } from '@consumit/ui'
 
 import { ScreenShell } from '../screens/screen-shell'
 
@@ -14,12 +14,56 @@ export function titleMeta(title: CatalogTitleSummary) {
   return [title.year, kind, title.genreNames.slice(0, 2).join(' · ')].filter(Boolean).join(' · ')
 }
 
+export function heroMeta(title: CatalogTitleSummary) {
+  const rating = title.tmdbRating === null ? null : `★ ${title.tmdbRating.toFixed(1)}`
+  return [rating, titleMeta(title)].filter(Boolean).join(' · ')
+}
+
+/**
+ * Detail-shaped hero data. Full title details satisfy this outright;
+ * plain summaries degrade gracefully to meta-only heroes.
+ */
+export type HeroDetail = CatalogTitleSummary & {
+  certification?: string | null | undefined
+  contentRating?: string | null | undefined
+  creators?: readonly Pick<CatalogPerson, 'name' | 'role'>[] | undefined
+  episodeRuntimeMinutes?: number | null | undefined
+  runtimeMinutes?: number | null | undefined
+  seasons?: readonly { number: number }[] | undefined
+  tagline?: string | null | undefined
+}
+
+export function detailMeta(detail: HeroDetail) {
+  const seasons = detail.seasons ?? []
+  const duration = detail.kind === 'movie'
+    ? (detail.runtimeMinutes ? `${Math.floor(detail.runtimeMinutes / 60)}h ${detail.runtimeMinutes % 60}m` : null)
+    : (seasons.length ? `${seasons.length} ${seasons.length === 1 ? 'season' : 'seasons'}` : null)
+  const rating = detail.kind === 'series' ? detail.contentRating : detail.certification
+  return (
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {detail.tmdbRating !== null ? <strong className="text-ink">★ {detail.tmdbRating.toFixed(1)}</strong> : null}
+      {detail.year ? <strong className="text-ink">{detail.year}</strong> : null}
+      {duration ? <span>{duration}</span> : null}
+      {detail.genreNames.length ? <span>{detail.genreNames.slice(0, 3).join(' · ')}</span> : null}
+      {rating ? <Badge tone="neutral">{rating}</Badge> : null}
+    </span>
+  )
+}
+
+export function makerByline(detail: Pick<HeroDetail, 'creators' | 'kind'>): string | undefined {
+  const makers = detail.kind === 'movie'
+    ? (detail.creators ?? []).filter((person) => person.role === 'Director').map((person) => person.name)
+    : (detail.creators ?? []).map((person) => person.name)
+  if (makers.length === 0) return undefined
+  return `${detail.kind === 'movie' ? 'Directed' : 'Created'} by ${makers.slice(0, 3).join(', ')}`
+}
+
 export function CatalogStaleNotice({ meta }: { meta: CatalogResponseMeta }) {
   if (!meta.stale) return null
   return (
     <p className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3 text-xs text-copy sm:px-8" role="status">
       <AlertTriangle aria-hidden="true" className="size-4 text-orange" />
-      Showing the latest saved catalog data while TMDB reconnects.
+      Showing saved catalog data while fresh titles load.
     </p>
   )
 }
@@ -107,7 +151,7 @@ export function CatalogUnavailableScreen({
 
   return (
     <ScreenShell activeHref={activeHref}>
-      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem] px-5 py-16 sm:px-8 lg:px-[62px]">
+      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem] px-5 py-16 sm:px-8 lg:px-[50px]">
         <CatalogFailure {...(detail ? { detail } : {})} />
       </main>
     </ScreenShell>

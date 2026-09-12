@@ -1,12 +1,19 @@
 import {
   catalogRefSchema,
+  createDiaryEntryRequestSchema,
+  createReviewRequestSchema,
+  diaryEntrySchema,
   favoriteSelectionRequestSchema,
   memberLibrarySchema,
   memberListDetailSchema,
   memberProfileDataSchema,
+  memberRatingSchema,
+  memberReviewSchema,
+  memberTitleRecordSchema,
   playbackProgressSchema,
   progressRefSchema,
   progressWriteRequestSchema,
+  setRatingRequestSchema,
   updateDiaryEntryRequestSchema,
   updateMemberListRequestSchema,
   updateMemberReviewRequestSchema,
@@ -76,6 +83,15 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return reply.code(204).send()
   })
 
+  app.post('/v1/me/diary', async (request, reply) => {
+    guardMutation(request)
+    const parsed = createDiaryEntryRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide a valid watched date.')
+    void reply.header('cache-control', 'private, no-store')
+    void reply.code(201)
+    return diaryEntrySchema.parse(await deps.memberData.createDiaryEntry((await viewer(request, true))!, parsed.data))
+  })
+
   app.patch('/v1/me/reviews/:id', async (request, reply) => {
     guardMutation(request)
     const parsed = updateMemberReviewRequestSchema.safeParse(request.body)
@@ -129,7 +145,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid title reference.')
     void reply.header('cache-control', 'private, no-store')
     const record = await deps.memberData.progress((await viewer(request, true))!, parsed.data)
-    if (!record) throw new ApiError('NOT_FOUND', 'No saved progress for this title.')
+    if (!record) return reply.code(204).send()
     return playbackProgressSchema.parse(record)
   })
 
@@ -140,5 +156,85 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     const list = await deps.memberData.list(slug, await viewer(request, false))
     if (!list) throw new ApiError('NOT_FOUND', 'List not found.')
     return memberListDetailSchema.parse(list)
+  })
+
+  app.put('/v1/ratings', async (request, reply) => {
+    guardMutation(request)
+    const parsed = setRatingRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Rate between 1 and 10.')
+    void reply.header('cache-control', 'private, no-store')
+    return memberRatingSchema.parse(await deps.memberData.setRating((await viewer(request, true))!, { id: parsed.data.id, kind: parsed.data.kind }, parsed.data.value))
+  })
+
+  app.get('/v1/ratings/:kind/:id', async (request, reply) => {
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    const rating = await deps.memberData.rating((await viewer(request, true))!, parsed.data)
+    if (!rating) throw new ApiError('NOT_FOUND', 'No rating for this title.')
+    return memberRatingSchema.parse(rating)
+  })
+
+  app.delete('/v1/ratings/:kind/:id', async (request, reply) => {
+    guardMutation(request)
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    const removed = await deps.memberData.removeRating((await viewer(request, true))!, parsed.data)
+    if (!removed) throw new ApiError('NOT_FOUND', 'No rating for this title.')
+    return reply.code(204).send()
+  })
+
+  for (const method of ['PUT', 'DELETE'] as const) {
+    app.route({
+      handler: async (request, reply) => {
+        guardMutation(request)
+        const params = request.params as { id?: unknown; kind?: unknown }
+        const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+        if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+        void reply.header('cache-control', 'private, no-store')
+        return memberLibrarySchema.parse(await deps.memberData.setWatched((await viewer(request, true))!, parsed.data, method === 'PUT'))
+      },
+      method,
+      url: '/v1/me/library/watched/:kind/:id',
+    })
+  }
+
+  app.put('/v1/likes', async (request, reply) => {
+    guardMutation(request)
+    const parsed = catalogRefSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    return memberTitleRecordSchema.parse(await deps.memberData.setLiked((await viewer(request, true))!, parsed.data, true))
+  })
+
+  app.get('/v1/likes/:kind/:id', async (request, reply) => {
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    const like = await deps.memberData.like((await viewer(request, true))!, parsed.data)
+    if (!like) throw new ApiError('NOT_FOUND', 'No like for this title.')
+    return memberTitleRecordSchema.parse(like)
+  })
+
+  app.delete('/v1/likes/:kind/:id', async (request, reply) => {
+    guardMutation(request)
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    const removed = await deps.memberData.removeLike((await viewer(request, true))!, parsed.data)
+    if (!removed) throw new ApiError('NOT_FOUND', 'No like for this title.')
+    return reply.code(204).send()
+  })
+
+  app.post('/v1/me/reviews', async (request, reply) => {
+    guardMutation(request)
+    const parsed = createReviewRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Write a review between 1 and 10,000 characters.')
+    void reply.header('cache-control', 'private, no-store')
+    void reply.code(201)
+    return memberReviewSchema.parse(await deps.memberData.createReview((await viewer(request, true))!, parsed.data))
   })
 }

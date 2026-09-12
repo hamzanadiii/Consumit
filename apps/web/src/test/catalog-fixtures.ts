@@ -5,6 +5,7 @@ export const movieSummary: CatalogTitleSummary = {
   genreNames: ['Science Fiction', 'Adventure'],
   id: 693134,
   kind: 'movie',
+  logoUrl: null,
   originalTitle: 'Dune: Part Two',
   overview: 'Paul unites with Chani and the Fremen.',
   popularity: 100,

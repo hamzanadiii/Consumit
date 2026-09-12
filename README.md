@@ -73,7 +73,7 @@ Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml 
 | [Delivery strategy](./docs/DELIVERY.md) | Small-modules-to-screens-to-logic implementation order |
 | [Library decisions](./docs/LIBRARIES.md) | Installed foundation and deliberately deferred dependencies |
 | [Component roadmap](./docs/COMPONENTS.md) | Ordered shared-component inventory and implementation status |
-| [Open decisions](./docs/OPEN-QUESTIONS.md) | Questions that must not be guessed away |
+| [Provider policy](./docs/PROVIDER-POLICY.md) | Authorization and direct-delivery activation rules |
 | [Agent working agreement](./AGENTS.md) | Task-specific reading and execution rules |
 
 ## Design reference

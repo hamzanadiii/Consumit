@@ -1,13 +1,21 @@
 import {
   acceptedResponseSchema,
   apiErrorResponseSchema,
+  createDiaryEntryRequestSchema,
+  createReviewRequestSchema,
+  diaryEntrySchema,
   profileSchema,
   favoriteSelectionRequestSchema,
   memberLibrarySchema,
+  memberRatingSchema,
+  memberReviewSchema,
+  memberTitleRecordSchema,
   sessionMemberResponseSchema,
   updateProfileRequestSchema,
   usernameAvailabilityResponseSchema,
   type AcceptedResponse,
+  type CreateDiaryEntryRequest,
+  type CreateReviewRequest,
   type PasswordChangeRequest,
   type LoginRequest,
   type CatalogRef,
@@ -73,6 +81,20 @@ export const updateMemberProfile = (input: UpdateProfileRequest) => request('/v1
 export const getUsernameAvailability = (username: string) => request(`/v1/usernames/${encodeURIComponent(username)}/availability`, { method: 'GET' }, usernameAvailabilityResponseSchema)
 export const saveMemberFavorites = (favorites: readonly CatalogRef[]) => request('/v1/me/favorites', { body: body(favoriteSelectionRequestSchema.parse({ favorites })), method: 'PUT' }, memberLibrarySchema)
 export const setMemberSaved = (title: CatalogRef, saved: boolean) => request(`/v1/me/library/titles/${title.kind}/${title.id}`, { method: saved ? 'PUT' : 'DELETE' }, memberLibrarySchema)
+export const getMemberRating = (title: CatalogRef) => request(`/v1/ratings/${title.kind}/${title.id}`, { method: 'GET' }, memberRatingSchema)
+export const setMemberRating = (title: CatalogRef, value: number) => request('/v1/ratings', { body: body({ ...title, value }), method: 'PUT' }, memberRatingSchema)
+export const clearMemberRating = (title: CatalogRef): Promise<void> => request(`/v1/ratings/${title.kind}/${title.id}`, { method: 'DELETE' })
+export const setMemberWatched = (title: CatalogRef, watched: boolean) => request(`/v1/me/library/watched/${title.kind}/${title.id}`, { method: watched ? 'PUT' : 'DELETE' }, memberLibrarySchema)
+export const getMemberLike = (title: CatalogRef) => request(`/v1/likes/${title.kind}/${title.id}`, { method: 'GET' }, memberTitleRecordSchema)
+export const setMemberLiked = async (title: CatalogRef, liked: boolean) => {
+  if (!liked) {
+    await request(`/v1/likes/${title.kind}/${title.id}`, { method: 'DELETE' })
+    return null
+  }
+  return request('/v1/likes', { body: body({ ...title }), method: 'PUT' }, memberTitleRecordSchema)
+}
+export const createMemberReview = (input: CreateReviewRequest) => request('/v1/me/reviews', { body: body(createReviewRequestSchema.parse(input)), method: 'POST' }, memberReviewSchema)
+export const createDiaryEntry = (input: CreateDiaryEntryRequest) => request('/v1/me/diary', { body: body(createDiaryEntryRequestSchema.parse(input)), method: 'POST' }, diaryEntrySchema)
 export const getMemberLibrary = () => request('/v1/me/library', { method: 'GET' }, memberLibrarySchema)
 
 const libraryByMember = new Map<string, Promise<MemberLibrary>>()

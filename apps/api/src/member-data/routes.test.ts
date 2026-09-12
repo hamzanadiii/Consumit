@@ -11,14 +11,26 @@ const origin = 'http://localhost:3000'
 function memberDataStub(): MemberData {
   const emptyLibrary = { diary: [], favorites: [], lists: [], saved: [], watched: [] }
   const storedProgress = { completed: false, durationSeconds: 3600, id: 693134, kind: 'movie' as const, positionSeconds: 1200, updatedAt: '2026-09-06T00:00:00.000Z' }
+  const storedRating = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null, value: 9 }
+  const storedLike = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null }
+  const storedReview = { body: 'A patient masterpiece.', id: 693134, kind: 'movie' as const, origin: 'native' as const, reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] }
   return {
+    createDiaryEntry: vi.fn(async () => ({ entryId: 'diary-1', id: 693134, kind: 'movie' as const, origin: 'native' as const, rewatch: false, sourceKey: null, tags: [], watchedOn: '2026-09-09' })),
+    createReview: vi.fn(async () => storedReview),
     library: vi.fn(async () => emptyLibrary),
+    like: vi.fn(async () => storedLike),
     list: vi.fn(async () => null),
     profile: vi.fn(async () => null),
     progress: vi.fn(async () => storedProgress),
+    rating: vi.fn(async () => storedRating),
+    removeLike: vi.fn(async () => true),
+    removeRating: vi.fn(async () => true),
     setFavorites: vi.fn(async () => emptyLibrary),
+    setLiked: vi.fn(async () => storedLike),
     setProgress: vi.fn(async () => storedProgress),
+    setRating: vi.fn(async () => storedRating),
     setSaved: vi.fn(async () => emptyLibrary),
+    setWatched: vi.fn(async () => emptyLibrary),
     updateDiary: vi.fn(async () => true),
     updateList: vi.fn(async () => true),
     updateReview: vi.fn(async () => true),
@@ -91,8 +103,116 @@ describe('member data mutation routes', () => {
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { id: 693134, kind: 'movie', positionSeconds: -5 }, url: '/v1/progress' })).statusCode).toBe(400)
     expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', payload: { id: 693134, kind: 'movie', positionSeconds: 10 }, url: '/v1/progress' })).statusCode).toBe(403)
     expect((await app.inject({ headers: { origin }, method: 'PUT', payload: { id: 693134, kind: 'movie', positionSeconds: 10 }, url: '/v1/progress' })).statusCode).toBe(401)
-    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/progress/movie/693134' })).statusCode).toBe(404)
+    const missing = await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/progress/movie/693134' })
+    expect(missing.statusCode).toBe(204)
+    expect(missing.body).toBe('')
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/progress/novel/693134' })).statusCode).toBe(400)
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/progress/series/95396?season=abc' })).statusCode).toBe(400)
+  })
+
+  it('writes, reads, and removes member ratings through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const saved = await app.inject({ cookies: cookie, headers, method: 'PUT', payload: { id: 693134, kind: 'movie', value: 9 }, url: '/v1/ratings' })
+    expect(saved.statusCode).toBe(200)
+    expect(saved.json()).toMatchObject({ id: 693134, kind: 'movie', value: 9 })
+    expect(memberData.setRating).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, 9)
+
+    const resumed = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/ratings/movie/693134' })
+    expect(resumed.statusCode).toBe(200)
+    expect(memberData.rating).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' })
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/ratings/movie/693134' })).statusCode).toBe(204)
+    expect(memberData.removeRating).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' })
+  })
+
+  it('rejects invalid, cross-site, unauthenticated, and missing ratings', async () => {
+    const memberData = memberDataStub()
+    vi.mocked(memberData.rating).mockResolvedValue(null)
+    vi.mocked(memberData.removeRating).mockResolvedValue(false)
+    const { app, cookie } = await setup(memberData)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { id: 693134, kind: 'movie', value: 11 }, url: '/v1/ratings' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', payload: { id: 693134, kind: 'movie', value: 8 }, url: '/v1/ratings' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'PUT', payload: { id: 693134, kind: 'movie', value: 8 }, url: '/v1/ratings' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/ratings/movie/693134' })).statusCode).toBe(404)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'DELETE', url: '/v1/ratings/movie/693134' })).statusCode).toBe(404)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/ratings/novel/693134' })).statusCode).toBe(400)
+  })
+
+  it('toggles watched state through validated same-origin library requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const marked = await app.inject({ cookies: cookie, headers, method: 'PUT', url: '/v1/me/library/watched/movie/693134' })
+    expect(marked.statusCode).toBe(200)
+    expect(memberData.setWatched).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, true)
+
+    const cleared = await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/me/library/watched/movie/693134' })
+    expect(cleared.statusCode).toBe(200)
+    expect(memberData.setWatched).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, false)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', url: '/v1/me/library/watched/novel/693134' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', url: '/v1/me/library/watched/movie/693134' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'PUT', url: '/v1/me/library/watched/movie/693134' })).statusCode).toBe(401)
+  })
+
+  it('writes, reads, and removes member likes through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const liked = await app.inject({ cookies: cookie, headers, method: 'PUT', payload: { id: 693134, kind: 'movie' }, url: '/v1/likes' })
+    expect(liked.statusCode).toBe(200)
+    expect(liked.json()).toMatchObject({ id: 693134, kind: 'movie' })
+    expect(memberData.setLiked).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, true)
+
+    const read = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/likes/movie/693134' })
+    expect(read.statusCode).toBe(200)
+    expect(memberData.like).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' })
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/likes/movie/693134' })).statusCode).toBe(204)
+    expect(memberData.removeLike).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' })
+  })
+
+  it('rejects invalid, cross-site, unauthenticated, and missing likes', async () => {
+    const memberData = memberDataStub()
+    vi.mocked(memberData.like).mockResolvedValue(null)
+    vi.mocked(memberData.removeLike).mockResolvedValue(false)
+    const { app, cookie } = await setup(memberData)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { id: -4, kind: 'movie' }, url: '/v1/likes' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', payload: { id: 693134, kind: 'movie' }, url: '/v1/likes' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'PUT', payload: { id: 693134, kind: 'movie' }, url: '/v1/likes' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/likes/movie/693134' })).statusCode).toBe(404)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'DELETE', url: '/v1/likes/movie/693134' })).statusCode).toBe(404)
+  })
+
+  it('creates native diary entries through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const created = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { id: 693134, kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' }, url: '/v1/me/diary' })
+    expect(created.statusCode).toBe(201)
+    expect(created.json()).toMatchObject({ entryId: 'diary-1', id: 693134, watchedOn: '2026-09-09' })
+    expect(memberData.createDiaryEntry).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' })
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: 'not-a-date' }, url: '/v1/me/diary' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(401)
+  })
+
+  it('creates native reviews through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const created = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { body: 'A patient masterpiece.', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })
+    expect(created.statusCode).toBe(201)
+    expect(created.json()).toMatchObject({ body: 'A patient masterpiece.', id: 693134, reviewId: 'review-1' })
+    expect(memberData.createReview).toHaveBeenCalledWith(memberId, { body: 'A patient masterpiece.', id: 693134, kind: 'movie' })
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'POST', payload: { body: '  ', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'POST', payload: { body: 'Great.', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'POST', payload: { body: 'Great.', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(401)
   })
 })

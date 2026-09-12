@@ -1,8 +1,15 @@
 import type {
   CatalogKind,
+  CatalogRef,
+  CreateDiaryEntryRequest,
+  CreateReviewRequest,
+  DiaryEntry,
   MemberLibrary,
   MemberListDetail,
   MemberProfileData,
+  MemberRating,
+  MemberReview,
+  MemberTitleRecord,
   PlaybackProgress,
   ProgressRef,
   ProgressWriteRequest,
@@ -42,6 +49,41 @@ function progressKey(memberId: string, ref: ProgressRef) {
   } as const
 }
 
+function ratingKey(memberId: string, ref: CatalogRef) {
+  return {
+    catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE',
+    memberId,
+    tmdbId: ref.id,
+  } as const
+}
+
+function ratingView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number; value: number }): MemberRating {
+  return {
+    id: row.tmdbId,
+    kind: kind(row.catalogKind),
+    origin: origin(row.origin),
+    sourceKey: row.sourceKey,
+    value: row.value,
+  }
+}
+
+function likeKey(memberId: string, ref: CatalogRef) {
+  return {
+    catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE',
+    memberId,
+    tmdbId: ref.id,
+  } as const
+}
+
+function likeView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number }): MemberTitleRecord {
+  return {
+    id: row.tmdbId,
+    kind: kind(row.catalogKind),
+    origin: origin(row.origin),
+    sourceKey: row.sourceKey,
+  }
+}
+
 function progressView(row: { catalogKind: 'MOVIE' | 'SERIES'; completed: boolean; durationSeconds: number | null; episode: number; positionSeconds: number; season: number; tmdbId: number; updatedAt: Date }): PlaybackProgress {
   return {
     completed: row.completed,
@@ -78,7 +120,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         prisma.watchedTitle.findMany({ orderBy: { updatedAt: 'desc' }, take: 5_000, where: { memberId } }),
         prisma.diaryEntry.findMany({ orderBy: [{ watchedOn: 'desc' }, { createdAt: 'desc' }], take: 5_000, where: { memberId } }),
         prisma.savedTitle.findMany({ orderBy: { createdAt: 'desc' }, take: 5_000, where: { memberId } }),
-        prisma.favorite.findMany({ orderBy: { position: 'asc' }, take: 4, where: { memberId } }),
+        prisma.favorite.findMany({ orderBy: { position: 'asc' }, take: 6, where: { memberId } }),
         prisma.memberList.findMany({ include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 1_000, where: { memberId } }),
       ])
       return {
@@ -109,7 +151,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       const member = await prisma.member.findFirst({
         include: {
           diaryEntries: { orderBy: [{ watchedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
-          favorites: { orderBy: { position: 'asc' }, take: 4 },
+          favorites: { orderBy: { position: 'asc' }, take: 6 },
           lists: { include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 30, where: visibleLists },
           profile: true,
           reviews: { orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
@@ -136,6 +178,23 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       })
       return library(memberId)
     },
+    async rating(memberId: string, ref): Promise<MemberRating | null> {
+      const row = await prisma.rating.findUnique({ where: { memberId_catalogKind_tmdbId: ratingKey(memberId, ref) } })
+      return row ? ratingView(row) : null
+    },
+    async setRating(memberId: string, ref, value: number): Promise<MemberRating> {
+      const key = ratingKey(memberId, ref)
+      const row = await prisma.rating.upsert({
+        create: { ...key, importBatchId: null, origin: 'NATIVE', sourceKey: null, value },
+        update: { importBatchId: null, origin: 'NATIVE', sourceKey: null, value },
+        where: { memberId_catalogKind_tmdbId: key },
+      })
+      return ratingView(row)
+    },
+    async removeRating(memberId: string, ref): Promise<boolean> {
+      const result = await prisma.rating.deleteMany({ where: { ...ratingKey(memberId, ref), origin: 'NATIVE' } })
+      return result.count === 1
+    },
     async setSaved(memberId, title, saved) {
       const catalogKind = title.kind === 'series' ? 'SERIES' : 'MOVIE'
       const key = { catalogKind, memberId, tmdbId: title.id } as const
@@ -149,6 +208,101 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         await prisma.savedTitle.deleteMany({ where: key })
       }
       return library(memberId)
+    },
+    async setWatched(memberId, title, watched) {
+      const catalogKind = title.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const key = { catalogKind, memberId, tmdbId: title.id } as const
+      if (watched) {
+        await prisma.watchedTitle.upsert({
+          create: { ...key, origin: 'NATIVE' },
+          update: { importBatchId: null, origin: 'NATIVE', sourceKey: null },
+          where: { memberId_catalogKind_tmdbId: key },
+        })
+      } else {
+        await prisma.watchedTitle.deleteMany({ where: key })
+      }
+      return library(memberId)
+    },
+    async like(memberId: string, ref: CatalogRef): Promise<MemberTitleRecord | null> {
+      const row = await prisma.titleLike.findUnique({ where: { memberId_catalogKind_tmdbId: likeKey(memberId, ref) } })
+      return row ? likeView(row) : null
+    },
+    async setLiked(memberId: string, ref: CatalogRef, liked: boolean): Promise<MemberTitleRecord | null> {
+      const key = likeKey(memberId, ref)
+      if (!liked) {
+        await prisma.titleLike.deleteMany({ where: key })
+        return null
+      }
+      const row = await prisma.titleLike.upsert({
+        create: { ...key, importBatchId: null, origin: 'NATIVE', sourceKey: null },
+        update: { importBatchId: null, origin: 'NATIVE', sourceKey: null },
+        where: { memberId_catalogKind_tmdbId: key },
+      })
+      return likeView(row)
+    },
+    async removeLike(memberId: string, ref: CatalogRef): Promise<boolean> {
+      const result = await prisma.titleLike.deleteMany({ where: likeKey(memberId, ref) })
+      return result.count === 1
+    },
+    async createDiaryEntry(memberId: string, input: CreateDiaryEntryRequest): Promise<DiaryEntry> {
+      const catalogKind = input.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const key = { catalogKind, memberId, tmdbId: input.id } as const
+      const watchedOn = new Date(`${input.watchedOn}T00:00:00.000Z`)
+      const row = await prisma.$transaction(async (tx) => {
+        await tx.watchedTitle.upsert({
+          create: { ...key, origin: 'NATIVE' },
+          update: { importBatchId: null, origin: 'NATIVE', sourceKey: null },
+          where: { memberId_catalogKind_tmdbId: key },
+        })
+        return tx.diaryEntry.create({
+          data: {
+            catalogKind,
+            importBatchId: null,
+            memberId,
+            origin: 'NATIVE',
+            rewatch: input.rewatch ?? false,
+            sourceKey: null,
+            tags: input.tags ?? [],
+            tmdbId: input.id,
+            watchedOn,
+          },
+        })
+      })
+      return {
+        entryId: row.id,
+        id: row.tmdbId,
+        kind: kind(row.catalogKind),
+        origin: origin(row.origin),
+        rewatch: row.rewatch,
+        sourceKey: row.sourceKey,
+        tags: row.tags,
+        watchedOn: input.watchedOn,
+      }
+    },
+    async createReview(memberId: string, input: CreateReviewRequest): Promise<MemberReview> {
+      const row = await prisma.review.create({
+        data: {
+          body: input.body,
+          catalogKind: input.kind === 'series' ? 'SERIES' : 'MOVIE',
+          importBatchId: null,
+          memberId,
+          origin: 'NATIVE',
+          reviewedOn: input.reviewedOn ? new Date(`${input.reviewedOn}T00:00:00.000Z`) : null,
+          sourceKey: null,
+          tags: [],
+          tmdbId: input.id,
+        },
+      })
+      return {
+        body: row.body,
+        id: row.tmdbId,
+        kind: kind(row.catalogKind),
+        origin: origin(row.origin),
+        reviewId: row.id,
+        reviewedOn: row.reviewedOn ? day(row.reviewedOn) : null,
+        sourceKey: row.sourceKey,
+        tags: row.tags,
+      }
     },
     async progress(memberId: string, ref: ProgressRef): Promise<PlaybackProgress | null> {
       const row = await prisma.playbackProgress.findUnique({ where: { memberId_catalogKind_tmdbId_season_episode: progressKey(memberId, ref) } })

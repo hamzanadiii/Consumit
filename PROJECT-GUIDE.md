@@ -10,9 +10,8 @@
 | Domain language | [`CONTEXT.md`](./CONTEXT.md) |
 | Product scope & flows | [`docs/PRODUCT.md`](./docs/PRODUCT.md) |
 | Platform & backend | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
-| Provider adoption | [`docs/PROVIDERS.md`](./docs/PROVIDERS.md) |
+| Provider adoption | [`docs/PROVIDER-POLICY.md`](./docs/PROVIDER-POLICY.md) |
 | Delivery sequencing | [`docs/DELIVERY.md`](./docs/DELIVERY.md) |
-| Open decisions | [`docs/OPEN-QUESTIONS.md`](./docs/OPEN-QUESTIONS.md) |
 | Visual system | [`DESIGN.md`](./DESIGN.md) |
 | Component registry | [`docs/COMPONENTS.md`](./docs/COMPONENTS.md) |
 | Ways of working | [`AGENTS.md`](./AGENTS.md) |
@@ -147,7 +146,7 @@ lease-proxy escape hatch, no rooms/DMs/donations/ads scaffolding, Fastify
 registrars, Prisma recommended, localized failure (no global panic), OTEL
 over bespoke metrics, Zod-validated env failing fast, Argon2id passwords,
 BullMQ only with the first real queue need. Provider work stays gated on the
-authorized set — execution order in `docs/PROVIDERS.md`.
+authorized set — activation rules in `docs/PROVIDER-POLICY.md`.
 
 ## 4. Delivery
 
@@ -195,7 +194,7 @@ surface `#121215` / raised `#19191E` · ink `#F4F0E8` · muted `#AAA7A1` ·
 signal orange `#FF5D38` (brand/selection/progress/commitment only) · social
 lilac `#A79CFF` (taste context only) · positive `#B8D86D` (presence/health
 only). Display: Bitstream Charter; interface: DejaVu Sans (both self-hosted).
-4px base, rhythm 8/12/18/24/32/48/64; 62px desktop edge, 84px nav shell;
+3.5px base, rhythm 7/10/16/21/28/42/56; 50px desktop edge, 68px nav shell;
 radius 4–8px (6px controls); flat surfaces, gradients only for artwork
 legibility; circles reserved for people/presence/progress.
 
@@ -207,7 +206,7 @@ messaging) · single promise per masthead · synchronized watch state · player
 ownership (Consumit controls, providers supply media) · honest recovery.
 
 Do: shipped brand assets, ivory = immediate action / orange = committed flow,
-visible focus + 44px targets, one finished component at a time, synchronized
+visible focus + 38px targets, one finished component at a time, synchronized
 playback state, TMDB attribution everywhere. Don't: pills/glass/gradients as
 decoration, interchangeable accents, card-grid everything, shrunk-desktop
 mobile, fake-live sample data, embeds, provider logic inside UI shell.
@@ -230,16 +229,16 @@ apps/web/            Next.js UI (routes, screens, fixtures)
 apps/api/            Fastify API (catalog module done; identity/library/social/playback open)
 packages/ui/         shared components + Consumit Player
 packages/contracts/  shared Zod schemas + types
-PROVE/               provider research (sources only, see docs/PROVIDERS.md)
+PROVE/               provider research (sources only, see docs/PROVIDER-POLICY.md)
 design/              reference package (ignored); DESIGN.md + COMPONENTS.md are authority
-docs/                PRODUCT / ARCHITECTURE / PROVIDERS / DELIVERY / OPEN-QUESTIONS / COMPONENTS
+docs/                PRODUCT / ARCHITECTURE / PROVIDER-POLICY / DELIVERY / COMPONENTS
 ```
 
 Root: `bun run dev|build|lint|typecheck|test|check` fan out to workspaces.
 Per workspace: `bun run {dev,build,lint,typecheck,test}`. Web `test` is
 `vitest run`; API `test:tmdb:live` hits the real TMDB API (explicit only).
 
-Working agreement: read CONTEXT/PRODUCT/ARCHITECTURE/DELIVERY/OPEN-QUESTIONS/
+Working agreement: read CONTEXT/PRODUCT/ARCHITECTURE/DELIVERY/PROVIDER-POLICY/
 DESIGN+COMPONENTS per task type · smallest coherent slice · provider code
 behind the adapter seam · progress independent of sources · external output
 hostile, playback inputs authorized-only · deterministic fixtures until

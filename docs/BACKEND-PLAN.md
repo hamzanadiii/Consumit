@@ -7,7 +7,7 @@
 > **Primary rule:** finish the smallest coherent backend slice, prove it, then move to the next one.
 >
 > This plan extends the existing `PROJECT-GUIDE.md`, `ARCHITECTURE.md`, `DELIVERY.md`,
-> `LIBRARIES.md`, `OPEN-QUESTIONS.md`, `PRODUCT.md`, and `PROVIDERS.md`.
+> `LIBRARIES.md`, `PRODUCT.md`, and `PROVIDER-POLICY.md`.
 > Those files remain authoritative when they define product scope or an already-made decision.
 >
 > **Decision update (2026-09-06):** streaming remains a core Consumit capability and ads are back in
@@ -46,7 +46,7 @@ Fastify API
    |
    +--> import worker     durable Letterboxd matching jobs claimed from Postgres
    |
-   +--> authorized media providers/CDNs ---- media bytes ----> browser
+   +--> media providers/CDNs ---- media bytes ----> browser
    +--> ad network/CDN ---------------------- ad creative ----> browser
 ```
 
@@ -1834,7 +1834,7 @@ The full Watch UX works against deterministic fake media behavior.
 
 Only after rights/region/delivery permissions are explicit.
 
-Use `PROVIDERS.md` sequencing.
+Use `PROVIDER-POLICY.md` activation rules.
 
 ## Touch 7.1 — Triage
 
@@ -2912,7 +2912,7 @@ Read:
 - PROJECT-GUIDE.md
 - docs/ARCHITECTURE.md
 - docs/DELIVERY.md
-- docs/OPEN-QUESTIONS.md
+- docs/PROVIDER-POLICY.md
 - BACKEND-PLAN.md
 
 Task:

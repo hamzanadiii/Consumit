@@ -88,6 +88,7 @@ export {
   type StatusDotProps,
   type TasteMatchProps,
 } from './signals/signals'
+export { RatingInput, type RatingInputProps } from './signals/rating-input'
 export {
   ActivityItem,
   CommentCard,
@@ -155,6 +156,13 @@ export {
   type PlayerMenuId,
   type PlayerOption,
 } from './playback/consumit-player'
+export {
+  createAdController,
+  type AdEvent,
+  type AdLoader,
+  type AdPhase,
+  type AdSlot,
+} from './playback/ad-controller'
 export {
   attachDirectMedia,
   canPlayHlsNatively,

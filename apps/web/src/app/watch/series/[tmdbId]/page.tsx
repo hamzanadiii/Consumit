@@ -31,5 +31,8 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   if (titleResponse.item.kind !== 'series') notFound()
   const season = await getCatalogSeason(id, seasonNumber).catch(() => null)
   const episode = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber)
-  return <WatchScreen {...(episode ? { episode } : {})} title={titleResponse.item} />
+  const next = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber + 1)
+  const nextSeason = titleResponse.item.seasons.find((item) => item.number === seasonNumber + 1 && item.episodeCount > 0)
+  const nextHref = next ? `/watch/series/${id}?season=${seasonNumber}&episode=${next.episodeNumber}` : nextSeason ? `/watch/series/${id}?season=${nextSeason.number}&episode=1` : undefined
+  return <WatchScreen interactive nextHref={nextHref} {...(episode ? { episode } : {})} title={titleResponse.item} />
 }

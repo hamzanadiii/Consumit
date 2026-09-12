@@ -12,7 +12,7 @@ import { saveMemberFavorites } from '@/lib/identity-browser'
 
 import { useProfileEdit } from './profile-edit'
 
-const MAX_FAVORITES = 4
+const MAX_FAVORITES = 6
 const SEARCH_DEBOUNCE_MS = 150
 
 function favoriteKeyFromRef(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
@@ -143,6 +143,7 @@ export function FavoritesEditor({ current, initialTitles }: FavoritesEditorProps
       router.refresh()
     } catch {
       setSaveError('Your favorites could not be saved. Please retry.')
+    } finally {
       setSaving(false)
     }
   }
@@ -151,7 +152,7 @@ export function FavoritesEditor({ current, initialTitles }: FavoritesEditorProps
 
   return (
     <div className="mt-8 rounded-card border border-border bg-surface p-5 sm:p-8" data-consumit-favorites-editor>
-      <div className="grid grid-cols-4 gap-3 sm:gap-4" role="group" aria-label="Favorite slots">
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 sm:gap-4" role="group" aria-label="Favorite slots">
         {slots.map((slot, index) => {
           const title = slot ? known.get(favoriteKeyFromRef(slot)) : undefined
           if (!slot) {

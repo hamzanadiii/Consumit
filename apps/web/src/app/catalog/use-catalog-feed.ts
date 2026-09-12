@@ -50,6 +50,8 @@ export function useCatalogFeed(query: BrowseCatalogQuery, initialPage?: CatalogP
   }, [hasMore, requestPage])
 
   useEffect(() => {
+    // requestPage handles cancellation. Stop network work when a filter change
+    // replaces this feed, and prevent late results from updating its state.
     return () => {
       requestRef.current?.abort()
       requestRef.current = null

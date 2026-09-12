@@ -15,6 +15,10 @@
 
 ## API
 
+- Playback reuses native media, hls.js, and dash.js behind the existing visual player. `@consumit/provider-sdk` provides Zod contracts; no additional player framework is introduced.
+- OpenTelemetry API/SDK and OTLP HTTP exporters provide opt-in playback traces and metrics. A separate disposable Valkey instance holds playback sessions, leases, and access caches.
+- Playwright with branded Chrome verifies controlled H.264/AAC decoding and touch layouts. k6 supplies a local admission/load scenario. Physical Safari remains a separate release gate; see [PLAYBACK.md](./PLAYBACK.md).
+
 - Fastify 5.12.1 on Bun.
 - `@fastify/cors`, `@fastify/helmet`, and `@fastify/rate-limit` establish the HTTP boundary baseline.
 - API modules expose an app factory so tests do not need to bind a network port.

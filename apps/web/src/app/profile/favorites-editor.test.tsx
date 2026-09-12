@@ -7,7 +7,7 @@ import type { CatalogTitleSummary } from '@consumit/contracts'
 import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 
 import { FavoritesEditor } from './favorites-editor'
-import { ProfileEditProvider } from './profile-edit'
+import { ProfileEditProvider, useProfileEdit } from './profile-edit'
 
 const mocks = vi.hoisted(() => ({
   browserSearchCatalog: vi.fn(),
@@ -40,6 +40,11 @@ function renderOpen(ui: React.ReactElement) {
   return render(<ProfileEditProvider initialFavoritesOpen>{ui}</ProfileEditProvider>)
 }
 
+function Reopener() {
+  const { setFavoritesOpen } = useProfileEdit()
+  return <button onClick={() => setFavoritesOpen(true)} type="button">Reopen editor</button>
+}
+
 describe('profile favorites editor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -48,15 +53,15 @@ describe('profile favorites editor', () => {
     mocks.saveMemberFavorites.mockResolvedValue({ favorites: [] })
   })
 
-  it('shows four slots with the current favorites prefilled', async () => {
+  it('shows six slots with the current favorites prefilled', async () => {
     const user = userEvent.setup()
     renderOpen(<FavoritesEditor current={current} initialTitles={[movieSummary, seriesSummary]} />)
 
     expect(screen.getByRole('button', { name: 'Remove Dune: Part Two from favorites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove Severance from favorites' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pick favorite for slot 3' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Pick favorite for slot 4' })).toBeInTheDocument()
-    expect(screen.getByText('2 of 4 selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pick favorite for slot 6' })).toBeInTheDocument()
+    expect(screen.getByText('2 of 6 selected')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Pick favorite for slot 3' }))
     expect(screen.getByRole('button', { name: 'Pick favorite for slot 3' })).toHaveAttribute('aria-pressed', 'true')
   })
@@ -74,7 +79,7 @@ describe('profile favorites editor', () => {
     expect(mocks.browserSearchCatalog).toHaveBeenCalledWith('third', 'all')
 
     await user.click(screen.getByRole('button', { name: 'Pick The Third One' }))
-    expect(screen.getByText('3 of 4 selected')).toBeInTheDocument()
+    expect(screen.getByText('3 of 6 selected')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Save favorites' }))
     await waitFor(() => expect(mocks.saveMemberFavorites).toHaveBeenCalledWith([
@@ -113,7 +118,7 @@ describe('profile favorites editor', () => {
     renderOpen(<FavoritesEditor current={current} initialTitles={[movieSummary, seriesSummary]} />)
 
     await user.click(screen.getByRole('button', { name: 'Remove Dune: Part Two from favorites' }))
-    expect(screen.getByText('1 of 4 selected')).toBeInTheDocument()
+    expect(screen.getByText('1 of 6 selected')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pick favorite for slot 1' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Save favorites' }))
@@ -139,10 +144,31 @@ describe('profile favorites editor', () => {
     renderOpen(<FavoritesEditor current={current} initialTitles={[movieSummary, seriesSummary]} />)
 
     await user.click(screen.getByRole('button', { name: 'Remove Severance from favorites' }))
-    expect(screen.getByText('1 of 4 selected')).toBeInTheDocument()
+    expect(screen.getByText('1 of 6 selected')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('button', { name: 'Save favorites' })).not.toBeInTheDocument()
     expect(mocks.saveMemberFavorites).not.toHaveBeenCalled()
+  })
+
+  it('saves again without a reload after a successful save', async () => {
+    const user = userEvent.setup()
+    render(
+      <ProfileEditProvider initialFavoritesOpen>
+        <Reopener />
+        <FavoritesEditor current={current} initialTitles={[movieSummary, seriesSummary]} />
+      </ProfileEditProvider>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save favorites' }))
+    await waitFor(() => expect(mocks.saveMemberFavorites).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole('button', { name: 'Reopen editor' }))
+    const saveAgain = screen.getByRole('button', { name: 'Save favorites' })
+    expect(saveAgain).not.toBeDisabled()
+    expect(saveAgain).not.toHaveAttribute('aria-busy', 'true')
+
+    await user.click(saveAgain)
+    await waitFor(() => expect(mocks.saveMemberFavorites).toHaveBeenCalledTimes(2))
   })
 })

@@ -8,6 +8,9 @@
 
 html {
   background: var(--consumit-canvas);
+  /* Dense interface root: every rem-derived size renders at 87.5%, which
+     pairs with the retuned px shell tokens to land the approved ~80% feel. */
+  font-size: 14px;
 }
 
 body {

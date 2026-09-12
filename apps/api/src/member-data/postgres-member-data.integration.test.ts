@@ -28,7 +28,7 @@ describe('real member data read model', () => {
     expect((await memberData.library(member.id)).diary).toHaveLength(1)
   })
 
-  it('keeps private lists owner-only and persists four ordered native Favorites', async () => {
+  it('keeps private lists owner-only and persists six ordered native Favorites', async () => {
     const member = await db.prisma.member.create({ data: { email: 'owner@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'list_owner', visibility: 'public' } } } })
     const list = await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Private list', slug: 'private-list' } })
     await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Public list', slug: 'public-list', visibility: 'public' } })
@@ -36,14 +36,14 @@ describe('real member data read model', () => {
     expect(await memberData.list(list.slug, member.id)).toMatchObject({ list: { name: 'Private list', visibility: 'private' } })
     expect(await memberData.profile('list_owner')).toMatchObject({ lists: [{ name: 'Public list' }], statistics: { lists: 1 } })
     expect(await memberData.profile('list_owner', member.id)).toMatchObject({ statistics: { lists: 2 } })
-    const library = await memberData.setFavorites(member.id, [1, 2, 3, 4].map((id) => ({ id, kind: 'movie' as const })))
-    expect(library.favorites.map((favorite) => favorite.position)).toEqual([1, 2, 3, 4])
+    const library = await memberData.setFavorites(member.id, [1, 2, 3, 4, 5, 6].map((id) => ({ id, kind: 'movie' as const })))
+    expect(library.favorites.map((favorite) => favorite.position)).toEqual([1, 2, 3, 4, 5, 6])
     expect(library.favorites.every((favorite) => favorite.origin === 'native')).toBe(true)
     expect((await memberData.setSaved(member.id, { id: 95396, kind: 'series' }, true)).saved).toMatchObject([{ id: 95396, kind: 'series', origin: 'native' }])
     expect((await memberData.setSaved(member.id, { id: 95396, kind: 'series' }, false)).saved).toEqual([])
   })
 
-  it('detaches edited Letterboxd records so import cleanup preserves them', async () => {    const member = await db.prisma.member.create({ data: { email: 'editor@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'record_editor' } } } })
+    it('detaches edited Letterboxd records so import cleanup preserves them', async () => {    const member = await db.prisma.member.create({ data: { email: 'editor@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'record_editor' } } } })
     const diary = await db.prisma.diaryEntry.create({ data: { importBatchId: 'import-1', memberId: member.id, origin: 'LETTERBOXD', sourceKey: 'diary-1', tmdbId: 843, watchedOn: new Date('2024-02-03T00:00:00.000Z') } })
     const review = await db.prisma.review.create({ data: { body: 'Imported body', importBatchId: 'import-1', memberId: member.id, origin: 'LETTERBOXD', sourceKey: 'review-1', tmdbId: 843 } })
     const list = await db.prisma.memberList.create({ data: { importBatchId: 'import-1', memberId: member.id, name: 'Imported list', origin: 'LETTERBOXD', slug: 'imported-list', sourceKey: 'list-1', items: { create: { origin: 'LETTERBOXD', position: 1, sourceKey: 'item-1', tmdbId: 843 } } } })
@@ -85,6 +85,49 @@ describe('real member data read model', () => {
     expect(await memberData.progress(member.id, { episode: 2, id: 95396, kind: 'series', season: 1 })).toBeNull()
 
     expect(await memberData.progress(other.id, { id: 693134, kind: 'movie' })).toBeNull()
+  })
+
+  it('stores member ratings idempotently and detaches them from imports', async () => {
+    const member = await db.prisma.member.create({ data: { email: 'rater@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'rater' } } } })
+    const other = await db.prisma.member.create({ data: { email: 'outsider@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'outsider' } } } })
+    await db.prisma.rating.create({ data: { importBatchId: 'import-1', memberId: member.id, origin: 'LETTERBOXD', sourceKey: 'rating-1', tmdbId: 843, value: 7 } })
+
+    expect(await memberData.rating(member.id, { id: 693134, kind: 'movie' })).toBeNull()
+
+    const first = await memberData.setRating(member.id, { id: 693134, kind: 'movie' }, 9)
+    expect(first).toMatchObject({ id: 693134, kind: 'movie', origin: 'native', value: 9 })
+    expect(await memberData.rating(member.id, { id: 693134, kind: 'movie' })).toMatchObject({ value: 9 })
+
+    const rewritten = await memberData.setRating(member.id, { id: 693134, kind: 'movie' }, 6)
+    expect(rewritten.value).toBe(6)
+    expect(await db.prisma.rating.count({ where: { memberId: member.id, tmdbId: 693134 } })).toBe(1)
+
+    const detached = await memberData.setRating(member.id, { id: 843, kind: 'movie' }, 10)
+    expect(detached).toMatchObject({ origin: 'native', value: 10 })
+    expect(await db.prisma.rating.findFirst({ where: { memberId: member.id, tmdbId: 843 } })).toMatchObject({ importBatchId: null, origin: 'NATIVE', sourceKey: null })
+
+    expect(await memberData.removeRating(member.id, { id: 693134, kind: 'movie' })).toBe(true)
+    expect(await memberData.rating(member.id, { id: 693134, kind: 'movie' })).toBeNull()
+    expect(await memberData.removeRating(member.id, { id: 693134, kind: 'movie' })).toBe(false)
+    expect(await memberData.rating(other.id, { id: 843, kind: 'movie' })).toBeNull()
+  })
+
+  it('toggles watched and liked titles and stores native reviews', async () => {
+    const member = await db.prisma.member.create({ data: { email: 'shelf@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'shelf_owner' } } } })
+
+    expect((await memberData.setWatched(member.id, { id: 693134, kind: 'movie' }, true)).watched).toMatchObject([{ id: 693134, kind: 'movie', origin: 'native' }])
+    expect((await memberData.setWatched(member.id, { id: 693134, kind: 'movie' }, false)).watched).toEqual([])
+
+    expect(await memberData.like(member.id, { id: 693134, kind: 'movie' })).toBeNull()
+    expect(await memberData.setLiked(member.id, { id: 693134, kind: 'movie' }, true)).toMatchObject({ id: 693134, kind: 'movie', origin: 'native' })
+    expect(await memberData.like(member.id, { id: 693134, kind: 'movie' })).toMatchObject({ id: 693134 })
+    expect(await memberData.setLiked(member.id, { id: 693134, kind: 'movie' }, false)).toBeNull()
+    expect(await memberData.removeLike(member.id, { id: 693134, kind: 'movie' })).toBe(false)
+
+    const review = await memberData.createReview(member.id, { body: 'A patient masterpiece.', id: 693134, kind: 'movie', reviewedOn: '2026-09-09' })
+    expect(review).toMatchObject({ body: 'A patient masterpiece.', id: 693134, origin: 'native', reviewedOn: '2026-09-09' })
+    expect(review.reviewId).toEqual(expect.any(String))
+    expect((await memberData.profile('shelf_owner', member.id))?.reviews.map((item) => item.body)).toContain('A patient masterpiece.')
   })
 })
 

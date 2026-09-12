@@ -9,6 +9,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().trim().min(1).optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  PLAYBACK_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_VALKEY_URL: z.string().min(1).optional(),
+  PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
+  PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
+  PLAYBACK_DELIVERY_PLANNER: z.enum(['true', 'false']).default('true'),
+  PLAYBACK_DELIVERY_CERT: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().trim().min(1).optional(),
   TMDB_API_READ_TOKEN: z.string().trim().min(1).optional(),
   TMDB_LANGUAGE: z.string().trim().min(1).default('en-US'),
@@ -18,6 +24,17 @@ const envSchema = z.object({
 })
 
 export type ApiEnv = {
+  playback?: {
+    enabled: boolean; stateUrl: string | undefined; mediaConfig: string | undefined;
+    /** Advertised API/resolver instance count. Past one, shared Valkey state
+     *  is mandatory (resolver cache, sessions, rate limits, health). */
+    instances: number
+    /** Direct-only gating by measured capability (ADR-0002). Permissive mode
+     *  (trust adapter declarations) when false. */
+    deliveryPlanner: boolean
+    /** Optional JSON file of attested capability rows loaded at boot. */
+    deliveryCert: string | undefined
+  }
   appOrigin: string
   authCodePepper: string | undefined
   authEmailFrom: string | undefined
@@ -40,6 +57,20 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_MEDIA_CONFIG) throw new Error('Playback requires PLAYBACK_MEDIA_CONFIG.')
+  if (value.PLAYBACK_ENABLED === 'true' && value.PLAYBACK_DELIVERY_PLANNER !== 'true') throw new Error('Playback requires direct-delivery certification; PLAYBACK_DELIVERY_PLANNER cannot be disabled.')
+  if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_DELIVERY_CERT) throw new Error('Playback requires PLAYBACK_DELIVERY_CERT.')
+  // Single-instance launches run playback on bounded in-process state; shared
+  // Valkey becomes mandatory past one instance, where split-brain resolvers
+  // would otherwise diverge on cache, sessions, and health.
+  if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_VALKEY_URL && value.PLAYBACK_INSTANCES > 1) {
+    throw new Error('Multi-instance playback requires PLAYBACK_VALKEY_URL.')
+  }
+  if (value.PLAYBACK_VALKEY_URL && value.VALKEY_URL) {
+    const playbackUrl = new URL(value.PLAYBACK_VALKEY_URL)
+    const authUrl = new URL(value.VALKEY_URL)
+    if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
+  }
   if (value.NODE_ENV === 'production') {
     const required = {
       AUTH_CODE_PEPPER: value.AUTH_CODE_PEPPER,
@@ -56,6 +87,10 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     }
   }
   return {
+    playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
+      instances: value.PLAYBACK_INSTANCES,
+      deliveryPlanner: value.PLAYBACK_DELIVERY_PLANNER === 'true',
+      deliveryCert: value.PLAYBACK_DELIVERY_CERT },
     appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,

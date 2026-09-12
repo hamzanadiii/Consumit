@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
-import { CatalogGrid, CatalogStaleNotice, CatalogUnavailableScreen } from './catalog-ui'
+import { CatalogGrid, CatalogStaleNotice, CatalogUnavailableScreen, detailMeta, heroMeta, makerByline } from './catalog-ui'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -23,7 +23,7 @@ describe('catalog UI', () => {
     const { rerender } = render(<CatalogStaleNotice meta={meta} />)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     rerender(<CatalogStaleNotice meta={{ ...meta, stale: true }} />)
-    expect(screen.getByRole('status')).toHaveTextContent('latest saved catalog data')
+    expect(screen.getByRole('status')).toHaveTextContent('saved catalog data')
   })
 
   it('turns a missing server catalog configuration into a useful product state', () => {
@@ -31,5 +31,25 @@ describe('catalog UI', () => {
 
     expect(screen.getByRole('heading', { name: 'The catalog missed its cue' })).toBeInTheDocument()
     expect(screen.getByText(/server-only TMDB API Read Access Token/)).toBeInTheDocument()
+  })
+
+  it('leads hero meta with the TMDB score', () => {
+    expect(heroMeta(movieSummary)).toBe('★ 8.2 · 2024 · Film · Science Fiction · Adventure')
+    expect(heroMeta({ ...movieSummary, tmdbRating: null })).toBe('2024 · Film · Science Fiction · Adventure')
+  })
+
+  it('shares one score-led meta and maker byline across heroes', () => {
+    render(<>{detailMeta({ ...movieSummary, certification: 'PG-13', runtimeMinutes: 166 })}</>)
+    expect(screen.getByText('★ 8.2')).toBeInTheDocument()
+    expect(screen.getByText('2h 46m')).toBeInTheDocument()
+    expect(screen.getByText('PG-13')).toBeInTheDocument()
+
+    expect(makerByline({ creators: [{ name: 'Denis Villeneuve', role: 'Director' }], kind: 'movie' })).toBe(
+      'Directed by Denis Villeneuve',
+    )
+    expect(makerByline({ creators: [], kind: 'series' })).toBeUndefined()
+    expect(makerByline({ creators: [{ name: 'Dan Erickson', role: 'Creator' }], kind: 'series' })).toBe(
+      'Created by Dan Erickson',
+    )
   })
 })

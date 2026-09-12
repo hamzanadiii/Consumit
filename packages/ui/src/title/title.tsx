@@ -8,8 +8,11 @@ export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
   actions?: ReactNode | undefined
   backgroundClassName?: string | undefined
   backgroundSrc?: string | undefined
+  byline?: ReactNode | undefined
   context?: string | undefined
   headingLevel?: 'h1' | 'h2' | undefined
+  lede?: ReactNode | undefined
+  logoUrl?: string | null | undefined
   metadata: ReactNode
   socialProof?: ReactNode | undefined
   synopsis: string
@@ -23,9 +26,12 @@ export function TitleMasthead({
   actions,
   backgroundClassName,
   backgroundSrc,
+  byline,
   className,
   context,
   headingLevel = 'h2',
+  lede,
+  logoUrl,
   metadata,
   socialProof,
   synopsis,
@@ -41,24 +47,43 @@ export function TitleMasthead({
   return (
     <header
       className={cn(
-        'relative isolate overflow-hidden rounded-card border border-border bg-surface px-5 py-10 sm:px-8 lg:min-h-[31rem] lg:px-10 lg:py-14',
+        'relative isolate overflow-hidden rounded-card border border-border bg-surface px-5 py-12 sm:px-8 sm:py-16 lg:min-h-[34rem] lg:px-10 lg:py-20',
+        socialProof && 'lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start lg:gap-10',
         className,
       )}
       data-consumit-title-masthead
       {...props}
     >
       {backgroundSrc ? (
-        <img alt="" className={cn('absolute inset-0 -z-20 size-full object-cover', backgroundClassName)} src={backgroundSrc} />
+        <img alt="" className={cn('absolute inset-0 -z-20 size-full object-cover', backgroundClassName)} fetchPriority="high" src={backgroundSrc} />
       ) : null}
       <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98)_0%,rgba(9,9,11,.84)_48%,rgba(9,9,11,.16)_100%)]" />
+      <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(0deg,rgba(9,9,11,.94)_0%,rgba(9,9,11,0)_34%)]" />
       <div className="min-w-0 max-w-2xl">
         {context ? (
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-copy">{context}</p>
         ) : null}
-        <Heading className={cn('max-w-full break-words text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.9] tracking-[-0.025em] text-ink', context && 'mt-5')}>
-          {title}
-        </Heading>
+        {logoUrl ? (
+          <>
+            <img
+              alt={title}
+              className={cn(
+                'h-auto max-h-24 w-auto max-w-full object-contain drop-shadow-[0_2px_16px_rgb(0_0_0/0.65)] sm:max-h-32',
+                context && 'mt-5',
+              )}
+              fetchPriority="high"
+              src={logoUrl}
+            />
+            <Heading className="sr-only">{title}</Heading>
+          </>
+        ) : (
+          <Heading className={cn('max-w-full break-words text-balance font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.9] tracking-[-0.025em] text-ink', context && 'mt-5')}>
+            {title}
+          </Heading>
+        )}
         <div className="mt-5 text-sm text-copy">{metadata}</div>
+        {lede ? <p className="mt-4 max-w-[48ch] font-display text-2xl leading-snug text-ink">{lede}</p> : null}
+        {byline ? <p className="mt-3 text-xs text-muted">{byline}</p> : null}
         <p className={cn('mt-5 max-w-[60ch] break-words text-sm leading-6 text-copy', synopsisClassName)}>{synopsis}</p>
         {actions ? <div className="mt-6 flex flex-wrap gap-2">{actions}</div> : null}
         {safeScore !== undefined ? (
@@ -71,7 +96,7 @@ export function TitleMasthead({
           </div>
         ) : null}
       </div>
-      {socialProof ? <div className="mt-8 max-w-md lg:absolute lg:right-8 lg:bottom-8 lg:mt-0">{socialProof}</div> : null}
+      {socialProof ? <div className="mt-8 w-full max-w-md lg:mt-0">{socialProof}</div> : null}
     </header>
   )
 }

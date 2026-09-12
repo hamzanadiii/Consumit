@@ -1,0 +1,9 @@
+[Unit]
+Description=Consumit encrypted PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/consumit
+ExecStart=/usr/bin/docker compose -f compose.yaml -f compose.production.yaml --profile backup run --rm backup

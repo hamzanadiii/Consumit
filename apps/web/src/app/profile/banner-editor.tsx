@@ -107,6 +107,7 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
       router.refresh()
     } catch {
       setSaveError('Your banner could not be saved. Please retry.')
+    } finally {
       setSaving(false)
     }
   }

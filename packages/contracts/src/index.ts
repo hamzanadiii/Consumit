@@ -30,6 +30,7 @@ export type CatalogResponseMeta = z.infer<typeof catalogResponseMetaSchema>
 export const catalogTitleSummarySchema = catalogRefSchema.extend({
   backdropUrl: z.url().nullable(),
   genreNames: z.array(z.string()),
+  logoUrl: z.url().nullable(),
   originalTitle: z.string().min(1),
   overview: z.string(),
   popularity: z.number().nonnegative(),
@@ -164,6 +165,7 @@ export const apiErrorCodeSchema = z.enum([
   'INVALID_VERIFICATION_CODE',
   'NOT_FOUND',
   'PASSWORD_INVALID',
+  'PLAYBACK_UNAVAILABLE',
   'RATE_LIMITED',
   'UNAUTHENTICATED',
   'USERNAME_CHANGE_COOLDOWN',
@@ -316,10 +318,10 @@ export const memberTitleRecordSchema = catalogRefSchema.extend({
 })
 export type MemberTitleRecord = z.infer<typeof memberTitleRecordSchema>
 
-export const favoriteSchema = memberTitleRecordSchema.extend({ position: z.int().min(1).max(4) })
+export const favoriteSchema = memberTitleRecordSchema.extend({ position: z.int().min(1).max(6) })
 export type Favorite = z.infer<typeof favoriteSchema>
 
-export const favoriteSelectionRequestSchema = z.object({ favorites: z.array(catalogRefSchema).max(4) })
+export const favoriteSelectionRequestSchema = z.object({ favorites: z.array(catalogRefSchema).max(6) })
 export type FavoriteSelectionRequest = z.infer<typeof favoriteSelectionRequestSchema>
 
 export const diaryEntrySchema = memberTitleRecordSchema.extend({
@@ -334,11 +336,17 @@ const memberTagsSchema = z.array(z.string().trim().min(1).max(100)).max(50)
 const hasChange = (value: Record<string, unknown>) => Object.values(value).some((entry) => entry !== undefined)
 
 export const updateDiaryEntryRequestSchema = z.object({
-  rewatch: z.boolean().optional(),
-  tags: memberTagsSchema.optional(),
+  rewatch: z.boolean().optional(),  tags: memberTagsSchema.optional(),
   watchedOn: z.iso.date().optional(),
 }).refine(hasChange, 'Provide at least one diary change.')
 export type UpdateDiaryEntryRequest = z.infer<typeof updateDiaryEntryRequestSchema>
+
+export const createDiaryEntryRequestSchema = catalogRefSchema.extend({
+  rewatch: z.boolean().optional(),
+  tags: memberTagsSchema.optional(),
+  watchedOn: z.iso.date(),
+})
+export type CreateDiaryEntryRequest = z.infer<typeof createDiaryEntryRequestSchema>
 
 export const memberListSummarySchema = z.object({
   description: z.string().nullable(),
@@ -360,7 +368,7 @@ export type UpdateMemberListRequest = z.infer<typeof updateMemberListRequestSche
 
 export const memberLibrarySchema = z.object({
   diary: z.array(diaryEntrySchema),
-  favorites: z.array(favoriteSchema).max(4),
+  favorites: z.array(favoriteSchema).max(6),
   lists: z.array(memberListSummarySchema),
   saved: z.array(memberTitleRecordSchema),
   watched: z.array(memberTitleRecordSchema),
@@ -382,14 +390,77 @@ export const updateMemberReviewRequestSchema = z.object({
 }).refine(hasChange, 'Provide at least one review change.')
 export type UpdateMemberReviewRequest = z.infer<typeof updateMemberReviewRequestSchema>
 
+export const createReviewRequestSchema = catalogRefSchema.extend({
+  body: z.string().trim().min(1).max(10_000),
+  reviewedOn: z.iso.date().nullable().optional(),
+})
+export type CreateReviewRequest = z.infer<typeof createReviewRequestSchema>
+
 export const memberRatingSchema = memberTitleRecordSchema.extend({ value: z.int().min(1).max(10) })
 export type MemberRating = z.infer<typeof memberRatingSchema>
+
+export const setRatingRequestSchema = catalogRefSchema.extend({ value: z.int().min(1).max(10) })
+export type SetRatingRequest = z.infer<typeof setRatingRequestSchema>
 
 export const progressRefSchema = catalogRefSchema.extend({
   episode: z.int().min(0).max(1000).optional(),
   season: z.int().min(0).max(100).optional(),
 })
 export type ProgressRef = z.infer<typeof progressRefSchema>
+
+export const playbackRefSchema = progressRefSchema.refine((ref) => ref.kind === 'series'
+  ? ref.season !== undefined && ref.episode !== undefined && ref.episode > 0
+  : ref.season === undefined && ref.episode === undefined, 'Specify a movie or an exact series episode.')
+export const playbackCapabilitiesSchema = z.object({
+  hls: z.boolean(), dash: z.boolean(), native: z.boolean(),
+  nativeHls: z.boolean().default(false),
+  maxHeight: z.int().min(240).max(4320).optional(),
+})
+export const resolvePlaybackRequestSchema = z.object({
+  ref: playbackRefSchema,
+  capabilities: playbackCapabilitiesSchema,
+  audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).default('en'),
+})
+export const playbackTrackSchema = z.object({
+  id: z.string().min(1).max(128), label: z.string().min(1).max(128),
+  language: z.string().max(32), url: z.string().max(4096).refine((value) => /^https:\/\//.test(value)),
+  format: z.enum(['vtt', 'srt']),
+})
+export const playbackSourceSchema = z.object({
+  id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
+  type: z.enum(['hls', 'dash', 'native']), src: z.string().min(1).max(4096),
+  qualityHint: z.string().min(1).max(24).optional(),
+  expiresAt: z.iso.datetime(), subtitles: z.array(playbackTrackSchema).max(32).default([]),
+})
+export const playbackSessionSchema = z.object({
+  id: z.string().uuid(), ref: playbackRefSchema, source: playbackSourceSchema,
+  expiresAt: z.iso.datetime(), fallbackCount: z.int().min(0).max(3),
+  capabilities: z.object({ refresh: z.boolean(), fallback: z.boolean(), externalSubtitles: z.boolean() }),
+})
+export const playbackFailureRequestSchema = z.object({
+  sourceId: z.string().min(1).max(160), reason: z.enum(['network', 'media', 'expired', 'unsupported']),
+})
+export const playbackEventsSchema = z.object({ events: z.array(z.object({
+  type: z.enum(['started', 'buffer-start', 'buffer-end', 'error', 'switched', 'ended']),
+  position: z.number().min(0).max(86400), elapsedMs: z.number().min(0).max(86400000).optional(),
+})).min(1).max(20) })
+export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80) })
+export const playbackProviderSchema = z.object({
+  id: z.string().min(1).max(80), label: z.string().min(1).max(80),
+  detail: z.string().min(1).max(80).optional(),
+  /** Direct caption tracks gathered from every provider that answered, ready
+   *  for the player to merge with the active source's own tracks. */
+  subtitles: z.array(playbackTrackSchema).max(32).default([]),
+})
+export const playbackProviderListSchema = z.object({ providers: z.array(playbackProviderSchema).max(30) })
+export type PlaybackRef = z.infer<typeof playbackRefSchema>
+export type PlaybackSource = z.infer<typeof playbackSourceSchema>
+export type PlaybackSession = z.infer<typeof playbackSessionSchema>
+export type ResolvePlaybackRequest = z.infer<typeof resolvePlaybackRequestSchema>
+export type PlaybackFailureRequest = z.infer<typeof playbackFailureRequestSchema>
+export type PlaybackEvents = z.infer<typeof playbackEventsSchema>
+export type PlaybackSwitchRequest = z.infer<typeof playbackSwitchRequestSchema>
+export type PlaybackProvider = z.infer<typeof playbackProviderSchema>
 
 export const progressWriteRequestSchema = progressRefSchema.extend({
   completed: z.boolean().optional(),
@@ -409,7 +480,7 @@ export type PlaybackProgress = z.infer<typeof playbackProgressSchema>
 export const memberProfileDataSchema = z.object({
   canonicalUsername: usernameSchema,
   diary: z.array(diaryEntrySchema),
-  favorites: z.array(favoriteSchema).max(4),
+  favorites: z.array(favoriteSchema).max(6),
   lists: z.array(memberListSummarySchema),
   profile: profileSchema,
   reviews: z.array(memberReviewSchema),

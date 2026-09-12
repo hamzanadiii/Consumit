@@ -11,8 +11,6 @@ The product combines four jobs:
 3. Preserve history, progress, favorites, ratings, reviews, and lists.
 4. Turn trusted people's activity into useful discovery.
 
-Consumit is a media platform with a social/product layer, not a website organized around provider-specific scrapers. Where legally and technically appropriate, Consumit resolves and manages playback while media bytes travel directly from an authorized provider or CDN to the browser.
-
 ## Product principles
 
 - **Taste before volume.** Explain why a recommendation fits instead of presenting an undifferentiated poster wall.
@@ -99,16 +97,15 @@ Scrolling near the end appends another page without duplicate titles. A keyboard
 - Streaming-service choices are availability preferences, not connected billing accounts.
 - The active playback design is a dedicated, focused screen owned by the first-party Consumit Player.
 - Playback uses authorized direct media sources; iframe and embed delivery are excluded.
+- Guests can watch and resume locally. Members additionally sync progress. Playback defaults to adaptive quality, original audio, and English captions when available; explicit track preferences persist. Recovery retains position and playback intent. The provider backend is disabled until approved media is configured; physical iOS and release reliability gates are recorded in [PLAYBACK.md](./PLAYBACK.md).
 - Every Watch action opens the dedicated first-party player route directly; the player is the screen, not an embedded panel inside a discovery surface.
-- Computed Taste Match, overlap, member scores, and numeric rating presentation are hidden until their product logic is implemented. Written reviews, catalog metadata, and watch progress remain visible.
+- Computed Taste Match, overlap, member scores, and public numeric rating presentation are hidden until their product logic is implemented. A member authors and sees only their own ratings on title detail. Written reviews, catalog metadata, and watch progress remain visible.
 - Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
-- Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Four ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.
+- Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Six ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.
 - Profile, Library, and List screens render stored member records. Unsupported presence, follows, activity, and engagement counts render zero or honest empty states.
 - Signed-out navigation keeps public catalog destinations visible and replaces the member avatar with Sign in. A signed-in member sees Friends and the existing profile entry.
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
-- Provider integrations use sources Consumit is legally and contractually permitted to expose.
-- Launch market is tier-1: US, UK, CA, AU, DE, FR, NL, ES, and IT.
 - Monetization uses first-class ads with fail-open playback: ad failure never blocks media, and ads stay visibly separate from editorial and member surfaces.
 
 ## Visual direction

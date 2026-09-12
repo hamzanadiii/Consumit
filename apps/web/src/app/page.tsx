@@ -1,7 +1,7 @@
 import { HomeScreen } from './home/home-screen'
 import { CatalogUnavailableScreen } from './catalog/catalog-ui'
 
-import { getCatalogBatch, getCatalogDiscovery, refsKey } from '@/lib/catalog-api'
+import { getCatalogBatch, getCatalogDiscovery, getCatalogTitle, refsKey } from '@/lib/catalog-api'
 import { catalogMap, editorialRefs } from '@/lib/catalog-registry'
 
 export default async function HomePage() {
@@ -28,5 +28,15 @@ export default async function HomePage() {
     .sort((a, b) => (b.releaseDate ?? '').localeCompare(a.releaseDate ?? ''))
     .slice(0, 5)
 
-  return <HomeScreen curated={batch.items} editorial={editorial} hero={hero} popular={popular.items} spotlight={spotlight} stale={batch.meta.stale || trending.meta.stale || nowPlaying.meta.stale || onAir.meta.stale || popular.meta.stale || topRated.meta.stale} topRated={topRated.items} trending={trending.items} />
+  // Spotlight heroes need artwork logos, which only title details carry.
+  // Details resolve server-side through the shared 6-hour cache; a title
+  // that fails detail resolution keeps its summary and the serif fallback.
+  const spotlightDetails = await Promise.all(
+    spotlight.map((item) => getCatalogTitle(item.kind, item.id).then(
+      (response) => response.item,
+      () => item,
+    )),
+  )
+
+  return <HomeScreen curated={batch.items} editorial={editorial} hero={hero} popular={popular.items} spotlight={spotlightDetails} stale={batch.meta.stale || trending.meta.stale || nowPlaying.meta.stale || onAir.meta.stale || popular.meta.stale || topRated.meta.stale} topRated={topRated.items} trending={trending.items} />
 }

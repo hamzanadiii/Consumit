@@ -360,7 +360,7 @@ export function GlobalNavigation({
       )}
     >
       <div
-        className="mx-auto flex h-nav-mobile max-w-[90rem] items-center px-5 sm:px-8 lg:h-nav-desktop lg:px-[62px]"
+        className="mx-auto flex h-nav-mobile max-w-[90rem] items-center px-5 sm:px-8 lg:h-nav-desktop lg:px-[50px]"
         data-session-state={signedIn ? 'signed-in' : 'signed-out'}
       >
         <Brand href={brandHref} linkComponent={LinkComponent} markSrc={brandMarkSrc} />

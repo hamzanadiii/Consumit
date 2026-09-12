@@ -118,7 +118,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
 
   return (
     <ScreenShell activeHref="/settings">
-      <main className="mx-auto w-full max-w-[90rem] px-5 py-14 sm:px-8 sm:py-16 lg:px-[62px] lg:py-20" data-consumit-settings-screen>
+      <main className="mx-auto w-full max-w-[90rem] px-5 py-14 sm:px-8 sm:py-16 lg:px-[50px] lg:py-20" data-consumit-settings-screen>
         <header className="border-b border-border pb-10 sm:pb-12">
           <h1 className="font-display text-5xl leading-none tracking-[-0.03em] text-ink sm:text-6xl">Settings</h1>
           <p className="mt-5 max-w-[64ch] text-sm leading-7 text-copy">Shape your account, privacy, playback, and notifications without losing sight of what each choice changes.</p>

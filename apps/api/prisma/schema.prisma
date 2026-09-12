@@ -27,6 +27,7 @@ model Member {
   watchedTitles   WatchedTitle[]
   diaryEntries    DiaryEntry[]
   ratings         Rating[]
+  likes           TitleLike[]
   reviews         Review[]
   savedTitles     SavedTitle[]
   favorites       Favorite[]
@@ -61,7 +62,7 @@ model Profile {
   displayNameOrigin DataOrigin @default(NATIVE)
   bioOrigin         DataOrigin @default(NATIVE)
   locationOrigin    DataOrigin @default(NATIVE)
-  // Private by default (OPEN-QUESTIONS.md). Per-surface visibility arrives
+  // Private by default (docs/PROVIDER-POLICY.md). Per-surface visibility arrives
   // with the social slice; nothing reads this as public until then.
   visibility  String  @default("private")
 }
@@ -155,6 +156,22 @@ model Rating {
   catalogKind   CatalogKind @default(MOVIE)
   tmdbId        Int
   value         Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model TitleLike {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
   origin        DataOrigin  @default(NATIVE)
   sourceKey     String?
   importBatchId String?

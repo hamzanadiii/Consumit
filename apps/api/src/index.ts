@@ -1,8 +1,10 @@
 import { buildApp } from './app.ts'
 import { createTmdbCatalog } from './catalog/tmdb-catalog.ts'
 import { loadEnv } from './config/env.ts'
+import { startPlaybackTelemetry } from './playback/telemetry.ts'
 
 const env = loadEnv()
+const telemetry = startPlaybackTelemetry()
 const catalog = env.tmdbToken
   ? createTmdbCatalog({
     language: env.tmdbLanguage,
@@ -11,6 +13,7 @@ const catalog = env.tmdbToken
   })
   : undefined
 const app = await buildApp(catalog ? { catalog, env } : { env })
+app.addHook('onClose', () => telemetry.shutdown())
 
 if (!env.tmdbToken) {
   app.log.warn('TMDB_API_READ_TOKEN is missing; catalog routes will return 503.')

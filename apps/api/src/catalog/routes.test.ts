@@ -17,6 +17,7 @@ const summary: CatalogTitleSummary = {
   genreNames: ['Drama'],
   id: 550,
   kind: 'movie',
+  logoUrl: null,
   originalTitle: 'Fight Club',
   overview: 'An insomniac meets a soap maker.',
   popularity: 80,

@@ -77,6 +77,7 @@ const tmdbFindSchema = z.object({ movie_results: z.array(z.unknown()) })
 const tmdbImageConfigurationSchema = z.object({
   images: z.object({
     backdrop_sizes: z.array(z.string()).min(1),
+    logo_sizes: z.array(z.string()).min(1),
     poster_sizes: z.array(z.string()).min(1),
     profile_sizes: z.array(z.string()).min(1),
     secure_base_url: z.url(),
@@ -101,6 +102,15 @@ const tmdbAggregateCastSchema = tmdbCreditSchema.extend({
   roles: z.array(z.object({ character: z.string().catch('') })).catch([]),
 })
 
+const tmdbLogoSchema = z.object({
+  file_path: z.string().min(1),
+  iso_639_1: z.string().nullable().catch(null),
+})
+
+const tmdbImagesSchema = z.object({
+  logos: z.array(tmdbLogoSchema).catch([]),
+}).catch({ logos: [] })
+
 const tmdbMovieDetailSchema = tmdbMovieSchema.omit({ genre_ids: true }).extend({
   credits: z.object({
     cast: z.array(tmdbCreditSchema).catch([]),
@@ -108,6 +118,7 @@ const tmdbMovieDetailSchema = tmdbMovieSchema.omit({ genre_ids: true }).extend({
   }),
   genres: z.array(z.object({ id: z.number().int(), name: z.string().min(1) })).catch([]),
   homepage: nullableString,
+  images: tmdbImagesSchema,
   production_countries: z.array(z.object({ name: z.string().min(1) })).catch([]),
   recommendations: tmdbPageSchema,
   release_dates: z.object({
@@ -137,6 +148,7 @@ const tmdbSeriesDetailSchema = tmdbSeriesSchema.omit({ genre_ids: true }).extend
   episode_run_time: z.array(z.number().int().positive()).catch([]),
   genres: z.array(z.object({ id: z.number().int(), name: z.string().min(1) })).catch([]),
   homepage: nullableString,
+  images: tmdbImagesSchema,
   origin_country: z.array(z.string()).catch([]),
   recommendations: tmdbPageSchema,
   seasons: z.array(z.object({
@@ -209,16 +221,32 @@ function chooseImageSize(sizes: readonly string[], preferred: string) {
   return sizes.findLast((size) => size !== 'original') ?? 'original'
 }
 
+/**
+ * Picks the hero logo from TMDB artwork: English first, then language-free
+ * artwork, then anything usable. List responses never carry logos, so they
+ * resolve to null and heroes fall back to the serif title.
+ */
+function pickLogoUrl(
+  logos: readonly z.infer<typeof tmdbLogoSchema>[],
+  configuration: ImageConfiguration,
+) {
+  const preferred = logos.find((logo) => logo.iso_639_1 === 'en')
+    ?? logos.find((logo) => logo.iso_639_1 === null)
+    ?? logos[0]
+  return preferred ? imageUrl(preferred.file_path, configuration, 'logo') : null
+}
+
 function imageUrl(
   path: string | null,
   configuration: ImageConfiguration,
-  type: 'backdrop' | 'poster' | 'profile' | 'still',
+  type: 'backdrop' | 'logo' | 'poster' | 'profile' | 'still',
 ) {
   if (!path?.startsWith('/')) return null
 
   const sizes = configuration[`${type}_sizes`]
   const preferred = {
     backdrop: 'w1280',
+    logo: 'w500',
     poster: 'w500',
     profile: 'w185',
     still: 'w780',
@@ -259,6 +287,7 @@ function summaryFromDetail(detail: CatalogTitleDetail): CatalogTitleSummary {
     genreNames: detail.genreNames,
     id: detail.id,
     kind: detail.kind,
+    logoUrl: detail.logoUrl,
     originalTitle: detail.originalTitle,
     overview: detail.overview,
     popularity: detail.popularity,
@@ -392,7 +421,7 @@ export function createTmdbCatalog({
     })
   }
 
-  async function normalizeSummary(kind: CatalogKind, raw: unknown) {
+  async function normalizeSummary(kind: CatalogKind, raw: unknown): Promise<CatalogTitleSummary | null> {
     const parsed = kind === 'movie'
       ? tmdbMovieSchema.safeParse(raw)
       : tmdbSeriesSchema.safeParse(raw)
@@ -406,6 +435,7 @@ export function createTmdbCatalog({
       genreNames: value.genre_ids.map((id) => genres.value.get(id)).filter((name): name is string => Boolean(name)),
       id: value.id,
       kind,
+      logoUrl: null,
       originalTitle: identity.originalTitle,
       overview: value.overview,
       popularity: value.popularity,
@@ -527,7 +557,7 @@ export function createTmdbCatalog({
 
   async function movieDetail(id: number) {
     const parsed = tmdbMovieDetailSchema.safeParse(await requestJson(`/movie/${id}`, {
-      append_to_response: 'credits,recommendations,release_dates',
+      append_to_response: 'credits,recommendations,release_dates,images',
       include_image_language: 'en,null',
       language,
     }))
@@ -570,6 +600,7 @@ export function createTmdbCatalog({
       id: value.id,
       kind: 'movie',
       languages: value.spoken_languages.map((item) => item.english_name),
+      logoUrl: pickLogoUrl(value.images.logos, images.value),
       originalTitle: value.original_title || value.title || `Movie ${value.id}`,
       overview: value.overview,
       popularity: value.popularity,
@@ -588,7 +619,7 @@ export function createTmdbCatalog({
 
   async function seriesDetail(id: number) {
     const parsed = tmdbSeriesDetailSchema.safeParse(await requestJson(`/tv/${id}`, {
-      append_to_response: 'aggregate_credits,recommendations,content_ratings',
+      append_to_response: 'aggregate_credits,recommendations,content_ratings,images',
       include_image_language: 'en,null',
       language,
     }))
@@ -628,6 +659,7 @@ export function createTmdbCatalog({
       id: value.id,
       kind: 'series',
       languages: value.spoken_languages.map((item) => item.english_name),
+      logoUrl: pickLogoUrl(value.images.logos, images.value),
       originalTitle: value.original_name || value.name || `Series ${value.id}`,
       overview: value.overview,
       popularity: value.popularity,

@@ -42,7 +42,7 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
     <ScreenShell activeHref="/search" searchDefaultValue={initialQuery}>
       <CatalogStaleNotice meta={page.meta} />
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-search-screen>
-        <section className="relative isolate overflow-hidden border-b border-border px-5 py-16 sm:px-8 sm:py-20 lg:px-[62px] lg:py-24">
+        <section className="relative isolate overflow-hidden border-b border-border px-5 py-16 sm:px-8 sm:py-20 lg:px-[50px] lg:py-24">
           {best?.backdropUrl ? <Image alt="" className="-z-20 object-cover opacity-35" fill priority sizes="100vw" src={best.backdropUrl} /> : null}
           <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98),rgba(9,9,11,.76)_58%,rgba(9,9,11,.42))]" />
           <div className="max-w-4xl">
@@ -58,7 +58,7 @@ export function SearchScreen({ initialQuery, page, queryTooShort }: SearchScreen
           </div>
         </section>
 
-        <div className="px-5 sm:px-8 lg:px-[62px]">
+        <div className="px-5 sm:px-8 lg:px-[50px]">
           {best ? (
             <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="best-match-heading">
               <SectionHeading id="best-match-heading" title={initialQuery.length >= 2 ? `Best match for “${initialQuery}”` : 'A strong place to begin'} />

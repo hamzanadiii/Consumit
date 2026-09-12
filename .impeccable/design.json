@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-06T18:14:26Z",
+  "generatedAt": "2026-09-08T15:12:19Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -128,7 +128,8 @@
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
-      { "name": "lg", "value": "1024px" }
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
     ]
   },
   "components": [
@@ -233,6 +234,7 @@
       { "name": "The Catalog Boundary Rule", "body": "TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.", "section": "components" },
       { "name": "The Preview Honesty Rule", "body": "Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.", "section": "components" },
       { "name": "The Home Cadence Rule", "body": "Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.", "section": "components" },
+      { "name": "The Browse Composition Rule", "body": "Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Cinema After Midnight palette, typography, global navigation, and compact corners throughout.", "section": "components" },
       { "name": "The Rank Behind the Poster Rule", "body": "A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.", "section": "components" },
       { "name": "The Social Boundary Rule", "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.", "section": "components" },
       { "name": "The Human Reason Rule", "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.", "section": "components" },

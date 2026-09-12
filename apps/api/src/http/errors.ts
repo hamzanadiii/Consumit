@@ -40,6 +40,7 @@ const statusByCode: Record<ApiErrorCode, number> = {
   INVALID_VERIFICATION_CODE: 400,
   NOT_FOUND: 404,
   PASSWORD_INVALID: 400,
+  PLAYBACK_UNAVAILABLE: 503,
   RATE_LIMITED: 429,
   UNAUTHENTICATED: 401,
   USERNAME_CHANGE_COOLDOWN: 409,
@@ -57,7 +58,7 @@ function translate(error: FastifyError | Error, requestId: string): { body: ApiE
       statusCode: statusByCode[error.code],
     }
   }
-  if ('validation' in error || (error as FastifyError).code === 'FST_ERR_VALIDATION') {
+  if ('validation' in error || (error as FastifyError).code === 'FST_ERR_VALIDATION' || (error as FastifyError).statusCode === 400) {
     return { body: errorEnvelope('BAD_REQUEST', 'The request could not be understood.', requestId), statusCode: 400 }
   }
   if ((error as FastifyError).statusCode === 429) {

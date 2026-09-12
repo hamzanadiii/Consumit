@@ -13,6 +13,10 @@ apps/api/generated/
 .vscode
 coverage
 design
+provider_example
+infra/playback/providers.local.json
+playwright-report
+test-results
 node_modules
 tmp
 temp

@@ -14,6 +14,7 @@
 export type DirectMediaType = 'native' | 'hls' | 'dash'
 
 export type DirectMediaSource = {
+  subtitles?: readonly { id: string; label: string; language: string; url: string }[] | undefined
   /** Direct delivery type. `native` is progressive MP4/WebM. */
   type: DirectMediaType
   /** Authorized https URL. Never a provider page, embed, or shortcut. */
@@ -28,6 +29,7 @@ export type ChapterCue = {
 }
 
 export function isSafeMediaUrl(url: string): boolean {
+  if (/^\/v1\/playback\/media\/[a-f0-9]{8}-[a-f0-9-]{27}$/.test(url)) return true
   if (!url || url.length > 2048) return false
   const trimmed = url.trim()
   if (trimmed !== url) return false
@@ -66,6 +68,24 @@ export function canPlayDashNatively(video: HTMLVideoElement): boolean {
   }
 }
 
+/**
+ * Auto-quality ceiling in pixels of rendition height for the current viewport.
+ * `capLevelToPlayerSize` already prevents picks above the player element, but
+ * high-DPR phones still qualify for wasteful 1080p/4K renditions; this tier
+ * caps Auto mode where extra pixels buy nothing visible. Explicit quality
+ * selection bypasses it (the controller sets the level directly).
+ */
+export function deviceAutoCapHeight(viewport?: { width: number; height: number } | undefined): number {
+  const dims = viewport ?? (typeof window === 'undefined'
+    ? undefined
+    : { width: window.innerWidth, height: window.innerHeight })
+  const smallest = dims ? Math.min(dims.width, dims.height) : Number.NaN
+  if (!Number.isFinite(smallest) || smallest <= 0) return Number.POSITIVE_INFINITY
+  if (smallest < 500) return 720
+  if (smallest < 900) return 1080
+  return Number.POSITIVE_INFINITY
+}
+
 export class UnsafeMediaSourceError extends Error {
   constructor() {
     super('Blocked an unauthorized playback source.')
@@ -86,112 +106,10 @@ export class UnsupportedMediaTypeError extends Error {
 
 export type DetachMedia = () => void
 
-type HlsEngineConstructor = {
-  isSupported(): boolean
-  new (config?: Record<string, unknown>): {
-    attachMedia(video: HTMLVideoElement): void
-    destroy(): void
-    loadSource(src: string): void
-  }
-}
-
-type DashEngine = {
-  MediaPlayer(): {
-    create(): {
-      initialize(video: HTMLVideoElement, src: string, autoPlay: boolean): void
-      reset(): void
-    }
-  }
-}
-
-/**
- * Attach an authorized direct-media source to a native video element.
- * Resolves with a detach function. Throws UnsafeMediaSourceError for
- * hostile URLs and UnsupportedMediaTypeError when no engine is available.
- */
-export async function attachDirectMedia(
-  video: HTMLVideoElement,
-  source: DirectMediaSource,
-): Promise<DetachMedia> {
-  if (!isSafeMediaUrl(source.src)) throw new UnsafeMediaSourceError()
-
-  if (source.type === 'native') {
-    if (video.src !== source.src) video.src = source.src
-    return () => {
-      video.removeAttribute('src')
-      video.load()
-    }
-  }
-
-  if (source.type === 'hls' && canPlayHlsNatively(video)) {
-    if (video.src !== source.src) video.src = source.src
-    return () => {
-      video.removeAttribute('src')
-      video.load()
-    }
-  }
-
-  if (source.type === 'dash' && canPlayDashNatively(video)) {
-    if (video.src !== source.src) video.src = source.src
-    return () => {
-      video.removeAttribute('src')
-      video.load()
-    }
-  }
-
-  if (source.type === 'hls') {
-    let Hls: HlsEngineConstructor | undefined
-    try {
-      // Lazy chunk: the engine loads only when an HLS source attaches,
-      // so the base player bundle stays fast on every machine.
-      const mod = (await import('hls.js')) as unknown as {
-        default?: HlsEngineConstructor
-      } & HlsEngineConstructor
-      Hls = mod.default ?? (mod as HlsEngineConstructor)
-    } catch {
-      throw new UnsupportedMediaTypeError('hls')
-    }
-    if (!Hls?.isSupported()) throw new UnsupportedMediaTypeError('hls')
-    const hls = new Hls({
-      backBufferLength: 60,
-      enableWorker: true,
-      maxBufferLength: 30,
-    })
-    hls.loadSource(source.src)
-    hls.attachMedia(video)
-    return () => {
-      try {
-        hls.destroy()
-      } catch {
-        /* engine teardown must never break the player */
-      }
-      video.removeAttribute('src')
-      video.load()
-    }
-  }
-
-  let dashjs: DashEngine | undefined
-  try {
-    // Lazy chunk: the engine loads only when a DASH source attaches.
-    const mod = (await import('dashjs')) as unknown as {
-      default?: DashEngine
-    } & DashEngine
-    dashjs = mod.default ?? (mod as DashEngine)
-  } catch {
-    throw new UnsupportedMediaTypeError('dash')
-  }
-  if (!dashjs?.MediaPlayer) throw new UnsupportedMediaTypeError('dash')
-  const dashPlayer = dashjs.MediaPlayer().create()
-  dashPlayer.initialize(video, source.src, false)
-  return () => {
-    try {
-      dashPlayer.reset()
-    } catch {
-      /* engine teardown must never break the player */
-    }
-    video.removeAttribute('src')
-    video.load()
-  }
+/** Compatibility entry point; the controller uses the same engine implementation. */
+export async function attachDirectMedia(video: HTMLVideoElement, source: DirectMediaSource): Promise<DetachMedia> {
+  const { attachMediaEngine } = await import('./media-engine')
+  return (await attachMediaEngine(video, source, { tracks() {}, fatal() {} })).destroy
 }
 
 export function formatPlaybackTime(seconds: number): string {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatPlaybackTime, isSafeMediaUrl } from './media-source'
+import { deviceAutoCapHeight, formatPlaybackTime, isSafeMediaUrl } from './media-source'
 
 describe('media-source seam', () => {
   it('accepts authorized https delivery URLs', () => {
@@ -25,5 +25,14 @@ describe('media-source seam', () => {
     expect(formatPlaybackTime(61)).toBe('1:01')
     expect(formatPlaybackTime(Number.NaN)).toBe('0:00')
     expect(formatPlaybackTime(-4)).toBe('0:00')
+  })
+
+  it('caps Auto quality by viewport tier', () => {
+    expect(deviceAutoCapHeight({ width: 390, height: 844 })).toBe(720)
+    expect(deviceAutoCapHeight({ width: 844, height: 390 })).toBe(720)
+    expect(deviceAutoCapHeight({ width: 1280, height: 700 })).toBe(1080)
+    expect(deviceAutoCapHeight({ width: 1920, height: 1080 })).toBe(Number.POSITIVE_INFINITY)
+    expect(deviceAutoCapHeight({ width: 0, height: 0 })).toBe(Number.POSITIVE_INFINITY)
+    expect(deviceAutoCapHeight({ width: Number.NaN, height: 800 })).toBe(Number.POSITIVE_INFINITY)
   })
 })

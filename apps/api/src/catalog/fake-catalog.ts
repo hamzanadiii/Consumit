@@ -25,6 +25,7 @@ function summary(detail: CatalogTitleDetail): CatalogTitleSummary {
     genreNames: detail.genreNames,
     id: detail.id,
     kind: detail.kind,
+    logoUrl: detail.logoUrl,
     originalTitle: detail.originalTitle,
     overview: detail.overview,
     popularity: detail.popularity,

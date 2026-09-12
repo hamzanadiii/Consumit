@@ -16,6 +16,12 @@
     "lint": "bun run --sequential --workspaces --if-present lint",
     "typecheck": "bun run --sequential --workspaces --if-present typecheck",
     "test": "bun run --sequential --workspaces --if-present test",
+    "test:playback": "node node_modules/@playwright/test/cli.js test",
+    "playback:certify": "bun --filter @consumit/api playback:certify",
+    "infra:validate": "node scripts/validate-infra.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "backup:run": "docker compose -f compose.yaml -f compose.production.yaml --profile backup run --rm backup",
+    "backup:check": "docker compose -f compose.yaml -f compose.production.yaml --profile backup run --rm --entrypoint consumit-backup-check backup",
     "check": "bun run lint && bun run typecheck && bun run test && bun run build"
   },
   "engines": {
@@ -24,6 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.63.0",
     "@types/bun": "^1.4.0",
     "@types/node": "^24.13.3",
     "eslint": "^9.39.5",

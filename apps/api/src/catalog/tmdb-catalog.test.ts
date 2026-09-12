@@ -5,6 +5,7 @@ import { createTmdbCatalog } from './tmdb-catalog.ts'
 const configuration = {
   images: {
     backdrop_sizes: ['w780', 'w1280', 'original'],
+    logo_sizes: ['w92', 'w500', 'original'],
     poster_sizes: ['w342', 'w500', 'original'],
     profile_sizes: ['w185', 'original'],
     secure_base_url: 'https://image.tmdb.org/t/p/',
@@ -153,7 +154,7 @@ describe('TMDB catalog adapter', () => {
     expect(result.item.kind === 'series' ? result.item.seasons : []).toEqual([
       expect.objectContaining({ name: 'Season 1', number: 1 }),
     ])
-    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('append_to_response=aggregate_credits%2Crecommendations%2Ccontent_ratings')
+    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('append_to_response=aggregate_credits%2Crecommendations%2Ccontent_ratings%2Cimages')
   })
 
   it('treats an empty upstream homepage as no homepage', async () => {
@@ -180,6 +181,53 @@ describe('TMDB catalog adapter', () => {
     const result = await catalog.title('movie', 38047)
 
     expect(result.item.kind === 'movie' ? result.item.homepageUrl : null).toBeNull()
+  })
+
+  it.each([
+    {
+      logos: [
+        { file_path: '/logo-fr.svg', iso_639_1: 'fr' },
+        { file_path: '/logo-en.png', iso_639_1: 'en' },
+        { file_path: '/logo-none.png', iso_639_1: null },
+      ],
+      name: 'prefers the English artwork logo',
+      wanted: 'https://image.tmdb.org/t/p/w500/logo-en.png',
+    },
+    {
+      logos: [{ file_path: '/logo-none.png', iso_639_1: null }],
+      name: 'falls back to language-free artwork logos',
+      wanted: 'https://image.tmdb.org/t/p/w500/logo-none.png',
+    },
+    {
+      logos: [],
+      name: 'leaves logoUrl empty when TMDB has no artwork logo',
+      wanted: null,
+    },
+  ])('resolves the hero artwork logo: $name', async ({ logos, wanted }) => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/3/movie/550') {
+        return json({
+          ...movieSummary,
+          credits: { cast: [], crew: [] },
+          genres: [{ id: 18, name: 'Drama' }],
+          homepage: null,
+          images: { logos },
+          recommendations: { page: 1, results: [], total_pages: 0, total_results: 0 },
+          release_dates: { results: [] },
+          runtime: 139,
+          status: 'Released',
+          tagline: 'Mischief. Mayhem. Soap.',
+        })
+      }
+      return supportingResponse(url)
+    })
+    const catalog = createTmdbCatalog({ fetch: fetchMock, token: 'test-token' })
+
+    const result = await catalog.title('movie', 550)
+
+    expect(result.item.logoUrl).toBe(wanted)
+    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('append_to_response=credits%2Crecommendations%2Crelease_dates%2Cimages')
   })
 
   it('normalizes episode data for a season', async () => {

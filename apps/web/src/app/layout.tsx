@@ -6,7 +6,6 @@ import './globals.css'
 import { siteUrl } from '@/lib/site'
 import { getServerSession } from '@/lib/identity-server'
 
-import { CatalogAttribution } from './catalog/catalog-attribution'
 import { SessionProvider } from './session/session'
 
 const siteDescription = 'Watch immediately, remember what you love, and discover through people whose taste you trust.'
@@ -38,7 +37,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <SessionProvider initialMember={session.member} initialStatus={session.status}>
           {children}
-          <CatalogAttribution />
         </SessionProvider>
       </body>
     </html>

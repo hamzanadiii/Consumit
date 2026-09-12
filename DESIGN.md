@@ -18,9 +18,10 @@ colors:
   separator: "rgba(255, 255, 255, 0.10)"
   control-outline: "rgba(244, 240, 232, 0.40)"
 typography:
+  root: "14px"
   display:
     fontFamily: "Charter, 'Bitstream Charter', Georgia, serif"
-    fontSize: "clamp(2.75rem, 7vw, 5.5rem)"
+    fontSize: "clamp(2.5rem, 6vw, 5rem)"
     fontWeight: 400
     lineHeight: 0.95
     letterSpacing: "-0.025em"
@@ -42,18 +43,18 @@ typography:
     lineHeight: 1
     letterSpacing: "-0.01em"
 rounded:
-  micro: "4px"
-  control: "6px"
-  card: "8px"
+  micro: "3px"
+  control: "5px"
+  card: "6px"
 spacing:
-  base: "4px"
-  compact: "8px"
-  small: "12px"
-  medium: "18px"
-  control: "24px"
-  section: "32px"
-  large: "48px"
-  hero: "64px"
+  base: "3.5px"
+  compact: "7px"
+  small: "10px"
+  medium: "16px"
+  control: "21px"
+  section: "28px"
+  large: "42px"
+  hero: "56px"
 components:
   button-primary:
     backgroundColor: "{colors.ink}"
@@ -61,40 +62,40 @@ components:
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 16px"
-    height: "44px"
+    height: "38px"
   button-accent:
     backgroundColor: "{colors.signal-orange}"
     textColor: "{colors.canvas}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 16px"
-    height: "44px"
+    height: "38px"
   button-secondary:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 16px"
-    height: "44px"
+    height: "38px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.copy}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 16px"
-    height: "44px"
+    height: "38px"
   button-danger:
     backgroundColor: "{colors.danger}"
     textColor: "{colors.ink}"
     typography: "{typography.control}"
     rounded: "{rounded.control}"
     padding: "0 16px"
-    height: "44px"
+    height: "38px"
   global-navigation:
     backgroundColor: "{colors.navigation}"
     textColor: "{colors.copy}"
     typography: "{typography.control}"
-    height: "84px"
+    height: "68px"
 ---
 
 # Design System: Consumit
@@ -171,15 +172,15 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 ## Layout
 
-Desktop compositions use a 62px content edge and an 84px global navigation shell. The base unit is 4px, with the established rhythm progressing through 8, 12, 18, 24, 32, 48, and 64px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
+Desktop compositions use a 50px content edge and a 68px global navigation shell. The interface root is 14px, so the base unit renders at 3.5px, with the established rhythm progressing through 7, 10, 16, 21, 28, 42, and 56px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
 
-The current catalog responds at 640px, 1024px, and 1280px. Below 1024px, global navigation becomes a separate 64px bar containing only the supplied brand lockup and a 44px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
+The current catalog responds at 640px, 1024px, and 1280px. Below 1024px, global navigation becomes a separate 52px bar containing only the supplied brand lockup and a 38px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
 
 On Home, poster-led circle and trending collections become horizontal discovery rails on narrow screens. Continue-watching cards, the editorial feature, curated lists, and the mood action stack instead, preserving a readable sequence and full-width actions without compressing their content.
 
-Movies and Series use a compact opening within a centered content width (1440px maximum), followed by a landscape rail and a portrait grid. The grid grows from two columns below 640px to three at 640px, four at 1024px, and six at 1280px. The rail retains horizontal scrolling at every width. Below 360px, Genre spans a full control row above Year and sort; wider mobile layouts fit all three controls in one row.
+Movies and Series use a compact opening within a centered content width (1260px maximum), followed by a landscape rail and a portrait grid. The grid grows from two columns below 640px to three at 640px, four at 1024px, and six at 1280px. The rail retains horizontal scrolling at every width. Below 360px, Genre spans a full control row above Year and sort; wider mobile layouts fit all three controls in one row.
 
-Authentication, onboarding, report, and Watch use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 44px high.
+Authentication, onboarding, report, and Watch use purpose-specific reduced shells instead of global navigation. Reduced branded headers keep only the context needed to finish the current job, always use the supplied Consumit mark, and never synthesize the mark with styled text. Onboarding keeps semantic step progress and an optional skip action visible at every width; the mobile skip target remains at least 38px high.
 
 ## Elevation & Depth
 
@@ -189,7 +190,7 @@ The interface is flat by default. Depth comes from tonal surfaces, hairline boun
 
 ## Shapes
 
-Controls and panels are square to gently rounded, using a tight 4–8px range. The 6px control radius is the default interactive shape. Circles are reserved for people, presence, progress, and the recurring celestial artwork language.
+Controls and panels are square to gently rounded, using a tight 3–6px range. The 5px control radius is the default interactive shape. Circles are reserved for people, presence, progress, and the recurring celestial artwork language.
 
 ## Components
 
@@ -197,7 +198,7 @@ Controls and panels are square to gently rounded, using a tight 4–8px range. T
 
 Buttons are compact, direct, and consequence-aware.
 
-- **Shape:** Gently squared controls with a 6px radius; default and icon controls are 44px tall.
+- **Shape:** Gently squared controls with a 5px radius; default and icon controls are 38px tall.
 - **Primary:** Warm ivory fill with midnight text for the confident immediate action, such as Play or View.
 - **Accent:** Signal-orange fill for committed flow progression, such as Create, Continue, or Submit.
 - **Secondary:** Transparent fill with a dedicated accessible control outline; never reuse the faint separator as its boundary.
@@ -212,10 +213,10 @@ Buttons are compact, direct, and consequence-aware.
 
 Global navigation is the stable wayfinding shell for catalog and social surfaces, not a universal header for every product flow.
 
-- **Desktop:** Use an 84px flat Navigation Black shell with the exact supplied mark, Home / Movies / Series / Friends, a universal outlined search field, and the supplied member portrait. The active route receives a thin signal-orange baseline.
-- **Search:** Submit a GET query named `q`. The destination, initial value, and placeholder may change through the component API, but the field remains a 44px outlined global search rather than a filled or pill-shaped control.
+- **Desktop:** Use a 68px flat Navigation Black shell with the exact supplied mark, Home / Movies / Series / Friends, a universal outlined search field, and the supplied member portrait. The active route receives a thin signal-orange baseline.
+- **Search:** Submit a GET query named `q`. The destination, initial value, and placeholder may change through the component API, but the field remains a 38px outlined global search rather than a filled or pill-shaped control.
 - **Member presence:** The portrait is supplied by the caller; the component alone owns the optional Positive Lime presence dot and keeps its visible and announced online state synchronized.
-- **Mobile:** Below 1024px, keep only the brand and a 44px menu trigger in the 64px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
+- **Mobile:** Below 1024px, keep only the brand and a 38px menu trigger in the 52px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
 - **API:** `activeHref` owns current-route presentation, while `items` defaults to Home / Movies / Series / Friends. Brand, search, and profile destinations and content may be overridden without changing the shell anatomy; `sticky` changes positioning only.
 - **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
 - **Scope:** Exclude this shell from Watch and from the reduced authentication, onboarding, and report headers.
@@ -237,8 +238,8 @@ Catalog provenance and prototype honesty are persistent interface chrome, not op
 
 Labels and inputs form one quiet, native-first control contract while remaining independently composable.
 
-- **Label:** Keep context visible above the field in 12px, 700-weight uppercase DejaVu Sans with `0.12em` tracking and Warm Copy color. The caller owns `htmlFor` / `id` association.
-- **Input:** Use a native input at exactly 52px high with the 6px control radius, Input Field surface, Warm Ink text, and the perceptible control outline.
+- **Label:** Keep context visible above the field in 10px, 700-weight uppercase DejaVu Sans with `0.12em` tracking and Warm Copy color. The caller owns `htmlFor` / `id` association.
+- **Input:** Use a native input at exactly 38px high with the 5px control radius, Input Field surface, Warm Ink text, and the perceptible control outline.
 - **Focus:** Keyboard focus changes the boundary to Signal Orange and adds a visible two-pixel orange ring separated from the field by the Midnight Canvas. Remove the transition for reduced motion.
 - **Invalid:** `aria-invalid="true"` changes the boundary and focus ring to Quiet Danger. The caller owns validation, `aria-describedby`, and message content.
 - **Read-only / Disabled:** Read-only fields move to Quiet Surface while preserving legibility. Disabled fields use the same surface with muted text, reduced opacity, and an unavailable cursor.
@@ -249,7 +250,7 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 - Tabs own horizontal overflow so narrow layouts keep one readable row without widening the page.
 - Chips, segmented controls, toggles, and issue selectors use the dedicated control outline; faint separators are never used as interactive boundaries.
-- Native radio and checkbox semantics remain intact. Controls and links keep at least a 44px target in both dimensions; compact title and action labels sit inside the larger interactive area instead of growing visually.
+- Native radio and checkbox semantics remain intact. Controls and links keep at least a 38px target in both dimensions; compact title and action labels sit inside the larger interactive area instead of growing visually.
 - Selected treatments remain legible in every pointer state: dark selections keep warm-ivory text, while ivory selections keep midnight text on hover.
 
 ### Identity and Signals
@@ -269,7 +270,7 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 ### Home Composition
 
-Home at `/` follows one deliberate live-catalog sequence: featured hero; Trending tonight; Popular now; Top rated; an editorial selection; Browse by genre; then the footer. Circle, progress, and community-list sections join that cadence only after real backing behavior exists.
+Home at `/` follows one deliberate live-catalog sequence: featured hero; Popular now; Top rated; an editorial selection; Browse by genre; then the footer. The hero is an auto-rotating artwork-logo spotlight on a brisk cadence with a vertical progress rail floating at its right edge — the live title falls top-down over one rotation period while the rest stay dots, pausing with the spotlight; it pairs a Watch action with a More info destination and mirrors the title masthead exactly — artwork logo, score-led metadata with duration and certification, tagline lede, and maker byline — through the shared hero helpers. Trending tonight is a ten-title ranked rail with one-line score meta under each poster; every featured title stays reachable through the rails below it. Browse by genre is framed as finding something by mood. Circle, progress, and community-list sections join that cadence only after real backing behavior exists.
 
 The pacing alternates emotional and practical decisions. A broad cinematic opening leads into trusted social discovery, a compact return-to-watch section, an editorial interruption, ranked member evidence, human curation, and a final low-friction mood choice.
 
@@ -278,7 +279,7 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 ### Movies and Series Browsing
 
 - **Opening:** Keep the Movies or Series heading in ivory Charter with its small orange full stop, a brief muted description, and compact native genre, year, and sort controls. Use the established global shell and control geometry.
-- **Controls:** Native selects remain 44px high with the control outline, dark surface, readable selected values, and visible orange keyboard focus. Reset is a subordinate ghost action.
+- **Controls:** Native selects remain 38px high with the control outline, dark surface, readable selected values, and visible orange keyboard focus. Reset is a subordinate ghost action.
 - **Artwork:** The landscape rail keeps title and year visible over a legibility gradient. Poster titles appear on hover and keyboard focus and remain visible on touch devices. Missing artwork retains the shared geometric fallback and visible title. Artwork loads lazily; reduced motion removes decorative transitions and smooth rail movement.
 - **Continuation:** Loading placeholders preserve poster proportions. The result count, loading, recovery, and terminal copy remain quiet supporting information below the compact section heading or grid; Load more and Try again use the shared outlined action.
 
@@ -287,7 +288,7 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 ### Trending Card
 
 - **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral a quiet warm-ivory silhouette with the artwork rather than a competing badge.
-- **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable.
+- **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable. Catalog rails add a one-line score meta (★ rating · year · kind) below trending titles.
 - **Responsive behavior:** Trending remains a horizontal discovery rail on narrow screens and resolves to the five-card desktop row at the established wide breakpoint.
 
 **The Rank Behind the Poster Rule.** A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.
@@ -322,7 +323,7 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Title and Series Surfaces
 
-- **Title masthead:** Make one cinematic promise with artwork, context, display title, metadata, synopsis, and a compact action cluster. Taste match and named social proof support that promise without competing with it.
+- **Title masthead:** Make one cinematic promise with artwork, context, the official title artwork logo, score-led metadata, the tagline as lede, a maker byline, a three-line constant synopsis, and a Watch action at the shared control height. The logo is the TMDB artwork mark (English preferred, language-free fallback); when no logo exists the serif display title takes its place, and the title stays in the heading for assistive technology either way. The byline names real directors (film) or creators (series) only; the tagline lives in the hero alone, never repeated in the overview. A dark-glass member shelf tops the hero's right column with Watched, Liked, and Saved toggles backed by stored records, interactive Rated stars, an Add-review row opening the watch-log dialog, a copy-link Share row, and a Your activity destination; rows without backing behavior never appear, and there is no separate rating section. Shelf toggles speak in verbs: Watch, Like, and Save at rest become Watched, Liked, and Saved on hover or when set, and hovering a set toggle reads Remove; the watched eye fills with a translucent wash so its shape survives, while heart and bookmark fill solid. Toggling plays a short scale-and-settle motion. Stars render at trio-icon scale with hover preview and a pop on the hovered star, clear by clicking the set value again with no separate clear control, and show the focus ring for keyboard focus only. The log dialog portals to the document body so the shelf glass never traps it, and commits every section to stored records with retry-safe writes. Taste match and named social proof support that promise without competing with it.
 - **Catalog identity:** TMDB-backed cards, details, seasons, episodes, and Watch actions preserve their canonical numeric catalog routes while the interface continues to show human titles rather than provider identifiers.
 - **Catalog evidence:** Explicitly label TMDB ratings and recommendations. Keep them visually separate from the sample member or Circle evidence governed by the preview-data notice.
 - **Detail priority:** Title Detail opens on Overview. Series Detail opens on Episodes and foregrounds season choice, episode state, progress, and the next available action.
@@ -392,7 +393,7 @@ Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster o
 
 - **Do** use the supplied brand and artwork assets instead of recreating them with generic icons.
 - **Do** reserve ivory for confident immediate actions and orange for committed progression.
-- **Do** preserve visible keyboard focus, 44px targets for compact controls and links, and readable metadata contrast.
+- **Do** preserve visible keyboard focus, 38px targets for compact controls and links, and readable metadata contrast.
 - **Do** finish each shared component and its states before composing the next screen.
 - **Do** keep Home’s section order and responsive discovery rails specific to Home.
 - **Do** keep playback selection, header status, player status, and active source detail synchronized from one application state.

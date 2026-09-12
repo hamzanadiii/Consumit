@@ -2,7 +2,7 @@
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, real member read models, and Letterboxd import worker now exist. Playback resolution and social relationships remain future work. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, Letterboxd worker, and certified direct-playback foundation exist. Social relationships remain future work. Provider changes follow [PROVIDER-POLICY.md](./PROVIDER-POLICY.md).
 
 ## System shape
 
@@ -152,7 +152,7 @@ Authenticate and rate-limit
 
 ### Hedged execution
 
-Do not race every provider on every miss. Start the best candidate, then begin backups only if the request remains unresolved. The founding example uses roughly 0 ms, 120 ms, 300 ms, and 700 ms start offsets; production values come from telemetry.
+Do not race every provider on every miss. The approved initial scheduler starts the best candidate, hedges after 600ms, permits at most two simultaneous attempts and three independent candidate groups, and stops within eight seconds. Production values come from measurements; current operational limits are in [PLAYBACK.md](./PLAYBACK.md).
 
 Each adapter has a hard timeout, concurrency ceiling, requests-per-second limit, burst limit, and bounded queue. A slow or overloaded provider cannot hold the whole request open.
 
@@ -228,6 +228,8 @@ Progress is stored by member and title/episode, never by provider URL.
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
 The Consumit Player owns the playback controls and native media surface. A playback controller will load authorized HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
+
+Delivery is strictly browser-direct. Certified HTTPS media travels from an authorized provider CDN to the member's browser; Consumit never proxies, leases, rewrites, or transforms media bytes. Unknown, expired, header-locked, cookie-bearing, DASH, or uncertified sources are unavailable.
 
 ## Data ownership
 
@@ -366,13 +368,13 @@ These standards generalize the catalog module's established shape (`apps/api/src
 - Per-route rate limits layered under edge and per-provider limits.
 - Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
 - Resolver discipline for playback: tiered candidates, hedged starts, dedupe, observed-quality ranking, health quarantine (Stage 6).
-- DB-first subtitles with normalization and validation (future slice, when subtitle priorities in OPEN-QUESTIONS.md are decided).
+- DB-first subtitle enrichment remains a future slice; current playback exposes only certified direct HTTPS WebVTT tracks.
 - Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
 
 ### Deliberately different this time
 
 1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
-2. **Direct-first media with one audited escape hatch.** Providers that require custom request headers cannot play directly from a browser; for exactly those, a narrow lease-scoped fetch proxy is permitted — short-lived leases, explicit domain allowlist, full SSRF guard, no open fetching. This keeps invariant 2 while preserving the old lease model's real lesson.
+2. **Certified browser-direct media, without an escape hatch.** Provider output is hostile until validated and certified. Anything requiring custom browser-forbidden headers, cookies, rewriting, transformation, or server-side media fetching is unavailable.
 3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
 5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
@@ -419,7 +421,7 @@ different shared queue need such as resolver warming or telemetry ingestion is m
 
 ### Still blocked
 
-Provider adapters and the resolve/fallback endpoints stay unwritten until OPEN-QUESTIONS.md item 1 (authorized provider set) resolves. The execution order for that work lives in [PROVIDERS.md](./PROVIDERS.md); only the provider contract and its fake may exist before then.
+The provider SDK, injectable playback backend, dedicated playback Valkey, capability certification, and headless media controller are implemented. Provider adapters use an injected, bounded DNS-pinned HTTP client only for resolution and operator certification; member media bytes never cross the API. Deployment activation requires authorization, regional approval, an exact configuration digest, and an unexpired direct-delivery certificate. See [PROVIDER-POLICY.md](./PROVIDER-POLICY.md).
 
 ## Architectural invariants
 

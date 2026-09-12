@@ -16,7 +16,7 @@ describe('profile components', () => {
       <ProfileMasthead
         actions={<button type="button">Follow</button>}
         avatarClassName="lg:size-36"
-        contentClassName="lg:inset-x-[62px]"
+        contentClassName="lg:inset-x-[50px]"
         username="@hamza"
         location="Rabat"
         name="Hamza"
@@ -32,7 +32,7 @@ describe('profile components', () => {
     expect(screen.getByRole('img', { name: 'Hamza, online' })).toHaveClass('lg:size-36')
     expect(
       container.querySelector('[data-consumit-profile-masthead] > div'),
-    ).toHaveClass('lg:inset-x-[62px]')
+    ).toHaveClass('lg:inset-x-[50px]')
   })
 
   it('clamps and labels compatibility', () => {

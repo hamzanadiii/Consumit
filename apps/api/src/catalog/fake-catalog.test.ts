@@ -5,7 +5,7 @@ import { createFakeCatalog } from './fake-catalog.ts'
 
 const movie: CatalogMovieDetail = {
   backdropUrl: null, cast: [], certification: null, countries: [], creators: [], genreNames: ['Drama'], homepageUrl: null,
-  id: 550, kind: 'movie', languages: [], originalTitle: 'Fight Club', overview: '', popularity: 1, posterUrl: null,
+  id: 550, kind: 'movie', languages: [], logoUrl: null, originalTitle: 'Fight Club', overview: '', popularity: 1, posterUrl: null,
   recommendations: [], releaseDate: '1999-10-15', runtimeMinutes: 139, status: 'Released', tagline: null,
   title: 'Fight Club', tmdbRating: 8.4, tmdbVoteCount: 30_000, year: 1999,
 }

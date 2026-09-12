@@ -14,7 +14,7 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
 
   return (
     <ScreenShell activeHref="">
-      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem] px-5 py-16 sm:px-8 lg:px-[62px]">
+      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem] px-5 py-16 sm:px-8 lg:px-[50px]">
         <ErrorState
           action={<Button onClick={reset}><RotateCcw aria-hidden="true" /> Try again</Button>}
           description="Consumit could not load this catalog view. Your library and watch history are safe."

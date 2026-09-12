@@ -11,6 +11,8 @@ apps/api/generated/
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Tool caches
@@ -34,4 +36,11 @@ temp/
 Thumbs.db
 
 /design/
-/PROVE/
+/provider_example/
+/infra/playback/providers.local.json
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+infra/secrets/

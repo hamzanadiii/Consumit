@@ -14,7 +14,7 @@ const variantNames = [
 ] as const
 
 const navigationBehaviors = [
-  ['Desktop', '84px shell with persistent routes and universal search'],
+  ['Desktop', '68px shell with persistent routes and universal search'],
   ['Mobile', '64px brand-and-menu bar with search inside the drawer'],
   ['Current route', 'Orange signal line and semantic page announcement'],
   ['Member', 'Profile shortcut with a lime presence signal'],
@@ -30,13 +30,13 @@ export default function ComponentsPage() {
         sticky={false}
       />
 
-      <main className="mx-auto min-h-screen w-full max-w-[90rem] px-5 py-12 sm:px-8 lg:px-[62px] lg:py-20">
+      <main className="mx-auto min-h-screen w-full max-w-[90rem] px-5 py-12 sm:px-8 lg:px-[50px] lg:py-20">
         <header className="max-w-[48rem]">
           <div aria-hidden="true" className="mb-8 h-px w-24 bg-orange" />
           <p className="mb-4 text-xs uppercase tracking-[0.14em] text-muted">
             Consumit interface system
           </p>
-          <h1 className="text-balance font-display text-[clamp(2.75rem,7vw,5.5rem)] leading-[0.95] tracking-[-0.025em] text-ink">
+          <h1 className="text-balance font-display text-[clamp(2.5rem,6vw,5rem)] leading-[0.95] tracking-[-0.025em] text-ink">
             Shared interface
           </h1>
           <p className="mt-6 max-w-[68ch] text-pretty text-base leading-7 text-copy sm:text-lg sm:leading-8">
@@ -61,7 +61,7 @@ export default function ComponentsPage() {
               </span>
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted">
-              Persistent context and a quiet 52px field across empty, filled,
+              Persistent context and a quiet 38px field across empty, filled,
               invalid, and unavailable states.
             </p>
           </div>
