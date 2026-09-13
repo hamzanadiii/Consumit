@@ -8,91 +8,226 @@
         "role": "neutral",
         "displayName": "Midnight Canvas",
         "canonical": "#09090b",
-        "tonalRamp": ["#09090b", "#18181c", "#303036", "#4b4b52", "#6d6d75", "#96969d", "#c4c4c9", "#f3f3f5"]
+        "tonalRamp": [
+          "#09090b",
+          "#18181c",
+          "#303036",
+          "#4b4b52",
+          "#6d6d75",
+          "#96969d",
+          "#c4c4c9",
+          "#f3f3f5"
+        ]
       },
       "navigation": {
         "role": "neutral",
         "displayName": "Navigation Black",
         "canonical": "#0b0b0e",
-        "tonalRamp": ["#0b0b0e", "#19191d", "#313137", "#4d4d54", "#707077", "#9999a0", "#c6c6cb", "#f4f4f6"]
+        "tonalRamp": [
+          "#0b0b0e",
+          "#19191d",
+          "#313137",
+          "#4d4d54",
+          "#707077",
+          "#9999a0",
+          "#c6c6cb",
+          "#f4f4f6"
+        ]
       },
       "surface": {
         "role": "neutral",
         "displayName": "Quiet Surface",
         "canonical": "#121216",
-        "tonalRamp": ["#121216", "#202025", "#38383f", "#53535b", "#75757e", "#9e9ea6", "#cacacf", "#f5f5f6"]
+        "tonalRamp": [
+          "#121216",
+          "#202025",
+          "#38383f",
+          "#53535b",
+          "#75757e",
+          "#9e9ea6",
+          "#cacacf",
+          "#f5f5f6"
+        ]
       },
       "surface-raised": {
         "role": "neutral",
         "displayName": "Raised Surface",
         "canonical": "#19191e",
-        "tonalRamp": ["#19191e", "#27272d", "#3f3f47", "#5b5b64", "#7d7d86", "#a5a5ad", "#ceced3", "#f6f6f7"]
+        "tonalRamp": [
+          "#19191e",
+          "#27272d",
+          "#3f3f47",
+          "#5b5b64",
+          "#7d7d86",
+          "#a5a5ad",
+          "#ceced3",
+          "#f6f6f7"
+        ]
       },
       "field": {
         "role": "neutral",
         "displayName": "Input Field",
         "canonical": "#0d0d10",
-        "tonalRamp": ["#0d0d10", "#1b1b1f", "#333339", "#4f4f56", "#717179", "#9a9aa1", "#c7c7cc", "#f4f4f6"]
+        "tonalRamp": [
+          "#0d0d10",
+          "#1b1b1f",
+          "#333339",
+          "#4f4f56",
+          "#717179",
+          "#9a9aa1",
+          "#c7c7cc",
+          "#f4f4f6"
+        ]
       },
       "ink": {
         "role": "neutral",
         "displayName": "Warm Ink",
         "canonical": "#f4f0e8",
-        "tonalRamp": ["#26231f", "#433e36", "#625b50", "#82796c", "#a39a8d", "#c2b9ad", "#ded8ce", "#f4f0e8"]
+        "tonalRamp": [
+          "#26231f",
+          "#433e36",
+          "#625b50",
+          "#82796c",
+          "#a39a8d",
+          "#c2b9ad",
+          "#ded8ce",
+          "#f4f0e8"
+        ]
       },
       "copy": {
         "role": "neutral",
         "displayName": "Warm Copy",
         "canonical": "#c9c4bc",
-        "tonalRamp": ["#211f1c", "#3b3833", "#57534d", "#746f67", "#928c83", "#afa9a0", "#cec9c1", "#f0ece6"]
+        "tonalRamp": [
+          "#211f1c",
+          "#3b3833",
+          "#57534d",
+          "#746f67",
+          "#928c83",
+          "#afa9a0",
+          "#cec9c1",
+          "#f0ece6"
+        ]
       },
       "muted": {
         "role": "neutral",
         "displayName": "Muted Metadata",
         "canonical": "#85817c",
-        "tonalRamp": ["#1d1c1a", "#343230", "#4d4a47", "#67635f", "#85817c", "#a6a29d", "#c9c6c1", "#eeece8"]
+        "tonalRamp": [
+          "#1d1c1a",
+          "#343230",
+          "#4d4a47",
+          "#67635f",
+          "#85817c",
+          "#a6a29d",
+          "#c9c6c1",
+          "#eeece8"
+        ]
       },
       "faint": {
         "role": "neutral",
         "displayName": "Faint Decoration",
         "canonical": "#67645f",
-        "tonalRamp": ["#1b1a18", "#302e2b", "#47443f", "#5e5b56", "#79756f", "#99958f", "#c0bdb7", "#eceae6"]
+        "tonalRamp": [
+          "#1b1a18",
+          "#302e2b",
+          "#47443f",
+          "#5e5b56",
+          "#79756f",
+          "#99958f",
+          "#c0bdb7",
+          "#eceae6"
+        ]
       },
       "signal-orange": {
         "role": "primary",
         "displayName": "Signal Orange",
         "canonical": "#ff5d38",
-        "tonalRamp": ["#35150e", "#5d2115", "#872f1d", "#b53d25", "#e54c2e", "#ff7252", "#ffa28d", "#ffd6cc"]
+        "tonalRamp": [
+          "#35150e",
+          "#5d2115",
+          "#872f1d",
+          "#b53d25",
+          "#e54c2e",
+          "#ff7252",
+          "#ffa28d",
+          "#ffd6cc"
+        ]
       },
       "social-lilac": {
         "role": "secondary",
         "displayName": "Social Lilac",
         "canonical": "#a79cff",
-        "tonalRamp": ["#211d3d", "#393267", "#524993", "#6c61c0", "#887ced", "#a79cff", "#cac4ff", "#ebe9ff"]
+        "tonalRamp": [
+          "#211d3d",
+          "#393267",
+          "#524993",
+          "#6c61c0",
+          "#887ced",
+          "#a79cff",
+          "#cac4ff",
+          "#ebe9ff"
+        ]
       },
       "positive-lime": {
         "role": "tertiary",
         "displayName": "Positive Lime",
         "canonical": "#b8d86d",
-        "tonalRamp": ["#26310f", "#40531b", "#5c7728", "#789c38", "#96c14d", "#b8d86d", "#d4e9a1", "#edf7d2"]
+        "tonalRamp": [
+          "#26310f",
+          "#40531b",
+          "#5c7728",
+          "#789c38",
+          "#96c14d",
+          "#b8d86d",
+          "#d4e9a1",
+          "#edf7d2"
+        ]
       },
       "danger": {
         "role": "tertiary",
         "displayName": "Quiet Danger",
         "canonical": "#8e5450",
-        "tonalRamp": ["#271313", "#452322", "#653533", "#854a46", "#a8625d", "#c9827d", "#e2aaa6", "#f5d5d2"]
+        "tonalRamp": [
+          "#271313",
+          "#452322",
+          "#653533",
+          "#854a46",
+          "#a8625d",
+          "#c9827d",
+          "#e2aaa6",
+          "#f5d5d2"
+        ]
       },
       "separator": {
         "role": "neutral",
         "displayName": "Warm Hairline",
         "canonical": "rgba(255, 255, 255, 0.10)",
-        "tonalRamp": ["#171719", "#29292c", "#3f3f43", "#59595e", "#77777d", "#9b9ba1", "#c6c6ca", "#f2f2f4"]
+        "tonalRamp": [
+          "#171719",
+          "#29292c",
+          "#3f3f43",
+          "#59595e",
+          "#77777d",
+          "#9b9ba1",
+          "#c6c6ca",
+          "#f2f2f4"
+        ]
       },
       "control-outline": {
         "role": "neutral",
         "displayName": "Perceptible Control Outline",
         "canonical": "rgba(244, 240, 232, 0.40)",
-        "tonalRamp": ["#211f1c", "#3b3833", "#55514b", "#716c64", "#918b82", "#b1aba2", "#d2cdc5", "#f4f0e8"]
+        "tonalRamp": [
+          "#211f1c",
+          "#3b3833",
+          "#55514b",
+          "#716c64",
+          "#918b82",
+          "#b1aba2",
+          "#d2cdc5",
+          "#f4f0e8"
+        ]
       }
     },
     "typographyMeta": {
@@ -124,12 +259,31 @@
         "name": "navigation-state",
         "value": "200ms cubic-bezier(0.4, 0, 0.2, 1)",
         "purpose": "Route color and active-line changes. Disabled when reduced motion is requested."
+      },
+      {
+        "name": "spotlight-transition",
+        "value": "300ms ease-out",
+        "purpose": "Opacity-only transition; disabled for reduced motion."
+      },
+      {
+        "name": "home-spotlight-cadence",
+        "value": "8000ms",
+        "purpose": "Member-controlled rotation; focus and manual selection stop it until explicitly restarted. Pauses on hover, offscreen, in hidden tabs, and for reduced motion."
       }
     ],
     "breakpoints": [
-      { "name": "sm", "value": "640px" },
-      { "name": "lg", "value": "1024px" },
-      { "name": "xl", "value": "1280px" }
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
     ]
   },
   "components": [
@@ -177,9 +331,9 @@
       "name": "Global Navigation",
       "kind": "nav",
       "refersTo": "global-navigation",
-      "description": "An 84px flat desktop shell that becomes a separate 64px brand-and-menu bar below 1024px; search and profile move inside the right-side dialog.",
+      "description": "A 68px flat desktop shell that becomes a separate 52px brand-and-menu bar below 1024px; search and profile move inside the right-side dialog.",
       "html": "<header class=\"ds-global-nav\"><div class=\"ds-nav-inner\"><a class=\"ds-nav-brand\" href=\"/\" aria-label=\"Consumit home\"><svg aria-hidden=\"true\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"10\" fill=\"#09090B\"/><circle cx=\"28\" cy=\"28\" r=\"17\" stroke=\"#FF5D38\" stroke-width=\"7\" stroke-dasharray=\"87 24\" transform=\"rotate(12 28 28)\"/><circle cx=\"46\" cy=\"45\" r=\"4\" fill=\"#FF5D38\"/></svg><span>CONSUMIT</span></a><nav class=\"ds-nav-routes\" aria-label=\"Primary navigation\"><a class=\"ds-nav-route ds-nav-route-active\" href=\"/\" aria-current=\"page\">Home</a><a class=\"ds-nav-route\" href=\"/movies\">Movies</a><a class=\"ds-nav-route\" href=\"/series\">Series</a><a class=\"ds-nav-route\" href=\"/friends\">Friends</a></nav><div class=\"ds-nav-tools\"><form class=\"ds-nav-search\" action=\"/search\" method=\"get\" role=\"search\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-4-4\"/></svg><label><span>Search movies, series, and people</span><input name=\"q\" type=\"search\" placeholder=\"Search anything\"/></label></form><a class=\"ds-nav-profile\" href=\"/profile\" aria-label=\"Open Hamza profile, online\"><svg aria-hidden=\"true\" viewBox=\"0 0 256 256\"><defs><linearGradient id=\"ds-avatar-a\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#E6A176\"/><stop offset=\".43\" stop-color=\"#E6A176\"/><stop offset=\".44\" stop-color=\"#35293E\"/></linearGradient></defs><circle cx=\"128\" cy=\"128\" r=\"123\" fill=\"#09090B\" stroke=\"#F4F0E8\" stroke-opacity=\".25\" stroke-width=\"6\"/><circle cx=\"128\" cy=\"128\" r=\"110\" fill=\"url(#ds-avatar-a)\"/><circle cx=\"218\" cy=\"218\" r=\"16\" fill=\"#B8D86D\" stroke=\"#09090B\" stroke-width=\"7\"/></svg></a></div><button class=\"ds-nav-menu\" type=\"button\" aria-label=\"Open navigation\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"M4 6h16M4 12h16M4 18h16\"/></svg></button></div></header>",
-      "css": ".ds-global-nav{width:100%;height:84px;border-bottom:1px solid var(--consumit-border,rgba(255,255,255,.1));background:var(--consumit-nav,#0b0b0e);color:var(--consumit-copy,#c9c4bc);font:500 14px/1 'DejaVu Sans',Arial,sans-serif}.ds-nav-inner{height:100%;max-width:1440px;margin:0 auto;padding:0 62px;display:flex;align-items:center}.ds-nav-brand{display:flex;flex-shrink:0;align-items:center;gap:12px;color:var(--consumit-ink,#f4f0e8);text-decoration:none}.ds-nav-brand>svg{width:32px;height:32px}.ds-nav-brand>span{font-size:15px;font-weight:700;letter-spacing:.2em}.ds-nav-routes{height:100%;margin-left:48px;display:flex}.ds-nav-route{position:relative;height:100%;padding:0 20px;display:flex;align-items:center;color:var(--consumit-copy,#c9c4bc);font-weight:700;text-decoration:none;transition:color 200ms cubic-bezier(.4,0,.2,1)}.ds-nav-route:hover,.ds-nav-route-active{color:var(--consumit-ink,#f4f0e8)}.ds-nav-route-active:after{position:absolute;right:20px;bottom:0;left:20px;height:2px;background:var(--consumit-orange,#ff5d38);content:''}.ds-nav-route:focus-visible{outline:0;box-shadow:inset 0 0 0 2px var(--consumit-orange,#ff5d38)}.ds-nav-tools{margin-left:auto;display:flex;align-items:center;gap:20px}.ds-nav-search{position:relative}.ds-nav-search>svg{position:absolute;top:13px;left:16px;width:18px;height:18px;fill:none;stroke:var(--consumit-muted,#85817c);stroke-width:2}.ds-nav-search label>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-nav-search input{box-sizing:border-box;width:224px;height:44px;padding:0 16px 0 44px;border:1px solid var(--consumit-control-outline,rgba(244,240,232,.4));border-radius:var(--consumit-radius-control,6px);outline:0;background:transparent;color:var(--consumit-ink,#f4f0e8);font:400 14px/1 'DejaVu Sans',Arial,sans-serif}.ds-nav-search input:focus-visible{border-color:var(--consumit-orange,#ff5d38);box-shadow:inset 0 0 0 1px var(--consumit-orange,#ff5d38)}.ds-nav-profile{border-radius:50%;outline:0}.ds-nav-profile>svg{display:block;width:44px;height:44px}.ds-nav-profile:focus-visible{box-shadow:0 0 0 2px var(--consumit-orange,#ff5d38)}.ds-nav-menu{display:none;width:44px;height:44px;padding:0;border:0;border-radius:var(--consumit-radius-control,6px);outline:0;background:transparent;color:var(--consumit-copy,#c9c4bc)}.ds-nav-menu>svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2}.ds-nav-menu:hover{color:var(--consumit-ink,#f4f0e8)}.ds-nav-menu:focus-visible{box-shadow:inset 0 0 0 2px var(--consumit-orange,#ff5d38)}@media(max-width:1023px){.ds-global-nav{height:64px}.ds-nav-inner{padding:0 20px}.ds-nav-routes,.ds-nav-tools{display:none}.ds-nav-menu{margin-left:auto;display:grid;place-items:center}}@media(prefers-reduced-motion:reduce){.ds-nav-route{transition:none}}"
+      "css": ".ds-global-nav{width:100%;height:68px;border-bottom:1px solid var(--consumit-border,rgba(255,255,255,.1));background:var(--consumit-nav,#0b0b0e);color:var(--consumit-copy,#c9c4bc);font:500 14px/1 'DejaVu Sans',Arial,sans-serif}.ds-nav-inner{height:100%;max-width:1440px;margin:0 auto;padding:0 50px;display:flex;align-items:center}.ds-nav-brand{display:flex;flex-shrink:0;align-items:center;gap:12px;color:var(--consumit-ink,#f4f0e8);text-decoration:none}.ds-nav-brand>svg{width:32px;height:32px}.ds-nav-brand>span{font-size:15px;font-weight:700;letter-spacing:.2em}.ds-nav-routes{height:100%;margin-left:48px;display:flex}.ds-nav-route{position:relative;height:100%;padding:0 20px;display:flex;align-items:center;color:var(--consumit-copy,#c9c4bc);font-weight:700;text-decoration:none;transition:color 200ms cubic-bezier(.4,0,.2,1)}.ds-nav-route:hover,.ds-nav-route-active{color:var(--consumit-ink,#f4f0e8)}.ds-nav-route-active:after{position:absolute;right:20px;bottom:0;left:20px;height:2px;background:var(--consumit-orange,#ff5d38);content:''}.ds-nav-route:focus-visible{outline:0;box-shadow:inset 0 0 0 2px var(--consumit-orange,#ff5d38)}.ds-nav-tools{margin-left:auto;display:flex;align-items:center;gap:20px}.ds-nav-search{position:relative}.ds-nav-search>svg{position:absolute;top:13px;left:16px;width:18px;height:18px;fill:none;stroke:var(--consumit-muted,#85817c);stroke-width:2}.ds-nav-search label>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-nav-search input{box-sizing:border-box;width:224px;height:38px;padding:0 16px 0 44px;border:1px solid var(--consumit-control-outline,rgba(244,240,232,.4));border-radius:var(--consumit-radius-control,5px);outline:0;background:transparent;color:var(--consumit-ink,#f4f0e8);font:400 14px/1 'DejaVu Sans',Arial,sans-serif}.ds-nav-search input:focus-visible{border-color:var(--consumit-orange,#ff5d38);box-shadow:inset 0 0 0 1px var(--consumit-orange,#ff5d38)}.ds-nav-profile{border-radius:50%;outline:0}.ds-nav-profile>svg{display:block;width:44px;height:38px}.ds-nav-profile:focus-visible{box-shadow:0 0 0 2px var(--consumit-orange,#ff5d38)}.ds-nav-menu{display:none;width:44px;height:38px;padding:0;border:0;border-radius:var(--consumit-radius-control,5px);outline:0;background:transparent;color:var(--consumit-copy,#c9c4bc)}.ds-nav-menu>svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2}.ds-nav-menu:hover{color:var(--consumit-ink,#f4f0e8)}.ds-nav-menu:focus-visible{box-shadow:inset 0 0 0 2px var(--consumit-orange,#ff5d38)}@media(max-width:1023px){.ds-global-nav{height:52px}.ds-nav-inner{padding:0 20px}.ds-nav-routes,.ds-nav-tools{display:none}.ds-nav-menu{margin-left:auto;display:grid;place-items:center}}@media(prefers-reduced-motion:reduce){.ds-nav-route{transition:none}}"
     },
     {
       "name": "Label and Input",
@@ -216,7 +370,7 @@
   ],
   "narrative": {
     "northStar": "Cinema After Midnight",
-    "overview": "Consumit feels cinematic, editorial, and human: a near-black room lit by warm ivory type and rare signals of color. The interface is intimate rather than glossy, with enough quiet space for artwork, taste, and other people’s perspectives to carry emotional weight.\n\nThe system pairs decisive controls with restrained surfaces. It should feel alive with other people’s taste without becoming noisy, gamified, or generically “streaming app.” Generic dashboards and glossy-tech decoration are explicit anti-references.",
+    "overview": "Consumit's original Cinema After Midnight identity is fixed: flat midnight surfaces, warm ivory, rare orange signals, Charter display typography, compact DejaVu Sans controls, and 3–6px corners. Improvements focus on usability, readability, native interaction, and responsive layout within that identity.",
     "keyCharacteristics": [
       "Near-black, flat surfaces with warm editorial contrast",
       "Charter display type paired with compact DejaVu Sans controls",
@@ -226,28 +380,116 @@
       "Purposeful composition that becomes distinct on mobile"
     ],
     "rules": [
-      { "name": "The Scarce Signal Rule", "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.", "section": "colors" },
-      { "name": "The Semantic Accent Rule", "body": "Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.", "section": "colors" },
-      { "name": "The Operational Status Rule", "body": "Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present; Quiet Danger marks a blocked first-party task, not routine metadata absence.", "section": "colors" },
-      { "name": "The Two Voices Rule", "body": "Serif type tells the story; sans-serif type helps the member act.", "section": "typography" },
-      { "name": "The Flat Interface Rule", "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.", "section": "elevation" },
-      { "name": "The Catalog Boundary Rule", "body": "TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.", "section": "components" },
-      { "name": "The Preview Honesty Rule", "body": "Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.", "section": "components" },
-      { "name": "The Home Cadence Rule", "body": "Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.", "section": "components" },
-      { "name": "The Browse Composition Rule", "body": "Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Cinema After Midnight palette, typography, global navigation, and compact corners throughout.", "section": "components" },
-      { "name": "The Rank Behind the Poster Rule", "body": "A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.", "section": "components" },
-      { "name": "The Social Boundary Rule", "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.", "section": "components" },
-      { "name": "The Human Reason Rule", "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.", "section": "components" },
-      { "name": "The Related Evidence Rule", "body": "Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.", "section": "components" },
-      { "name": "The Rating Evidence Rule", "body": "Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.", "section": "components" },
-      { "name": "The Single Promise Rule", "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.", "section": "components" },
-      { "name": "The Detail Priority Rule", "body": "Overview leads Title Detail; actionable episode state leads Series Detail. Social evidence remains supporting context at every width.", "section": "components" },
-      { "name": "The State, Evidence, Action Rule", "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.", "section": "components" },
-      { "name": "The Reduced Shell Rule", "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.", "section": "components" },
-      { "name": "The Heading Carries the Story Rule", "body": "Authentication story panels use brand, artwork, a headline, description, and optional proof; never add a kicker or eyebrow above the story headline.", "section": "components" },
-      { "name": "The Player Ownership Rule", "body": "Consumit owns the playback controls and media surface; authorized providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.", "section": "components" },
-      { "name": "The Synchronized Watch State Rule", "body": "Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any authorized source.", "section": "components" },
-      { "name": "The Honest Recovery Rule", "body": "Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.", "section": "components" }
+      {
+        "name": "The Scarce Signal Rule",
+        "body": "Orange communicates brand, selection, progress, or commitment; it is never ambient decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Accent Rule",
+        "body": "Lilac means social or taste context, and lime means presence or health. Do not swap their jobs for variety.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operational Status Rule",
+        "body": "Orange marks selection, commitment, and progress; Warm Copy marks checking or slow states; Positive Lime means healthy or present; Quiet Danger marks a blocked first-party task, not routine metadata absence.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Serif type tells the story; sans-serif type helps the member act.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Interface Rule",
+        "body": "Shadows may separate artwork, but ordinary controls and content panels remain flat.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Catalog Boundary Rule",
+        "body": "TMDB supplies title metadata and artwork only; it never supplies Taste Match, member or social evidence, progress, product actions, or playback.",
+        "section": "components"
+      },
+      {
+        "name": "The Preview Honesty Rule",
+        "body": "Deterministic member-facing signals stay visibly disclosed as sample data immediately below the active header; a polished composition never makes fixture evidence pass as live activity.",
+        "section": "components"
+      },
+      {
+        "name": "The Home Cadence Rule",
+        "body": "Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.",
+        "section": "components"
+      },
+      {
+        "name": "The Browse Composition Rule",
+        "body": "Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Cinema After Midnight palette, typography, global navigation, and compact corners throughout.",
+        "section": "components"
+      },
+      {
+        "name": "The Rank Behind the Poster Rule",
+        "body": "A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.",
+        "section": "components"
+      },
+      {
+        "name": "The Social Boundary Rule",
+        "body": "Follow and Circle support asynchronous discovery; direct or private member messaging is not part of the product.",
+        "section": "components"
+      },
+      {
+        "name": "The Human Reason Rule",
+        "body": "Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.",
+        "section": "components"
+      },
+      {
+        "name": "The Related Evidence Rule",
+        "body": "Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.",
+        "section": "components"
+      },
+      {
+        "name": "The Rating Evidence Rule",
+        "body": "Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.",
+        "section": "components"
+      },
+      {
+        "name": "The Single Promise Rule",
+        "body": "A title masthead sells one film or series; continuation state, member evidence, and secondary actions clarify the decision without becoming rival heroes.",
+        "section": "components"
+      },
+      {
+        "name": "The Detail Priority Rule",
+        "body": "Overview leads Title Detail; actionable episode state leads Series Detail. Social evidence remains supporting context at every width.",
+        "section": "components"
+      },
+      {
+        "name": "The State, Evidence, Action Rule",
+        "body": "Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.",
+        "section": "components"
+      },
+      {
+        "name": "The Reduced Shell Rule",
+        "body": "Authentication, onboarding, report, and watch flows remove unrelated global navigation while retaining exact brand identity, clear escape routes, and the context needed to finish the job.",
+        "section": "components"
+      },
+      {
+        "name": "The Heading Carries the Story Rule",
+        "body": "Authentication story panels use brand, artwork, a headline, description, and optional proof; never add a kicker or eyebrow above the story headline.",
+        "section": "components"
+      },
+      {
+        "name": "The Player Ownership Rule",
+        "body": "Consumit owns the playback controls and media surface; configured providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.",
+        "section": "components"
+      },
+      {
+        "name": "The Synchronized Watch State Rule",
+        "body": "Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any authorized source.",
+        "section": "components"
+      },
+      {
+        "name": "The Honest Recovery Rule",
+        "body": "Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.",
+        "section": "components"
+      }
     ],
     "dos": [
       "Do use the supplied brand and artwork assets instead of recreating them with generic icons.",

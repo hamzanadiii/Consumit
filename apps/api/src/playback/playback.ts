@@ -4,7 +4,6 @@ import { playbackProviderListSchema, playbackSessionSchema, type PlaybackEvents,
 import { sourceIdentity, type ProviderRegistration } from '@consumit/provider-sdk'
 import { ApiError } from '../http/errors.ts'
 import { collectSubtitleCandidates, createResolver, dedupeSubtitleTracks, type ResolvedSource, type SubtitleCandidate } from './resolver.ts'
-import { createCapabilityRegistry, type CapabilityRegistry } from './delivery.ts'
 import type { PlaybackStore } from './state.ts'
 
 type SessionRecord = { owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; group: string }
@@ -17,13 +16,10 @@ export interface Playback {
 }
 const unavailable = () => new ApiError('PLAYBACK_UNAVAILABLE', 'No compatible playback source is available.', { retryable: true })
 
-export function createPlayback({ providers, store, region, deliveryPlanner, deliveryRegistry }: { providers: readonly ProviderRegistration[]; store: PlaybackStore; region: string; deliveryPlanner?: boolean; deliveryRegistry?: CapabilityRegistry }): Playback {
-  // One registry shared across resolution (wired in app.ts). The resolver
-  // gates every source on measured direct playability; planners disabled
-  // means permissive mode (trust adapter declarations).
-  const registry = deliveryRegistry ?? createCapabilityRegistry(store)
-  const plannerOn = deliveryPlanner ?? false
-  const resolver = createResolver(providers, { region, store, delivery: { registry, enabled: plannerOn } })
+export function createPlayback({ providers, store, region }: { providers: readonly ProviderRegistration[]; store: PlaybackStore; region: string }): Playback {
+  // The resolver gates every source on hostile-output validation
+  // (schema, expiry, allowlisted https media, no credentials/transforms).
+  const resolver = createResolver(providers, { region, store })
   const events = metrics.getMeter('consumit.playback').createCounter('playback.events')
   const timing = metrics.getMeter('consumit.playback').createHistogram('playback.client.duration', { unit: 'ms' })
   const recoveryLocks = new Set<string>()

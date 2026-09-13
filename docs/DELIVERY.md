@@ -108,7 +108,7 @@ Exit criterion: one complete member job works through the interface and its fail
 
 ## Stage 6 — playback hardening
 
-Playback is strict browser-direct HTTPS. An adapter may resolve metadata, but it becomes active only when the operator both approves it and imports a current certification artifact for the deployed configuration and region. The API never serves, proxies, leases, rewrites, or transforms media, manifests, keys, audio, or subtitles. Operator certification may fetch bounded media evidence; member playback bytes always travel browser-to-provider. Stellar/Aphrodite adapters are ported as browser-direct integrations, with runtime activation gated by operator approval and certification evidence. [PLAYBACK.md](./PLAYBACK.md) records the release gates.
+Playback is strict browser-direct HTTPS. Every enabled provider in the configured set resolves directly; hostile-output validation still applies at the adapter seam. The API never serves, proxies, leases, rewrites, or transforms media, manifests, keys, audio, or subtitles. Member playback bytes always travel browser-to-provider. Stellar/Aphrodite adapters are ported as browser-direct integrations.
 
 Hardening scope:
 
@@ -119,7 +119,7 @@ Hardening scope:
 - Playback sessions, progress, reporting, and source fallback
 - Provider dashboard, health probes, and playback telemetry
 
-Exit criterion: the authorized test catalog meets the agreed playback success and latency baseline under normal and provider-failure scenarios.
+Exit criterion: the configured test catalog meets the agreed playback success and latency baseline under normal and provider-failure scenarios.
 
 ## Stage 7 — operational growth
 

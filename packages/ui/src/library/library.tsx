@@ -78,14 +78,6 @@ export function SavedTitleCard({
 
   return (
     <article className={cn('group relative min-w-0', className)} data-consumit-saved-title-card {...props}>
-      {href ? (
-        <a
-          aria-hidden="true"
-          className="absolute inset-0 outline-none"
-          href={href}
-          tabIndex={-1}
-        />
-      ) : null}
       <ArtworkFrame alt={`${title} poster`} src={artworkSrc}>
         {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
         {saved && !action ? (
@@ -104,7 +96,7 @@ export function SavedTitleCard({
       </ArtworkFrame>
       <div className="mt-3 min-w-0">
         {href ? (
-          <a className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href={href}>{title}</a>
+          <a className="consumit-card-title inline-flex min-h-11 items-center font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href={href}>{title}</a>
         ) : (
           <h3 className="text-sm font-bold text-ink">{title}</h3>
         )}

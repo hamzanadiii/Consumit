@@ -1,7 +1,7 @@
 /**
  * Dedicated subtitle normalizer. It owns format detection, encoding checks,
- * language metadata, validation, and SRT-to-WebVTT conversion for bounded
- * operator certification. Member playback accepts direct WebVTT only.
+ * language metadata, validation, and SRT-to-WebVTT conversion.
+ * Member playback accepts direct WebVTT only.
  */
 
 export type SubtitleFormat = 'srt' | 'vtt'

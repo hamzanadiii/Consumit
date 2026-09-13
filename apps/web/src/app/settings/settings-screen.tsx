@@ -226,7 +226,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
             >
               <div className="py-5">
                 <p className="text-sm font-bold text-ink">Availability preferences</p>
-                <p className="mt-1 text-xs leading-5 text-muted">We use these choices to organize authorized sources. Consumit never manages or changes your subscriptions.</p>
+                <p className="mt-1 text-xs leading-5 text-muted">We use these choices to organize available sources. Consumit never manages or changes your subscriptions.</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <ServiceMark description="Preferred for availability" name="Netflix" src="/assets/services/netflix.svg" />
                   <ServiceMark description="Preferred for availability" name="Shahid" src="/assets/services/shahid.svg" />
@@ -241,7 +241,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               />
               <PreferenceRow
                 control={<SegmentedControl className="w-48" defaultValue="ask" legend="Unavailable source behavior" name="unavailable-behavior" options={[{ label: 'Ask me', value: 'ask' }, { label: 'Switch', value: 'switch' }]} />}
-                description="Choose what happens if the current authorized source becomes unavailable."
+                description="Choose what happens if the current playback source becomes unavailable."
                 label="Source changes"
               />
             </SettingsSection>

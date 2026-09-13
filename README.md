@@ -73,7 +73,6 @@ Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml 
 | [Delivery strategy](./docs/DELIVERY.md) | Small-modules-to-screens-to-logic implementation order |
 | [Library decisions](./docs/LIBRARIES.md) | Installed foundation and deliberately deferred dependencies |
 | [Component roadmap](./docs/COMPONENTS.md) | Ordered shared-component inventory and implementation status |
-| [Provider policy](./docs/PROVIDER-POLICY.md) | Authorization and direct-delivery activation rules |
 | [Agent working agreement](./AGENTS.md) | Task-specific reading and execution rules |
 
 ## Design reference
@@ -86,4 +85,4 @@ Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml 
 
 ## Implementation foundation
 
-The repository uses Bun workspaces with a Next.js web application, a Bun/Fastify API, shared Zod catalog contracts, and a shared UI package. Postgres, Valkey, authentication, durable member data, and authorized playback integrations remain deferred until a vertical slice requires them.
+The repository uses Bun workspaces with a Next.js web application, a Bun/Fastify API, shared Zod catalog contracts, and a shared UI package. Postgres, Valkey, authentication, durable member data, and configured playback integrations remain deferred until a vertical slice requires them.

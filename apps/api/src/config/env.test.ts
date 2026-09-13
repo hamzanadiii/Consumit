@@ -3,21 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
-  it('keeps playback state separate and requires direct certification', () => {
+  it('keeps playback state separate and requires a media config', () => {
     expect(loadEnv({ NODE_ENV: 'test' }).playback?.enabled).toBe(false)
-    expect(loadEnv({ NODE_ENV: 'test' }).playback?.deliveryPlanner).toBe(true)
     expect(() => loadEnv({ PLAYBACK_ENABLED: 'true' })).toThrow('Playback requires')
     expect(() => loadEnv({ PLAYBACK_VALKEY_URL: 'valkey://cache:6379/1', VALKEY_URL: 'valkey://cache:6379/0' })).toThrow('separate Valkey')
-    expect(() => loadEnv({ PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/providers.json', PLAYBACK_DELIVERY_PLANNER: 'false' })).toThrow('cannot be disabled')
   })
   it('runs single-instance playback without Valkey and requires it past one instance', () => {
-    const single = loadEnv({ NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/approved-media.json', PLAYBACK_DELIVERY_CERT: '/run/consumit/certification.json' })
+    const single = loadEnv({ NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json' })
     expect(single.playback).toMatchObject({ enabled: true, instances: 1, stateUrl: undefined })
     expect(() => loadEnv({
-      NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/approved-media.json', PLAYBACK_DELIVERY_CERT: '/run/consumit/certification.json', PLAYBACK_INSTANCES: '2',
+      NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json', PLAYBACK_INSTANCES: '2',
     })).toThrow('Multi-instance playback requires PLAYBACK_VALKEY_URL')
     expect(loadEnv({
-      NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/approved-media.json', PLAYBACK_DELIVERY_CERT: '/run/consumit/certification.json',
+      NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json',
       PLAYBACK_INSTANCES: '2', PLAYBACK_VALKEY_URL: 'valkey://playback:6379/0',
     }).playback).toMatchObject({ instances: 2 })
   })

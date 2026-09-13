@@ -11,7 +11,30 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
     const isTv = ref.kind === 'series'
     const pageUrl = isTv ? `${origin}/watch/tv/${ref.id}` : `${origin}/watch/movie/${ref.id}`
 
-    const page = await document(http, pageUrl, signal, headers)
+    let jar = ''
+    const storeCookies = (resHeaders?: any) => {
+      if (!resHeaders) return
+      const getSetCookie = typeof resHeaders.getSetCookie === 'function' ? resHeaders.getSetCookie() : []
+      const list = getSetCookie?.length ? getSetCookie : (typeof resHeaders.get === 'function' && resHeaders.get('set-cookie') ? [resHeaders.get('set-cookie')] : [])
+      for (const c of list) {
+        if (!c) continue
+        const pair = c.split(';')[0]?.trim()
+        if (!pair) continue
+        const name = pair.split('=')[0]
+        const parts = jar ? jar.split('; ').filter((p: string) => !p.startsWith(name + '=')) : []
+        parts.push(pair)
+        jar = parts.join('; ')
+      }
+    }
+    const withCookies = (extra: Record<string, string> = {}) => ({
+      ...headers,
+      origin,
+      ...(jar ? { cookie: jar } : {}),
+      ...extra,
+    })
+
+    const page = await document(http, pageUrl, signal, withCookies())
+    storeCookies(page.headers)
     const tokenMatch = page.text.match(/window\.__REQUEST_TOKEN__\s*=\s*"([^"]+)"/)
     if (!tokenMatch) throw new ProviderFailure('empty')
     const requestToken = tokenMatch[1]
@@ -28,9 +51,10 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
       http,
       `${origin}/api/playback-init`,
       signal,
-      { ...headers, 'content-type': 'application/json' },
+      withCookies({ 'content-type': 'application/json' }),
       { method: 'POST', body: JSON.stringify(initPayload) },
     )
+    storeCookies(initRes.headers)
 
     let initData = JSON.parse(initRes.text)
     if (initData?.requiresPow && initData?.pow) {
@@ -49,9 +73,10 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
         http,
         `${origin}/api/playback-init`,
         signal,
-        { ...headers, 'content-type': 'application/json' },
+        withCookies({ 'content-type': 'application/json' }),
         { method: 'POST', body: JSON.stringify(powPayload) },
       )
+      storeCookies(powRes.headers)
       initData = JSON.parse(powRes.text)
     }
 
@@ -62,7 +87,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
       http,
       `${origin}/api/encrypt`,
       signal,
-      { ...headers, 'content-type': 'application/json' },
+      withCookies({ 'content-type': 'application/json' }),
       {
         method: 'POST',
         body: JSON.stringify({
@@ -72,6 +97,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
         }),
       },
     )
+    storeCookies(encRes.headers)
 
     const encData = JSON.parse(encRes.text)
     if (!encData?.url) throw new ProviderFailure('empty')
@@ -80,12 +106,13 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
     const sep = encUrl.includes('?') ? '&' : '?'
     const streamEndpoint = `${encUrl}${sep}requestToken=${encodeURIComponent(requestToken)}&token=${encodeURIComponent(streamToken)}`
 
-    const finalRes = await document(http, streamEndpoint, signal, headers)
+    const finalRes = await document(http, streamEndpoint, signal, withCookies())
+    storeCookies(finalRes.headers)
     const finalData = JSON.parse(finalRes.text)
     const streamUrl = finalData?.data?.stream_url
     if (!finalData?.success || !streamUrl) throw new ProviderFailure('empty')
 
-    const manifestRes = await document(http, streamUrl, signal, headers)
+    const manifestRes = await document(http, streamUrl, signal, { ...headers, origin })
     if (!manifestRes.text.includes('#EXTM3U')) throw new ProviderFailure('empty')
 
     let height: number | undefined
@@ -104,7 +131,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
       type: 'hls',
       expiresAt: accessDeadline(streamUrl, now()),
       language: 'original',
-      headers,
+      headers: { referer: `${origin}/`, origin },
       subtitles: [],
       qualityHint,
       ...(height ? { height } : {}),

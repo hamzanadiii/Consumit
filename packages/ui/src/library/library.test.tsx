@@ -26,10 +26,8 @@ describe('library and list components', () => {
       />,
     )
 
-    expect(screen.getByRole('link', { name: 'The Silent Year' })).not.toHaveClass('after:absolute')
-    const overlay = container.querySelector('[data-consumit-saved-title-card] > a[aria-hidden="true"]')
-    expect(overlay).toHaveAttribute('href', '/titles/silent-year')
-    expect(overlay).toHaveAttribute('tabindex', '-1')
+    expect(screen.getByRole('link', { name: 'The Silent Year' })).toHaveAttribute('href', '/titles/silent-year')
+    expect(container.querySelectorAll('[data-consumit-saved-title-card] a')).toHaveLength(1)
     expect(container.querySelector('[data-consumit-saved-title-card]')).toHaveClass('relative')
     expect(screen.getByRole('button', { name: 'Remove' }).parentElement).toHaveClass('relative', 'z-10')
   })

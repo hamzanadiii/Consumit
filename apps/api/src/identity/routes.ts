@@ -43,7 +43,7 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: { env: ApiEnv
   const cookieOptions = sessionCookieOptions(env)
 
   function guardMutation(request: FastifyRequest) {
-    if (!isAllowedOrigin(request.headers, env.appOrigin)) {
+    if (!isAllowedOrigin(request.headers, env.appOrigin, env.nodeEnv !== 'production')) {
       throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
     }
   }

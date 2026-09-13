@@ -9,7 +9,6 @@ import type { MediaTransport } from './transport.ts'
 
 const common = z.object({
   id: z.string().regex(/^[a-z0-9-]{1,40}$/),
-  approved: z.boolean(),
   enabled: z.boolean().default(true),
   regions: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1),
   mediaHosts: z.array(z.string().regex(/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/)).min(1).max(100),
@@ -22,7 +21,7 @@ const configurationSchema = z.array(z.union([
   common.extend({ adapter: z.literal('static').default('static'),
   entries: z.array(z.object({ ref: playbackRefSchema, sources: z.array(providerSourceSchema).max(32) })).max(1000),
   }),
-  common.extend({ adapter: z.enum(['vixsrc', 'nhdapi', 'vaplayer', 'vidcore', 'insertunit', 'mapple', 'stigstream', 'wecollege-miami', 'wecollege-boise', 'perses', 'rivestream', 'vidapi', 'vidlove', 'screenscape', 'vidrock', 'vidnest', 'netmirror', 'vidstorm', 'vidlink', 'vidvault', 'modiplay', 'cinehd', 'nxsha', 'stellar', 'aphrodite']),
+  common.extend({ adapter: z.enum(['vixsrc', 'nhdapi', 'vaplayer', 'vidcore', 'insertunit', 'mapple', 'stigstream', 'wecollege', 'perses', 'rivestream', 'vidapi', 'vidlove', 'screenscape', 'vidrock', 'vidnest', 'netmirror', 'vidstorm', 'vidlink', 'vidvault', 'modiplay', 'cinehd', 'nxsha', 'stellar', 'aphrodite']),
     resolutionHosts: z.array(z.string().regex(/^[a-z0-9.-]+$/)).max(30).default([]),
     upstreamGroup: z.string().regex(/^[a-z0-9-]{1,60}$/),
   }),
@@ -30,7 +29,7 @@ const configurationSchema = z.array(z.union([
 
 type ProviderOptions = { tmdbToken?: string | undefined; transport?: MediaTransport }
 
-/** Explicit operator configuration for owned/approved media; never imports the research registry. */
+/** Explicit operator configuration for configured media; never imports the research registry. */
 export async function loadConfiguredProviders(path?: string, options: ProviderOptions = {}): Promise<ProviderRegistration[]> {
   if (!path) return []
   const raw = await readFile(path, 'utf8')
@@ -43,10 +42,10 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
   if (new Set(parsed.map((entry) => entry.id)).size !== parsed.length) throw new Error('Duplicate playback provider id.')
   // No active-provider ceiling: per-provider concurrency, rate limits, hedged
   // resolution, and the three-candidate resolver window bound load instead.
-  const active = parsed.filter((entry) => entry.enabled && entry.approved)
+  const active = parsed.filter((entry) => entry.enabled)
   return active.map((entry) => {
     if (entry.adapter !== 'static' && entry.id !== entry.adapter) throw new Error('Imported provider id must match its adapter.')
-    const origins = { vixsrc: 'vixsrc.to', nhdapi: 'nhdapi.com', vaplayer: 'streamdata.vaplayer.ru', vidcore: 'vidrack.created.app', insertunit: 'api.insertunit.ws', mapple: 'mapple.rip', stigstream: 'api.stigstream.ru', 'wecollege-miami': 'api.wecollege.net', 'wecollege-boise': 'api.wecollege.net', perses: 'streamguide.cfd', rivestream: 'scrapper.rivestream.app', vidapi: 'streamdata.vaplayer.ru', vidlove: 'api.tungtungtungtungsahur.app', screenscape: 'screenscape.me', vidrock: 'vidrock.ru', vidnest: 'new.vidnest.fun', netmirror: 'net27.cc', vidstorm: 'vidstorm.ru', vidlink: 'vidlink.pro', vidvault: 'vidvault.ru', modiplay: 'rozgarlelo.modiplay.xyz', cinehd: 'cinehd.vc', nxsha: 'nxsha.space', stellar: 'stellar.maybeoneday.ch', aphrodite: 'cdn.maybeoneday.ch' }
+    const origins = { vixsrc: 'vixsrc.to', nhdapi: 'nhdapi.com', vaplayer: 'streamdata.vaplayer.ru', vidcore: 'vidrack.created.app', insertunit: 'api.insertunit.ws', mapple: 'mapple.rip', stigstream: 'api.stigstream.ru', wecollege: 'api.wecollege.net', perses: 'streamguide.cfd', rivestream: 'scrapper.rivestream.app', vidapi: 'streamdata.vaplayer.ru', vidlove: 'api.vidlove.cc', screenscape: 'screenscape.me', vidrock: 'vidrock.ru', vidnest: 'new.vidnest.fun', netmirror: 'net27.cc', vidstorm: 'vidstorm.ru', vidlink: 'vidlink.pro', vidvault: 'vidvault.ru', modiplay: 'rozgarlelo.modiplay.xyz', cinehd: 'cinehd.vc', nxsha: 'nxsha.space', stellar: 'stellar.maybeoneday.ch', aphrodite: 'cdn.maybeoneday.ch' }
     const http = entry.adapter === 'static' ? undefined : createProviderHttp([origins[entry.adapter], ...entry.resolutionHosts, ...entry.mediaHosts], options.transport)
     const adapter = entry.adapter === 'static' ? createStaticProvider(entry.id, entry.entries)
       : entry.adapter === 'vixsrc' ? createVixsrcProvider(http!)
@@ -55,8 +54,7 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
       : entry.adapter === 'insertunit' ? createInsertunitProvider(http!, createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport))
       : entry.adapter === 'mapple' ? createMappleProvider(http!)
       : entry.adapter === 'stigstream' ? createStigstreamProvider(http!)
-      : entry.adapter === 'wecollege-miami' ? createWecollegeProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { id: 'wecollege-miami', cities: ['miami'] })
-      : entry.adapter === 'wecollege-boise' ? createWecollegeProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { id: 'wecollege-boise', cities: ['boise'] })
+      : entry.adapter === 'wecollege' ? createWecollegeProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { mediaHosts: entry.mediaHosts })
       : entry.adapter === 'perses' ? createPersesProvider(http!)
       : entry.adapter === 'rivestream' ? createRivestreamProvider(http!)
       : entry.adapter === 'vidapi' ? createVidapiProvider(http!)

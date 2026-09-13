@@ -35,8 +35,8 @@ function qualityOf(resolution?: number | string, fallback = 'Auto'): string {
 
 /** Port of the supplied Vidstorm recipe: AES-id lookup, then a cheap
  *  ranged probe per server distinguishes JSON quality lists from direct
- *  streams. Upstreams gate hotlinking, so the player referer rides the
- *  direct-only certification. vdrk subtitles are keyless. No page scripts run. */
+ *  streams. Upstreams gate hotlinking, so the player referer rides with
+ *  direct playback. vdrk subtitles are keyless. No page scripts run. */
 export function createVidstormProvider(http: ProviderHttp, now = Date.now) {
   return adapter('vidstorm', async (input, signal) => {
     const { ref } = input

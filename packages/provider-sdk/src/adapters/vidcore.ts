@@ -39,7 +39,7 @@ function endpoints(tmdbId: string, type: 'movie' | 'tv', season?: number, episod
 function parseQuality(q?: string): { height?: number; qualityHint?: string } {
   if (!q) return {}
   const match = q.match(/(\d{3,4})p?/i)
-  if (match) {
+  if (match?.[1]) {
     const h = Number.parseInt(match[1], 10)
     if (h >= 2160) return { height: 2160, qualityHint: '4K' }
     return { height: h, qualityHint: `${h}p` }
@@ -99,11 +99,19 @@ export function createVidcoreProvider(http: ProviderHttp, now = Date.now) {
 
     if (!rawSources.length) throw new ProviderFailure('empty')
 
-    // Sort: non-HEVC before HEVC
+    // Sort: non-HEVC before HEVC, and direct-playable servers (vidrift, cinextream, movy) before others
+    const directPriority = (key: string) => {
+      if (key.startsWith('vidrift:')) return 0
+      if (key.startsWith('cinextream:')) return 1
+      if (key.startsWith('movy:')) return 2
+      if (key.startsWith('cineplay:')) return 10
+      return 5
+    }
     rawSources.sort((a: any, b: any) => {
       const aHevc = a._hevc ? 1 : 0
       const bHevc = b._hevc ? 1 : 0
-      return aHevc - bHevc
+      if (aHevc !== bHevc) return aHevc - bHevc
+      return directPriority(a.key) - directPriority(b.key)
     })
 
     for (const s of rawSources) {

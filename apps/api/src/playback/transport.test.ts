@@ -28,7 +28,7 @@ describe('provider network boundary', () => {
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow('Blocked media address')
     expect(mocks.request).not.toHaveBeenCalled()
   })
-  it('pins validated DNS and strips credentials on an approved cross-host redirect', async () => {
+  it('pins validated DNS and strips credentials on an allowlisted cross-host redirect', async () => {
     mocks.request.mockImplementationOnce(response(302, { location: 'https://cdn.example/video' })).mockImplementationOnce(response())
     const result = await fetchMedia('https://media.example/a', ['media.example', 'cdn.example'], { Authorization: 'fixture', Cookie: 'fixture', Range: 'bytes=0-3' }, new AbortController().signal)
     expect(mocks.lookup).toHaveBeenCalledTimes(2)
@@ -39,7 +39,7 @@ describe('provider network boundary', () => {
     expect(options.lookup).toBeTypeOf('function')
     result.body.destroy()
   })
-  it('revalidates redirect destinations and stops unapproved hosts', async () => {
+  it('revalidates redirect destinations and stops off-allowlist hosts', async () => {
     mocks.request.mockImplementationOnce(response(302, { location: 'https://internal.example/secret' }))
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow('Blocked media destination')
     expect(mocks.request).toHaveBeenCalledOnce()

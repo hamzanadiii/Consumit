@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
+import { signAphroditeRequest } from './aphrodite-gate.ts'
 
 const resolveOrigin = 'https://stellar.maybeoneday.ch'
 const cdnOrigin = 'https://cdn.maybeoneday.ch'
@@ -104,12 +105,13 @@ export function createStellarProvider(http: ProviderHttp, now = Date.now, option
     // 2. Aphrodite CDN mirror.
     if (endpoint === 'all' || endpoint === 'aphrodite') {
       try {
-        const path = isTv
-          ? `${cdnOrigin}/content/tv/${encodeURIComponent(tmdbId)}/${season}/${episode}`
-          : `${cdnOrigin}/content/movie/${encodeURIComponent(tmdbId)}`
-        const response = await document(http, path, signal, clientHeaders)
+        const subPath = isTv
+          ? `/content/tv/${encodeURIComponent(tmdbId)}/${season}/${episode}`
+          : `/content/movie/${encodeURIComponent(tmdbId)}`
+        const gateHeaders = (await signAphroditeRequest(cdnOrigin, subPath)) ?? {}
+        const response = await document(http, `${cdnOrigin}${subPath}`, signal, { ...clientHeaders, ...gateHeaders })
         const data = aphroditeSchema.parse(JSON.parse(response.text))
-        if (data.found && data.url) {
+        if (data.found && data.url && !data.url.includes('/m3u8-proxy')) {
           pushSource(data.url, 'Aphrodite')
         }
       } catch {

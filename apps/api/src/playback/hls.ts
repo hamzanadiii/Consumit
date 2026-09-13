@@ -1,11 +1,11 @@
 /**
- * Dedicated HLS playlist parser/tokenizer for direct-delivery certification.
+ * Dedicated HLS playlist parser/tokenizer for direct playback validation.
  *
- * Approved adapters produce a narrow set of URI-bearing constructs: plain
+ * Configured adapters produce a narrow set of URI-bearing constructs: plain
  * segment/variant URI lines plus URI attributes on EXT-X-MEDIA, EXT-X-KEY,
  * EXT-X-MAP, and EXT-X-I-FRAME-STREAM-INF. Every other URI-bearing tag fails
  * closed so an upstream playlist can never smuggle an unreviewed reference
- * through certification. Unrestricted regex parsing is not used: attribute
+ * through validation. Unrestricted regex parsing is not used: attribute
  * lists are tokenized with quoted-string awareness.
  */
 
@@ -118,14 +118,14 @@ export function isPlausibleManifestDuration(actualSec: number, expectedSec: numb
 
 /**
  * Parse an HLS manifest and return its URI references in line order.
- * Resolution against the manifest URL happens here so validation and
- * certification shares one tokenizer; callers deduplicate as needed.
+ * Resolution against the manifest URL happens here so validation shares
+ * one tokenizer; callers deduplicate as needed.
  */
 export function parseHlsReferences(text: string, baseUrl: string): string[] {
   return parseHlsReferenceEntries(text, baseUrl).map((entry) => entry.url)
 }
 
-/** Keep media-segment provenance for bounded seek certification. */
+/** Keep media-segment provenance for bounded seek checks. */
 export function parseHlsReferenceEntries(text: string, baseUrl: string): Array<{ url: string; media: boolean }> {
   const lines = tokenize(text)
   const mediaPlaylist = lines.some((line) => line.kind === 'tag' && /^\s*#EXTINF:/.test(line.raw))

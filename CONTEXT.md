@@ -97,7 +97,7 @@ _Avoid_: Account link, synchronization
 ## Discovery and playback
 
 **Provider**:
-An external, authorized source that makes a title available for playback through Consumit.
+An external, configured source that makes a title available for playback through Consumit.
 _Avoid_: Host, scraper, streaming service
 
 **Availability Preference**:
@@ -125,5 +125,5 @@ The focused Consumit screen that contains the Consumit Player and provides sourc
 _Avoid_: Watch / Embed, provider frame
 
 **Consumit Player**:
-The first-party playback surface through which a member watches an authorized direct media source while keeping one consistent set of controls.
+The first-party playback surface through which a member watches a configured direct media source while keeping one consistent set of controls.
 _Avoid_: Embed frame, provider player

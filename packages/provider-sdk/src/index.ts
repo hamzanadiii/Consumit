@@ -89,8 +89,8 @@ export function validatedSources(result: unknown, registration: ProviderRegistra
   return parsed.data.sources.filter((source) => {
     if (seen.has(source.key) || Date.parse(source.expiresAt) <= now + 30_000) return false
     if (!allowedMediaUrl(source.url, registration.mediaHosts)) return false
-    // Browser playback cannot attach provider-specific headers. Certification
-    // may prove declared Referer/Origin hints unnecessary, but credentials are
+    // Browser playback cannot attach provider-specific headers. Declared
+    // Referer/Origin hints ride with the source, but credentials are
     // never allowed to cross this seam.
     if (Object.keys(source.headers).some((name) => /^(cookie|authorization)$/i.test(name))) return false
     if (source.segmentTransform) return false

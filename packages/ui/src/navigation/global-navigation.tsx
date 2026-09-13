@@ -260,7 +260,7 @@ export function ProfileMenu({
             <MenuLinkRow
               active={isProfileActive}
               href={profileHref}
-              icon={<CircleUserRound aria-hidden="true" className="size-5 shrink-0 text-lime" />}
+              icon={<CircleUserRound aria-hidden="true" className="size-5 shrink-0 text-orange" />}
               label="My profile"
               linkComponent={LinkComponent}
             />
@@ -355,7 +355,7 @@ export function GlobalNavigation({
   return (
     <header
       className={cn(
-        'z-50 w-full border-b border-border bg-nav',
+        'consumit-global-navigation z-50 w-full border-b border-border bg-nav',
         sticky && 'sticky top-0',
       )}
     >

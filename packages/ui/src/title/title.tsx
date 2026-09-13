@@ -14,6 +14,7 @@ export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
   lede?: ReactNode | undefined
   logoUrl?: string | null | undefined
   metadata: ReactNode
+  posterSrc?: string | undefined
   socialProof?: ReactNode | undefined
   synopsis: string
   synopsisClassName?: string | undefined
@@ -33,6 +34,7 @@ export function TitleMasthead({
   lede,
   logoUrl,
   metadata,
+  posterSrc,
   socialProof,
   synopsis,
   synopsisClassName,
@@ -52,6 +54,7 @@ export function TitleMasthead({
         className,
       )}
       data-consumit-title-masthead
+      data-poster-layout={posterSrc ? '' : undefined}
       {...props}
     >
       {backgroundSrc ? (
@@ -59,7 +62,8 @@ export function TitleMasthead({
       ) : null}
       <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98)_0%,rgba(9,9,11,.84)_48%,rgba(9,9,11,.16)_100%)]" />
       <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(0deg,rgba(9,9,11,.94)_0%,rgba(9,9,11,0)_34%)]" />
-      <div className="min-w-0 max-w-2xl">
+      {posterSrc ? <ArtworkFrame alt={`${title} poster`} className="consumit-masthead-poster" loading="eager" src={posterSrc} /> : null}
+      <div className="consumit-masthead-copy min-w-0 max-w-2xl">
         {context ? (
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-copy">{context}</p>
         ) : null}

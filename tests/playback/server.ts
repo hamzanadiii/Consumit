@@ -50,7 +50,7 @@ const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({
   } satisfies ProviderSource] }))),
   enabled: true, approvedRegions: ['US'], mediaHosts: ['fixture.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,
 }))
-providers.push(...configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', approved: true, regions: ['US'], mediaHosts: ['fixture.example'], upstreamGroup: 'vixsrc' }], { transport }))
+providers.push(...configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['fixture.example'], upstreamGroup: 'vixsrc' }], { transport }))
 let playback = createPlayback({ providers, store, region: 'US' })
 const app = await buildApp({
   env: loadEnv({ NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:27911' }),

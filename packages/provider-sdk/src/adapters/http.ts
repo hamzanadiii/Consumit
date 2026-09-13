@@ -67,8 +67,49 @@ export function mediaType(url: string, hint?: string): ProviderSource['type'] | 
   return undefined
 }
 
+/** Variant heights of an HLS master playlist, or null when the text is not a master. */
+export function masterVariantHeights(text: string): number[] | null {
+  if (!/#EXT-X-STREAM-INF/.test(text)) return null
+  const heights: number[] = []
+  for (const match of text.matchAll(/RESOLUTION=\d+x(\d+)/g)) {
+    const height = Number.parseInt(match[1]!, 10)
+    if (Number.isFinite(height) && height >= 144 && height <= 4320) heights.push(height)
+  }
+  return heights
+}
+
+/** Absolute media hosts referenced by an HLS playlist: segment and nested
+ *  variant URIs on bare lines, plus EXT-X-MAP and EXT-X-KEY URIs. Relative
+ *  references resolve against the playlist host and are not listed. */
+export function playlistAbsoluteHosts(text: string): string[] {
+  const hosts = new Set<string>()
+  const absolute = (value: string | undefined) => {
+    if (!value) return
+    const trimmed = value.trim()
+    const absoluteUrl = /^https?:\/\//i.test(trimmed) ? trimmed : trimmed.startsWith('//') ? `https:${trimmed}` : null
+    if (!absoluteUrl) return
+    try { hosts.add(new URL(absoluteUrl).hostname.toLowerCase()) } catch { /* ignore malformed */ }
+  }
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) continue
+    if (line.startsWith('#')) {
+      absolute(line.match(/#EXT-X-MAP:URI="([^"]+)"/)?.[1])
+      absolute(line.match(/#EXT-X-KEY:[^\n]*URI="([^"]+)"/)?.[1])
+      continue
+    }
+    absolute(line)
+  }
+  return [...hosts]
+}
+
 /** Verify HLS roots before selection so dead provider URLs never become sessions. */
-export async function verifiedPlaybackSources(http: ProviderHttp, candidates: readonly ProviderSource[], signal: AbortSignal) {
+export async function verifiedPlaybackSources(
+  http: ProviderHttp,
+  candidates: readonly ProviderSource[],
+  signal: AbortSignal,
+  refine?: ((source: ProviderSource, manifest: string) => ProviderSource) | undefined,
+) {
   const verified: Array<ProviderSource | undefined> = new Array(candidates.length)
   let cursor = 0
   const worker = async () => {
@@ -79,7 +120,8 @@ export async function verifiedPlaybackSources(http: ProviderHttp, candidates: re
       try {
         const response = await document(http, source.url, signal, source.headers)
         if (!response.text.trimStart().startsWith('#EXTM3U') || !/#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE):/.test(response.text)) continue
-        verified[index] = { ...source, url: response.url }
+        const settled = { ...source, url: response.url }
+        verified[index] = refine ? refine(settled, response.text) : settled
       } catch { signal.throwIfAborted() }
     }
   }

@@ -1,5 +1,9 @@
 export { Button, buttonVariants, type ButtonProps } from './button/button'
 export {
+  CarouselRow,
+  type CarouselRowProps,
+} from './cards/carousel-row'
+export {
   ContentCard,
   ContentRating,
   ContinueCard,

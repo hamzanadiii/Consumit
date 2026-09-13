@@ -6,7 +6,7 @@ import { isAllowedOrigin } from '../http/csrf.ts'
 import { ApiError } from '../http/errors.ts'
 import type { Playback } from './playback.ts'
 
-export function registerPlaybackRoutes(app: FastifyInstance, deps: { playback: Playback; origin: string; secure: boolean }) {
+export function registerPlaybackRoutes(app: FastifyInstance, deps: { playback: Playback; origin: string; secure: boolean; dev?: boolean }) {
   const cookieName = deps.secure ? '__Host-consumit-playback' : 'consumit-playback'
   const owner = (request: FastifyRequest) => {
     const token = request.cookies[cookieName]
@@ -14,7 +14,7 @@ export function registerPlaybackRoutes(app: FastifyInstance, deps: { playback: P
     return createHash('sha256').update(token).digest('hex')
   }
   const guard = (request: FastifyRequest) => {
-    if (!isAllowedOrigin(request.headers, deps.origin)) throw new ApiError('FORBIDDEN', 'This playback request is not allowed.')
+    if (!isAllowedOrigin(request.headers, deps.origin, deps.dev)) throw new ApiError('FORBIDDEN', 'This playback request is not allowed.')
   }
   const id = (request: FastifyRequest) => {
     const parsed = z.object({ id: z.uuid() }).safeParse(request.params)

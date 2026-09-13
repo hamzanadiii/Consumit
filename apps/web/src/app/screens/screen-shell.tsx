@@ -30,7 +30,7 @@ export function ScreenShell({
     <>
       <SessionNavigation
         activeHref={activeHref}
-        searchPlaceholder="Search movies and series"
+        searchPlaceholder="Search titles"
         sticky={false}
         {...(searchDefaultValue === undefined ? {} : { searchDefaultValue })}
       />

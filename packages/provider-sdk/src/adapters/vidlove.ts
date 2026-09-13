@@ -55,8 +55,7 @@ export function createVidloveProvider(http: ProviderHttp, now = Date.now) {
       if (!res?.source?.url || seen.has(res.source.url)) continue
       seen.add(res.source.url)
 
-      const type = mediaType(res.source.url)
-      if (!type) continue
+      const type = /\.m3u8(\?|#|$)/i.test(res.source.url) ? 'hls' : 'native'
 
       const subtitles = (res.subtitles || [])
         .filter((sub) => {

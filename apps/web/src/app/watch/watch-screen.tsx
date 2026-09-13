@@ -25,7 +25,7 @@ type WatchScreenProps = {
 
 /**
  * Deterministic fixture path for visual work only. Production routes never
- * pass `demo`: with no authorized source the screen stays in its honest
+ * pass `demo`: with no configured source the screen stays in its honest
  * unavailable branch and loads no media, demo clip, trailer, or embed.
  */
 export function WatchScreen({ demo, episode, title, interactive = false, nextHref }: WatchScreenProps) {
@@ -56,7 +56,7 @@ export function WatchScreen({ demo, episode, title, interactive = false, nextHre
               topMeta={demoMeta}
             />
           ) : (
-            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No authorized source available" statusTone="unavailable" title={displayTitle} />
+            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No playback source available" statusTone="unavailable" title={displayTitle} />
           )}
         </div>
         <div className="flex flex-col gap-4 border-t border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between" role="status">
@@ -65,7 +65,7 @@ export function WatchScreen({ demo, episode, title, interactive = false, nextHre
             {hasDemo ? (
               <p>Preview fixture. Source selection, status, and progress stay synchronized from one playback state.</p>
             ) : (
-              <p>This is the Consumit Player. Playback remains disabled until an authorized direct-media source is available.</p>
+              <p>This is the Consumit Player. Playback remains disabled until a configured direct-media source is available.</p>
             )}
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">

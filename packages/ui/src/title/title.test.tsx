@@ -86,6 +86,10 @@ describe('hero spotlight', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show Third Meridian' }))
     expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
 
+    act(() => { vi.advanceTimersByTime(14000) })
+    expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Start featured titles' }))
+
     act(() => {
       vi.advanceTimersByTime(7000)
     })
@@ -97,39 +101,53 @@ describe('hero spotlight', () => {
     expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
   })
 
-  it('never pauses on hover so the loop cannot strand', () => {
+  it('pauses while hovered and resumes when the pointer leaves', () => {
     vi.useFakeTimers()
     render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
 
-    expect(screen.queryByRole('button', { name: /rotation/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pause featured titles' })).toBeInTheDocument()
 
     fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
     act(() => {
       vi.advanceTimersByTime(8000)
     })
+    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
+    fireEvent.mouseLeave(screen.getByRole('region', { name: 'Featured titles' }))
+    act(() => { vi.advanceTimersByTime(7000) })
     expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
   })
 
-  it('resumes rotation after the focus grace period', () => {
+  it('keeps the reading position stable after focus until explicitly restarted', () => {
     vi.useFakeTimers()
     render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
 
     fireEvent.focus(screen.getByRole('region', { name: 'Featured titles' }))
     act(() => {
-      vi.advanceTimersByTime(3000)
+      vi.advanceTimersByTime(30000)
     })
     expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
 
-    // Grace expires in its own flush so the auto timer it schedules can fire.
+    fireEvent.blur(screen.getByRole('region', { name: 'Featured titles' }))
     act(() => {
-      vi.advanceTimersByTime(4000)
+      vi.advanceTimersByTime(30000)
     })
     expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Start featured titles' }))
     act(() => {
       vi.advanceTimersByTime(7000)
     })
     expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
+  })
+
+  it('honors an explicit pause and excludes hidden titles from keyboard interaction', () => {
+    vi.useFakeTimers()
+    const { container } = render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Pause featured titles' }))
+    act(() => { vi.advanceTimersByTime(30000) })
+    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
+    expect(container.querySelectorAll('[inert]')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Start featured titles' })).toBeInTheDocument()
   })
 
   it('renders a single title without carousel chrome', () => {

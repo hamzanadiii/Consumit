@@ -18,4 +18,12 @@ describe('CSRF origin gate', () => {
     expect(isAllowedOrigin({ origin: allowedOrigin, 'sec-fetch-site': 'cross-site' }, allowedOrigin)).toBe(false)
     expect(isAllowedOrigin({ origin: 'https://consumit.online.evil.example' }, allowedOrigin)).toBe(false)
   })
+
+  it('permits localhost development origins when dev mode is active', () => {
+    expect(isAllowedOrigin({ origin: 'http://localhost:3000', 'sec-fetch-site': 'same-origin' }, allowedOrigin, true)).toBe(true)
+    expect(isAllowedOrigin({ origin: 'http://localhost:8080', 'sec-fetch-site': 'same-site' }, allowedOrigin, true)).toBe(true)
+    expect(isAllowedOrigin({ origin: 'http://127.0.0.1:3000', 'sec-fetch-site': 'cross-site' }, allowedOrigin, true)).toBe(true)
+    expect(isAllowedOrigin({ origin: 'http://localhost:3000', 'sec-fetch-site': 'same-origin' }, allowedOrigin, false)).toBe(false)
+    expect(isAllowedOrigin({ origin: 'http://evil.com', 'sec-fetch-site': 'same-origin' }, allowedOrigin, true)).toBe(false)
+  })
 })

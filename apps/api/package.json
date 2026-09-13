@@ -18,8 +18,7 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:resend:live": "bun src/identity/resend-live.ts",
-    "test:tmdb:live": "bun src/catalog/tmdb-live.ts",
-    "playback:certify": "bun src/playback/certify.ts"
+    "test:tmdb:live": "bun src/catalog/tmdb-live.ts"
   },
   "dependencies": {
     "@consumit/contracts": "workspace:*",

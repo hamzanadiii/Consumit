@@ -21,7 +21,9 @@ function BrowsePoster({ title }: { title: CatalogTitleSummary }) {
           </div>
           {!title.posterUrl ? <p className="absolute inset-x-3 top-3 text-sm font-bold text-ink">{title.title}</p> : null}
         </ArtworkFrame>
+        <p aria-hidden="true" className="mt-3 truncate text-sm font-bold text-ink group-hover:text-orange">{title.title}</p>
       </Link>
+      <p className="mt-1 text-xs text-muted">{[title.year, title.genreNames[0]].filter(Boolean).join(' · ')}</p>
     </li>
   )
 }
@@ -110,7 +112,7 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
   const isDefault = !genre && !year && feed === 'popular'
   function reset() { setGenre(''); setYear(''); setFeed('popular') }
   return (
-    <main className="mx-auto w-full max-w-[90rem] px-5 pt-9 pb-8 sm:px-8 sm:pt-12 lg:px-[50px]">
+    <main className="consumit-catalog-browse mx-auto w-full max-w-[90rem] px-5 pt-9 pb-8 sm:px-8 sm:pt-12 lg:px-[50px]">
       <div className="mb-7 flex flex-col gap-6 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
         <div className="shrink-0">
           <h1 className="font-display text-[2.75rem] leading-tight tracking-[-0.025em] text-ink sm:text-5xl">{kind === 'movie' ? 'Movies' : 'Series'}<span className="text-orange">.</span></h1>

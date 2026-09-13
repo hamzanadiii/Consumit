@@ -2,11 +2,11 @@
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, Letterboxd worker, and certified direct-playback foundation exist. Social relationships remain future work. Provider changes follow [PROVIDER-POLICY.md](./PROVIDER-POLICY.md).
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, Letterboxd worker, and direct-playback foundation exist. Social relationships remain future work.
 
 ## System shape
 
-Consumit resolves playback, manages sessions, ranks providers, and stores member data. It avoids proxying media bytes unless there is a deliberate, authorized reason to do so.
+Consumit resolves playback, manages sessions, ranks providers, and stores member data. It avoids proxying media bytes.
 
 ```text
 Cloudflare edge
@@ -101,7 +101,7 @@ TMDB is the canonical metadata source and identifier namespace for movies, serie
 
 Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
 
-Catalog metadata and playback availability are independent. A real TMDB title can exist without an authorized playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
+Catalog metadata and playback availability are independent. A real TMDB title can exist without a configured playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
 
 The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
 
@@ -152,7 +152,7 @@ Authenticate and rate-limit
 
 ### Hedged execution
 
-Do not race every provider on every miss. The approved initial scheduler starts the best candidate, hedges after 600ms, permits at most two simultaneous attempts and three independent candidate groups, and stops within eight seconds. Production values come from measurements; current operational limits are in [PLAYBACK.md](./PLAYBACK.md).
+Do not race every provider on every miss. The initial scheduler starts the best candidate, hedges after 600ms, permits at most two simultaneous attempts and three independent candidate groups, and stops within eight seconds.
 
 Each adapter has a hard timeout, concurrency ceiling, requests-per-second limit, burst limit, and bounded queue. A slow or overloaded provider cannot hold the whole request open.
 
@@ -227,9 +227,9 @@ Progress is stored by member and title/episode, never by provider URL.
 
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
-The Consumit Player owns the playback controls and native media surface. A playback controller will load authorized HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
+The Consumit Player owns the playback controls and native media surface. A playback controller will load configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
 
-Delivery is strictly browser-direct. Certified HTTPS media travels from an authorized provider CDN to the member's browser; Consumit never proxies, leases, rewrites, or transforms media bytes. Unknown, expired, header-locked, cookie-bearing, DASH, or uncertified sources are unavailable.
+Delivery is strictly browser-direct. Validated HTTPS media travels from a configured provider CDN to the member's browser; Consumit never proxies, leases, rewrites, or transforms media bytes. Unknown, expired, header-locked, cookie-bearing, or DASH sources are unavailable.
 
 ## Data ownership
 
@@ -322,7 +322,7 @@ This is an interface inventory, not route-level implementation approval. Contrac
 - Protect URL-fetching paths from SSRF. Block loopback, private networks, metadata endpoints, internal DNS, and non-HTTP protocols; prefer explicit domain allowlists.
 - Keep secrets in environment-backed secret storage initially and rotate them. Move to a dedicated secret manager as operations mature.
 - Keep public, internal, and admin interfaces separate.
-- Direct playback sources must be authorized; system quality does not remove copyright, contract, or regional obligations.
+- Direct playback sources come from the configured provider set; system quality does not remove copyright, contract, or regional obligations.
 
 ## Deployment progression
 
@@ -350,7 +350,7 @@ Important state never lives only in an API process. Scale API servers, resolver 
 
 ## Verification and operations
 
-Every provider adapter needs contract tests and fixtures for movies, episodes, special-character titles, missing titles, timeouts, and malformed output. Synthetic checks regularly exercise authorized known titles before members discover an outage.
+Every provider adapter needs contract tests and fixtures for movies, episodes, special-character titles, missing titles, timeouts, and malformed output. Synthetic checks regularly exercise configured known titles before members discover an outage.
 
 Load tests cover cache hits and misses, provider outage, cache outage, database latency, worker crashes, slow DNS, and hot-title stampedes. Canary changes through small traffic percentages and roll back on degraded playback measures.
 
@@ -368,13 +368,13 @@ These standards generalize the catalog module's established shape (`apps/api/src
 - Per-route rate limits layered under edge and per-provider limits.
 - Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
 - Resolver discipline for playback: tiered candidates, hedged starts, dedupe, observed-quality ranking, health quarantine (Stage 6).
-- DB-first subtitle enrichment remains a future slice; current playback exposes only certified direct HTTPS WebVTT tracks.
+- DB-first subtitle enrichment remains a future slice; current playback exposes only direct HTTPS WebVTT tracks.
 - Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
 
 ### Deliberately different this time
 
 1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
-2. **Certified browser-direct media, without an escape hatch.** Provider output is hostile until validated and certified. Anything requiring custom browser-forbidden headers, cookies, rewriting, transformation, or server-side media fetching is unavailable.
+2. **Validated browser-direct media, without an escape hatch.** Provider output is hostile until validated. Anything requiring custom browser-forbidden headers, cookies, rewriting, transformation, or server-side media fetching is unavailable.
 3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
 5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
@@ -419,9 +419,9 @@ The Letterboxd import worker is an active separate entry point and claims durabl
 with `FOR UPDATE SKIP LOCKED`, ownership checks, and lease renewal. BullMQ remains deferred until a
 different shared queue need such as resolver warming or telemetry ingestion is measured.
 
-### Still blocked
+### Still enabled
 
-The provider SDK, injectable playback backend, dedicated playback Valkey, capability certification, and headless media controller are implemented. Provider adapters use an injected, bounded DNS-pinned HTTP client only for resolution and operator certification; member media bytes never cross the API. Deployment activation requires authorization, regional approval, an exact configuration digest, and an unexpired direct-delivery certificate. See [PROVIDER-POLICY.md](./PROVIDER-POLICY.md).
+The provider SDK, injectable playback backend, dedicated playback Valkey, and headless media controller are implemented. Provider adapters use an injected, bounded DNS-pinned HTTP client only for resolution; member media bytes never cross the API. Deployment activates the providers listed in `PLAYBACK_MEDIA_CONFIG` with hostile-output validation at the adapter seam.
 
 ## Architectural invariants
 

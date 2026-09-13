@@ -3,7 +3,6 @@ import { playbackTrackSchema, type ResolvePlaybackRequest } from '@consumit/cont
 import { metrics, trace, SpanStatusCode } from '@opentelemetry/api'
 import { createHash } from 'node:crypto'
 import type { z } from 'zod'
-import { guessEngine, planSource, type CapabilityRegistry, type DeliveryEngine, type DeliveryPlan } from './delivery.ts'
 import type { PlaybackStore } from './state.ts'
 
 export type ResolvedSource = { source: ProviderSource; registration: ProviderRegistration; subtitles: SubtitleCandidate[] }
@@ -61,7 +60,7 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; hedgeMs?: number; now?: () => number; store?: PlaybackStore; delivery?: { registry: CapabilityRegistry; enabled: boolean } }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; hedgeMs?: number; now?: () => number; store?: PlaybackStore }) {
   const now = options.now ?? Date.now
   const cache = new Map<string, Cached>()
   const pending = new Map<string, Pending>()
@@ -116,27 +115,10 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         const validated = validatedSources(result, registration, now())
         const tracks = collectSubtitleCandidates(validated, registration)
         const matching = validated.filter((source) => input.capabilities[source.type])
-        // Direct-only gating (Amendment D): a source plays iff every needed
-        // resource is measured direct with browser headers alone. Anything
-        // else is unsupported — there is no relay to fall back to. Planner
-        // disabled means permissive mode (trust adapter declarations).
-        const delivery = options.delivery
-        const plans = new Map<string, DeliveryPlan>()
-        let engine: DeliveryEngine = 'hlsjs'
-        if (delivery?.enabled) {
-          try {
-            engine = guessEngine(input.capabilities)
-            const verdicts = await Promise.all(
-              matching.map(async (source) => ({ key: source.key, plan: await planSource(source, engine, delivery.registry) })),
-            )
-            for (const { key, plan } of verdicts) plans.set(key, plan)
-          } catch {
-            // Plans stay empty ⇒ nothing eligible below; never break resolve.
-          }
-        } else {
-          for (const source of matching) plans.set(source.key, 'direct')
-        }
-        const candidates = matching.filter((source) => plans.get(source.key) === 'direct')
+        // Hostile-output validation already ran in validatedSources (schema,
+        // expiry, allowlisted https media, no credentials/transforms).
+        // Configured providers resolve directly with no approval step.
+        const candidates = matching
         const targetHeight = input.capabilities.maxHeight ?? 1080
         const qualityScore = (source: ProviderSource) => source.height === undefined ? 10_000
           : source.height <= targetHeight ? 5_000 + source.height : 4_000 - source.height
@@ -150,16 +132,6 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         current.latency = current.latency ? current.latency * 0.8 + (now() - started) * 0.2 : now() - started
         current.outcomes++
         attempts.add(1, { provider: registration.adapter.id, outcome: 'success' })
-        // Delivery verdict for the chosen source. Observability only — the
-        // gating above already decided playability.
-        if (delivery?.enabled) {
-          try {
-            span.setAttribute('delivery.plan', plans.get(source.key) ?? 'unsupported')
-            span.setAttribute('delivery.engine', engine)
-          } catch {
-            // Shadow telemetry must never break resolution.
-          }
-        }
         return { source, registration, subtitles: tracks }
       } catch {
         if (!signal.aborted || signal.reason?.name === 'TimeoutError') { current.failures++; current.outcomes++ }
@@ -271,10 +243,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
                   if (source && input.capabilities[source.type]) {
-                    const plan = options.delivery?.enabled
-                      ? await planSource(source, guessEngine(input.capabilities), options.delivery.registry)
-                      : 'direct'
-                    if (plan === 'direct') return { source, registration, subtitles: [] }
+                    return { source, registration, subtitles: [] }
                   }
                 }
               }

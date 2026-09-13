@@ -1,4 +1,4 @@
-# Opt-in playback wiring. Uses only providers explicitly approved in the local file.
+# Opt-in playback wiring. Uses the providers listed in the local file.
 # docker compose -f compose.yaml -f compose.playback.yaml --profile playback up -d --build api playback-valkey
 services:
   playback-valkey:
@@ -9,20 +9,10 @@ services:
       PLAYBACK_ENABLED: "true"
       PLAYBACK_VALKEY_URL: valkey://playback-valkey:6379/0
       PLAYBACK_MEDIA_CONFIG: /run/consumit/providers.json
-      PLAYBACK_DELIVERY_CERT: /run/consumit/certification.json
-      # Direct-only delivery: only sources proven browser-playable are used.
-      # Unknown or header/cookie-locked sources fail closed.
-      PLAYBACK_DELIVERY_PLANNER: "true"
     volumes:
       - type: bind
         source: ./infra/playback/providers.local.json
         target: /run/consumit/providers.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./infra/playback/certification.local.json
-        target: /run/consumit/certification.json
         read_only: true
         bind:
           create_host_path: false

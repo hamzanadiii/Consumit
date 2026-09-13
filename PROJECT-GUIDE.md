@@ -10,7 +10,6 @@
 | Domain language | [`CONTEXT.md`](./CONTEXT.md) |
 | Product scope & flows | [`docs/PRODUCT.md`](./docs/PRODUCT.md) |
 | Platform & backend | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
-| Provider adoption | [`docs/PROVIDER-POLICY.md`](./docs/PROVIDER-POLICY.md) |
 | Delivery sequencing | [`docs/DELIVERY.md`](./docs/DELIVERY.md) |
 | Visual system | [`DESIGN.md`](./DESIGN.md) |
 | Component registry | [`docs/COMPONENTS.md`](./docs/COMPONENTS.md) |
@@ -22,7 +21,7 @@
 movies and series. Promise: **watch immediately, remember what you love, and
 discover through people whose taste you trust.** A media platform with a
 social/product layer — not a website organized around provider scrapers. Media
-bytes travel directly from an authorized provider or CDN to the browser;
+bytes travel directly from a configured provider or CDN to the browser;
 Consumit resolves and manages playback.
 
 Four jobs: choose what to watch with confidence · start playback with minimum
@@ -70,7 +69,7 @@ curated, with notes) · Saved Title (bookmarked for later) vs Favorite
 History (factual record) vs Diary (member-facing chronology) · Library
 (personal home: saved, favorites, history, lists).
 
-Provider (authorized external source) · Availability Preference (selected
+Provider (configured external source) · Availability Preference (selected
 service for discovery, not a linked account) · Source (provider playback
 option) · Playback Session (one member's attempt; keeps progress + recovery
 per title, never per URL) · Resolve (find/validate/select a source) ·
@@ -99,7 +98,7 @@ implementations genuinely vary. New code is created lazily, slice by slice.
 Catalog: TMDB is canonical metadata/identifier namespace (en-US, US market,
 no adult). Web talks only to the versioned Consumit catalog API; TMDB secrets
 never leave Fastify. Injectable `Catalog` interface (fake/TMDB/unavailable);
-request coalescing + SWR tiers. A real title may have no authorized source —
+request coalescing + SWR tiers. A real title may have no configured source —
 the player then shows the honest unavailable branch, never a demo or embed.
 
 Playback: resolve creates a session (identity, title/episode, provider,
@@ -133,7 +132,7 @@ Security: adapters get minimum access; all external results schema-validated;
 independent timeouts; ≤2 retries with backoff + jitter; edge → member →
 provider rate limits; SSRF guard on URL-fetching (no loopback/private/
 metadata/non-HTTP, prefer allowlists); env-backed secrets with rotation;
-public/internal/admin kept apart; authorized sources only.
+public/internal/admin kept apart; configured sources with validation only.
 
 Deployment: simple production → measured horizontal growth → orchestration →
 multi-region, each only on measured demand. State never lives only in an API
@@ -141,12 +140,12 @@ process.
 
 Backend standards (new modules repeat the catalog module's shape: interface,
 route registrar, typed errors, fake + adapters, interface tests): cookie
-sessions (never localStorage JWT), direct-first media with one audited
-lease-proxy escape hatch, no rooms/DMs/donations/ads scaffolding, Fastify
+sessions (never localStorage JWT), validated direct media with no proxy
+escape hatch, no rooms/DMs/donations/ads scaffolding, Fastify
 registrars, Prisma recommended, localized failure (no global panic), OTEL
 over bespoke metrics, Zod-validated env failing fast, Argon2id passwords,
-BullMQ only with the first real queue need. Provider work stays gated on the
-authorized set — activation rules in `docs/PROVIDER-POLICY.md`.
+BullMQ only with the first real queue need. Providers resolve directly
+from the configured set with hostile-output validation.
 
 ## 4. Delivery
 
@@ -174,8 +173,8 @@ the next.
 
 ## 5. Open decisions (blocking order)
 
-1. **Authorized provider set** — names, rights, regions, permitted HLS/DASH/
-   native delivery. Blocks playback work. (Triage input: `PROVE/`.)
+1. **Configured provider set** — names, regions, permitted HLS/DASH/
+   native delivery in `PLAYBACK_MEDIA_CONFIG`.
 2. Privacy defaults across profile/diary/ratings/reviews/lists/follows.
 3. Auth methods, import sources, recovery/verification/deletion/export.
 4. Launch market decided (tier-1: US, UK, CA, AU, DE, FR, NL, ES, IT); languages, subtitle priorities, age rules incl. ads consent, hosting region open.
@@ -229,19 +228,18 @@ apps/web/            Next.js UI (routes, screens, fixtures)
 apps/api/            Fastify API (catalog module done; identity/library/social/playback open)
 packages/ui/         shared components + Consumit Player
 packages/contracts/  shared Zod schemas + types
-PROVE/               provider research (sources only, see docs/PROVIDER-POLICY.md)
 design/              reference package (ignored); DESIGN.md + COMPONENTS.md are authority
-docs/                PRODUCT / ARCHITECTURE / PROVIDER-POLICY / DELIVERY / COMPONENTS
+docs/                PRODUCT / ARCHITECTURE / DELIVERY / COMPONENTS
 ```
 
 Root: `bun run dev|build|lint|typecheck|test|check` fan out to workspaces.
 Per workspace: `bun run {dev,build,lint,typecheck,test}`. Web `test` is
 `vitest run`; API `test:tmdb:live` hits the real TMDB API (explicit only).
 
-Working agreement: read CONTEXT/PRODUCT/ARCHITECTURE/DELIVERY/PROVIDER-POLICY/
+Working agreement: read CONTEXT/PRODUCT/ARCHITECTURE/DELIVERY/
 DESIGN+COMPONENTS per task type · smallest coherent slice · provider code
 behind the adapter seam · progress independent of sources · external output
-hostile, playback inputs authorized-only · deterministic fixtures until
+hostile, playback inputs validated · deterministic fixtures until
 integration is the slice's purpose · lazy structure · Consumit owns playback
 controls · done = states + failure behavior covered, checks pass, docs
 updated at their single source of truth.

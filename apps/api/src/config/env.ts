@@ -13,8 +13,6 @@ const envSchema = z.object({
   PLAYBACK_VALKEY_URL: z.string().min(1).optional(),
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
-  PLAYBACK_DELIVERY_PLANNER: z.enum(['true', 'false']).default('true'),
-  PLAYBACK_DELIVERY_CERT: z.string().min(1).optional(),
   RESEND_API_KEY: z.string().trim().min(1).optional(),
   TMDB_API_READ_TOKEN: z.string().trim().min(1).optional(),
   TMDB_LANGUAGE: z.string().trim().min(1).default('en-US'),
@@ -29,11 +27,6 @@ export type ApiEnv = {
     /** Advertised API/resolver instance count. Past one, shared Valkey state
      *  is mandatory (resolver cache, sessions, rate limits, health). */
     instances: number
-    /** Direct-only gating by measured capability (ADR-0002). Permissive mode
-     *  (trust adapter declarations) when false. */
-    deliveryPlanner: boolean
-    /** Optional JSON file of attested capability rows loaded at boot. */
-    deliveryCert: string | undefined
   }
   appOrigin: string
   authCodePepper: string | undefined
@@ -58,8 +51,6 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   const value = parsed.data
   if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_MEDIA_CONFIG) throw new Error('Playback requires PLAYBACK_MEDIA_CONFIG.')
-  if (value.PLAYBACK_ENABLED === 'true' && value.PLAYBACK_DELIVERY_PLANNER !== 'true') throw new Error('Playback requires direct-delivery certification; PLAYBACK_DELIVERY_PLANNER cannot be disabled.')
-  if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_DELIVERY_CERT) throw new Error('Playback requires PLAYBACK_DELIVERY_CERT.')
   // Single-instance launches run playback on bounded in-process state; shared
   // Valkey becomes mandatory past one instance, where split-brain resolvers
   // would otherwise diverge on cache, sessions, and health.
@@ -88,9 +79,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   return {
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
-      instances: value.PLAYBACK_INSTANCES,
-      deliveryPlanner: value.PLAYBACK_DELIVERY_PLANNER === 'true',
-      deliveryCert: value.PLAYBACK_DELIVERY_CERT },
+      instances: value.PLAYBACK_INSTANCES },
     appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,

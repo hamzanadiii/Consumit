@@ -3,6 +3,7 @@ import type { FastifyError, FastifyInstance } from 'fastify'
 import type { ApiErrorCode, ApiErrorResponse } from '@consumit/contracts'
 
 import { CatalogError } from '../catalog/errors.ts'
+import { AnilistError } from '../anilist/errors.ts'
 import { IdentityError } from '../identity/errors.ts'
 import { LetterboxdImportError } from '../imports/letterboxd/errors.ts'
 
@@ -52,7 +53,7 @@ export function errorEnvelope(code: ApiErrorCode, message: string, requestId: st
 }
 
 function translate(error: FastifyError | Error, requestId: string): { body: ApiErrorResponse; statusCode: number } {
-  if (error instanceof ApiError || error instanceof CatalogError || error instanceof IdentityError || error instanceof LetterboxdImportError) {
+  if (error instanceof ApiError || error instanceof CatalogError || error instanceof AnilistError || error instanceof IdentityError || error instanceof LetterboxdImportError) {
     return {
       body: errorEnvelope(error.code, error.message, requestId, error.retryable),
       statusCode: statusByCode[error.code],

@@ -102,6 +102,8 @@ components:
 
 ## Overview
 
+The original Consumit identity is fixed. Improve clarity, flow, accessibility, and responsiveness within these tokens and shared components; references are interaction inspiration, not permission to replace the brand.
+
 **Creative North Star: "Cinema After Midnight"**
 
 Consumit feels cinematic, editorial, and human: a near-black room lit by warm ivory type and rare signals of color. The interface is intimate rather than glossy, with enough quiet space for artwork, taste, and other people’s perspectives to carry emotional weight.
@@ -132,7 +134,7 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 ### Tertiary
 
 - **Positive Lime:** Presence and healthy status only.
-- **Quiet Danger:** Destructive actions, invalid fields, and first-party playback states blocked by the absence of an authorized source.
+- **Quiet Danger:** Destructive actions, invalid fields, and first-party playback states blocked by the absence of a configured source.
 
 ### Neutral
 
@@ -163,7 +165,7 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 - **Display:** Regular, tightly tracked, and near-solid leading for hero statements and major page titles.
 - **Headline:** Regular Charter for section openings and card-led editorial statements.
 - **Body:** Regular DejaVu Sans with generous leading and a readable maximum line length around 68 characters.
-- **Label:** Compact uppercase DejaVu Sans with wide tracking for roles, categories, and state names.
+- **Label:** Compact DejaVu Sans for metadata and controls; persistent form labels may use the established uppercase tracking. Do not turn ornamental eyebrows into a reusable pattern.
 - **Control:** Medium-weight DejaVu Sans with tight leading and subtle negative tracking for direct actions.
 
 ### Named Rules
@@ -174,9 +176,9 @@ The palette is a midnight neutral field with warm ivory content and three delibe
 
 Desktop compositions use a 50px content edge and a 68px global navigation shell. The interface root is 14px, so the base unit renders at 3.5px, with the established rhythm progressing through 7, 10, 16, 21, 28, 42, and 56px. Broad editorial openings transition into structured content, often with a main column and a decision-oriented side rail.
 
-The current catalog responds at 640px, 1024px, and 1280px. Below 1024px, global navigation becomes a separate 52px bar containing only the supplied brand lockup and a 38px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
+The current catalog responds at 640px, 1024px, and 1280px. Below 1024px, global navigation becomes a separate 52px bar containing the supplied brand lockup, a guest Sign in action, and a 38px menu trigger; routes, search, and the member profile move into the drawer. Mobile is composed independently rather than produced by shrinking a desktop grid; controls wrap, section ownership remains obvious, and primary actions retain touch-safe height.
 
-On Home, poster-led circle and trending collections become horizontal discovery rails on narrow screens. Continue-watching cards, the editorial feature, curated lists, and the mood action stack instead, preserving a readable sequence and full-width actions without compressing their content.
+Home keeps its bounded backdrop masthead below the global navigation. Popular and Top rated retain horizontal discovery rails, followed by editorial selection and genre browsing. Persistent poster captions and dedicated carousel controls improve scanning and keyboard access.
 
 Movies and Series use a compact opening within a centered content width (1260px maximum), followed by a landscape rail and a portrait grid. The grid grows from two columns below 640px to three at 640px, four at 1024px, and six at 1280px. The rail retains horizontal scrolling at every width. Below 360px, Genre spans a full control row above Year and sort; wider mobile layouts fit all three controls in one row.
 
@@ -216,7 +218,7 @@ Global navigation is the stable wayfinding shell for catalog and social surfaces
 - **Desktop:** Use a 68px flat Navigation Black shell with the exact supplied mark, Home / Movies / Series / Friends, a universal outlined search field, and the supplied member portrait. The active route receives a thin signal-orange baseline.
 - **Search:** Submit a GET query named `q`. The destination, initial value, and placeholder may change through the component API, but the field remains a 38px outlined global search rather than a filled or pill-shaped control.
 - **Member presence:** The portrait is supplied by the caller; the component alone owns the optional Positive Lime presence dot and keeps its visible and announced online state synchronized.
-- **Mobile:** Below 1024px, keep only the brand and a 38px menu trigger in the 52px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
+- **Mobile:** Below 1024px, keep the brand, guest Sign in action, and a 38px menu trigger in the 52px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
 - **API:** `activeHref` owns current-route presentation, while `items` defaults to Home / Movies / Series / Friends. Brand, search, and profile destinations and content may be overridden without changing the shell anatomy; `sticky` changes positioning only.
 - **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
 - **Scope:** Exclude this shell from Watch and from the reduced authentication, onboarding, and report headers.
@@ -239,7 +241,7 @@ Catalog provenance and prototype honesty are persistent interface chrome, not op
 Labels and inputs form one quiet, native-first control contract while remaining independently composable.
 
 - **Label:** Keep context visible above the field in 10px, 700-weight uppercase DejaVu Sans with `0.12em` tracking and Warm Copy color. The caller owns `htmlFor` / `id` association.
-- **Input:** Use a native input at exactly 38px high with the 5px control radius, Input Field surface, Warm Ink text, and the perceptible control outline.
+- **Input:** Use a native input at exactly 38px high with the shared control radius, Input Field surface, Warm Ink text, and the perceptible control outline.
 - **Focus:** Keyboard focus changes the boundary to Signal Orange and adds a visible two-pixel orange ring separated from the field by the Midnight Canvas. Remove the transition for reduced motion.
 - **Invalid:** `aria-invalid="true"` changes the boundary and focus ring to Quiet Danger. The caller owns validation, `aria-describedby`, and message content.
 - **Read-only / Disabled:** Read-only fields move to Quiet Surface while preserving legibility. Disabled fields use the same surface with muted text, reduced opacity, and an unavailable cursor.
@@ -270,22 +272,26 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 ### Home Composition
 
-Home at `/` follows one deliberate live-catalog sequence: featured hero; Popular now; Top rated; an editorial selection; Browse by genre; then the footer. The hero is an auto-rotating artwork-logo spotlight on a brisk cadence with a vertical progress rail floating at its right edge — the live title falls top-down over one rotation period while the rest stay dots, pausing with the spotlight; it pairs a Watch action with a More info destination and mirrors the title masthead exactly — artwork logo, score-led metadata with duration and certification, tagline lede, and maker byline — through the shared hero helpers. Trending tonight is a ten-title ranked rail with one-line score meta under each poster; every featured title stays reachable through the rails below it. Browse by genre is framed as finding something by mood. Circle, progress, and community-list sections join that cadence only after real backing behavior exists.
+Home at `/` follows the shipped live-catalog sequence: featured hero; Popular now; Top rated; editorial selection; Browse by genre; footer. The bounded hero remains below the original flat navigation. Official title artwork or a Charter fallback leads, with catalog metadata, tagline, maker byline, synopsis, and the existing Watch / More info actions.
 
-The pacing alternates emotional and practical decisions. A broad cinematic opening leads into trusted social discovery, a compact return-to-watch section, an editorial interruption, ranked member evidence, human curation, and a final low-friction mood choice.
+The shared spotlight uses an eight-second cadence and a 300ms opacity crossfade. It has a visible Pause/Start control before slide content in the keyboard order. Hover pauses rotation; focus entering the slide or choosing a title stops it until explicitly restarted. Offscreen content, hidden browser tabs, and reduced-motion preferences also suspend rotation. The original vertical progress rail remains on desktop; mobile puts the same controls in a separate row below the hero. Selector hit areas are 44px. Hidden slides are inert.
 
-**The Home Cadence Rule.** Preserve Home’s shipped section order and alternation of cinematic, social, utility, and editorial beats; do not generalize that composition to other pages.
+Poster captions and year/rating metadata remain visible. Bookmark actions are available on hover, focus, and touch. No page-load movement, camera drift, blur transitions, or poster tilting is added.
+
+**The Home Cadence Rule.** Keep the shipped catalog order and let members control changes to their reading position. Follow the [WAI carousel guidance](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/) for interaction behavior.
 
 ### Movies and Series Browsing
 
 - **Opening:** Keep the Movies or Series heading in ivory Charter with its small orange full stop, a brief muted description, and compact native genre, year, and sort controls. Use the established global shell and control geometry.
 - **Controls:** Native selects remain 38px high with the control outline, dark surface, readable selected values, and visible orange keyboard focus. Reset is a subordinate ghost action.
-- **Artwork:** The landscape rail keeps title and year visible over a legibility gradient. Poster titles appear on hover and keyboard focus and remain visible on touch devices. Missing artwork retains the shared geometric fallback and visible title. Artwork loads lazily; reduced motion removes decorative transitions and smooth rail movement.
+- **Artwork:** The landscape rail keeps title and year visible over a legibility gradient. Poster captions stay visible below artwork; hover, keyboard focus, and touch also reveal the artwork overlay. Missing artwork retains the shared geometric fallback and visible title. Artwork loads lazily; reduced motion removes decorative transitions and smooth rail movement.
 - **Continuation:** Loading placeholders preserve poster proportions. The result count, loading, recovery, and terminal copy remain quiet supporting information below the compact section heading or grid; Load more and Try again use the shared outlined action.
 
-**The Browse Composition Rule.** Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Cinema After Midnight palette, typography, global navigation, and compact corners throughout.
+**The Browse Composition Rule.** Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Consumit palette, typography, global navigation, and compact geometry throughout.
 
 ### Trending Card
+
+This pattern remains an internal gallery component; it is not a current Home section.
 
 - **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral a quiet warm-ivory silhouette with the artwork rather than a competing badge.
 - **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable. Catalog rails add a one-line score meta (★ rating · year · kind) below trending titles.
@@ -305,25 +311,17 @@ The pacing alternates emotional and practical decisions. A broad cinematic openi
 
 ### Profile and Taste Surfaces
 
-Profile surfaces are living taste spaces rather than account summaries.
+The profile preserves Consumit's original masthead: a bounded backdrop, flat composition, Charter name, avatar, biography, and factual history counts. The masthead expands for long names or biographies; owner actions wrap rather than overlap content.
 
-- **Ownership state:** Public and owner presentations share the canonical `/profile/[username]` route. When the route belongs to the signed-in member, replace public follow and compatibility actions with editing, completion, and public-preview controls instead of creating a separate owner URL.
-- **Profile masthead:** Layer real Favorite artwork and a legibility gradient behind one identity block: initials avatar, name, username and context, optional bio, and compact history statistics. Statistics support the person; they do not become the headline. Presence, follower counts, and direct messaging are not fabricated.
-- **Profile composition:** Move from the masthead into horizontally scrollable section tabs, then pair primary section content with contextual evidence on desktop. On mobile, place each evidence block immediately after the content it explains.
-- **Compatibility:** Pair the named member relationship with a clamped overlap score, a human-readable reason, and mutual people or shared favorites. Foreground why two people connect rather than anonymous engagement.
-- **Diary row:** Keep date, artwork, title, rating, watch context, optional personal note, and destination action in separate readable slots. On narrow screens the action follows the content instead of compressing it.
-- **Taste signature:** Use one editorial sentence as the lead, followed by explicitly named taste worlds and restrained supporting behavior.
-- **Rating rhythm:** Treat the histogram as evidence rather than a control. Label the distribution on the figure, hide individual bars from assistive technology, and keep even the smallest axis labels at readable Muted Metadata contrast.
+Six ordered Favorites use equal size, opacity, and contrast. Desktop shows six columns; tablet and mobile show three. Every cover and caption leads to the title, with one keyboard stop and a visible focus outline. Controls inside a card remain independently usable.
 
-**The Human Reason Rule.** Profile and taste surfaces explain affinity through named people, shared worlds, and readable reasons; totals never stand alone as proof.
+Profile section links are native anchors. The selected location follows the URL hash, including browser Back and Forward. Favorites, diary, reviews, and lists retain their existing owner editors and stored data. Genre counts are derived only from available Favorite metadata.
 
-**The Related Evidence Rule.** Public-profile evidence sits beside the content it explains on desktop and follows that content immediately on mobile; never detach it into a generic side rail.
-
-**The Rating Evidence Rule.** Rating histograms are labeled figures, not controls: announce the distribution once, hide individual bars, and keep the axis labels readable.
+Diary and authored reviews share two columns on desktop and stack on mobile. Reviews keep the poster, title destination, date, and full text together. Missing catalog metadata preserves stored records and destinations. Empty and private states make no claims of activity that has not happened.
 
 ### Title and Series Surfaces
 
-- **Title masthead:** Make one cinematic promise with artwork, context, the official title artwork logo, score-led metadata, the tagline as lede, a maker byline, a three-line constant synopsis, and a Watch action at the shared control height. The logo is the TMDB artwork mark (English preferred, language-free fallback); when no logo exists the serif display title takes its place, and the title stays in the heading for assistive technology either way. The byline names real directors (film) or creators (series) only; the tagline lives in the hero alone, never repeated in the overview. A dark-glass member shelf tops the hero's right column with Watched, Liked, and Saved toggles backed by stored records, interactive Rated stars, an Add-review row opening the watch-log dialog, a copy-link Share row, and a Your activity destination; rows without backing behavior never appear, and there is no separate rating section. Shelf toggles speak in verbs: Watch, Like, and Save at rest become Watched, Liked, and Saved on hover or when set, and hovering a set toggle reads Remove; the watched eye fills with a translucent wash so its shape survives, while heart and bookmark fill solid. Toggling plays a short scale-and-settle motion. Stars render at trio-icon scale with hover preview and a pop on the hovered star, clear by clicking the set value again with no separate clear control, and show the focus ring for keyboard focus only. The log dialog portals to the document body so the shelf glass never traps it, and commits every section to stored records with retry-safe writes. Taste match and named social proof support that promise without competing with it.
+- **Title masthead:** Make one cinematic promise with artwork, context, the official title artwork logo, score-led metadata, the tagline as lede, a maker byline, a three-line constant synopsis, and the shared ivory Watch action with Consumit's compact control corners. The detail hero uses the same bounded, square-edged composition as Home. The logo is the TMDB artwork mark (English preferred, language-free fallback); when no logo exists the serif display title takes its place, and the title stays in the heading for assistive technology either way. The byline names real directors (film) or creators (series) only; the tagline lives in the hero alone, never repeated in the overview. A dark-glass member shelf tops the hero's right column with Watched, Liked, and Saved toggles backed by stored records, interactive Rated stars, an Add-review row opening the watch-log dialog, a copy-link Share row, and a Your activity destination; rows without backing behavior never appear, and there is no separate rating section. Shelf toggles speak in verbs: Watch, Like, and Save at rest become Watched, Liked, and Saved on hover or when set, and hovering a set toggle reads Remove; the watched eye fills with a translucent wash so its shape survives, while heart and bookmark fill solid. Toggling plays a short scale-and-settle motion. Stars render at trio-icon scale with hover preview and a pop on the hovered star, clear by clicking the set value again with no separate clear control, and show the focus ring for keyboard focus only. The log dialog portals to the document body so the shelf glass never traps it, and commits every section to stored records with retry-safe writes. Taste match and named social proof support that promise without competing with it.
 - **Catalog identity:** TMDB-backed cards, details, seasons, episodes, and Watch actions preserve their canonical numeric catalog routes while the interface continues to show human titles rather than provider identifiers.
 - **Catalog evidence:** Explicitly label TMDB ratings and recommendations. Keep them visually separate from the sample member or Circle evidence governed by the preview-data notice.
 - **Detail priority:** Title Detail opens on Overview. Series Detail opens on Episodes and foregrounds season choice, episode state, progress, and the next available action.
@@ -338,12 +336,17 @@ Profile surfaces are living taste spaces rather than account summaries.
 
 ### Library and List Surfaces
 
-- **Library toolbar:** Keep in-library search, filters, and sort or view controls as distinct regions that can wrap without losing their labels or order.
-- **Saved title card:** Separate saved state, contextual badge, watch progress, metadata, personal or social signal, and destination. Progress uses orange and includes a textual equivalent.
-- **Ordered title row:** Preserve curator rank and note as authored evidence. Match, friend proof, and the title action remain separate; search and filtering must not silently reorder the list.
-- **Curator panel:** Name owners and collaborators with their roles and contribution detail before descriptive tags.
+Library retains Consumit's typography, palette, compact corners, and flat controls. A small selection of saved covers introduces the page; a quiet ledge in the existing surface tokens makes the shelf recognizable without turning the whole interface into a cabinet.
 
-**The State, Evidence, Action Rule.** Episode, library, and ordered-list rows keep current state, supporting evidence, and the available action visibly distinct.
+- Shelves, Grid, and List are distinct views of the same saved records. Shelf ledges sit directly below cover artwork; captions remain below the ledge.
+- Local search and movie/series filters work together. Clear filters recovers from zero matches. An empty library offers Explore movies.
+- Native radio semantics identify the selected view. Search has an accessible label, visible focus, and a readable placeholder.
+- The section index labels the chronological records as Watch diary, matching the data and count.
+- Covers and captions share a title destination while Save remains an independent control.
+- Missing catalog metadata preserves records with fallback names and destinations.
+- Lists and Diary retain existing ownership and privacy behavior.
+
+**The State, Evidence, Action Rule.** Keep the stored record, its metadata, and the available action clear in every view.
 
 ### Authentication and Onboarding
 
@@ -368,14 +371,14 @@ Profile surfaces are living taste spaces rather than account summaries.
 Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster or backdrop, but never a media source. Provider ranking, health determination, entitlement checks, streaming adapters, and switching behavior remain application logic behind the provider-adapter seam.
 
 - **Watch header:** Use the supplied Consumit mark, back destination, title context, active source status, and an explicit exit. Do not restore global navigation inside watch.
-- **Consumit Player:** Render a semantic native video surface with first-party play, seek, volume, and fullscreen controls. Authorized providers supply direct HLS, DASH, or native-media sources through the later adapter seam; iframe and embed surfaces are excluded.
-- **Unavailable state:** When no authorized direct-media source exists, keep the first-party player visible with the catalog poster or established missing-art fallback, show an explicit Quiet Danger status, disable unavailable playback controls, and pair the state with a plain-language lock explanation and a route back to the title. Never substitute a demo clip, trailer, iframe, or embed.
-- **Source selector:** Render controlled native radio rows only when authorized sources exist. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable; do not render an empty or invented source list.
+- **Consumit Player:** Render a semantic native video surface with first-party play, seek, volume, and fullscreen controls. Configured providers supply direct HLS, DASH, or native-media sources through the later adapter seam; iframe and embed surfaces are excluded.
+- **Unavailable state:** When no configured direct-media source exists, keep the first-party player visible with the catalog poster or established missing-art fallback, show an explicit Quiet Danger status, disable unavailable playback controls, and pair the state with a plain-language lock explanation and a route back to the title. Never substitute a demo clip, trailer, iframe, or embed.
+- **Source selector:** Render controlled native radio rows only when configured sources exist. The radio owns keyboard focus, the containing row exposes that focus visibly, and selected, health, and detail text remain independently understandable; do not render an empty or invented source list.
 - **Composition contract:** The selected source, watch-header status, player status, and active source detail update from the same application state. The no-source branch must say so consistently, and a visual selection must never disagree with the source reported as selected.
 
-**The Player Ownership Rule.** Consumit owns the playback controls and media surface; authorized providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.
+**The Player Ownership Rule.** Consumit owns the playback controls and media surface; configured providers may supply direct media through an adapter boundary, while TMDB supplies metadata and artwork only. Neither replaces the interface with an embed.
 
-**The Synchronized Watch State Rule.** Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any authorized source.
+**The Synchronized Watch State Rule.** Source selection, watch status, player status, and active detail always describe the same application state, including the explicit absence of any configured source.
 
 ### Global Finish
 
@@ -392,7 +395,7 @@ Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster o
 ### Do:
 
 - **Do** use the supplied brand and artwork assets instead of recreating them with generic icons.
-- **Do** reserve ivory for confident immediate actions and orange for committed progression.
+- **Do** keep ivory as the shared primary action and orange for committed progression and cinematic Watch actions.
 - **Do** preserve visible keyboard focus, 38px targets for compact controls and links, and readable metadata contrast.
 - **Do** finish each shared component and its states before composing the next screen.
 - **Do** keep Home’s section order and responsive discovery rails specific to Home.
@@ -403,7 +406,7 @@ Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster o
 
 ### Don't:
 
-- **Don't** introduce large pills, routine gradients, glass effects, or floating dashboard cards.
+- **Don't** spread artwork gradients, poster shadows, or the detail member shelf's glass treatment into routine controls and panels.
 - **Don't** use orange, lilac, or lime as interchangeable decoration.
 - **Don't** reduce every surface to a rounded card grid.
 - **Don't** treat mobile as a scaled-down desktop composition.

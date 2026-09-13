@@ -80,7 +80,7 @@ describe('content cards', () => {
 
     expect(screen.getByText('★ 8.3 · 2026 · Series')).toBeInTheDocument()
   })
-  it('covers each card with a keyboard-silent destination overlay', () => {
+  it('gives ContentCard a single named destination and preserves other card destinations', () => {
     const { container } = render(
       <>
         <ContentCard href="/titles/northbound" title="Northbound" />
@@ -90,10 +90,11 @@ describe('content cards', () => {
     )
 
     const overlays = container.querySelectorAll('a[aria-hidden="true"][tabindex="-1"]')
-    expect(overlays).toHaveLength(3)
-    expect(overlays[0]).toHaveAttribute('href', '/titles/northbound')
-    expect(overlays[1]).toHaveAttribute('href', '/titles/fault-lines')
-    expect(overlays[2]).toHaveAttribute('href', '/lists/memory')
+    expect(container.querySelectorAll('[data-consumit-content-card] a')).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Northbound' })).toHaveAttribute('href', '/titles/northbound')
+    expect(overlays).toHaveLength(2)
+    expect(overlays[0]).toHaveAttribute('href', '/titles/fault-lines')
+    expect(overlays[1]).toHaveAttribute('href', '/lists/memory')
     for (const overlay of overlays) {
       expect(overlay.className).toMatch(/absolute/)
       expect(overlay.className).toMatch(/inset-0/)

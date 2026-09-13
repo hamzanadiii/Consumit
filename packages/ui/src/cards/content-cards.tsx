@@ -1,5 +1,5 @@
 import type { ComponentProps, ElementType, ReactNode } from 'react'
-import { Bookmark, Check } from 'lucide-react'
+import { Bookmark, Check, Star } from 'lucide-react'
 
 import {
   Avatar,
@@ -52,14 +52,6 @@ export function ContentCard({
       data-state={state}
       {...props}
     >
-      {href ? (
-        <LinkComponent
-          aria-hidden="true"
-          className="absolute inset-0 outline-none"
-          href={href}
-          tabIndex={-1}
-        />
-      ) : null}
       <ArtworkFrame alt={alt ?? `${title} poster`} src={artworkSrc}>
         {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
         {state === 'watched' || state === 'saved' || action ? (
@@ -89,10 +81,10 @@ export function ContentCard({
       </ArtworkFrame>
       <div className="mt-3 min-w-0">
         {href ? (
-            <LinkComponent
-              className="mt-1 flex min-h-11 items-center font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-              href={href}
-            >
+          <LinkComponent
+            className="consumit-card-title mt-1 flex min-h-11 items-center font-display text-xl leading-tight text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+            href={href}
+          >
             {title}
           </LinkComponent>
         ) : (
@@ -301,7 +293,7 @@ export function CuratedListCard({
       <div className="mt-4 flex items-end gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[0.625rem] font-bold uppercase tracking-[0.1em] text-orange">
-            {curator}&apos;s list
+            {curator === 'You' ? 'Your list' : `${curator}'s list`}
           </p>
           {href ? (
             <a
@@ -356,7 +348,11 @@ export function WatchCard({
       data-consumit-watch-card
       {...props}
     >
-      <ArtworkFrame alt={`${title} poster`} src={artworkSrc}>
+      <ArtworkFrame
+        alt={`${title} poster`}
+        className="transition-all duration-200 group-hover:border-orange group-hover:ring-1 group-hover:ring-orange/60 group-focus-within:border-orange group-focus-within:ring-1 group-focus-within:ring-orange/60"
+        src={artworkSrc}
+      >
         {titleHref ? (
           <LinkComponent
             aria-hidden="true"
@@ -370,7 +366,7 @@ export function WatchCard({
           className="pointer-events-none absolute inset-0 bg-canvas/60 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
         />
         {bookmark ? (
-          <div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+          <div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
             {bookmark}
           </div>
         ) : null}
@@ -378,10 +374,11 @@ export function WatchCard({
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(180deg,transparent_0%,rgba(9,9,11,0.72)_55%,rgba(9,9,11,0.94)_100%)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
         />
-        <div className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-[opacity,transform] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 motion-reduce:transition-none">
+      </ArtworkFrame>
+        <div className="pt-3">
           {titleHref ? (
             <LinkComponent
-              className="font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
+              className="block truncate py-1 font-bold text-ink outline-none transition-colors hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
               href={titleHref}
             >
               {title}
@@ -393,14 +390,13 @@ export function WatchCard({
             {meta ? <span>{meta}</span> : null}
             {rating === undefined || rating === null ? null : (
               <span className="inline-flex items-center gap-1">
-                <span aria-hidden="true" className="text-orange">★</span>
+                <Star aria-hidden="true" className="size-3 fill-orange text-orange" />
                 <span className="sr-only">Rated {rating.toFixed(1)} out of 10.</span>
                 <span aria-hidden="true">{rating.toFixed(1)}</span>
               </span>
             )}
           </p>
         </div>
-      </ArtworkFrame>
     </article>
   )
 }

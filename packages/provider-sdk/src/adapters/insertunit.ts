@@ -4,7 +4,7 @@ import { accessDeadline, adapter, document, mediaType, ProviderFailure, type Pro
 
 const origin = 'https://api.insertunit.ws'
 
-export type TmdbIdentityResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<{ imdbId?: string; tmdbId?: number }>
+export type TmdbIdentityResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<{ imdbId?: string | undefined; tmdbId?: number | undefined }>
 
 export function createInsertunitProvider(http: ProviderHttp, identity: TmdbIdentityResolver, now = Date.now) {
   return adapter('insertunit', async (input, signal) => {

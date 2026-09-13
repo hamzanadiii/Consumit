@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStaticProvider, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import { createResolver } from './resolver.ts'
-import { createCapabilityRegistry } from './delivery.ts'
 import { createMemoryPlaybackStore } from './state.ts'
 
 const source: ProviderSource = { key: 'main', url: 'https://media.example/test.m3u8', type: 'hls', language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }
@@ -63,7 +62,7 @@ describe('bounded playback resolution', () => {
     await vi.advanceTimersByTimeAsync(8000)
     expect(await task).toBeNull()
   })
-  it('excludes correlated providers and disabled or unapproved registrations', async () => {
+  it('excludes correlated providers and disabled or out-of-region registrations', async () => {
     const first = provider('first'); const same = provider('same'); same.upstreamGroup = first.upstreamGroup
     const disabled = provider('disabled'); disabled.enabled = false
     const outside = provider('outside'); outside.approvedRegions = ['GB']
@@ -114,16 +113,8 @@ describe('bounded playback resolution', () => {
     registration.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [{ ...source }, ...fixed] }))
     await expect(resolver.resolve({ ...input, ref: { kind: 'movie', id: 2 } }, new AbortController().signal, [], undefined, true)).resolves.toMatchObject({ source: { key: 'main' } })
   })
-  it('plans delivery in shadow mode without changing resolution', async () => {
-    const registration = provider('shadow')
-    const store = createMemoryPlaybackStore()
-    const resolver = createResolver([registration], {
-      region: 'US', store,
-      delivery: { registry: createCapabilityRegistry(store), enabled: true },
-    })
-    // Empty registry means the source is not yet proven browser-direct and
-    // must fail closed now that no relay fallback exists.
-    await expect(resolver.resolve(input, new AbortController().signal)).resolves.toBeNull()
+  it('resolves configured providers directly through hostile-output validation', async () => {
+    const registration = provider('direct')
     await expect(createResolver([registration], { region: 'US' }).resolve(input, new AbortController().signal)).resolves.toMatchObject({ source: { key: 'main' } })
   })
 })

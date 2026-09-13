@@ -1,7 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { Pause, Play } from 'lucide-react'
 
+import { Button } from '../button/button'
 import { cn } from '../lib/cn'
 import { TitleMasthead } from './title'
 
@@ -14,6 +16,7 @@ export type HeroSpotlightItem = {
   lede?: ReactNode | undefined
   logoUrl?: string | null | undefined
   metadata: ReactNode
+  posterSrc?: string | undefined
   synopsis: string
   title: string
 }
@@ -26,18 +29,13 @@ export type HeroSpotlightProps = Omit<ComponentProps<'section'>, 'children'> & {
   mastheadClassName?: string | undefined
 }
 
-const DEFAULT_ADVANCE_MS = 2500
-const FOCUS_GRACE_MS = 6000
+const DEFAULT_ADVANCE_MS = 8000
 
 /**
  * Rotating cinematic spotlight. One title owns the hero at a time;
- * backdrops crossfade with a slow settle while the title block rises.
- * Hovering never pauses the loop, so pointer and touch users can never
- * strand it; rotation pauses on focus, offscreen, and reduced motion, with
- * focus resuming on its own after a short grace period. A vertical progress
- * rail floats at the hero's right edge: the live title falls top-down over
- * one rotation period while the rest stay dots, so every title stays
- * reachable; the rails below carry the same titles.
+ * backdrops crossfade without moving the reading position. Focus and manual
+ * selection stop rotation until the member explicitly starts it again.
+ * Hover, offscreen content, hidden tabs, and reduced motion also pause it.
  */
 export function HeroSpotlight({
   autoAdvanceMs = DEFAULT_ADVANCE_MS,
@@ -49,11 +47,12 @@ export function HeroSpotlight({
   ...props
 }: HeroSpotlightProps) {
   const [index, setIndex] = useState(0)
-  const [interrupted, setInterrupted] = useState(false)
+  const [playing, setPlaying] = useState(true)
+  const [hovered, setHovered] = useState(false)
+  const [documentVisible, setDocumentVisible] = useState(true)
   const [visible, setVisible] = useState(true)
   const [reducedMotion, setReducedMotion] = useState(false)
   const sectionRef = useRef<HTMLElement>(null)
-  const focusTimer = useRef<number | null>(null)
   const count = items.length
 
   const go = useCallback(
@@ -63,16 +62,12 @@ export function HeroSpotlight({
     [count],
   )
 
-  useEffect(() => () => {
-    if (focusTimer.current != null) window.clearTimeout(focusTimer.current)
+  useEffect(() => {
+    const sync = () => setDocumentVisible(!document.hidden)
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => document.removeEventListener('visibilitychange', sync)
   }, [])
-
-  function clearFocusTimer() {
-    if (focusTimer.current != null) {
-      window.clearTimeout(focusTimer.current)
-      focusTimer.current = null
-    }
-  }
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -94,7 +89,7 @@ export function HeroSpotlight({
     return () => observer.disconnect()
   }, [])
 
-  const running = count > 1 && !interrupted && visible && !reducedMotion
+  const running = count > 1 && playing && !hovered && visible && documentVisible && !reducedMotion
 
   useEffect(() => {
     if (!running) return
@@ -118,6 +113,7 @@ export function HeroSpotlight({
         lede={only.lede}
         logoUrl={only.logoUrl}
         metadata={only.metadata}
+        posterSrc={only.posterSrc}
         synopsis={only.synopsis}
         synopsisClassName="line-clamp-3"
         title={only.title}
@@ -128,47 +124,48 @@ export function HeroSpotlight({
   return (
     <section
       aria-label={label}
+      aria-roledescription="carousel"
       className={cn('relative', className)}
       data-consumit-hero-spotlight
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          clearFocusTimer()
-          setInterrupted(false)
-        }
+      onFocusCapture={(event) => {
+        if (!(event.target instanceof Element) || !event.target.closest('[data-consumit-rotation-toggle]')) setPlaying(false)
       }}
-      onFocus={() => {
-        // Keyboard and assistive-tech readers get a still hero to read, then
-        // rotation resumes on its own so one interaction never strands it.
-        setInterrupted(true)
-        clearFocusTimer()
-        focusTimer.current = window.setTimeout(() => {
-          setInterrupted(false)
-        }, FOCUS_GRACE_MS)
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       ref={sectionRef}
       {...props}
     >
-      <div className="grid">
+      <Button
+        aria-label={playing && !reducedMotion ? 'Pause featured titles' : 'Start featured titles'}
+        className="consumit-hero-toggle"
+        data-consumit-rotation-toggle
+        disabled={reducedMotion}
+        onClick={() => setPlaying((current) => !current)}
+        size="icon"
+        title={reducedMotion ? 'Automatic rotation is off for reduced motion' : playing ? 'Pause featured titles' : 'Start featured titles'}
+        variant="secondary"
+      >
+        {playing && !reducedMotion ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+      </Button>
+      <div aria-atomic="false" aria-live={running ? 'off' : 'polite'} className="grid">
         {items.map((item, position) => {
-          const active = position === index
+          const active = position === index % count
           return (
             <div
               aria-hidden={!active}
               aria-label={`${position + 1} of ${count}: ${item.title}`}
+              aria-roledescription="slide"
               className={cn(
-                'col-start-1 row-start-1 transition-[opacity,transform] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
-                active ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
+                'col-start-1 row-start-1 transition-opacity duration-300 ease-out motion-reduce:transition-none',
+                active ? 'opacity-100' : 'pointer-events-none opacity-0',
               )}
+              data-active={active || undefined}
               inert={!active}
               key={item.key}
               role="group"
             >
               <TitleMasthead
                 actions={item.actions}
-                backgroundClassName={cn(
-                  'transition-transform duration-[6000ms] ease-linear motion-reduce:transition-none',
-                  active ? 'scale-100' : 'scale-[1.06]',
-                )}
                 backgroundSrc={item.backgroundSrc}
                 byline={item.byline}
                 className={mastheadClassName}
@@ -177,6 +174,7 @@ export function HeroSpotlight({
                 lede={item.lede}
                 logoUrl={item.logoUrl}
                 metadata={item.metadata}
+                posterSrc={item.posterSrc}
                 synopsis={item.synopsis}
                 synopsisClassName="line-clamp-3"
                 title={item.title}
@@ -185,16 +183,16 @@ export function HeroSpotlight({
           )
         })}
       </div>
-      <div className="pointer-events-none absolute top-1/2 right-5 z-10 flex -translate-y-1/2 flex-col items-center gap-2 sm:right-8 lg:right-[50px]">
+      <div aria-label="Choose a featured title" className="consumit-hero-selectors" role="group">
         {items.map((item, position) => {
-          const active = position === index
+          const active = position === index % count
           return (
             <button
               aria-current={active || undefined}
               aria-label={`Show ${item.title}`}
               className="pointer-events-auto flex h-7 w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-orange"
               key={item.key}
-              onClick={() => go(position)}
+              onClick={() => { setPlaying(false); go(position) }}
               type="button"
             >
               {active ? (

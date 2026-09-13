@@ -43,7 +43,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
   }
 
   function guardMutation(request: FastifyRequest) {
-    if (!isAllowedOrigin(request.headers, deps.env.appOrigin)) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
+    if (!isAllowedOrigin(request.headers, deps.env.appOrigin, deps.env.nodeEnv !== 'production')) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
   }
 
   function recordId(request: FastifyRequest) {

@@ -6,6 +6,9 @@ import Fastify from 'fastify'
 import type { Catalog } from './catalog/catalog.ts'
 import { registerCatalogRoutes } from './catalog/routes.ts'
 import { unavailableCatalogAdapter } from './catalog/unavailable-catalog.ts'
+import type { Anilist } from './anilist/anilist.ts'
+import { createAnilistAdapter } from './anilist/anilist-adapter.ts'
+import { registerAnilistRoutes } from './anilist/routes.ts'
 import { loadEnv, type ApiEnv } from './config/env.ts'
 import { createDbClient } from './db/client.ts'
 import { rateLimitExceeded, registerErrorHandlers } from './http/errors.ts'
@@ -27,22 +30,21 @@ import { createPostgresMemberData } from './member-data/postgres-member-data.ts'
 import { registerMemberDataRoutes } from './member-data/routes.ts'
 import { unavailableMemberData } from './member-data/unavailable-member-data.ts'
 import { createPlayback, type Playback } from './playback/playback.ts'
-import { createCapabilityRegistry } from './playback/delivery.ts'
 import { registerPlaybackRoutes } from './playback/routes.ts'
 import { createMemoryPlaybackStore, createValkeyPlaybackStore } from './playback/state.ts'
 import { loadConfiguredProviders } from './playback/configured-providers.ts'
-import { loadPlaybackCertification } from './playback/certification.ts'
 
 type BuildAppOptions = {
   playback?: Playback
   catalog?: Catalog
+  anilist?: Anilist
   env?: ApiEnv
   identity?: Identity
   letterboxdImporter?: LetterboxdImporter
   memberData?: MemberData
 }
 
-export async function buildApp({ catalog = unavailableCatalogAdapter, env = loadEnv(), identity, letterboxdImporter, memberData, playback }: BuildAppOptions = {}) {
+export async function buildApp({ catalog = unavailableCatalogAdapter, env = loadEnv(), identity, letterboxdImporter, memberData, playback, anilist }: BuildAppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
     connectionTimeout: 10_000,
@@ -101,23 +103,13 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, env = load
   registerLetterboxdImportRoutes(app, { env, identity: resolvedIdentity, importer: resolvedImporter })
   registerMemberDataRoutes(app, { env, identity: resolvedIdentity, memberData: resolvedMemberData })
   registerCatalogRoutes(app, catalog)
+  // AniList is a keyless public API: the anime catalog is always configured
+  // unless a test injects a fake. TMDB gating above is untouched.
+  registerAnilistRoutes(app, anilist ?? createAnilistAdapter())
   const playbackStore = env.playback?.enabled && env.playback.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore()
-  // One delivery-capability registry for resolution gating. Direct-only
-  // architecture: no relay exists, so nothing here mints or serves media.
-  const deliveryRegistry = createCapabilityRegistry(playbackStore)
-  let providers = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, { tmdbToken: env.tmdbToken }) : []
-  if (!playback && env.playback?.enabled && env.playback.deliveryPlanner) {
-    if (!env.playback.mediaConfig || !env.playback.deliveryCert) throw new Error('Playback requires PLAYBACK_DELIVERY_CERT when direct delivery is enabled.')
-    providers = await loadPlaybackCertification({
-      path: env.playback.deliveryCert,
-      mediaConfigPath: env.playback.mediaConfig,
-      providers,
-      registry: deliveryRegistry,
-      region: env.tmdbRegion,
-    })
-  }
-  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, deliveryPlanner: env.playback?.deliveryPlanner ?? false, deliveryRegistry })
-  registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production' })
+  const providers = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, { tmdbToken: env.tmdbToken }) : []
+  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion })
+  registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
   app.addHook('onClose', async () => playbackStore.close())
 
   return app

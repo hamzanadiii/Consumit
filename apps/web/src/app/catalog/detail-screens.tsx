@@ -5,7 +5,7 @@ import { Play, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRef, useState } from 'react'
 
-import { Button, CastCard, EmptyState, EpisodeRow, SeasonSelector, SectionHeading, Tabs, TitleMasthead, WatchCard, buttonVariants } from '@consumit/ui'
+import { Button, CarouselRow, CastCard, EmptyState, EpisodeRow, SeasonSelector, SectionHeading, Tabs, TitleMasthead, WatchCard, buttonVariants } from '@consumit/ui'
 
 import { browserCatalogSeason } from '@/lib/catalog-browser'
 import { CatalogStaleNotice, detailMeta, makerByline } from './catalog-ui'
@@ -26,9 +26,25 @@ function RelatedRail({ current, items }: {
   items: readonly CatalogTitleSummary[]
 }) {
   const related = items.filter((item) => item.id !== current.id || item.kind !== current.kind)
+  if (related.length === 0) return null
   return (
-    <div className="mt-8 grid auto-cols-[minmax(10rem,68vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[12rem] xl:grid-flow-row xl:grid-cols-5 xl:overflow-visible xl:pb-0">
-      {related.slice(0, 5).map((item) => <WatchCard artworkSrc={item.posterUrl ?? undefined} bookmark={<SaveTitleButton id={item.id} kind={item.kind} title={item.title} />} href={watchHref(item)} key={`${item.kind}:${item.id}`} linkComponent={Link} meta={item.year ? String(item.year) : undefined} rating={item.tmdbRating ?? undefined} title={item.title} titleHref={titleHref(item)} />)}
+    <div className="mt-8">
+      <CarouselRow aria-label="Related titles">
+        {related.slice(0, 15).map((item) => (
+          <WatchCard
+            artworkSrc={item.posterUrl ?? undefined}
+            bookmark={<SaveTitleButton id={item.id} kind={item.kind} title={item.title} />}
+            className="w-[145px] sm:w-[170px] md:w-[195px] lg:w-[215px] shrink-0"
+            href={watchHref(item)}
+            key={`${item.kind}:${item.id}`}
+            linkComponent={Link}
+            meta={item.year ? String(item.year) : undefined}
+            rating={item.tmdbRating ?? undefined}
+            title={item.title}
+            titleHref={titleHref(item)}
+          />
+        ))}
+      </CarouselRow>
     </div>
   )
 }
@@ -58,7 +74,7 @@ function DetailMasthead({ detail }: { detail: CatalogTitleDetail }) {
       )}
       backgroundSrc={detail.backdropUrl ?? undefined}
       byline={byline}
-      className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[42rem] lg:px-[50px] lg:py-24"
+      className="consumit-detail-masthead px-5 py-14 sm:px-8 lg:min-h-[42rem] lg:px-[50px] lg:py-24"
       headingLevel="h1"
       lede={detail.tagline ?? undefined}
       logoUrl={detail.logoUrl ?? undefined}

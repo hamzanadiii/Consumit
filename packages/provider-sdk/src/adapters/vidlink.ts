@@ -94,8 +94,7 @@ export function createVidlinkProvider(http: ProviderHttp, now = Date.now) {
       // Sort qualities descending (e.g. 1080 before 720)
       qEntries.sort((a, b) => Number(b[0]) - Number(a[0]))
 
-      for (let i = 0; i < qEntries.length; i++) {
-        const [q, entry] = qEntries[i]
+      for (const [q, entry] of qEntries) {
         if (!entry?.url) continue
         const type = entry.url.endsWith('.mp4') ? 'native' : (mediaType(entry.url) || 'hls')
         const qualityHint = `${q}p`

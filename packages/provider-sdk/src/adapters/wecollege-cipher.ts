@@ -46,36 +46,37 @@ export function keystream(seed: string, mediaId: number, len: number): Uint8Arra
   } else {
     let f = 0x811c9dc5
     for (let a = 0; a < seed.length; a++) f = Math.imul(f ^ seed.charCodeAt(a), 0x1000193) >>> 0
-    const r = mix32((mix32(f) ^ mix32((mediaId >>> 0) ^ 0x9e3779b9)) >>> 0)
+    let r = mix32((mix32(f) ^ mix32((mediaId >>> 0) ^ 0x9e3779b9)) >>> 0)
     S = new Array<number>(61)
     for (let e = 0; e < 8; e++) {
       if (triEven(e)) {
         const t = r % 61
-        const r2 = rotl32((r + 0x9e3779b9) >>> 0, 7 + (7 & e))
-        S[t] = (r2 ^ mix32(r2)) >>> 0
+        r = rotl32((r + 0x9e3779b9) >>> 0, 7 + (7 & e))
+        S[t] = (r ^ mix32(r)) >>> 0
+        r = mix32((r + t) >>> 0)
       } else {
         S[e] = SHA_CONSTS[15 & e]!
       }
     }
-    for (let i = 0; i < 61; i++) {
-      if (S[i] === undefined) S[i] = mix32((r + i * 0x9e3779b9) >>> 0)
-    }
     acc = mix32((0xa5a5a5a5 ^ r) >>> 0)
   }
-
   const out = new Uint8Array(len)
   let n = 0
   for (let e = 0; e < len;) {
-    const i = acc % S.length
+    const i = acc % 61
+    const o = i in S ? -1 : 0
     const l = (S[i] as number) >>> 0
     const c = Math.imul(0x9e3779b9, n + 1) >>> 0
-    const u = (l ^ c) >>> 0
-    out[e++] = (u >>> 0) & 255
-    if (e < len) out[e++] = (u >>> 8) & 255
-    if (e < len) out[e++] = (u >>> 16) & 255
-    if (e < len) out[e++] = (u >>> 24) & 255
-    acc = mix32((acc + l + n) >>> 0)
+    const s_ = (l ^ c) >>> 0
+    const h = (((acc ^ s_) >>> 0) | ((acc & s_ & o) >>> 0)) >>> 0
+    acc = mix32(((rotl32((h + acc) >>> 0, 31 & i) ^ rotl32(acc, 31 & Math.imul(i, 7))) >>> 0) + 0x9e3779b9 >>> 0)
+    S[i] = acc >>> 0
+    const w = acc >>> 0
     n++
+    out[e++] = 255 & w
+    if (e < len) out[e++] = (w >>> 8) & 255
+    if (e < len) out[e++] = (w >>> 16) & 255
+    if (e < len) out[e++] = (w >>> 24) & 255
   }
   return out
 }

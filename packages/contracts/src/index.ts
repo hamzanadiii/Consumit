@@ -579,3 +579,97 @@ export function watchHref(title: CatalogRef, episode?: { episode: number; season
 
   return `/watch/series/${title.id}?season=${episode?.season ?? 1}&episode=${episode?.episode ?? 1}`
 }
+
+// --- Consumit media identity + AniList anime catalog (additive; TMDB contracts above are untouched) ---
+
+export const consumitIdSchema = z.string().regex(/^c_[A-Za-z0-9_-]{8,64}$/)
+export type ConsumitId = z.infer<typeof consumitIdSchema>
+
+export const mediaIdentitySchema = z.object({
+  consumitId: consumitIdSchema,
+  anilistId: z.int().positive().optional(),
+  malId: z.int().positive().optional(),
+})
+export type MediaIdentity = z.infer<typeof mediaIdentitySchema>
+
+export const animeRelationTypeSchema = z.enum([
+  'sequel',
+  'prequel',
+  'parent',
+  'side_story',
+  'spin_off',
+  'adaptation',
+  'alternative',
+  'character',
+  'summary',
+  'other',
+])
+export type AnimeRelationType = z.infer<typeof animeRelationTypeSchema>
+
+export const animeRelationSchema = z.object({
+  relationType: animeRelationTypeSchema,
+  anilistId: z.int().positive(),
+  title: z.string().min(1),
+  format: z.string().nullable(),
+  status: z.string().nullable(),
+})
+export type AnimeRelation = z.infer<typeof animeRelationSchema>
+
+const animeTitlesSchema = z.object({
+  romaji: z.string().nullable(),
+  english: z.string().nullable(),
+  native: z.string().nullable(),
+})
+export type AnimeTitles = z.infer<typeof animeTitlesSchema>
+
+const animeSummaryBaseSchema = z.object({
+  anilistId: z.int().positive(),
+  identity: mediaIdentitySchema,
+  title: z.string().min(1),
+  titles: animeTitlesSchema,
+  coverUrl: z.string().max(4096).refine((value) => /^https:\/\//.test(value)).nullable(),
+  bannerUrl: z.string().max(4096).refine((value) => /^https:\/\//.test(value)).nullable(),
+  format: z.string().nullable(),
+  status: z.string().nullable(),
+  seasonYear: z.int().min(1900).max(2200).nullable(),
+  episodes: z.int().nonnegative().nullable(),
+  averageScore: z.int().min(0).max(100).nullable(),
+  genres: z.array(z.string()),
+})
+
+export const animeSummarySchema = animeSummaryBaseSchema
+export type AnimeSummary = z.infer<typeof animeSummarySchema>
+
+export const animeDetailSchema = animeSummaryBaseSchema.extend({
+  description: z.string(),
+  tags: z.array(z.string()),
+  season: z.string().nullable(),
+  relations: z.array(animeRelationSchema).max(50),
+  malId: z.int().positive().nullable(),
+})
+export type AnimeDetail = z.infer<typeof animeDetailSchema>
+
+export const animeResponseMetaSchema = z.object({
+  fetchedAt: z.iso.datetime(),
+  source: z.literal('anilist'),
+  stale: z.boolean(),
+})
+export type AnimeResponseMeta = z.infer<typeof animeResponseMetaSchema>
+
+export const animePageSchema = z.object({
+  items: z.array(animeSummarySchema),
+  meta: animeResponseMetaSchema,
+  page: z.int().positive(),
+  totalResults: z.int().nonnegative(),
+})
+export type AnimePage = z.infer<typeof animePageSchema>
+
+export const animeDetailResponseSchema = z.object({
+  item: animeDetailSchema,
+  meta: animeResponseMetaSchema,
+})
+export type AnimeDetailResponse = z.infer<typeof animeDetailResponseSchema>
+
+export function animeHref(anime: { anilistId: number }) {
+  return `/anime/${anime.anilistId}`
+}

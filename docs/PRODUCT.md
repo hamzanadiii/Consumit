@@ -72,13 +72,12 @@ These screens describe the intended product surface, not an automatic first-rele
 
 The live catalog Home currently uses this order:
 
-1. Featured hero with a direct Watch action
-2. Trending tonight
-3. Popular now
-4. Top rated
-5. Editorial selection
-6. Browse by genre
-7. Footer
+1. Bounded featured masthead beneath the original global navigation, with direct Watch and More info actions
+2. Popular now
+3. Top rated
+4. Editorial selection
+5. Browse by genre
+6. Footer
 
 Circle activity, continue-watching progress, and community lists return only when their real backing behavior exists. Live routes never fill those sections with invented member evidence.
 
@@ -96,8 +95,8 @@ Scrolling near the end appends another page without duplicate titles. A keyboard
 - Private or direct messaging between members is excluded; follows, profiles, reviews, lists, and circle activity carry the social experience.
 - Streaming-service choices are availability preferences, not connected billing accounts.
 - The active playback design is a dedicated, focused screen owned by the first-party Consumit Player.
-- Playback uses authorized direct media sources; iframe and embed delivery are excluded.
-- Guests can watch and resume locally. Members additionally sync progress. Playback defaults to adaptive quality, original audio, and English captions when available; explicit track preferences persist. Recovery retains position and playback intent. The provider backend is disabled until approved media is configured; physical iOS and release reliability gates are recorded in [PLAYBACK.md](./PLAYBACK.md).
+- Playback uses configured direct media sources with hostile-output validation; iframe and embed delivery are excluded.
+- Guests can watch and resume locally. Members additionally sync progress. Playback defaults to adaptive quality, original audio, and English captions when available; explicit track preferences persist. Recovery retains position and playback intent. The provider backend is disabled until media is configured.
 - Every Watch action opens the dedicated first-party player route directly; the player is the screen, not an embedded panel inside a discovery surface.
 - Computed Taste Match, overlap, member scores, and public numeric rating presentation are hidden until their product logic is implemented. A member authors and sees only their own ratings on title detail. Written reviews, catalog metadata, and watch progress remain visible.
 - Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
@@ -110,24 +109,9 @@ Scrolling near the end appends another page without duplicate titles. A keyboard
 
 ## Visual direction
 
-The visual thesis is **cinema after midnight**: editorial, intimate, and alive with other people's taste.
+The visual thesis remains **Cinema After Midnight**: Consumit's original midnight palette, warm ivory, rare orange signals, Charter display type, DejaVu Sans controls, compact corners, and flat navigation. Improve usability within this identity. Reference websites inform interaction patterns only; they do not replace the product's visual system.
 
-| Role | Value |
-|---|---|
-| Canvas | `#09090B` |
-| Surface | `#121215` |
-| Raised surface | `#19191E` |
-| Primary ink | `#F4F0E8` |
-| Muted ink | `#AAA7A1` |
-| Signal orange | `#FF5D38` |
-| Social lilac | `#A79CFF` |
-| Positive | `#B8D86D` |
-
-- Display type: Bitstream Charter
-- Interface type: DejaVu Sans
-- Base spacing: 4 px; primary rhythm: 8 / 12 / 18 / 24 / 32 / 48 / 64
-
-The durable visual system and page grammar live in [`DESIGN.md`](../DESIGN.md). The shared-component registry and active implementation boundaries live in [`docs/COMPONENTS.md`](./COMPONENTS.md).
+The durable visual tokens, responsive geometry, and page grammar live in [`DESIGN.md`](../DESIGN.md). The shared-component registry and active implementation boundaries live in [`docs/COMPONENTS.md`](./COMPONENTS.md).
 
 ## Near-term product gaps
 
@@ -138,3 +122,11 @@ The durable visual system and page grammar live in [`DESIGN.md`](../DESIGN.md). 
 - Password recovery and verification states
 
 Account settings and provider preferences already have an active desktop reference, despite also appearing in the package's historical “next” list.
+
+## Personal spaces
+
+The Library presents a member's saved titles on subtle display shelves in the existing visual system, with optional grid and compact list views. Search and movie/series filters operate together on saved records; Clear filters restores the shelf. Missing catalog metadata never removes a stored title or its destination. Lists and diary retain their existing ownership and privacy rules.
+
+The Profile is the central expression of a member's taste: a cinematic identity cover, six ordered Favorites, recurring genres derived from those Favorites, diary entries, authored reviews, and lists. Owner editing controls keep their real backing behavior. Unsupported social controls are omitted.
+
+[Letterboxd's diary, Favorites, watchlist, and list concepts](https://letterboxd.com/about/faq/) inform these personal jobs. Consumit's visual system remains its own. Anime and manga sections were explicitly removed from this redesign's scope by the member commissioning the work.

@@ -383,7 +383,7 @@ describe('imported provider contracts', () => {
       { text: mediaPlaylist },
     )
     const metadata = async () => ({ title: 'Fight Club', year: 1999, imdbId: 'tt0137523' })
-    const result = await createWecollegeProvider(client, metadata, () => now)
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege-miami', cities: ['miami'] })
       .resolve({ ...input, ref: { kind: 'movie' as const, id: 550 } }, new AbortController().signal)
     expect(client.mock.calls[0]?.[0]).toBe('https://api.wecollege.net/seed?mediaId=550')
     expect(client.mock.calls[1]?.[0]).toContain('https://api.wecollege.net/miami/sources?')
@@ -405,7 +405,7 @@ describe('imported provider contracts', () => {
       { text: mediaPlaylist },
     )
     const metadata = async () => ({ title: 'Show', year: 2020 })
-    const result = await createWecollegeProvider(client, metadata, () => now).resolve(episode, new AbortController().signal)
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege-miami', cities: ['miami'] }).resolve(episode, new AbortController().signal)
     expect(client.mock.calls[1]?.[0]).toContain('seasonId=3&episodeId=4')
     expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://cdn.example/ep.m3u8', height: 720 }] })
   })
@@ -444,6 +444,101 @@ describe('imported provider contracts', () => {
     await boise.resolve({ ...input, ref: { kind: 'movie' as const, id: 550 } }, new AbortController().signal)
     expect(boiseCalls.mock.calls[1]?.[0]).toContain('/boise/sources?')
     expect(boiseCalls.mock.calls.some(([url]) => url.includes('/miami/'))).toBe(false)
+  })
+  it('prefers explicit WeCollege heights over a first-city Auto instead of locking to low quality', async () => {
+    const seed = 'quality-seed-11'
+    const seal = (payload: unknown, tmdb: number) => {
+      const body = Buffer.concat([Buffer.from([109, 118, 109, 49]), Buffer.from(JSON.stringify(payload))])
+      const ks = keystream(seed, tmdb, body.length)
+      return Buffer.from(body.map((byte, index) => byte ^ ks[index]!)).toString('base64url')
+    };
+    const metadata = async () => ({ title: 'Fight Club', year: 1999, imdbId: 'tt0137523' })
+    // Route by URL so the test holds under sequential and fanout fetching alike.
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal) => {
+      signal.throwIfAborted()
+      if (url.includes('/seed?')) return { status: 200, text: JSON.stringify({ seed }), url }
+      if (url.includes('/lowcity/sources?')) return { status: 200, text: seal({ sources: [{ quality: 'Auto', url: 'https://cdn.example/low.m3u8' }] }, 550), url }
+      if (url.includes('/hicity/sources?')) return { status: 200, text: seal({ sources: [
+        { quality: '2160p', url: 'https://cdn.example/hi2160.m3u8' },
+        { quality: '1080p', url: 'https://cdn.example/hi1080.m3u8' },
+      ] }, 550), url }
+      if (url.endsWith('.m3u8')) return { status: 200, text: mediaPlaylist, url }
+      throw new Error(`Unexpected request ${url}`)
+    })
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege-miami', cities: ['lowcity', 'hicity'] })
+      .resolve({ ...input, ref: { kind: 'movie' as const, id: 550 } }, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true })
+    expect(result.ok && result.sources.map((source) => source.height)).toEqual([2160, 1080])
+    expect(result.ok && result.sources[0]).toMatchObject({ qualityHint: '2160p' })
+  })
+  it('measures WeCollege master ceilings instead of trusting inflated quality labels', async () => {
+    const seed = 'ceiling-seed-5'
+    const seal = (payload: unknown, tmdb: number) => {
+      const body = Buffer.concat([Buffer.from([109, 118, 109, 49]), Buffer.from(JSON.stringify(payload))])
+      const ks = keystream(seed, tmdb, body.length)
+      return Buffer.from(body.map((byte, index) => byte ^ ks[index]!)).toString('base64url')
+    };
+    const metadata = async () => ({ title: 'Show', year: 2026 })
+    // Labeled 1080p upstream, but the master tops at 800p with 266/534/800
+    // renditions; the genuine 2160p media playlist must win the ranking.
+    const inflatedMaster = '#EXTM3U\n'
+      + '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x266\nlow.m3u8\n'
+      + '#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=960x534\nmid.m3u8\n'
+      + '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1440x800\nhi.m3u8\n'
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal) => {
+      signal.throwIfAborted()
+      if (url.includes('/seed?')) return { status: 200, text: JSON.stringify({ seed }), url }
+      if (url.includes('/phoenix/sources?')) return { status: 200, text: seal({ sources: [{ quality: '1080p', url: 'https://cdn.example/phoenix.m3u8' }] }, 9), url }
+      if (url.includes('/miami/sources?')) return { status: 200, text: seal({ sources: [{ quality: '2160p', url: 'https://cdn.example/miami-2160.m3u8' }] }, 9), url }
+      if (url === 'https://cdn.example/phoenix.m3u8') return { status: 200, text: inflatedMaster, url }
+      if (url === 'https://cdn.example/miami-2160.m3u8') return { status: 200, text: mediaPlaylist, url }
+      throw new Error(`Unexpected request ${url}`)
+    })
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege-miami', cities: ['phoenix', 'miami'] })
+      .resolve({ ...input, ref: { kind: 'movie' as const, id: 9 } }, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true })
+    expect(result.ok && result.sources.map((source) => [source.height, source.qualityHint])).toEqual([[2160, '2160p'], [800, '800p']])
+  })
+  it('drops WeCollege split-host playlists whose segments live outside the configured media set', async () => {
+    const seed = 'split-host-seed-8'
+    const seal = (payload: unknown, tmdb: number) => {
+      const body = Buffer.concat([Buffer.from([109, 118, 109, 49]), Buffer.from(JSON.stringify(payload))])
+      const ks = keystream(seed, tmdb, body.length)
+      return Buffer.from(body.map((byte, index) => byte ^ ks[index]!)).toString('base64url')
+    };
+    const metadata = async () => ({ title: 'Show', year: 2026 })
+    // Same-host relative segments play browser-direct; absolute segments on
+    // a hotlink-guarded foreign host 403 without provider referers, and no
+    // relay exists — so the entry must fail closed even at a higher label.
+    const splitManifest = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n'
+      + '#EXT-X-MAP:URI="https://guard.example/init-s2160p.mp4"\n#EXTINF:6,\nhttps://guard.example/seg-1-s2160p.m4s\n'
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal) => {
+      signal.throwIfAborted()
+      if (url.includes('/seed?')) return { status: 200, text: JSON.stringify({ seed }), url }
+      if (url.includes('/metro/sources?')) return { status: 200, text: seal({ sources: [
+        { quality: '1080p', url: 'https://cdn.example/good.m3u8' },
+        { quality: '2160p', url: 'https://cdn.example/split.m3u8' },
+      ] }, 7), url }
+      if (url === 'https://cdn.example/good.m3u8') return { status: 200, text: mediaPlaylist, url }
+      if (url === 'https://cdn.example/split.m3u8') return { status: 200, text: splitManifest, url }
+      throw new Error(`Unexpected request ${url}`)
+    })
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege', cities: ['metro'], mediaHosts: ['cdn.example'] })
+      .resolve({ ...input, ref: { kind: 'movie' as const, id: 7 } }, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true })
+    expect(result.ok && result.sources.map((source) => source.url)).toEqual(['https://cdn.example/good.m3u8'])
+  })
+  it('lists only absolute playlist hosts for containment checks', async () => {
+    const { playlistAbsoluteHosts } = await import('./http.ts')
+    expect(playlistAbsoluteHosts(mediaPlaylist)).toEqual([])
+    expect(playlistAbsoluteHosts(
+      '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=640x360\nlow.m3u8\n'
+      + '#EXT-X-STREAM-INF:BANDWIDTH=2,RESOLUTION=1280x720\nhttps://other.example/hi.m3u8\n',
+    )).toEqual(['other.example'])
+    expect(playlistAbsoluteHosts(
+      '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n'
+      + '#EXT-X-MAP:URI="https://guard.example/init.mp4"\n#EXTINF:6,\nhttps://guard.example/seg.m4s\n',
+    )).toEqual(['guard.example'])
   })
   it('keeps VidLove streams when subtitle lists overflow their bounds', async () => {
     const oversized = { file: `https://cdn.example/${'x'.repeat(5000)}.vtt`, label: 'Huge' };

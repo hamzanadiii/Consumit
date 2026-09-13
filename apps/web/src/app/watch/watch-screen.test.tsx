@@ -6,13 +6,13 @@ import { movieDetail } from '@/test/catalog-fixtures'
 import { WatchScreen } from './watch-screen'
 
 describe('real catalog watch state', () => {
-  it('never supplies a playable source when no authorized provider exists', () => {
+  it('never supplies a playable source when no configured provider exists', () => {
     const { container } = render(<WatchScreen title={movieDetail} />)
     const player = screen.getByLabelText('Dune: Part Two player')
     expect(player).not.toHaveAttribute('src')
     expect(player.closest('[data-consumit-player-screen]')).toBeInTheDocument()
     expect(container.querySelector('iframe, embed, object')).not.toBeInTheDocument()
-    expect(screen.getAllByText('No authorized source available').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('No playback source available').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
     expect(screen.getByRole('link', { name: 'Return to title' })).toHaveAttribute('href', '/title/693134')
   })

@@ -6,7 +6,7 @@ This roadmap records Consumit’s buildable component families, implementation o
 
 - Finish one component and its meaningful states before starting the next.
 - Add only variants already demanded by an active design or the immediately selected screen.
-- Keep styling specific to Consumit's “cinema after midnight” system: flat dark surfaces, ivory type, restrained signal colors, compact geometry, and editorial typography.
+- Preserve Consumit's original Cinema After Midnight system: flat midnight surfaces, warm ivory, rare semantic signals, compact corners, editorial typography, and orange active-route underlines.
 - Use Lucide for interface icons. Use Radix primitives when keyboard behavior, focus management, or ARIA semantics are complex. Do not import a generic shadcn theme; individual patterns may be adapted into Consumit-owned code when useful.
 - Every component ships through `@consumit/ui` with its public types, a catalog example, behavioral tests where interaction exists, and responsive/focus verification.
 
@@ -14,13 +14,15 @@ This roadmap records Consumit’s buildable component families, implementation o
 
 These patterns recur across the complete active screen set and should be preserved as components are added:
 
-- **Global shell:** a 68px desktop bar with the Consumit lockup, four primary destinations, universal search, and the member avatar. Active routes use a thin orange underline. Authentication, onboarding, reporting, and Watch use purpose-specific reduced headers.
+- **Global shell:** the original flat 68px desktop bar with the Consumit lockup, session-aware destinations, outlined search, and member entry. Active routes use an orange baseline. The brand, guest Sign in, and menu shell is 52px below desktop. Authentication, onboarding, reporting, and Watch use purpose-specific reduced headers.
 - **Page structure:** a 50px desktop edge, broad editorial hero, warm-white hairline separators, and a main-content/side-rail split for dense decision surfaces. Mobile gets a separate composition rather than a scaled desktop grid.
-- **Action hierarchy:** ivory means the confident immediate action (play, view, accept); orange advances a committed flow (submit, continue, create); outlines hold secondary actions; ghost text handles low-emphasis destinations.
+- **Action hierarchy:** ivory is the shared primary action (Watch, view, accept); orange advances a committed flow (submit, continue, create); outlines hold secondary actions; ghost text handles low-emphasis destinations.
 - **Semantic signals:** orange marks brand, selection, ratings, and active progress; lilac is reserved for social/taste context; lime is reserved for presence, health, and success.
-- **Geometry:** controls and panels stay square to gently rounded at 4–8px. Circles are reserved for people, presence, progress, and recurring celestial artwork.
+- **Geometry:** preserve the original 5px controls, 6px cards, and 3px micro corners across Consumit. Circular shapes identify avatars and established icon affordances.
 - **Assets:** reuse the supplied lockup, mark, cinematic backdrop, poster motifs, member avatar treatment, and neutral service identifiers. Do not recreate those assets with generic iconography.
 - **Depth:** interface surfaces are flat and separated by tone or border. Shadows belong to artwork separation, not routine controls or panels.
+
+WatchCard captions and catalog metadata stay visible below the poster; bookmark actions appear on hover and keyboard focus and remain visible on touch devices. Home composes its bounded featured masthead, Popular now, Top rated, editorial selection, genre browsing, and footer. Trending is not a current Home section; its reusable component remains available in the internal gallery.
 
 ## Application composition boundary
 
@@ -72,8 +74,8 @@ Source references: Home / Discover, Search, Movies, Series, Friends, Profile, Se
 
 Included behavior:
 
-- Exact 68px desktop shell and sparse 52px brand-and-menu shell
-- Supplied Consumit mark, primary destinations, and orange active-route line
+- Original 68px desktop shell and 52px mobile brand, guest Sign in, and menu shell
+- Supplied Consumit mark, primary destinations, and orange active-route baseline
 - Native GET search form with an accessible search label
 - Supplied member portrait with component-owned visual and announced presence state
 - Signed-in member menu with identity header, profile/library/settings destination rows in that order, active-route selection, caller-owned sign out, and optional help/report rows
@@ -92,7 +94,7 @@ Source references: Create Account, Sign In, Settings, and Report Issue.
 Included behavior:
 
 - Persistent uppercase label with caller-owned native association
-- 52px text field with the shared field surface and control radius
+- 38px text field with the shared field surface and control radius
 - Empty, populated, hover, focus, invalid, read-only, and disabled styling
 - Native input attributes, autocomplete, validation, and accessible descriptions remain caller-owned
 - Autofill, caret, keyboard focus, and reduced-motion treatment match the Consumit palette
@@ -200,8 +202,8 @@ Source references: Title Detail and Series Detail.
 
 Included behavior:
 
-- Cinematic title masthead with metadata, synopsis, action hierarchy, Taste Match reason, and social proof
-- Rotating hero spotlight with newest titles, crossfading backdrops, dots with prev/next controls, pause on hover and focus, and reduced-motion support
+- Framed cinematic title masthead with optional portrait poster, metadata, synopsis, and action hierarchy. Slots for Taste Match or social proof require real backing behavior on live routes
+- Rotating hero spotlight with a bounded backdrop, optional portrait poster, 300ms crossfade, and visible Pause/Start control. Rotation pauses on hover, offscreen, in hidden tabs, and for reduced motion. Focus inside slide content or manual selection stops rotation until explicitly restarted. The default cadence is eight seconds. Selector targets are 44px and hidden slides are inert.
 - Member pulse with a single accessible rating label and decorative distribution histogram
 - Cast cards with supplied portrait support and a restrained geometric identity fallback
 - Native season selection with caller-owned state
@@ -276,3 +278,9 @@ Included behavior:
 - Empty composition with a direct activation path
 - Reduced-motion loading composition with a live status label
 - Alerting error composition that explains impact, recovery, and optional diagnostic detail
+
+## Personal-space compositions
+
+`apps/web/src/app/library/library-screen.tsx` composes shared artwork, saved-title cards, chips, segmented controls, lists, and diary rows into shelf, grid, and list views. The shelf view uses subtle ledges in existing surface tokens, with captions below the covers. Its local search and kind filter are application concerns; their combination and empty-result recovery are covered by the library screen tests.
+
+`apps/web/src/app/profile/public-profile-screen.tsx` composes the shared ProfileMasthead, six-Favorites exhibition, metadata-derived genre counts, diary, and written reviews. The original flat masthead grows with its content; Favorites have equal size and contrast, and native section links track the current URL hash. Owner editors remain the existing components. Profile and library visual rules live in DESIGN.md; their decorative shelf boards do not become generic card primitives.

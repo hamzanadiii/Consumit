@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 
 import {
   buttonVariants,
+  CarouselRow,
   EditorialFeature,
   FilterChip,
   Footer,
@@ -62,13 +63,14 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
 
   return (
     <>
-      <SessionNavigation activeHref="/" searchPlaceholder="Search movies and series" sticky={false} />
+      <SessionNavigation activeHref="/" searchPlaceholder="Search titles" sticky={false} />
       {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
 
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-home>
         <h1 className="sr-only">Consumit home</h1>
         {spotlight.length > 1 ? (
           <HeroSpotlight
+            autoAdvanceMs={8000}
             items={spotlight.map((item) => ({
               actions: (
                 <>
@@ -86,7 +88,7 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
               title: item.title,
             }))}
             label="New this week"
-            mastheadClassName="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[50px] lg:py-20"
+            mastheadClassName="consumit-home-masthead"
           />
         ) : (
           <TitleMasthead
@@ -98,7 +100,7 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
             )}
             backgroundSrc={hero.backdropUrl ?? undefined}
             byline={makerByline(hero)}
-            className="rounded-none border-x-0 border-t-0 px-5 py-14 sm:px-8 lg:min-h-[36.5rem] lg:px-[50px] lg:py-20"
+            className="consumit-home-masthead"
             lede={hero.tagline ?? undefined}
             logoUrl={hero.logoUrl ?? undefined}
             metadata={detailMeta(hero)}
@@ -111,10 +113,23 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
           {popular.length > 0 ? (
             <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="popular-heading">
               <SectionHeading action={<SectionAction href="/search" />} description="What viewers are discovering across the catalog" id="popular-heading" title="Popular now" />
-              <div className="mt-8 grid auto-cols-[minmax(11rem,72vw)] grid-flow-col gap-5 overflow-x-auto pb-4 sm:auto-cols-[13rem] xl:grid-flow-row xl:grid-cols-5 xl:overflow-visible xl:pb-0">
-                {popular.slice(0, 5).map((title) => (
-                  <WatchCard artworkSrc={title.posterUrl ?? undefined} bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />} href={watchHref(title)} key={`${title.kind}:${title.id}`} linkComponent={Link} meta={title.year ? String(title.year) : undefined} rating={title.tmdbRating ?? undefined} title={title.title} titleHref={titleHref(title)} />
-                ))}
+              <div className="mt-8">
+                <CarouselRow aria-label="Popular titles">
+                  {popular.slice(0, 15).map((title) => (
+                    <WatchCard
+                      artworkSrc={title.posterUrl ?? undefined}
+                      bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />}
+                      className="w-[145px] sm:w-[170px] md:w-[195px] lg:w-[215px] shrink-0"
+                      href={watchHref(title)}
+                      key={`${title.kind}:${title.id}`}
+                      linkComponent={Link}
+                      meta={title.year ? String(title.year) : undefined}
+                      rating={title.tmdbRating ?? undefined}
+                      title={title.title}
+                      titleHref={titleHref(title)}
+                    />
+                  ))}
+                </CarouselRow>
               </div>
             </section>
           ) : null}
@@ -122,10 +137,23 @@ export function HomeScreen({ curated, editorial, hero, popular = [], spotlight =
           {topRated.length > 0 ? (
             <section className="border-t border-border py-14 sm:py-16 lg:py-20" aria-labelledby="top-rated-heading">
               <SectionHeading action={<SectionAction href="/search" />} description="Sustained acclaim across the catalog" id="top-rated-heading" title="Top rated" />
-              <div className="mt-8 grid auto-cols-[minmax(11rem,72vw)] grid-flow-col gap-5 overflow-x-auto pb-4 sm:auto-cols-[13rem] xl:grid-flow-row xl:grid-cols-5 xl:overflow-visible xl:pb-0">
-                {topRated.slice(0, 5).map((title) => (
-                  <WatchCard artworkSrc={title.posterUrl ?? undefined} bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />} href={watchHref(title)} key={`${title.kind}:${title.id}`} linkComponent={Link} meta={title.year ? String(title.year) : undefined} rating={title.tmdbRating ?? undefined} title={title.title} titleHref={titleHref(title)} />
-                ))}
+              <div className="mt-8">
+                <CarouselRow aria-label="Top rated titles">
+                  {topRated.slice(0, 15).map((title) => (
+                    <WatchCard
+                      artworkSrc={title.posterUrl ?? undefined}
+                      bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />}
+                      className="w-[145px] sm:w-[170px] md:w-[195px] lg:w-[215px] shrink-0"
+                      href={watchHref(title)}
+                      key={`${title.kind}:${title.id}`}
+                      linkComponent={Link}
+                      meta={title.year ? String(title.year) : undefined}
+                      rating={title.tmdbRating ?? undefined}
+                      title={title.title}
+                      titleHref={titleHref(title)}
+                    />
+                  ))}
+                </CarouselRow>
               </div>
             </section>
           ) : null}
