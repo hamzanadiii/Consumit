@@ -5,16 +5,12 @@ import { SignInScreen } from '../auth/auth-screens'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
+import { internalNextPath } from '@/lib/internal-next-path'
 
 export const metadata: Metadata = {
   title: 'Sign in · Consumit',
   description: 'Return to your Consumit library and circle.',
   robots: { follow: false, index: false },
-}
-
-function internalNextPath(value: string | string[] | undefined) {
-  const candidate = Array.isArray(value) ? value[0] : value
-  return candidate && candidate.startsWith('/') && !candidate.startsWith('//') ? candidate : '/'
 }
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string | string[] }> }) {

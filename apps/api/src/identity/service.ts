@@ -27,6 +27,7 @@ function memberView(member: IdentityRecord): SafeMember {
     email: member.email,
     emailVerified: member.emailVerifiedAt !== null,
     id: member.id,
+    role: member.role === 'ADMIN' ? 'admin' : 'member',
     username: member.profile.username,
   }
 }

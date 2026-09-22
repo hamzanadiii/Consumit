@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const catalogKindSchema = z.enum(['movie', 'series'])
+export const catalogKindSchema = z.enum(['movie', 'series', 'anime'])
 export type CatalogKind = z.infer<typeof catalogKindSchema>
 
 export const catalogFeedSchema = z.enum([
@@ -22,7 +22,7 @@ export const catalogResponseMetaSchema = z.object({
   fetchedAt: z.iso.datetime(),
   language: z.string().min(2),
   region: z.string().length(2),
-  source: z.literal('tmdb'),
+  source: z.enum(['tmdb', 'anilist']),
   stale: z.boolean(),
 })
 export type CatalogResponseMeta = z.infer<typeof catalogResponseMetaSchema>
@@ -66,6 +66,7 @@ const catalogDetailBaseSchema = catalogTitleSummarySchema.extend({
   certification: z.string().nullable(),
   countries: z.array(z.string()),
   creators: z.array(catalogPersonSchema),
+  heroBackdropUrl: z.url().nullable(),
   homepageUrl: z.url().nullable(),
   languages: z.array(z.string()),
   recommendations: z.array(catalogTitleSummarySchema),
@@ -143,7 +144,182 @@ export const catalogSeasonResponseSchema = z.object({
 })
 export type CatalogSeasonResponse = z.infer<typeof catalogSeasonResponseSchema>
 
+export const animeSeasonSchema = z.enum(['WINTER', 'SPRING', 'SUMMER', 'FALL'])
+export type AnimeSeason = z.infer<typeof animeSeasonSchema>
+
+export const animeFormatSchema = z.enum(['TV', 'MOVIE', 'OVA', 'ONA', 'SPECIAL', 'TV_SHORT'])
+export type AnimeFormat = z.infer<typeof animeFormatSchema>
+
+export const animeStatusSchema = z.enum(['FINISHED', 'RELEASING', 'NOT_YET_RELEASED', 'CANCELLED', 'HIATUS'])
+export type AnimeStatus = z.infer<typeof animeStatusSchema>
+
+export const animeRelationTypeSchema = z.enum([
+  'PREQUEL', 'SEQUEL', 'PARENT', 'SIDE_STORY', 'CHARACTER', 'SUMMARY',
+  'ALTERNATIVE', 'SPIN_OFF', 'OTHER', 'SOURCE', 'COMPILATION', 'CONTAINS',
+])
+export type AnimeRelationType = z.infer<typeof animeRelationTypeSchema>
+
+export const animeTitleSchema = z.object({
+  preferred: z.string().min(1),
+  english: z.string().nullable(),
+  romaji: z.string().nullable(),
+  native: z.string().nullable(),
+})
+export type AnimeTitle = z.infer<typeof animeTitleSchema>
+
+export const animeImageAssetSchema = z.object({
+  url: z.url().nullable(),
+  color: z.string().max(16).nullable(),
+})
+export type AnimeImageAsset = z.infer<typeof animeImageAssetSchema>
+
+export const animeTitleSummarySchema = z.object({
+  anilistId: z.int().positive(),
+  kind: z.literal('anime'),
+  titles: animeTitleSchema,
+  format: animeFormatSchema,
+  status: animeStatusSchema,
+  season: animeSeasonSchema.nullable(),
+  seasonYear: z.int().min(1870).max(2200).nullable(),
+  episodes: z.int().positive().nullable(),
+  episodeDuration: z.int().positive().nullable(),
+  genres: z.array(z.string()),
+  coverImage: animeImageAssetSchema,
+  bannerImage: z.url().nullable(),
+  averageScore: z.number().min(0).max(100).nullable(),
+  popularity: z.int().nonnegative(),
+  description: z.string(),
+  nextAiringEpisode: z.object({
+    episode: z.int().positive(),
+    airingAt: z.iso.datetime(),
+  }).nullable(),
+})
+export type AnimeTitleSummary = z.infer<typeof animeTitleSummarySchema>
+
+export const animeCharacterSchema = z.object({
+  id: z.int().positive(),
+  name: z.string().min(1),
+  image: z.url().nullable(),
+  role: z.string().nullable(),
+  voiceActors: z.array(z.object({
+    id: z.int().positive(),
+    name: z.string().min(1),
+    image: z.url().nullable(),
+    language: z.string().min(2),
+  })),
+})
+export type AnimeCharacter = z.infer<typeof animeCharacterSchema>
+
+export const animeStaffSchema = z.object({
+  id: z.int().positive(),
+  name: z.string().min(1),
+  image: z.url().nullable(),
+  role: z.string().nullable(),
+})
+export type AnimeStaff = z.infer<typeof animeStaffSchema>
+
+export const animeTitleDetailSchema = animeTitleSummarySchema.extend({
+  malId: z.int().positive().nullable(),
+  source: z.string().nullable(),
+  countryOfOrigin: z.string().nullable(),
+  trailer: z.object({
+    id: z.string(),
+    site: z.string(),
+    thumbnail: z.url().nullable(),
+  }).nullable(),
+  characters: z.array(animeCharacterSchema),
+  staff: z.array(animeStaffSchema),
+  streamingEpisodes: z.array(z.object({
+    title: z.string(),
+    thumbnail: z.url().nullable(),
+    site: z.string(),
+  })),
+  externalLinks: z.array(z.object({
+    id: z.int().positive(),
+    site: z.string(),
+    url: z.url(),
+    color: z.string().max(16).nullable(),
+  })),
+})
+export type AnimeTitleDetail = z.infer<typeof animeTitleDetailSchema>
+
+export const animeEpisodeSchema = z.object({
+  anilistId: z.int().positive(),
+  number: z.int().positive(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  thumbnail: z.url().nullable(),
+  airDate: z.iso.date().nullable(),
+  duration: z.int().positive().nullable(),
+})
+export type AnimeEpisode = z.infer<typeof animeEpisodeSchema>
+
+export const animeSeasonSchema_v2 = z.object({
+  season: animeSeasonSchema,
+  year: z.int().min(1870).max(2200),
+  episodeCount: z.int().nonnegative(),
+})
+export type AnimeSeason_v2 = z.infer<typeof animeSeasonSchema_v2>
+
+export const animeFranchiseRelationSchema = z.object({
+  type: animeRelationTypeSchema,
+  anime: animeTitleSummarySchema,
+})
+export type AnimeFranchiseRelation = z.infer<typeof animeFranchiseRelationSchema>
+
+export const animeFranchiseSchema = z.object({
+  main: animeTitleSummarySchema,
+  relations: z.array(animeFranchiseRelationSchema),
+})
+export type AnimeFranchise = z.infer<typeof animeFranchiseSchema>
+
+export const animeAiringEpisodeSchema = z.object({
+  episode: z.int().positive(),
+  airingAt: z.iso.datetime(),
+  timeUntilAiring: z.int().nonnegative(),
+  mediaTitle: z.string().min(1),
+})
+export type AnimeAiringEpisode = z.infer<typeof animeAiringEpisodeSchema>
+
+export const animeAiringScheduleSchema = z.object({
+  episodes: z.array(animeAiringEpisodeSchema),
+  page: z.int().positive(),
+  totalPages: z.int().nonnegative(),
+})
+export type AnimeAiringSchedule = z.infer<typeof animeAiringScheduleSchema>
+
+export const animePageSchema = z.object({
+  items: z.array(animeTitleSummarySchema),
+  page: z.int().positive(),
+  totalPages: z.int().nonnegative(),
+  totalResults: z.int().nonnegative(),
+})
+export type AnimePage = z.infer<typeof animePageSchema>
+
+export const animeBatchSchema = z.object({
+  items: z.array(animeTitleSummarySchema),
+  missing: z.array(z.int().positive()),
+})
+export type AnimeBatch = z.infer<typeof animeBatchSchema>
+
+export const animeSearchResultSchema = z.object({
+  items: z.array(animeTitleSummarySchema),
+  page: z.int().positive(),
+  totalPages: z.int().nonnegative(),
+  totalResults: z.int().nonnegative(),
+})
+export type AnimeSearchResult = z.infer<typeof animeSearchResultSchema>
+
+export const animePlaybackRefSchema = z.object({
+  kind: z.literal('anime'),
+  anilistId: z.int().positive(),
+  episode: z.int().min(1),
+})
+export type AnimePlaybackRef = z.infer<typeof animePlaybackRefSchema>
+
 export const apiErrorCodeSchema = z.enum([
+  'ANIME_NOT_FOUND',
+  'ANILIST_UNAVAILABLE',
   'AUTH_STATE_UNAVAILABLE',
   'BAD_REQUEST',
   'CATALOG_INVALID_QUERY',
@@ -167,6 +343,8 @@ export const apiErrorCodeSchema = z.enum([
   'PASSWORD_INVALID',
   'PLAYBACK_UNAVAILABLE',
   'RATE_LIMITED',
+  'SUBTITLES_NOT_FOUND',
+  'SUBTITLES_UNAVAILABLE',
   'UNAUTHENTICATED',
   'USERNAME_CHANGE_COOLDOWN',
   'USERNAME_UNAVAILABLE',
@@ -231,6 +409,7 @@ export const safeMemberSchema = z.object({
   email: emailSchema,
   emailVerified: z.boolean(),
   id: z.string().min(1),
+  role: z.enum(['member', 'admin']),
   username: usernameSchema,
 })
 export type SafeMember = z.infer<typeof safeMemberSchema>
@@ -396,6 +575,68 @@ export const createReviewRequestSchema = catalogRefSchema.extend({
 })
 export type CreateReviewRequest = z.infer<typeof createReviewRequestSchema>
 
+export const titleReviewAuthorSchema = z.object({
+  avatarStyle: avatarStyleSchema,
+  avatarUrl: avatarUrlSchema.nullable(),
+  displayName: z.string().nullable(),
+  username: usernameSchema,
+})
+export type TitleReviewAuthor = z.infer<typeof titleReviewAuthorSchema>
+
+export const reviewLikeSchema = z.object({
+  likesCount: z.int().nonnegative(),
+  reviewId: z.string().min(1),
+})
+export type ReviewLike = z.infer<typeof reviewLikeSchema>
+
+export const setReviewLikeRequestSchema = z.object({
+  reviewId: z.string().trim().min(1).max(128),
+})
+export type SetReviewLikeRequest = z.infer<typeof setReviewLikeRequestSchema>
+
+export const titleReviewSchema = z.object({
+  author: titleReviewAuthorSchema,
+  body: z.string(),
+  liked: z.boolean(),
+  likesCount: z.int().nonnegative(),
+  rating: z.int().min(1).max(10).nullable(),
+  reviewId: z.string().min(1),
+  reviewedOn: z.iso.date().nullable(),
+})
+export type TitleReview = z.infer<typeof titleReviewSchema>
+
+export const titleReviewSortSchema = z.enum(['recent', 'popular'])
+export type TitleReviewSort = z.infer<typeof titleReviewSortSchema>
+
+export const titleReviewAudienceSchema = z.enum(['all', 'circle'])
+export type TitleReviewAudience = z.infer<typeof titleReviewAudienceSchema>
+
+export const followStateSchema = z.object({
+  following: z.boolean(),
+})
+export type FollowState = z.infer<typeof followStateSchema>
+
+export const followStatusSchema = z.object({
+  followers: z.int().nonnegative(),
+  following: z.boolean(),
+})
+export type FollowStatus = z.infer<typeof followStatusSchema>
+
+export const titleReviewsPageSchema = z.object({
+  items: z.array(titleReviewSchema).max(10),
+  page: z.int().positive(),
+  totalPages: z.int().nonnegative(),
+  totalResults: z.int().nonnegative(),
+})
+export type TitleReviewsPage = z.infer<typeof titleReviewsPageSchema>
+
+export const titleReviewsQuerySchema = z.object({
+  audience: titleReviewAudienceSchema.optional().default('all'),
+  page: z.coerce.number().int().min(1).max(500).optional().default(1),
+  sort: titleReviewSortSchema.optional().default('recent'),
+})
+export type TitleReviewsQuery = z.infer<typeof titleReviewsQuerySchema>
+
 export const memberRatingSchema = memberTitleRecordSchema.extend({ value: z.int().min(1).max(10) })
 export type MemberRating = z.infer<typeof memberRatingSchema>
 
@@ -403,14 +644,16 @@ export const setRatingRequestSchema = catalogRefSchema.extend({ value: z.int().m
 export type SetRatingRequest = z.infer<typeof setRatingRequestSchema>
 
 export const progressRefSchema = catalogRefSchema.extend({
-  episode: z.int().min(0).max(1000).optional(),
+  episode: z.int().min(0).max(10000).optional(),
   season: z.int().min(0).max(100).optional(),
 })
 export type ProgressRef = z.infer<typeof progressRefSchema>
 
-export const playbackRefSchema = progressRefSchema.refine((ref) => ref.kind === 'series'
-  ? ref.season !== undefined && ref.episode !== undefined && ref.episode > 0
-  : ref.season === undefined && ref.episode === undefined, 'Specify a movie or an exact series episode.')
+export const playbackRefSchema = progressRefSchema.refine((ref) => {
+  if (ref.kind === 'series') return ref.season !== undefined && ref.episode !== undefined && ref.episode > 0
+  if (ref.kind === 'anime') return ref.episode !== undefined && ref.episode > 0
+  return ref.season === undefined && ref.episode === undefined
+}, 'Specify a movie, an exact series episode, or an anime episode.')
 export const playbackCapabilitiesSchema = z.object({
   hls: z.boolean(), dash: z.boolean(), native: z.boolean(),
   nativeHls: z.boolean().default(false),
@@ -424,13 +667,19 @@ export const resolvePlaybackRequestSchema = z.object({
 export const playbackTrackSchema = z.object({
   id: z.string().min(1).max(128), label: z.string().min(1).max(128),
   language: z.string().max(32), url: z.string().max(4096).refine((value) => /^https:\/\//.test(value)),
-  format: z.enum(['vtt', 'srt']),
+  format: z.enum(['vtt', 'srt', 'ass']),
+})
+export const skipSegmentSchema = z.object({
+  kind: z.enum(['intro', 'outro', 'recap']),
+  start: z.number().min(0).max(86400),
+  end: z.number().min(0).max(86400),
 })
 export const playbackSourceSchema = z.object({
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
   type: z.enum(['hls', 'dash', 'native']), src: z.string().min(1).max(4096),
   qualityHint: z.string().min(1).max(24).optional(),
   expiresAt: z.iso.datetime(), subtitles: z.array(playbackTrackSchema).max(32).default([]),
+  skipSegments: z.array(skipSegmentSchema).max(8).default([]),
 })
 export const playbackSessionSchema = z.object({
   id: z.string().uuid(), ref: playbackRefSchema, source: playbackSourceSchema,
@@ -448,11 +697,39 @@ export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min
 export const playbackProviderSchema = z.object({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80),
   detail: z.string().min(1).max(80).optional(),
+  /** Mirror family (base adapter, e.g. `vidcore`) and mirror name (config
+   *  suffix, e.g. `nova`, or `auto` for the whole-provider aggregate).
+   *  The player groups the server menu by family so members choose between
+   *  mirrors with their qualities instead of a flat provider list. */
+  family: z.string().min(1).max(80).optional(),
+  mirror: z.string().min(1).max(80).optional(),
+  /** Approved serving regions (ISO-3166 alpha-2); the player renders the
+   *  first as the server flag. Empty stays valid for older payloads. */
+  regions: z.array(z.string().length(2)).max(10).default([]),
+  /** Breaker-derived serving state: degraded while cooling down or
+   *  repeatedly failing. The player shows it, never blocks on it. */
+  health: z.enum(['ok', 'degraded']).default('ok'),
+  /** Whether this provider answered for the title. The menu lists the
+   *  whole fixed fleet; unavailable rows stay selectable so a tap attempts
+   *  a fresh resolve and the player auto-advances on failure. */
+  available: z.boolean().default(true),
   /** Direct caption tracks gathered from every provider that answered, ready
    *  for the player to merge with the active source's own tracks. */
   subtitles: z.array(playbackTrackSchema).max(32).default([]),
 })
-export const playbackProviderListSchema = z.object({ providers: z.array(playbackProviderSchema).max(30) })
+export const playbackProviderListSchema = z.object({ providers: z.array(playbackProviderSchema).max(64) })
+/** Caption track served or validated by the subtitles module. Served
+ *  entries point at first-party VTT files converted and cached by the API
+ *  (same-origin absolute URLs, so the scheme follows the app origin);
+ *  direct entries are upstream https WebVTT handed to the browser
+ *  untouched. Hostile-output gating (https-only into playback sessions)
+ *  stays downstream in the playback module. */
+export const subtitleTrackSchema = playbackTrackSchema.extend({ url: z.string().url().max(4096) })
+export type SubtitleTrack = z.infer<typeof subtitleTrackSchema>
+/** Aggregated caption tracks for one title/episode, independent of the
+ *  selected streaming provider. */
+export const subtitlesResponseSchema = z.object({ subtitles: z.array(subtitleTrackSchema).max(32) })
+export type SubtitlesResponse = z.infer<typeof subtitlesResponseSchema>
 export type PlaybackRef = z.infer<typeof playbackRefSchema>
 export type PlaybackSource = z.infer<typeof playbackSourceSchema>
 export type PlaybackSession = z.infer<typeof playbackSessionSchema>
@@ -484,7 +761,7 @@ export const memberProfileDataSchema = z.object({
   lists: z.array(memberListSummarySchema),
   profile: profileSchema,
   reviews: z.array(memberReviewSchema),
-  social: z.object({ followers: z.literal(0), following: z.literal(0) }),
+  social: z.object({ followers: z.int().nonnegative(), following: z.int().nonnegative() }),
   statistics: z.object({
     diaryEntries: z.int().nonnegative(),
     lists: z.int().nonnegative(),
@@ -572,104 +849,15 @@ export const memberExportSchema = z.object({
 export type MemberExport = z.infer<typeof memberExportSchema>
 
 export function titleHref(title: CatalogRef) {
+  if (title.kind === 'anime') return `/anime/${title.id}`
   return title.kind === 'movie' ? `/title/${title.id}` : `/series/${title.id}`
 }
+export function reviewsHref(title: CatalogRef) {
+  return `${titleHref(title)}/reviews`
+}
 export function watchHref(title: CatalogRef, episode?: { episode: number; season: number }) {
+  if (title.kind === 'anime') return `/watch/anime/${title.id}?episode=${episode?.episode ?? 1}`
   if (title.kind === 'movie') return `/watch/movie/${title.id}`
 
   return `/watch/series/${title.id}?season=${episode?.season ?? 1}&episode=${episode?.episode ?? 1}`
-}
-
-// --- Consumit media identity + AniList anime catalog (additive; TMDB contracts above are untouched) ---
-
-export const consumitIdSchema = z.string().regex(/^c_[A-Za-z0-9_-]{8,64}$/)
-export type ConsumitId = z.infer<typeof consumitIdSchema>
-
-export const mediaIdentitySchema = z.object({
-  consumitId: consumitIdSchema,
-  anilistId: z.int().positive().optional(),
-  malId: z.int().positive().optional(),
-})
-export type MediaIdentity = z.infer<typeof mediaIdentitySchema>
-
-export const animeRelationTypeSchema = z.enum([
-  'sequel',
-  'prequel',
-  'parent',
-  'side_story',
-  'spin_off',
-  'adaptation',
-  'alternative',
-  'character',
-  'summary',
-  'other',
-])
-export type AnimeRelationType = z.infer<typeof animeRelationTypeSchema>
-
-export const animeRelationSchema = z.object({
-  relationType: animeRelationTypeSchema,
-  anilistId: z.int().positive(),
-  title: z.string().min(1),
-  format: z.string().nullable(),
-  status: z.string().nullable(),
-})
-export type AnimeRelation = z.infer<typeof animeRelationSchema>
-
-const animeTitlesSchema = z.object({
-  romaji: z.string().nullable(),
-  english: z.string().nullable(),
-  native: z.string().nullable(),
-})
-export type AnimeTitles = z.infer<typeof animeTitlesSchema>
-
-const animeSummaryBaseSchema = z.object({
-  anilistId: z.int().positive(),
-  identity: mediaIdentitySchema,
-  title: z.string().min(1),
-  titles: animeTitlesSchema,
-  coverUrl: z.string().max(4096).refine((value) => /^https:\/\//.test(value)).nullable(),
-  bannerUrl: z.string().max(4096).refine((value) => /^https:\/\//.test(value)).nullable(),
-  format: z.string().nullable(),
-  status: z.string().nullable(),
-  seasonYear: z.int().min(1900).max(2200).nullable(),
-  episodes: z.int().nonnegative().nullable(),
-  averageScore: z.int().min(0).max(100).nullable(),
-  genres: z.array(z.string()),
-})
-
-export const animeSummarySchema = animeSummaryBaseSchema
-export type AnimeSummary = z.infer<typeof animeSummarySchema>
-
-export const animeDetailSchema = animeSummaryBaseSchema.extend({
-  description: z.string(),
-  tags: z.array(z.string()),
-  season: z.string().nullable(),
-  relations: z.array(animeRelationSchema).max(50),
-  malId: z.int().positive().nullable(),
-})
-export type AnimeDetail = z.infer<typeof animeDetailSchema>
-
-export const animeResponseMetaSchema = z.object({
-  fetchedAt: z.iso.datetime(),
-  source: z.literal('anilist'),
-  stale: z.boolean(),
-})
-export type AnimeResponseMeta = z.infer<typeof animeResponseMetaSchema>
-
-export const animePageSchema = z.object({
-  items: z.array(animeSummarySchema),
-  meta: animeResponseMetaSchema,
-  page: z.int().positive(),
-  totalResults: z.int().nonnegative(),
-})
-export type AnimePage = z.infer<typeof animePageSchema>
-
-export const animeDetailResponseSchema = z.object({
-  item: animeDetailSchema,
-  meta: animeResponseMetaSchema,
-})
-export type AnimeDetailResponse = z.infer<typeof animeDetailResponseSchema>
-
-export function animeHref(anime: { anilistId: number }) {
-  return `/anime/${anime.anilistId}`
 }

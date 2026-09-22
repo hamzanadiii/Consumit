@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SessionNavigation } from './session-navigation'
 import { SessionProvider } from './session'
+import { FilScreenShell } from '../home/filscreen-shell'
 
 const mocks = vi.hoisted(() => ({
   invalidateMemberLibraryCache: vi.fn(),
@@ -29,6 +30,7 @@ const signedInMember = {
   id: 'member_1',
   avatarStyle: 'halo',
   avatarUrl: null,
+  role: 'member',
   username: 'hamza_8',
 } as const
 
@@ -87,5 +89,31 @@ describe('SessionNavigation member menu', () => {
     expect(mocks.push).toHaveBeenCalledWith('/sign-in')
     expect(screen.queryByRole('button', { name: 'Hamza menu' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Sign in' }).length).toBeGreaterThan(0)
+  })
+
+  it.each(['navigation', 'sidebar'] as const)('keeps the member signed in and allows retry when %s logout fails', async (surface) => {
+    const user = userEvent.setup()
+    mocks.logoutMember.mockRejectedValueOnce(new Error('Offline'))
+    render(
+      <SessionProvider initialMember={{ ...signedInMember }} initialStatus="authenticated">
+        {surface === 'navigation' ? <SessionNavigation activeHref="/" /> : <FilScreenShell><p>Library</p></FilScreenShell>}
+      </SessionProvider>,
+    )
+    async function logout() {
+      if (surface === 'navigation') {
+        await user.click(screen.getByRole('button', { name: 'Hamza menu' }))
+        await user.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+      } else {
+        await user.click(screen.getByRole('button', { name: 'Log out' }))
+      }
+    }
+    await logout()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign out could not finish')
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(mocks.invalidateMemberLibraryCache).not.toHaveBeenCalled()
+    await logout()
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/sign-in'))
+    expect(mocks.invalidateMemberLibraryCache).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

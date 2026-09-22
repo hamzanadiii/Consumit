@@ -4,7 +4,26 @@ import { accessDeadline, adapter, document, mediaType, ProviderFailure, type Pro
 
 const apiOrigin = 'https://scrapper.rivestream.app'
 const defaultReferer = 'https://nextgencloudfabric.com/'
-const PROVIDERS = ['citadel', 'quasar']
+// Sub-provider map (languages as codes so resolve-time audio matching
+// works): citadel serves English, hindicast Hindi, apex/solstice multi-audio
+// (English-first with in-player track choice), quasar French, the rest
+// Original. Citadel leads: proven English workhorse, deterministic order.
+const SUB_PROVIDERS = [
+  { id: 'citadel', lang: 'en' },
+  { id: 'apex', lang: 'en' },
+  { id: 'hindicast', lang: 'hi' },
+  { id: 'solstice', lang: 'en' },
+  { id: 'quasar', lang: 'fr' },
+  { id: 'flowcast', lang: 'original' },
+  { id: 'pulse', lang: 'original' },
+  { id: 'horizon', lang: 'original' },
+  { id: 'asiacloud', lang: 'original' },
+  { id: 'guru', lang: 'original' },
+] as const
+// One sick sub-provider must not hold a healthy one hostage: the resolver
+// caps every attempt at 5s, so each sub-provider gets its own tighter
+// deadline and degrades to "no data" instead of stalling the attempt.
+const SUB_PROVIDER_TIMEOUT_MS = 3500
 
 const captionSchema = z.object({
   file: z.string().max(4096),
@@ -25,8 +44,7 @@ const responseSchema = z.object({
   }).optional(),
 })
 
-function parseQualityAndLang(q?: string): { height?: number; qualityHint?: string; language?: string } {
-  if (!q) return {}
+function parseQualityAndLang(q?: string): { height?: number; qualityHint?: string; language?: string } {  if (!q) return {}
   let qualityHint: string | undefined
   let language: string | undefined
 
@@ -39,10 +57,28 @@ function parseQualityAndLang(q?: string): { height?: number; qualityHint?: strin
   }
 
   const match = qualityHint?.match(/(\d{3,4})p?/i)
-  const height = match ? Number.parseInt(match[1], 10) : undefined
+  const heightText = match?.[1]
+  const height = heightText ? Number.parseInt(heightText, 10) : undefined
   if (height) qualityHint = `${height}p`
 
-  return { height, qualityHint, language }
+  return {
+    ...(height !== undefined ? { height } : {}),
+    ...(qualityHint !== undefined ? { qualityHint } : {}),
+    ...(language !== undefined ? { language } : {}),
+  }
+}
+
+// Language codes so resolve-time audio matching works: full names from
+// quality strings ('720p | English') collapse to the same codes as the
+// sub-provider defaults.
+function normalizeLang(value: string): string {
+  const lower = value.toLowerCase()
+  if (lower === 'english' || lower === 'eng') return 'en'
+  if (lower === 'hindi' || lower === 'hin') return 'hi'
+  if (lower === 'tamil' || lower === 'tam') return 'ta'
+  if (lower === 'telugu' || lower === 'tel') return 'te'
+  if (lower === 'french' || lower === 'fre' || lower === 'fra') return 'fr'
+  return lower
 }
 
 function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, string> } {
@@ -78,21 +114,33 @@ function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, str
   return { url: rawUrl, headers: {} }
 }
 
-export function createRivestreamProvider(http: ProviderHttp, now = Date.now) {
-  return adapter('rivestream', async (input, signal) => {
+export type RivestreamScope = { id?: string; subs?: string[] }
+
+export function createRivestreamProvider(http: ProviderHttp, now = Date.now, scope: RivestreamScope = {}) {
+  const { id = 'rivestream', subs } = scope
+  const wanted = subs?.map((sub) => sub.toLowerCase())
+  return Object.assign(adapter('rivestream', async (input, signal) => {
     const { ref } = input
     const isTv = ref.kind === 'series'
     const qBase = isTv ? `id=${ref.id}&season=${ref.season}&episode=${ref.episode}` : `id=${ref.id}`
 
     const results = await Promise.all(
-      PROVIDERS.map(async (prov) => {
-        const url = `${apiOrigin}/api/provider?provider=${prov}&${qBase}`
+      SUB_PROVIDERS.filter((sub) => !wanted || wanted.includes(sub.id)).map(async (sub) => {
+        const url = `${apiOrigin}/api/provider?provider=${sub.id}&${qBase}`
+        const controller = new AbortController()
+        if (signal.aborted) controller.abort(signal.reason)
+        const onAbort = () => controller.abort(signal.reason)
+        signal.addEventListener('abort', onAbort, { once: true })
+        const timer = setTimeout(() => controller.abort(new DOMException('Sub-provider timed out', 'TimeoutError')), SUB_PROVIDER_TIMEOUT_MS)
         try {
-          const res = await document(http, url, signal)
+          const res = await document(http, url, controller.signal)
           const data = responseSchema.parse(JSON.parse(res.text))
-          return { provider: prov, data: data.data }
+          return { provider: sub.id, lang: sub.lang, data: data.data }
         } catch {
-          return { provider: prov, data: undefined }
+          return { provider: sub.id, lang: sub.lang, data: undefined }
+        } finally {
+          clearTimeout(timer)
+          signal.removeEventListener('abort', onAbort)
         }
       }),
     )
@@ -100,7 +148,7 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now) {
     const allSources: ProviderSource[] = []
     const seen = new Set<string>()
 
-    for (const { provider, data } of results) {
+    for (const { provider, lang: subLang, data } of results) {
       if (!data?.sources) continue
 
       const subtitles = (data.captions || []).map((c, idx) => ({
@@ -113,7 +161,7 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now) {
 
       for (let idx = 0; idx < data.sources.length; idx++) {
         const entry = data.sources[idx]
-        if (!entry.url || seen.has(entry.url)) continue
+        if (!entry || !entry.url || seen.has(entry.url)) continue
 
         const { url, headers } = unwrapProxy(entry.url)
         const type = mediaType(url)
@@ -121,14 +169,20 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now) {
         seen.add(entry.url)
 
         const { height, qualityHint, language } = parseQualityAndLang(entry.quality)
-        const lang = language || (provider === 'quasar' ? 'French' : 'English')
+        const lang = normalizeLang(language || subLang)
         const qTag = qualityHint ? qualityHint.toLowerCase() : 'auto'
+        let expiresAt: string
+        try {
+          expiresAt = accessDeadline(url, now())
+        } catch {
+          continue
+        }
 
         allSources.push({
           key: `${provider}:${qTag}:${idx}`,
           url,
           type,
-          expiresAt: accessDeadline(url, now()),
+          expiresAt,
           language: lang,
           headers,
           subtitles,
@@ -140,13 +194,15 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now) {
 
     if (!allSources.length) throw new ProviderFailure('empty')
 
-    // Prefer English/Original audio over dubs/French
+    // Prefer the requested audio first, then Original, then everything else.
+    // Stable otherwise, so provider order breaks ties deterministically.
+    const audioWanted = input.audioLanguage.toLowerCase()
     allSources.sort((a, b) => {
-      const aIsEn = /english|original/i.test(a.language) ? 0 : 1
-      const bIsEn = /english|original/i.test(b.language) ? 0 : 1
-      return aIsEn - bIsEn
+      const score = (language: string) =>
+        language.toLowerCase() === audioWanted ? 0 : language.toLowerCase() === 'original' ? 1 : 2
+      return score(a.language) - score(b.language)
     })
 
     return allSources
-  })
+  }), { id })
 }

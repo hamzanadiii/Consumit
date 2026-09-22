@@ -1,123 +1,177 @@
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
+import { accessDeadline, adapter, document, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 
-const apiOrigin = 'https://vidrack.created.app'
-const streamripOrigin = 'https://movie.streamrip.fun'
+const siteOrigin = 'https://vidcore.org'
 const streamripKey = 'streamrip_secret_2026'
-const playerOrigin = 'https://vidcore.org'
 
-const sourceSchema = z.object({
-  url: z.url().max(4096),
-  quality: z.string().max(32).optional(),
+// Port of the PROVE VidCore recipe: multi-server aggregator calling the same
+// upstream source APIs as their player. Lease-wrapped proxy URLs are never
+// used — only direct https media crosses into playback (browser-direct rule).
+// Relay/embed/iframe shapes and unplayable containers are dropped, not
+// proxied. Every job is individually bounded so dead servers degrade instead
+// of holding healthy answers hostage past the attempt budget.
+const JOB_TIMEOUT_MS = 3000
+
+const rawSourceSchema = z.object({
+  url: z.string().max(4096).optional(),
+  quality: z.string().max(64).optional(),
   label: z.string().max(64).optional(),
-  type: z.string().max(20).optional(),
-  language: z.string().min(1).max(32).optional(),
-  headers: z.record(z.string().max(64), z.string().max(2048)).optional(),
-})
+  type: z.string().max(16).optional(),
+  language: z.string().max(32).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+}).passthrough()
 
-const responseSchema = z.object({
-  sources: z.array(sourceSchema).max(40).optional(),
-  data: z.object({ sources: z.array(sourceSchema).max(40) }).optional(),
-})
+const providersPayloadSchema = z.object({
+  providers: z.array(z.object({
+    name: z.string().max(64).optional(),
+    sources: z.array(rawSourceSchema).max(64).optional(),
+  }).passthrough()).max(32).optional(),
+}).passthrough()
 
-type Endpoint = { server: string; url: string }
-const VIDRACK_KEYS = ['1embed', 'cinextream', 'movy', 'overlook', 'vaplayer', 'vidnest', 'viduki']
+type Job = { server: string; url: string; kind: 'json-sources' | 'json-providers' | 'sse' }
 
-function endpoints(tmdbId: string, type: 'movie' | 'tv', season?: number, episode?: number): Endpoint[] {
-  const tvQuery = type === 'tv' ? `id=${tmdbId}&type=tv&season=${season}&episode=${episode}` : `id=${tmdbId}&type=movie`
-  const cineplayQuery = tvQuery
-  const list: Endpoint[] = [
-    { server: 'cineplay', url: `${apiOrigin}/api/sources/cineplay?${cineplayQuery}` },
-    { server: 'vidrift', url: `${apiOrigin}/api/sources/vidrift?${tvQuery}` },
-    ...VIDRACK_KEYS.map((server) => ({ server, url: `${apiOrigin}/api/sources/${server}?${tvQuery}` })),
+function jobsFor(tmdbId: string, isTv: boolean, season: number, episode: number): Job[] {
+  const tvQuery = isTv ? `&type=tv&season=${season}&episode=${episode}` : '&type=movie'
+  const tvPath = isTv ? `/tv/${tmdbId}/${season}/${episode}` : `/movie/${tmdbId}`
+  const vidrackKeys = ['1embed', 'cinextream', 'movy', 'overlook', 'vaplayer', 'vidnest', 'viduki']
+  return [
+    { server: 'Pacific', url: `https://vidrack.created.app/api/sources/cineplay?id=${tmdbId}${tvQuery}`, kind: 'json-sources' },
+    { server: 'Orion', url: `https://hahaevilcraft.site/api/search/stream?q=${tmdbId}${tvQuery}`, kind: 'sse' },
+    { server: 'Nova', url: `https://movie.streamrip.fun/api/source/${tmdbId}?api_key=${streamripKey}&apikey=${streamripKey}`, kind: 'json-sources' },
+    { server: 'Armor', url: `https://vidrack.created.app/api/sources/vidrift?id=${tmdbId}${tvQuery}`, kind: 'json-sources' },
+    { server: 'Tiki', url: `https://streamguide.cfd/Perses${tvPath}`, kind: 'json-providers' },
+    ...vidrackKeys.map((key): Job => ({ server: key, url: `https://vidrack.created.app/api/sources/${key}?id=${tmdbId}${tvQuery}`, kind: 'json-sources' })),
   ]
-  if (type === 'movie') list.push({ server: 'streamrip', url: `${streamripOrigin}/api/source/${tmdbId}?api_key=${streamripKey}&apikey=${streamripKey}` })
-  return list
 }
 
-function parseQuality(q?: string): { height?: number; qualityHint?: string } {
-  if (!q) return {}
-  const match = q.match(/(\d{3,4})p?/i)
-  if (match?.[1]) {
-    const h = Number.parseInt(match[1], 10)
-    if (h >= 2160) return { height: 2160, qualityHint: '4K' }
-    return { height: h, qualityHint: `${h}p` }
-  }
-  if (/4k|uhd/i.test(q)) return { height: 2160, qualityHint: '4K' }
-  return { qualityHint: q }
-}
-
-export function createVidcoreProvider(http: ProviderHttp, now = Date.now) {
-  return adapter('vidcore', async (input, signal) => {
-    const params = input.ref.kind === 'movie'
-      ? { tmdbId: String(input.ref.id), type: 'movie' as const }
-      : { tmdbId: String(input.ref.id), type: 'tv' as const, season: input.ref.season, episode: input.ref.episode }
-
-    const settled = await Promise.all(
-      endpoints(params.tmdbId, params.type, params.season, params.episode).map(async ({ server, url }) => {
-        const scoped = AbortSignal.any([signal, AbortSignal.timeout(5000)])
-        try {
-          const response = await document(http, url, scoped, { accept: 'application/json', referer: `${playerOrigin}/` })
-          const data = responseSchema.parse(JSON.parse(response.text))
-          return { server, sources: (data.sources ?? data.data?.sources ?? []).slice(0, 3) }
-        } catch { return { server, sources: [] as z.infer<typeof sourceSchema>[] } }
-      }),
-    )
-
-    const rawSources: ProviderSource[] = []
-    const seenUrls = new Set<string>()
-    const seenKeys = new Set<string>()
-
-    for (const { server, sources } of settled) {
-      for (const s of sources) {
-        if (!s.url || seenUrls.has(s.url)) continue
-        const { height, qualityHint } = parseQuality(s.quality || s.label)
-        const key = `${server}:${s.quality || qualityHint || 'auto'}`
-        if (seenKeys.has(key)) continue
-        seenUrls.add(s.url)
-        seenKeys.add(key)
-
-        const type = mediaType(s.url)
-        if (!type) continue
-
-        const isHevc = /hevc|h\.?265/i.test(`${s.url} ${s.quality || ''} ${s.label || ''}`)
-        rawSources.push({
-          key,
-          url: s.url,
-          type,
-          expiresAt: accessDeadline(s.url, now()),
-          language: s.language || 'original',
-          headers: { referer: `${playerOrigin}/`, ...(s.headers || {}) },
-          subtitles: [],
-          ...(height ? { height } : {}),
-          ...(qualityHint ? { qualityHint } : {}),
-          _hevc: isHevc,
-        } as ProviderSource & { _hevc?: boolean })
+function parseSSEFrames(text: string, server: string): Array<Record<string, unknown> & { _server: string }> {
+  const out: Array<Record<string, unknown> & { _server: string }> = []
+  for (const line of text.split('\n')) {
+    const index = line.indexOf('data:')
+    if (index === -1) continue
+    const payload = line.slice(index + 5).trim()
+    if (!payload || payload === '[DONE]') continue
+    try {
+      const json = JSON.parse(payload) as Record<string, unknown>
+      const list = json['streams'] ?? json['sources'] ?? (json['url'] ? [json] : [])
+      if (!Array.isArray(list)) continue
+      for (const item of list) {
+        if (item && typeof item === 'object') out.push({ ...(item as Record<string, unknown>), _server: server })
       }
+    } catch {
+      // ignore malformed frames
     }
+  }
+  return out
+}
 
-    if (!rawSources.length) throw new ProviderFailure('empty')
+function bounded(parent: AbortSignal, ms: number) {
+  const controller = new AbortController()
+  if (parent.aborted) controller.abort(parent.reason)
+  const onAbort = () => controller.abort(parent.reason)
+  parent.addEventListener('abort', onAbort, { once: true })
+  const timer = setTimeout(() => controller.abort(new DOMException('VidCore server timed out', 'TimeoutError')), ms)
+  return { signal: controller.signal, cleanup: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort) } }
+}
 
-    // Sort: non-HEVC before HEVC, and direct-playable servers (vidrift, cinextream, movy) before others
-    const directPriority = (key: string) => {
-      if (key.startsWith('vidrift:')) return 0
-      if (key.startsWith('cinextream:')) return 1
-      if (key.startsWith('movy:')) return 2
-      if (key.startsWith('cineplay:')) return 10
-      return 5
+function classifyType(rawUrl: string): ProviderSource['type'] | null {
+  if (/\.(mkv|avi|mov|wmv|flv|webm)(\?|#|$)/i.test(rawUrl)) return null
+  return mediaType(rawUrl) ?? 'hls'
+}
+
+const RELAY_RE = /proxy|relay|\bembed\b|\biframe\b|\.html?(?:[?#]|$)/i
+
+function isDirectCandidate(rawUrl: string): boolean {
+  if (!/^https:\/\//i.test(rawUrl) || rawUrl.length > 4096) return false
+  if (RELAY_RE.test(rawUrl)) return false
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.username || parsed.password) return false
+    for (const value of parsed.searchParams.values()) {
+      if (/https?%3A|https?:\/\//i.test(value)) return false
     }
-    rawSources.sort((a: any, b: any) => {
-      const aHevc = a._hevc ? 1 : 0
-      const bHevc = b._hevc ? 1 : 0
-      if (aHevc !== bHevc) return aHevc - bHevc
-      return directPriority(a.key) - directPriority(b.key)
-    })
+  } catch {
+    return false
+  }
+  return true
+}
 
-    for (const s of rawSources) {
-      delete (s as any)._hevc
+export type VidcoreScope = { id?: string; servers?: string[] }
+
+export function createVidcoreProvider(http: ProviderHttp, now = Date.now, scope: VidcoreScope = {}) {
+  const { id = 'vidcore', servers } = scope
+  const wanted = servers?.map((s) => s.toLowerCase())
+  return Object.assign(adapter('vidcore', async (input, signal) => {
+    const { ref } = input
+    const isTv = ref.kind === 'series'
+    const tmdbId = String(ref.id)
+    const season = ref.season ?? 1
+    const episode = ref.episode ?? 1
+
+    const jobs = jobsFor(tmdbId, isTv, season, episode)
+      .filter((job) => !wanted || wanted.includes(job.server.toLowerCase()))
+    const settled: Array<Array<Record<string, unknown> & { _server: string }>> = await Promise.all(jobs.map(async (job): Promise<Array<Record<string, unknown> & { _server: string }>> => {
+      const op = bounded(signal, JOB_TIMEOUT_MS)
+      try {
+        const response = await document(http, job.url, op.signal, {
+          'user-agent': userAgent,
+          accept: '*/*',
+          referer: `${siteOrigin}/`,
+        })
+        if (job.kind === 'sse') return parseSSEFrames(response.text, job.server)
+        const body: unknown = JSON.parse(response.text)
+        if (job.kind === 'json-providers') {
+          const parsed = providersPayloadSchema.parse(body)
+          const out: Array<Record<string, unknown> & { _server: string }> = []
+          for (const provider of parsed.providers ?? []) {
+            for (const source of provider.sources ?? []) out.push({ ...source, _server: `${job.server}/${provider.name ?? ''}` })
+          }
+          return out
+        }
+        const data = body as { sources?: unknown; data?: { sources?: unknown } }
+        const list = data.sources ?? data.data?.sources
+        if (!Array.isArray(list)) return []
+        return list.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+          .map((item) => ({ ...item, _server: job.server }))
+      } catch {
+        return []
+      } finally {
+        op.cleanup()
+      }
+    }))
+
+    const sources: ProviderSource[] = []
+    const seen = new Set<string>()
+    for (const list of settled) {
+      for (const item of list) {
+        const url = typeof item['url'] === 'string' ? item.url : ''
+        if (!url || seen.has(url) || !isDirectCandidate(url)) continue
+        const type = classifyType(url)
+        if (!type) continue
+        seen.add(url)
+        const quality = String(item['quality'] ?? item['label'] ?? 'auto').slice(0, 24)
+        let expiresAt: string
+        try {
+          expiresAt = accessDeadline(url, now())
+        } catch {
+          continue
+        }
+        sources.push({
+          key: `vidcore:${String(item['_server'] ?? 'mov').toLowerCase().replace(/[^a-z0-9-]+/g, '').slice(0, 32) || 'mov'}:${sources.length}`,
+          url,
+          type,
+          qualityHint: quality || 'Auto',
+          expiresAt,
+          language: typeof item['language'] === 'string' && item['language'] ? item['language'].slice(0, 32) : 'original',
+          headers: { referer: `${siteOrigin}/` },
+          subtitles: [],
+        })
+        if (sources.length >= 12) break
+      }
+      if (sources.length >= 12) break
     }
-
-    return verifiedPlaybackSources(http, rawSources, signal)
-  })
+    if (!sources.length) throw new ProviderFailure('empty')
+    return sources
+  }), { id })
 }

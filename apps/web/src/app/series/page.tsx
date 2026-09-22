@@ -11,7 +11,7 @@ export default async function SeriesPage() {
   let responses
   try {
     responses = await Promise.all([
-      getCatalogDiscovery({ feed: 'on-air', kind: 'series' }),
+      getCatalogDiscovery({ feed: 'trending', kind: 'series' }),
       getCatalogDiscovery({ feed: 'popular', kind: 'series' }),
     ])
   } catch (error) {

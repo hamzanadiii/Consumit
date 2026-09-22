@@ -97,13 +97,41 @@ Prefer deep modules with small interfaces that hide scheduling, validation, expi
 
 ## Canonical catalog
 
-TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. Anime remains a movie or series classification rather than a separate catalog kind. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
+TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. AniList is the canonical metadata source for anime titles, providing search, details, relations, characters, staff, airing schedules, and franchise graphs. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
 
 Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
 
 Catalog metadata and playback availability are independent. A real TMDB title can exist without a configured playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
 
 The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
+
+## Anime domain
+
+Anime is a first-class bounded domain that plugs into the same playback, library, social, and recommendation systems as movies and series.
+
+### AniList adapter
+
+The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+
+### Episode identity engine
+
+The episode identity engine (`apps/api/src/anime/episodes/`) maps canonical anime episodes (as defined by AniList) to provider-specific episode numbers. This handles discrepancies in season numbering, split cours, absolute numbering, specials, OVA numbering, and dub numbering. Each mapping carries a confidence score and verification timestamp.
+
+### Franchise graph
+
+The franchise graph (`apps/api/src/anime/franchise/`) builds directed graphs from AniList relation edges (PREQUEL, SEQUEL, SIDE_STORY, SPIN_OFF, ADAPTATION, SOURCE). It supports watch order recommendations, related-title discovery, and franchise browsing.
+
+### Provider episode mapping
+
+Provider-specific episode mappings are stored per anime title per provider per audio language. Once a mapping is verified, it is not re-discovered on every watch. This reduces upstream load and improves reliability.
+
+### Anime providers
+
+Three direct-media adapters serve anime episodes by canonical AniList number (`packages/provider-sdk/src/adapters/anixo.ts`, `kyren.ts`, `nagare.ts`): Anixo (embed pages, 3-server race), Kyren (JSON API, parallel race plus fallback servers), Nagare (Stremio-protocol addon, cached). Anixo and Kyren match by AniList id plus a server-owned canonical title (`apps/api/src/anime/title-resolver.ts`); Nagare is id-only. The watch route sends `audioLanguage: 'en'` for DUB and anything else for SUB; dub requests fall back to sub when a provider has no dub. The anime watch screen (`/watch/anime/[anilistId]`) exposes the same SUB/DUB choice as a toggle and reuses the shared Watch playback flow with season-less episode identity.
+
+### SUB/DUB as variants
+
+SUB (original audio with subtitles) and DUB (translated audio) are playback variants of one canonical anime, never separate catalog entries. The resolver selects the best variant based on member audio preferences.
 
 ## Identity and import boundaries
 
@@ -117,10 +145,10 @@ Every provider adapter exposes the same conceptual input and result.
 
 ### Input
 
-- Title kind: movie or series episode; anime follows the underlying movie or series kind.
-- Stable TMDB catalog identifier.
+- Title kind: movie, series episode, or anime episode.
+- Stable catalog identifier (TMDB for movies/series, AniList for anime).
 - Title and release year as fallback identification.
-- Season and episode for episodic playback.
+- Season and episode for series; canonical episode number for anime.
 - Context required for region, language, and safe provider selection.
 
 ### Result
@@ -132,6 +160,10 @@ Every provider adapter exposes the same conceptual input and result.
 - Resolution latency and structured failure information.
 
 A source describes its direct delivery type, URL, quality, and language. External output is untrusted and schema-validated at the adapter seam.
+
+### Alias rows
+
+One adapter may serve several menu rows: a config entry id must equal its adapter or extend it with a `-suffix` (`wecollege-phoenix` scopes that city, `cinehd-hindi` filters that audio). Aliases carry independent regions, health, and fallback groups; the suffix selects the scope. Source languages use codes (`en`, `hi`) so resolve-time audio matching prefers the requested language, and the watch flow forwards the member's stored audio preference (explicit per-title choices win).
 
 ## Resolve lifecycle
 
@@ -230,6 +262,8 @@ When the active source fails, the playback flow excludes that source/provider, r
 The Consumit Player owns the playback controls and native media surface. A playback controller will load configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
 
 Delivery is strictly browser-direct. Validated HTTPS media travels from a configured provider CDN to the member's browser; Consumit never proxies, leases, rewrites, or transforms media bytes. Unknown, expired, header-locked, cookie-bearing, or DASH sources are unavailable.
+
+The single exception is first-party caption files: the subtitles module (`apps/api/src/subtitles/`) fetches subtitle archives from nine search providers (YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK keyless; SubDL, Jimaku, OpenSubtitles key-gated and self-skipping without credentials), extracts and converts them to WebVTT server-side, caches the converted text (Valkey when configured, memory otherwise, 7-day TTL), and serves it from `GET /v1/subtitles/file/:key`. Media bytes, manifests, keys, and audio stay browser-direct; only caption text — small, schema-shaped, never executable — takes this path. Direct upstream WebVTT tracks still travel untouched alongside served files, and the aggregated menu never depends on the selected streaming provider. Members may pick up to three preferred subtitle languages (device-local, `langs` query); the engine tries those first from every provider and the first drives track auto-select.
 
 ## Data ownership
 
@@ -368,7 +402,7 @@ These standards generalize the catalog module's established shape (`apps/api/src
 - Per-route rate limits layered under edge and per-provider limits.
 - Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
 - Resolver discipline for playback: tiered candidates, hedged starts, dedupe, observed-quality ranking, health quarantine (Stage 6).
-- DB-first subtitle enrichment remains a future slice; current playback exposes only direct HTTPS WebVTT tracks.
+- Subtitle enrichment is implemented: the subtitles module aggregates YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, SubDL, Jimaku, and OpenSubtitles behind its adapter seam (keyed providers skip without credentials), converts archives to cached first-party VTT, and merges direct upstream WebVTT untouched. A 9s overall budget returns partial rank-ordered results instead of failing cold searches; converted files are cache-checked before any refetch. Playback sessions additionally carry each streaming adapter's own direct WebVTT tracks.
 - Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
 
 ### Deliberately different this time

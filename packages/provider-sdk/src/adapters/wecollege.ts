@@ -60,8 +60,12 @@ export function createWecollegeProvider(
     // Fan out across every configured city (bounded per-city timeout) and
     // aggregate: stopping at the first verifying city locks the member to
     // that city's lowest rendition (e.g. a heightless single-variant Auto)
-    // while HD/4K renditions in later cities are never probed.
-    const settled = await Promise.all(cities.map(async (city, cityIndex) => {
+    // while HD/4K renditions in later cities are never probed. Stragglers
+    // must not hold healthy answers hostage either: harvest whatever lands
+    // by a soft deadline, and only wait out the full term when nothing
+    // arrived at all (empty answers starve both sources and subtitles).
+    const landed: ({ cityIndex: number; sources: ProviderSource[] } | null)[] = new Array(cities.length).fill(null)
+    const pending = cities.map(async (city, cityIndex) => {
       const scoped = AbortSignal.any([signal, AbortSignal.timeout(5000)])
       try {
         const url = `${apiOrigin}/${city}/sources?${qParams.toString()}`
@@ -135,18 +139,51 @@ export function createWecollegeProvider(
       } catch {
         return { cityIndex, sources: [] as ProviderSource[] }
       }
-    }))
+    })
+    const harvest = async (): Promise<void> => {
+      const runners = pending.map((work, cityIndex) => work.then(
+        (result) => { landed[cityIndex] = result },
+        () => { landed[cityIndex] = { cityIndex, sources: [] as ProviderSource[] } },
+      ))
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          Promise.all(runners),
+          new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 3000) }),
+        ])
+        if (!landed.some(Boolean)) await Promise.allSettled(runners)
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
+    }
+    await harvest()
 
     const seen = new Set<string>()
     const aggregated: ProviderSource[] = []
-    for (const { sources } of settled) {
-      for (const source of sources) {
+    for (const entry of landed) {
+      if (!entry) continue
+      for (const source of entry.sources) {
         if (seen.has(source.url)) continue
         seen.add(source.url)
         aggregated.push(source)
       }
     }
     if (!aggregated.length) throw new ProviderFailure('empty')
+
+    // Hosts measured browser-unplayable in Chromium (live 2026-09-14: the
+    // peakstorm family 403s masters/segments, mirrowcelo002 workers answer
+    // without CORS headers so hls.js can never read them). Sink — never
+    // drop — their sources below playable hosts so the resolver's top pick
+    // plays instead of burning the whole provider on a dead "1080p".
+    function gatedHost(url: string): boolean {
+      try {
+        const host = new URL(url).hostname.toLowerCase()
+        return host.endsWith('peakstorm.top') || host === 'keenanchor.top'
+          || host.endsWith('mirrowcelo002.workers.dev')
+      } catch {
+        return false
+      }
+    }
 
     // Explicit heights are strictly more informative than heightless Auto
     // labels (single-variant manifests mislabeled Auto). When real HD/4K
@@ -156,7 +193,8 @@ export function createWecollegeProvider(
     // explicit verified.
     const explicit = aggregated.filter((source) => typeof source.height === 'number')
     const ranked = (explicit.length ? explicit : aggregated)
-      .sort((a, b) => (b.height ?? -1) - (a.height ?? -1))
+      .sort((a, b) => Number(gatedHost(a.url)) - Number(gatedHost(b.url))
+        || (b.height ?? -1) - (a.height ?? -1))
       .slice(0, 32)
     return ranked
   })

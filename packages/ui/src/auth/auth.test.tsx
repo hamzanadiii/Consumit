@@ -15,6 +15,8 @@ describe('authentication components', () => {
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toHaveClass('auth-title')
     expect(container.querySelector('.auth-artwork-overlay')).toBeInTheDocument()
+    expect(container.querySelector('section')).toHaveClass('lg:sticky')
+    expect(container.querySelector('section')).toHaveClass('lg:min-h-0')
   })
 
   it('associates auth field labels and errors', () => {

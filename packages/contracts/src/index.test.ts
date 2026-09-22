@@ -7,6 +7,8 @@ import {
   apiErrorResponseSchema,
   avatarUrlSchema,
   bannerUrlSchema,
+  followStateSchema,
+  followStatusSchema,
   loginRequestSchema,
   playbackProgressSchema,
   progressWriteRequestSchema,
@@ -17,6 +19,10 @@ import {
   registerRequestSchema,
   safeMemberSchema,
   setRatingRequestSchema,
+  subtitlesResponseSchema,
+  titleReviewsPageSchema,
+  titleReviewsQuerySchema,
+  titleReviewSchema,
   updateDiaryEntryRequestSchema,
   updateMemberListRequestSchema,
   updateMemberReviewRequestSchema,
@@ -24,6 +30,7 @@ import {
   usernameAvailabilityResponseSchema,
   usernameSchema,
   titleHref,
+  reviewsHref,
   watchHref,
 } from './index'
 
@@ -31,6 +38,8 @@ describe('catalog contracts', () => {
   it('builds canonical title and watch destinations', () => {
     expect(titleHref({ id: 550, kind: 'movie' })).toBe('/title/550')
     expect(titleHref({ id: 1399, kind: 'series' })).toBe('/series/1399')
+    expect(reviewsHref({ id: 550, kind: 'movie' })).toBe('/title/550/reviews')
+    expect(reviewsHref({ id: 1399, kind: 'series' })).toBe('/series/1399/reviews')
     expect(watchHref({ id: 550, kind: 'movie' })).toBe('/watch/movie/550')
     expect(watchHref({ id: 1399, kind: 'series' }, { episode: 2, season: 3 })).toBe(
       '/watch/series/1399?season=3&episode=2',
@@ -124,6 +133,27 @@ describe('catalog contracts', () => {
     expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 4.5 }).success).toBe(false)
   })
 
+  it('pages public title reviews with author identity and optional ratings', () => {
+    const author = { avatarStyle: 'dusk', avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }
+    expect(titleReviewSchema.safeParse({ author, body: 'A patient masterpiece.', liked: false, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }).success).toBe(true)
+    expect(titleReviewSchema.safeParse({ author, body: 'No stars attached.', liked: true, likesCount: 1, rating: null, reviewId: 'review-2', reviewedOn: null }).success).toBe(true)
+    expect(titleReviewSchema.safeParse({ author, body: 'Too many stars.', liked: false, likesCount: 0, rating: 11, reviewId: 'review-3', reviewedOn: null }).success).toBe(false)
+    expect(titleReviewSchema.safeParse({ author, body: 'Missing like state.', rating: null, reviewId: 'review-4', reviewedOn: null }).success).toBe(false)
+    expect(titleReviewsPageSchema.safeParse({ items: [], page: 1, totalPages: 0, totalResults: 0 }).success).toBe(true)
+    expect(titleReviewsQuerySchema.parse({})).toEqual({ audience: 'all', page: 1, sort: 'recent' })
+    expect(titleReviewsQuerySchema.parse({ page: '2', sort: 'popular' })).toEqual({ audience: 'all', page: 2, sort: 'popular' })
+    expect(titleReviewsQuerySchema.parse({ audience: 'circle' })).toMatchObject({ audience: 'circle' })
+    expect(titleReviewsQuerySchema.safeParse({ page: 0 }).success).toBe(false)
+    expect(titleReviewsQuerySchema.safeParse({ sort: 'top' }).success).toBe(false)
+    expect(titleReviewsQuerySchema.safeParse({ audience: 'everyone' }).success).toBe(false)
+  })
+
+  it('tracks circle follows with honest counts', () => {
+    expect(followStateSchema.parse({ following: true })).toEqual({ following: true })
+    expect(followStatusSchema.parse({ followers: 4, following: true })).toEqual({ followers: 4, following: true })
+    expect(followStatusSchema.safeParse({ followers: -1, following: false }).success).toBe(false)
+  })
+
   it('bounds playback progress writes to sane ranges', () => {    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })
     expect(progressWriteRequestSchema.parse({ completed: true, durationSeconds: 3600, episode: 3, id: 95396, kind: 'series', positionSeconds: 3599, season: 1 })).toMatchObject({ completed: true, season: 1 })
     expect(progressWriteRequestSchema.safeParse({ id: 693134, kind: 'movie', positionSeconds: -5 }).success).toBe(false)
@@ -132,6 +162,20 @@ describe('catalog contracts', () => {
   })
 
   it('requires request correlation on stable errors', () => {    expect(apiErrorResponseSchema.safeParse({ error: { code: 'BAD_REQUEST', message: 'Bad request.', requestId: 'request-1234', retryable: false } }).success).toBe(true)
+  })
+
+  it('aggregates subtitle tracks independently of streaming providers', () => {
+    const parsed = subtitlesResponseSchema.parse({ subtitles: [
+      { id: 'yify-en-1', label: 'English (yify)', language: 'en', url: 'https://api.example/v1/subtitles/file/abc123', format: 'vtt' },
+      { id: 'castlesubs-en-1', label: 'English (castlesubs)', language: 'en', url: 'https://cdn.example/en.vtt', format: 'vtt' },
+    ] })
+    expect(parsed.subtitles).toHaveLength(2)
+    // Served files follow the app origin scheme (http in dev).
+    expect(subtitlesResponseSchema.safeParse({ subtitles: [
+      { id: 'local', label: 'English (yify)', language: 'en', url: 'http://localhost:8080/v1/subtitles/file/abc123', format: 'vtt' },
+    ] }).success).toBe(true)
+    expect(subtitlesResponseSchema.safeParse({ subtitles: [] }).success).toBe(true)
+    expect(apiErrorResponseSchema.safeParse({ error: { code: 'SUBTITLES_UNAVAILABLE', message: 'No.', requestId: 'request-1234', retryable: true } }).success).toBe(true)
   })
 
   it('carries direct caption tracks on listed providers', () => {

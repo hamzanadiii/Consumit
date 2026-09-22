@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
-import { CatalogGrid, CatalogStaleNotice, CatalogUnavailableScreen, detailMeta, heroMeta, makerByline } from './catalog-ui'
+import { CatalogGrid, CatalogUnavailableScreen, detailMeta, heroMeta, makerByline } from './catalog-ui'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -16,14 +16,6 @@ describe('catalog UI', () => {
     expect(screen.getByRole('link', { name: 'Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
     expect(screen.getByRole('img', { name: 'Arrival poster' })).toBeInTheDocument()
     expect(screen.queryByText(/taste match|% match|TMDB rating/i)).not.toBeInTheDocument()
-  })
-
-  it('only announces stale catalog data when the response is stale', () => {
-    const meta = { fetchedAt: '2026-09-06T00:00:00.000Z', language: 'en-US', region: 'US', source: 'tmdb' as const, stale: false }
-    const { rerender } = render(<CatalogStaleNotice meta={meta} />)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    rerender(<CatalogStaleNotice meta={{ ...meta, stale: true }} />)
-    expect(screen.getByRole('status')).toHaveTextContent('saved catalog data')
   })
 
   it('turns a missing server catalog configuration into a useful product state', () => {

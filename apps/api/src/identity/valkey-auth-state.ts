@@ -158,15 +158,22 @@ function stateFailure(error: unknown): IdentityError {
 
 export function createValkeyAuthState(url: string, codePepper: string): AuthStateStore {
   const client = new Valkey(url, {
+    commandTimeout: 3_000,
     connectTimeout: 3_000,
     enableAutoPipelining: true,
     enableOfflineQueue: false,
+    lazyConnect: true,
     maxRetriesPerRequest: 1,
   })
   client.on('error', () => {})
+  // The first auth request can arrive before the socket is ready. Share the
+  // initial handshake without queuing commands across later outages.
+  const ready = client.connect()
+  void ready.catch(() => undefined)
 
   async function run<T>(work: () => Promise<T>): Promise<T> {
     try {
+      if (client.status !== 'ready') await ready
       return await work()
     } catch (error) {
       throw stateFailure(error)

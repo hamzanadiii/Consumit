@@ -40,6 +40,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
         id: randomUUID(),
         passwordHash: input.passwordHash,
         profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, location: null, username: input.username, usernameChangedAt: now, visibility: 'private' },
+        role: 'MEMBER',
         status: 'ACTIVE',
       }
       byId.set(record.id, record)
@@ -61,8 +62,9 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
           displayName: member.profile.displayName,
           email: member.email,
           emailVerified: member.emailVerifiedAt !== null,
-          username: member.profile.username,
           id: member.id,
+          role: member.role === 'ADMIN' ? 'admin' : 'member',
+          username: member.profile.username,
         },
         profile: {
           avatarStyle: member.profile.avatarStyle,
@@ -98,6 +100,16 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
     },
     async isUsernameAvailable(username) {
       return !byUsername.has(username) && !aliases.has(username)
+    },
+    async listAll(limit = 50, offset = 0) {
+      const active = [...byId.values()].filter((m) => m.status === 'ACTIVE')
+      return { members: active.slice(offset, offset + limit).map(copy), total: active.length }
+    },
+    async setRole(memberId, role) {
+      const member = byId.get(memberId)
+      if (!member || member.status !== 'ACTIVE') return null
+      member.role = role
+      return copy(member)
     },
     async tombstone(memberId) {
       const member = byId.get(memberId)

@@ -83,15 +83,32 @@ describe('playback controller', () => {
     expect(fatal).toHaveBeenCalledOnce()
     controller.destroy()
   })
-  it('appends late external subtitles without reloading media', async () => {
+  it('reports a declined recovery immediately without waiting', async () => {
+    vi.useFakeTimers()
+    const adapter = engine()
+    let events: EngineEvents | undefined
+    const fatal = vi.fn()
+    const controller = createPlaybackController(media(), { change: vi.fn(), fatal }, async (_video, _source, callbacks) => { events = callbacks; return adapter })
+    await controller.load(source)
+    events?.fatal('gone')
+    // The controller always asks the engine first; a declining engine means
+    // no 3s recovery wait before the application fallback.
+    expect(adapter.recover).toHaveBeenCalledOnce()
+    expect(fatal).toHaveBeenCalledOnce()
+    expect(fatal).toHaveBeenCalledWith('gone')
+    controller.destroy()
+  })
+  it('leaves external subtitles to the merged list instead of the load', async () => {
     const video = media(); const adapter = engine()
     const change = vi.fn()
     const controller = createPlaybackController(video, { change, fatal: vi.fn() }, async (_video, _source, events) => {
       events.tracks({ qualities: [], audio: [], subtitles: [] })
       return adapter
     })
+    // Source loads carry no tracks by themselves; the caller merges the
+    // source tracks with every aggregated extra track in one call.
     await controller.load({ ...source, subtitles: [{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }] })
-    expect(video.querySelectorAll('track')).toHaveLength(1)
+    expect(video.querySelectorAll('track')).toHaveLength(0)
     controller.externalSubtitles([
       { id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' },
       { id: 'b', label: 'B', language: 'fr', url: 'https://media.example/b.vtt' },
@@ -107,6 +124,47 @@ describe('playback controller', () => {
     expect(video.querySelectorAll('track')).toHaveLength(1)
     // ...and falls back to the language preference when it disappears.
     expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'off' }))
+    controller.destroy()
+  })
+  it('keeps the shared subtitle menu across source switches', async () => {
+    const video = media(); const adapter = engine()
+    const change = vi.fn()
+    const controller = createPlaybackController(video, { change, fatal: vi.fn() }, async (_video, _source, events) => {
+      events.tracks({ qualities: [], audio: [], subtitles: [] })
+      return adapter
+    })
+    await controller.load(source)
+    const shared = [
+      { id: 'server-a-en', label: 'English (server-a)', language: 'en', url: 'https://media.example/a-en.vtt' },
+      { id: 'yify-en', label: 'English (yify)', language: 'en', url: 'https://subs.example/yify-en.vtt' },
+    ]
+    controller.externalSubtitles(shared)
+    expect(video.querySelectorAll('track')).toHaveLength(2)
+    controller.subtitle('external:consumit-external-yify-en')
+    // Switching servers reloads media but must never wipe the menu: the
+    // caller re-passes the merged list and the film-picked track survives.
+    await controller.load({ ...source, src: 'https://media.example/two.mp4' })
+    controller.externalSubtitles(shared)
+    expect(video.querySelectorAll('track')).toHaveLength(2)
+    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'external:consumit-external-yify-en' }))
+    controller.destroy()
+  })
+  it('accepts same-origin served subtitle files over plain http', async () => {
+    const video = media(); const adapter = engine()
+    const change = vi.fn()
+    const controller = createPlaybackController(video, { change, fatal: vi.fn() }, async (_video, _source, events) => {
+      events.tracks({ qualities: [], audio: [], subtitles: [] })
+      return adapter
+    })
+    await controller.load(source)
+    const host = window.location.hostname
+    controller.externalSubtitles([
+      { id: 'served', label: 'English (yify)', language: 'en', url: `http://${host}/v1/subtitles/file/abc123` },
+    ])
+    expect(video.querySelectorAll('track')).toHaveLength(1)
+    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitles: expect.arrayContaining([
+      expect.objectContaining({ value: 'external:consumit-external-served' }),
+    ]) }))
     controller.destroy()
   })
   it('disposes late attachments and never lets old loads replace a newer source', async () => {

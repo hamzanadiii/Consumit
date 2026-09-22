@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   output: 'standalone',
   outputFileTracingRoot: `${process.cwd()}/../..`,
   images: {
@@ -13,6 +14,11 @@ const nextConfig: NextConfig = {
       {
         hostname: 'www.themoviedb.org',
         pathname: '/assets/**',
+        protocol: 'https',
+      },
+      {
+        hostname: 's4.anilist.co',
+        pathname: '/file/anilistcdn/**',
         protocol: 'https',
       },
     ],

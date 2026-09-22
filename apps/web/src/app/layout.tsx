@@ -7,6 +7,7 @@ import { siteUrl } from '@/lib/site'
 import { getServerSession } from '@/lib/identity-server'
 
 import { SessionProvider } from './session/session'
+import { THEME_INIT_SCRIPT } from './home/filscreen-theme'
 
 const siteDescription = 'Watch immediately, remember what you love, and discover through people whose taste you trust.'
 
@@ -33,7 +34,12 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const session = await getServerSession()
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Pre-paint FilScreen theme: runs before first paint so stored light
+            mode never flashes dark (including the loading fallback). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <SessionProvider initialMember={session.member} initialStatus={session.status}>
           {children}

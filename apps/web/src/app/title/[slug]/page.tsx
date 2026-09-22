@@ -5,6 +5,7 @@ import { TitleDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
 import { CatalogApiError, getCatalogTitle } from '@/lib/catalog-api'
+import { serializeJsonLd } from '@/lib/json-ld'
 
 type TitleDetailPageProps = {
   params: Promise<{ slug: string }>
@@ -50,8 +51,8 @@ export default async function TitleDetailPage({ params }: TitleDetailPageProps) 
   }
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} type="application/ld+json" />
-      <TitleDetailScreen detail={response.item} stale={response.meta.stale} />
+      <script dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} type="application/ld+json" />
+      <TitleDetailScreen detail={response.item} />
     </>
   )
 }

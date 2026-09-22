@@ -67,7 +67,7 @@ export function createNetmirrorProvider(http: ProviderHttp, now = Date.now) {
     if (Array.isArray(data.streams)) {
       for (let idx = 0; idx < data.streams.length; idx++) {
         const str = data.streams[idx]
-        if (!str.url) continue
+        if (!str?.url) continue
         const type = mediaType(str.url) || 'hls'
         const res = str.resolution
         const qualityHint = res ? `${res}p` : 'Auto'

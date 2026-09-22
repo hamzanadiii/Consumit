@@ -1,29 +1,47 @@
 'use client'
 
 import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary } from '@consumit/contracts'
-import { ArtworkFrame, Button } from '@consumit/ui'
-import { ArrowLeft, ArrowRight, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { ArtworkFrame, Button, Select } from '@consumit/ui'
+import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { useCatalogFeed } from './use-catalog-feed'
 
 function BrowsePoster({ title }: { title: CatalogTitleSummary }) {
+  const rating = title.tmdbRating === null ? null : title.tmdbRating.toFixed(1)
   return (
-    <li className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]">
-      <Link aria-label={title.title} className="group block rounded-card outline-none" href={titleHref(title)} prefetch={false}>
-        <ArtworkFrame alt="" className="group-focus-visible:outline-2 group-focus-visible:-outline-offset-2 group-focus-visible:outline-orange" src={title.posterUrl ?? undefined}>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/65 to-transparent px-3 pt-12 pb-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            <p className="line-clamp-3 text-sm font-bold text-white">{title.title}</p>
-            {title.year ? <p className="mt-1 text-xs text-white/80">{title.year}</p> : null}
+    <li className="min-w-0 w-40 shrink-0 snap-start sm:w-44 lg:w-48 [content-visibility:auto] [contain-intrinsic-size:auto_300px]">
+      <Link
+        aria-label={`${title.title}${title.year ? `, ${title.year}` : ''}`}
+        className="group block rounded-card outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+        href={titleHref(title)}
+        prefetch={false}
+      >
+        <ArtworkFrame
+          alt={`${title.title} poster`}
+          className="transition-colors duration-200 group-hover:border-[var(--fs-accent)] motion-reduce:transition-none"
+          ratio="portrait"
+          src={title.posterUrl ?? undefined}
+        >
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+            <p className="truncate text-sm font-bold text-white">{title.title}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-white/80 tabular-nums">
+              {title.year ? <span>{title.year}</span> : null}
+              {rating ? (
+                <span className="inline-flex items-center gap-1 font-bold text-white">
+                  <Star aria-hidden="true" className="size-3 fill-current" />
+                  {rating}
+                  <span className="sr-only">on TMDB</span>
+                </span>
+              ) : null}
+            </p>
           </div>
-          {!title.posterUrl ? <p className="absolute inset-x-3 top-3 text-sm font-bold text-ink">{title.title}</p> : null}
+          {!title.posterUrl ? <p className="absolute inset-x-3 top-3 text-sm font-bold text-[var(--fs-ink)]">{title.title}</p> : null}
         </ArtworkFrame>
-        <p aria-hidden="true" className="mt-3 truncate text-sm font-bold text-ink group-hover:text-orange">{title.title}</p>
       </Link>
-      <p className="mt-1 text-xs text-muted">{[title.year, title.genreNames[0]].filter(Boolean).join(' · ')}</p>
     </li>
   )
 }
@@ -35,28 +53,46 @@ function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: Cat
     const rail = railRef.current
     rail?.scrollBy({ left: rail.clientWidth * 0.8 * direction, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
   }
+  const scrollButtonClass = 'grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
   return (
     <section aria-labelledby="featured-heading" className="mb-10 sm:mb-12">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-base font-bold text-ink" id="featured-heading">{kind === 'movie' ? 'Now playing' : 'On air'}</h2>
-        <div className="flex gap-1">
-          <Button aria-label="Scroll featured titles left" onClick={() => move(-1)} size="icon" variant="ghost"><ArrowLeft aria-hidden="true" /></Button>
-          <Button aria-label="Scroll featured titles right" onClick={() => move(1)} size="icon" variant="ghost"><ArrowRight aria-hidden="true" /></Button>
+        <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)] sm:text-3xl" id="featured-heading">{kind === 'movie' ? 'Now Playing' : 'Trending Now'}</h2>
+        <div className="flex gap-1.5">
+          <button aria-label="Scroll featured titles left" className={scrollButtonClass} onClick={() => move(-1)} type="button"><ArrowLeft aria-hidden="true" className="size-4" /></button>
+          <button aria-label="Scroll featured titles right" className={scrollButtonClass} onClick={() => move(1)} type="button"><ArrowRight aria-hidden="true" className="size-4" /></button>
         </div>
       </div>
-      <ul className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain py-1 pr-1 pb-3 sm:gap-4" ref={railRef} style={{ scrollbarWidth: 'none' }}>
-        {items.slice(0, 10).map((title) => (
-          <li className="w-[76%] max-w-[20rem] shrink-0 snap-start sm:w-[36%] lg:w-[27%] xl:w-[23%]" key={`${title.kind}:${title.id}`}>
-            <Link aria-label={title.title} className="group block rounded-card outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset" href={titleHref(title)} prefetch={false}>
-              <ArtworkFrame alt="" ratio="landscape" src={title.backdropUrl ?? title.posterUrl ?? undefined}>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pt-10 pb-3">
-                  <p className="line-clamp-2 text-sm font-bold text-white">{title.title}</p>
-                  {title.year ? <p className="mt-1 text-xs text-white/80">{title.year}</p> : null}
-                </div>
-              </ArtworkFrame>
-            </Link>
-          </li>
-        ))}
+      <ul className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain py-1 pr-1 pb-3 sm:gap-5" ref={railRef} style={{ scrollbarWidth: 'none' }}>
+        {items.slice(0, 10).map((title) => {
+          const rating = title.tmdbRating === null ? null : title.tmdbRating.toFixed(1)
+          return (
+            <li className="w-[85%] max-w-[26rem] shrink-0 snap-start sm:w-[52%] lg:w-[38%] xl:w-[32%]" key={`${title.kind}:${title.id}`}>
+              <Link aria-label={title.title} className="group block overflow-hidden rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] shadow-sm outline-none transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none" href={titleHref(title)} prefetch={false}>
+                <ArtworkFrame alt="" className="rounded-none border-0" ratio="landscape" src={title.backdropUrl ?? title.posterUrl ?? undefined}>
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent opacity-60" />
+                  <div className="absolute inset-x-0 bottom-0 p-4 pt-8">
+                    <p className="truncate font-display text-lg leading-tight text-white transition-colors duration-150 group-hover:text-[var(--fs-accent)] sm:text-xl">{title.title}</p>
+                    <p className="mt-1.5 flex items-center gap-2 text-xs tabular-nums text-white/80 sm:text-sm">
+                      {title.year ? <span>{title.year}</span> : null}
+                      {title.year && (rating || title.genreNames[0]) ? <span aria-hidden="true">·</span> : null}
+                      {rating ? (
+                        <span className="inline-flex items-center gap-1 font-bold text-white">
+                          <Star aria-hidden="true" className="size-3.5 fill-current text-[#ffb800]" />
+                          {rating}
+                          <span className="sr-only">score</span>
+                        </span>
+                      ) : null}
+                      {rating && title.genreNames[0] ? <span aria-hidden="true">·</span> : null}
+                      {title.genreNames[0] ? <span>{title.genreNames[0]}</span> : null}
+                    </p>
+                  </div>
+                </ArtworkFrame>
+              </Link>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
@@ -66,40 +102,36 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
   const { page, loading, error, hasMore, loadMore, sentinelRef } = useCatalogFeed(query, initialPage)
   return (
     <section aria-labelledby="browse-results-heading">
-      <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-border pb-4">
-        <h2 className="text-base font-bold text-ink" id="browse-results-heading">{query.feed === 'top-rated' ? 'Top rated' : 'Popular now'}</h2>
-        <p className="text-xs text-muted" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
+      <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-[var(--fs-line)] pb-4">
+        <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="browse-results-heading">{query.feed === 'top-rated' ? 'Top rated' : 'Popular now'}</h2>
+        <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
       </div>
-      {page?.meta.stale ? <p className="mb-4 text-sm text-muted">Showing saved catalog results. Some details may have changed.</p> : null}
+      {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
         {page?.items.map((title) => <BrowsePoster key={`${title.kind}:${title.id}`} title={title} />)}
-        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-card bg-surface-raised motion-reduce:animate-none" key={`loading-${index}`} />) : null}
+        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && page?.items.length === 0 ? (
         <div className="py-16 text-center">
-          <h3 className="font-display text-2xl text-ink">No titles found</h3>
-          <p className="mt-3 mb-6 text-sm text-muted">Try another genre or year to find something to watch.</p>
+          <h3 className="font-display text-2xl text-[var(--fs-ink)]">No titles found</h3>
+          <p className="mt-3 mb-6 text-sm text-[var(--fs-muted)]">Try another genre or year to find something to watch.</p>
           <Button onClick={reset} variant="secondary">Clear filters</Button>
         </div>
       ) : null}
       <div className="flex min-h-40 flex-col items-center justify-center gap-4 py-10" ref={sentinelRef}>
-        {error ? <p className="max-w-md text-center text-sm text-copy" role="alert">We couldn’t load {page ? 'more' : 'these'} titles. Please try again.</p> : null}
+        {error ? <p className="max-w-md text-center text-sm text-[var(--fs-ink)]" role="alert">We couldn’t load {page ? 'more' : 'these'} titles. Please try again.</p> : null}
         {hasMore ? <Button loading={loading} onClick={() => void loadMore()} variant="secondary">{loading ? 'Loading titles…' : error ? 'Try again' : 'Load more'}</Button> : null}
-        {!hasMore && (page?.items.length ?? 0) > 0 ? <p className="text-sm text-muted">You’re all caught up. Try another genre or year.</p> : null}
+        {!hasMore && (page?.items.length ?? 0) > 0 ? <p className="text-sm text-[var(--fs-muted)]">You’re all caught up. Try another genre or year.</p> : null}
       </div>
     </section>
   )
 }
 
-function BrowseSelect({ children, label, onChange, value }: { children: ReactNode; label: string; onChange: (value: string) => void; value: string }) {
+function BrowseSelect({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: readonly { label: string; value: string }[]; value: string }) {
   return (
-    <label className={`relative min-w-0 flex-1 sm:flex-none ${label === 'Genre' ? 'max-[359px]:col-span-2' : ''}`}>
-      <span className="sr-only">{label}</span>
-      <select className="h-11 w-full appearance-none rounded-control border border-control-outline bg-surface py-2 pr-6 pl-2 text-ink outline-none hover:border-muted focus-visible:ring-2 focus-visible:ring-orange sm:max-w-48 sm:min-w-32 sm:pr-9 sm:pl-3" onChange={(event) => onChange(event.target.value)} style={{ fontSize: '0.875rem' }} title={value || label} value={value}>
-        {children}
-      </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute top-3.5 right-2 size-4 text-muted sm:right-3" />
-    </label>
+    <div className="min-w-0 flex-1 sm:w-44 sm:flex-none">
+      <Select hideLabel label={label} onValueChange={onChange} options={options} placeholder={label} value={value} />
+    </div>
   )
 }
 
@@ -112,17 +144,17 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
   const isDefault = !genre && !year && feed === 'popular'
   function reset() { setGenre(''); setYear(''); setFeed('popular') }
   return (
-    <main className="consumit-catalog-browse mx-auto w-full max-w-[90rem] px-5 pt-9 pb-8 sm:px-8 sm:pt-12 lg:px-[50px]">
+    <main className="consumit-catalog-browse w-full">
       <div className="mb-7 flex flex-col gap-6 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
         <div className="shrink-0">
-          <h1 className="font-display text-[2.75rem] leading-tight tracking-[-0.025em] text-ink sm:text-5xl">{kind === 'movie' ? 'Movies' : 'Series'}<span className="text-orange">.</span></h1>
-          <p className="mt-2 text-sm text-muted">{kind === 'movie' ? 'Find your next great watch.' : 'Find your next can’t-stop-watching.'}</p>
+          <h1 className="font-display text-[2.75rem] leading-tight tracking-[-0.025em] text-[var(--fs-ink)] sm:text-5xl">{kind === 'movie' ? 'Movies' : 'Series'}<span className="text-[var(--fs-accent)]">.</span></h1>
+          <p className="mt-2 text-sm text-[var(--fs-muted)]">{kind === 'movie' ? 'Find your next great watch.' : 'Find your next can’t-stop-watching.'}</p>
         </div>
         <div aria-label="Filter titles" className="grid grid-cols-3 items-center gap-2 max-[359px]:grid-cols-2 sm:flex sm:flex-wrap" role="group">
-          <SlidersHorizontal aria-hidden="true" className="mr-2 hidden size-4 text-muted xl:block" />
-          <BrowseSelect label="Genre" onChange={setGenre} value={genre}><option value="">Genre</option>{genres.map((name) => <option key={name} value={name}>{name}</option>)}</BrowseSelect>
-          <BrowseSelect label="Year" onChange={setYear} value={year}><option value="">Year</option>{Array.from({ length: currentYear - 1899 }, (_, index) => currentYear + 1 - index).map((value) => <option key={value} value={value}>{value}</option>)}</BrowseSelect>
-          <BrowseSelect label="Sort by" onChange={(value) => setFeed(value === 'top-rated' ? 'top-rated' : 'popular')} value={feed}><option value="popular">Popular</option><option value="top-rated">Top rated</option></BrowseSelect>
+          <SlidersHorizontal aria-hidden="true" className="mr-2 hidden size-4 text-[var(--fs-muted)] xl:block" />
+          <BrowseSelect label="Genre" onChange={setGenre} options={[{ label: 'All genres', value: '' }, ...genres.map((name) => ({ label: name, value: name }))]} value={genre} />
+          <BrowseSelect label="Year" onChange={setYear} options={[{ label: 'All years', value: '' }, ...Array.from({ length: currentYear - 1899 }, (_, index) => currentYear + 1 - index).map((value) => ({ label: String(value), value: String(value) }))]} value={year} />
+          <BrowseSelect label="Sort by" onChange={(value) => setFeed(value === 'top-rated' ? 'top-rated' : 'popular')} options={[{ label: 'Popular', value: 'popular' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
           {!isDefault ? <Button className="col-span-3 justify-self-end max-[359px]:col-span-2" onClick={reset} size="sm" variant="ghost">Reset</Button> : null}
         </div>
       </div>

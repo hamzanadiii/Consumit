@@ -1,0 +1,8 @@
+name = "consumit-proxy"
+main = "index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+# ALLOWED_DOMAINS = "example.com,*.example.com"
+# These are set as secrets in production:
+# HMAC_SECRET, ALLOWED_DOMAINS

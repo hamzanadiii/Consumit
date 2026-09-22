@@ -1,11 +1,42 @@
 import type { ReactNode } from 'react'
 
-import { titleHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
+import { titleHref } from '@consumit/contracts'
 import { LockKeyhole } from 'lucide-react'
 import Link from 'next/link'
 
 import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
 import { WatchPlayback } from './watch-playback'
+
+/** Minimal title surface the Watch screens need. Movie/series catalog
+ *  details and anime details both satisfy it; anime titles map their
+ *  AniList fields onto it at the route boundary so watch identity,
+ *  progress, and navigation stay honest per kind. */
+export type WatchTitle = {
+  kind: 'movie' | 'series' | 'anime'
+  id: number
+  title: string
+  year?: number | null | undefined
+  overview?: string | null | undefined
+  posterUrl?: string | null | undefined
+  backdropUrl?: string | null | undefined
+  logoUrl?: string | null | undefined
+  runtimeMinutes?: number | null | undefined
+  episodeRuntimeMinutes?: number | null | undefined
+  tmdbRating?: number | null | undefined
+  certification?: string | null | undefined
+  contentRating?: string | null | undefined
+}
+
+/** Minimal episode surface. Series episodes carry a season; anime episodes
+ *  are identified by canonical number alone. */
+export type WatchEpisode = {
+  title: string
+  seasonNumber?: number | undefined
+  episodeNumber: number
+  overview?: string | null | undefined
+  runtimeMinutes?: number | null | undefined
+  stillUrl?: string | null | undefined
+}
 
 export type WatchDemoPlayback = {
   caption?: string | undefined
@@ -15,12 +46,22 @@ export type WatchDemoPlayback = {
   topMeta?: ReactNode | undefined
 }
 
+/** Lab `?provider=` pin: provider ids use the config id shape. Anything
+ *  else is ignored so junk query values never reach the switch call. */
+export function sanitizePinnedProvider(value: unknown): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value
+  return typeof first === 'string' && /^[a-z0-9-]{1,40}$/.test(first) ? first : undefined
+}
+
 type WatchScreenProps = {
   interactive?: boolean
   nextHref?: string | undefined
+  prevHref?: string | undefined
   demo?: WatchDemoPlayback | undefined
-  episode?: CatalogEpisode | undefined
-  title: CatalogTitleDetail
+  episode?: WatchEpisode | undefined
+  title: WatchTitle
+  audioLanguage?: string | undefined
+  pinnedProvider?: string | undefined
 }
 
 /**
@@ -28,11 +69,11 @@ type WatchScreenProps = {
  * pass `demo`: with no configured source the screen stays in its honest
  * unavailable branch and loads no media, demo clip, trailer, or embed.
  */
-export function WatchScreen({ demo, episode, title, interactive = false, nextHref }: WatchScreenProps) {
-  if (interactive && !demo) return <WatchPlayback key={`${title.kind}:${title.id}:${episode?.seasonNumber}:${episode?.episodeNumber}`} title={title} episode={episode} nextHref={nextHref} />
+export function WatchScreen({ audioLanguage, demo, episode, title, interactive = false, nextHref, prevHref, pinnedProvider }: WatchScreenProps) {
+  if (interactive && !demo) return <WatchPlayback key={`${title.kind}:${title.id}:${episode?.seasonNumber ?? 0}:${episode?.episodeNumber}`} title={title} episode={episode} nextHref={nextHref} prevHref={prevHref} {...(audioLanguage ? { audioLanguage } : {})} {...(pinnedProvider ? { pinnedProvider } : {})} />
   const displayTitle = episode ? `${title.title} · ${episode.title}` : title.title
   const meta = episode
-    ? `Season ${episode.seasonNumber} · Episode ${episode.episodeNumber}${episode.runtimeMinutes ? ` · ${episode.runtimeMinutes} min` : ''}`
+    ? [episode.seasonNumber != null ? `Season ${episode.seasonNumber}` : null, `Episode ${episode.episodeNumber}`, episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null].filter(Boolean).join(' · ')
     : [title.year, title.kind === 'movie' && title.runtimeMinutes ? `${title.runtimeMinutes} min` : 'Movie'].filter(Boolean).join(' · ')
   const poster = episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined
   const hasDemo = demo != null

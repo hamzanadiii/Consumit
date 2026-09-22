@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deviceAutoCapHeight, formatPlaybackTime, isSafeMediaUrl } from './media-source'
+import { audioTrackLabel, deviceAutoCapHeight, formatPlaybackTime, isSafeMediaUrl } from './media-source'
 
 describe('media-source seam', () => {
   it('accepts authorized https delivery URLs', () => {
@@ -34,5 +34,18 @@ describe('media-source seam', () => {
     expect(deviceAutoCapHeight({ width: 1920, height: 1080 })).toBe(Number.POSITIVE_INFINITY)
     expect(deviceAutoCapHeight({ width: 0, height: 0 })).toBe(Number.POSITIVE_INFINITY)
     expect(deviceAutoCapHeight({ width: Number.NaN, height: 800 })).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('names generic audio renditions without inventing languages', () => {
+    // Real names and language tags pass through untouched.
+    expect(audioTrackLabel({ name: 'English', lang: 'en' }, 0)).toBe('English')
+    expect(audioTrackLabel({ name: '', lang: 'Deutsch' }, 1)).toBe('Deutsch')
+    // Upstream Numbered placeholders ("Audio 1".."Audio N", no LANGUAGE):
+    // the manifest default becomes Main audio, the rest keep numbers.
+    expect(audioTrackLabel({ name: 'Audio 1', isDefault: true }, 0)).toBe('Main audio')
+    expect(audioTrackLabel({ name: 'Audio 2' }, 1)).toBe('Audio 2')
+    expect(audioTrackLabel({ name: 'AUDIO 10' }, 9)).toBe('AUDIO 10')
+    expect(audioTrackLabel({}, 4)).toBe('Audio 5')
+    expect(audioTrackLabel({ name: '  ' }, 2)).toBe('Audio 3')
   })
 })

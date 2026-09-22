@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,6 +38,7 @@ const member = {
   email: 'member@example.com',
   emailVerified: true,
   id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca',
+  role: 'member',
   username: 'hamzanadi',
 } as const
 
@@ -54,6 +55,33 @@ const profile: MemberProfile = {
   usernameChangedAt: null,
   visibility: 'private',
 }
+
+describe('settings preferred subtitle languages', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  function renderSettings() {
+    render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
+  }
+
+  it('picks up to three languages in priority order and persists them', async () => {
+    const user = userEvent.setup()
+    renderSettings()
+    const group = screen.getByRole('group', { name: 'Preferred subtitle languages' })
+
+    await user.click(within(group).getByRole('button', { name: /العربية/ }))
+    await user.click(within(group).getByRole('button', { name: /Français/ }))
+    await user.click(within(group).getByRole('button', { name: /Español/ }))
+    expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'fr', 'es'])
+    expect(screen.getByText('3/3 · subtitles are fetched in these languages first, in order.')).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /Deutsch/ })).toBeDisabled()
+
+    await user.click(within(group).getByRole('button', { name: /Français/ }))
+    expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'es'])
+    expect(within(group).getByRole('button', { name: /Deutsch/ })).toBeEnabled()
+  })
+})
 
 describe('settings avatar portrait picker', () => {
   beforeEach(() => {

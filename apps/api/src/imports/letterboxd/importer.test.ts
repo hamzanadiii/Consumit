@@ -6,7 +6,7 @@ import { createLetterboxdImporter } from './importer.ts'
 import { createMemoryLetterboxdImportRepository } from './memory-repository.ts'
 
 const movie = (id: number, title: string, year: number): CatalogMovieDetail => ({
-  backdropUrl: null, cast: [], certification: null, countries: [], creators: [], genreNames: [], homepageUrl: null,
+  backdropUrl: null, cast: [], certification: null, countries: [], creators: [], genreNames: [], heroBackdropUrl: null, homepageUrl: null,
   id, kind: 'movie', languages: [], logoUrl: null, originalTitle: title, overview: '', popularity: 1, posterUrl: null,
   recommendations: [], releaseDate: `${year}-01-01`, runtimeMinutes: 120, status: 'Released', tagline: null,
   title, tmdbRating: null, tmdbVoteCount: 0, year,

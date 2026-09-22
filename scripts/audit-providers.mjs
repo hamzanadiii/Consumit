@@ -69,7 +69,7 @@ for (const dir of (await readdir(base, { withFileTypes: true })).sort((a, b) => 
   const checks = rows.flatMap((row) => Object.values(row.servers ?? {}).flatMap((server) => server.checked ?? []))
   const note = notes[dir.name] ?? ['Unreviewed', 'Unknown', 'Unknown', 'New provider requires manual review.']
   providers.push({ id: dir.name, registeredInExample: bootstrap.includes(`providers/${dir.name}/`), status: 'disabled',
-    consumitAdapter: ['vixsrc', 'vidrock', 'nhdapi', 'vaplayer', 'vidcore', 'stellar'].includes(dir.name) ? 'ported; activation gated; see docs/PROVIDERS.md' : 'not ported',
+    consumitAdapter: ['vixsrc', 'vidrock', 'nhdapi', 'vaplayer', 'stellar'].includes(dir.name) ? 'ported; activation gated; see docs/PROVIDERS.md' : 'not ported',
     delivery: dir.name === 'stellar' ? 'direct (CORS-open)' : dir.name === 'vidsrc' || dir.name === 'vidfast' || dir.name === 'insertunit' ? 'incomplete' : 'relay-required (declared; unverified)',
     support: note[0], formats: note[1], language: note[2], notes: note[3],
     expiry: dir.name === 'vixsrc' ? 'Explicit token expiry, not normalized by legacy contract' : 'No validated playback expiry contract',
@@ -81,7 +81,7 @@ const output = resolve('docs/provider-audit.json')
 await mkdir(dirname(output), { recursive: true })
 await writeFile(output, JSON.stringify({ source: 'provider_example', method: 'Static source and supplied historical audit; no live probes', providers }, null, 2) + '\n')
 const table = ['# Provider matrix', '', 'Source: `provider_example/`. Rebuild with `node scripts/audit-providers.mjs`. Full dependency, host, provenance hashes, and missing-import evidence are in [provider-audit.json](./provider-audit.json).', '',
-  'All 26 handoff directories remain excluded from runtime imports. Twenty-three are registered by the example service. Its TypeScript alias supplies `@omss/framework`; the old `providers/registry.ts` and legacy wrappers still contain broken imports. Consumit has separate ports of VixSrc, VidRock, NHD API, VAPlayer, and VidCore Cineplay; activation remains gated. See [PROVIDERS.md](./PROVIDERS.md) for current integration and live diagnostic evidence. No license/provenance grant was supplied for adoption.', '',
+  'All 26 handoff directories remain excluded from runtime imports. Twenty-three are registered by the example service. Its TypeScript alias supplies `@omss/framework`; the old `providers/registry.ts` and legacy wrappers still contain broken imports. Consumit has separate ports of VixSrc, VidRock, NHD API, and VAPlayer; activation remains gated. See [PROVIDERS.md](./PROVIDERS.md) for current integration and live diagnostic evidence. No license/provenance grant was supplied for adoption.', '',
   'Delivery classification reflects explicit source headers/proxy calls, not proven necessity. Resolution Referer alone is not evidence that media requires a relay. No integration currently qualifies as verified direct-compatible. VidFast iframe output is excluded. Other incomplete entries require repair before probes.', '',
   'Historical “ok/checks” below are undated URL probes, not playback success rates, episode coverage, browser compatibility, or approval. Zero checks means no evidence. Expiry and caller cancellation are missing across the shared contract; VixSrc alone parses explicit token expiry. Language values are claims, not verified tracks.', '',
   '| Identity | Delivery | Movie/episode support | Formats | Audio evidence | Historical ok/checks | Gaps |',

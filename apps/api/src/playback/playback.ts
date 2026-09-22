@@ -3,10 +3,11 @@ import { metrics } from '@opentelemetry/api'
 import { playbackProviderListSchema, playbackSessionSchema, type PlaybackEvents, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type ResolvePlaybackRequest } from '@consumit/contracts'
 import { sourceIdentity, type ProviderRegistration } from '@consumit/provider-sdk'
 import { ApiError } from '../http/errors.ts'
+import { createEmbedToken } from './embed-tokens.ts'
 import { collectSubtitleCandidates, createResolver, dedupeSubtitleTracks, type ResolvedSource, type SubtitleCandidate } from './resolver.ts'
 import type { PlaybackStore } from './state.ts'
 
-type SessionRecord = { owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; group: string }
+type SessionRecord = { owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; group: string; fallbackAt?: number[] }
 export interface Playback {
   resolve(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackSession>
   recover(owner: string, id: string, failure: PlaybackFailureRequest, refresh: boolean, signal: AbortSignal): Promise<PlaybackSession>
@@ -15,14 +16,29 @@ export interface Playback {
   events(owner: string, id: string, events: PlaybackEvents): Promise<void>
 }
 const unavailable = () => new ApiError('PLAYBACK_UNAVAILABLE', 'No compatible playback source is available.', { retryable: true })
+// Signed upstream URLs live 5–30 minutes while a title plays for hours, so
+// mid-stream re-resolution is routine. Bound automatic provider switches to a
+// rolling window (not a session-lifetime total) so a long watch never dies
+// after three early switches, while a true outage still stops quickly.
+export const MAX_FALLBACKS_PER_WINDOW = 3
+export const FALLBACK_WINDOW_MS = 10 * 60_000
+function prunedFallbacks(fallbackAt: readonly number[] | undefined, now = Date.now()): number[] {
+  if (!Array.isArray(fallbackAt)) return []
+  return fallbackAt.filter((stamp) => typeof stamp === 'number' && Number.isFinite(stamp) && now - stamp < FALLBACK_WINDOW_MS)
+}
 
-export function createPlayback({ providers, store, region }: { providers: readonly ProviderRegistration[]; store: PlaybackStore; region: string }): Playback {
+export function createPlayback({ providers, store, region, workerUrl, hmacSecret }: { providers: readonly ProviderRegistration[]; store: PlaybackStore; region: string; workerUrl?: string | undefined; hmacSecret?: string | undefined }): Playback {
   // The resolver gates every source on hostile-output validation
   // (schema, expiry, allowlisted https media, no credentials/transforms).
   const resolver = createResolver(providers, { region, store })
+  const providerHealth = (input: ResolvePlaybackRequest, providerId: string): 'ok' | 'degraded' => {
+    const state = resolver.status(input.ref.kind).find((entry) => entry.id === providerId)
+    if (!state) return 'ok'
+    return state.openUntil > Date.now() || state.failures >= 3 ? 'degraded' : 'ok'
+  }
   const events = metrics.getMeter('consumit.playback').createCounter('playback.events')
   const timing = metrics.getMeter('consumit.playback').createHistogram('playback.client.duration', { unit: 'ms' })
-  const recoveryLocks = new Set<string>()
+  const recoveryLocks = new Map<string, number>()
 
   async function read(owner: string, id: string) {
     const raw = await store.get(`session:${id}`)
@@ -38,7 +54,24 @@ export function createPlayback({ providers, store, region }: { providers: readon
     // Direct-only architecture: the session hands the browser the upstream
     // URL untouched. The resolver already gated playability, so there is
     // nothing to mint, rewrite, or lease here.
-    const src = source.url
+    // When WORKER_URL is configured, route through the CORS proxy to hide
+    // upstream URLs and bypass ISP blocks.
+    const src = workerUrl && registration.proxy
+      ? (() => {
+        const params = new URLSearchParams({ url: source.url })
+        // Forward the adapter-declared upstream headers: the worker sends
+        // its own default referer otherwise, and hotlink-guarded origins
+        // (vidcore, videasy, vidrock…) 403 anything else. Nested segments
+        // inherit them through the worker rewrite chain.
+        const headers = source.headers ?? {}
+        const referer = headers.referer ?? headers.Referer
+        if (referer) params.set('referer', referer)
+        const origin = headers.origin ?? headers.Origin
+        if (origin) params.set('origin', origin)
+        if (hmacSecret) { const workerDomain = new URL(workerUrl).hostname; params.set('token', createEmbedToken(hmacSecret, source.url, workerDomain)); }
+        return `${workerUrl}/proxy?${params.toString()}`
+      })()
+      : source.url
     // Captions aggregate across every provider that answered, plus the tracks
     // the member already had: a video fallback never takes the subtitles down
     // with it. Only upstream https WebVTT survives — legacy lease paths from
@@ -53,15 +86,16 @@ export function createPlayback({ providers, store, region }: { providers: readon
     ])
       .map(({ track }) => track)
       .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
+    const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
       id: previous?.session.id ?? randomUUID(), ref: input.ref,
-      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key), providerId: registration.adapter.id, type: source.type, src, ...(source.qualityHint ? { qualityHint: source.qualityHint } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: subtitles.filter((track) => track.format === 'vtt') },
+      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key), providerId: registration.adapter.id, type: source.type, src, ...(source.qualityHint ? { qualityHint: source.qualityHint } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: subtitles.filter((track) => track.format === 'vtt'), skipSegments: source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
-      fallbackCount: previous?.session.fallbackCount ?? 0,
-      capabilities: { refresh: true, fallback: (previous?.session.fallbackCount ?? 0) < 3, externalSubtitles: subtitles.some((track) => track.format === 'vtt') },
+      fallbackCount: windowedFallbacks.length,
+      capabilities: { refresh: true, fallback: windowedFallbacks.length < MAX_FALLBACKS_PER_WINDOW, externalSubtitles: subtitles.some((track) => track.format === 'vtt') },
     }
     playbackSessionSchema.parse(session)
-    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: registration.upstreamGroup, excluded: previous?.excluded ?? [] } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
+    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: registration.upstreamGroup, excluded: previous?.excluded ?? [], fallbackAt: windowedFallbacks } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
     return session
   }
 
@@ -72,12 +106,36 @@ export function createPlayback({ providers, store, region }: { providers: readon
       return save(owner, input, result)
     },
     async listProviders(input, signal) {
+      // Fixed server order: operator priority first, ties keep the
+      // configured file order. Only compatible providers for this media
+      // kind are listed, ordered by priority waterfall.
       const eligible = providers
-        .filter((registration) => registration.enabled && registration.approvedRegions.includes(region))
+        .filter((registration) => {
+          if (!registration.enabled || !registration.approvedRegions.includes(region)) return false
+          return (registration.mediaKinds as readonly string[]).includes(input.ref.kind)
+        })
         .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+      // Reuse cached resolution (never fresh): one Watch open must not fan out
+      // a fresh upstream resolve per provider. Fresh upstream work stays on the
+      // resolve/refresh/fallback path; the server list is a read-only snapshot
+      // that rides the same 30s resolver cache instead of hammering provider
+      // rate limits and tripping upstream IP blocks "after a while".
       const settled = await Promise.allSettled(eligible.map(async (registration) => {
-        const result = await resolver.resolve(input, signal, [], registration.adapter.id, true)
-        if (!result || signal.aborted) return null
+        const dash = registration.adapter.id.indexOf('-')
+        const base = {
+          id: registration.adapter.id, label: registration.adapter.id,
+          // Mirror families: `vidcore-nova` serves family `vidcore`,
+          // mirror `nova`; a whole-provider aggregate serves mirror `auto`.
+          family: dash === -1 ? registration.adapter.id : registration.adapter.id.slice(0, dash),
+          mirror: dash === -1 ? 'auto' : registration.adapter.id.slice(dash + 1),
+          regions: [...registration.approvedRegions],
+          health: providerHealth(input, registration.adapter.id),
+        }
+        const result = await resolver.resolve(input, signal, [], registration.adapter.id, false)
+        // The menu lists the whole fixed fleet, answering or not: members
+        // pick mirrors, not moving targets. Unavailable rows stay
+        // selectable — a tap attempts a fresh resolve and auto-advances.
+        if (!result || signal.aborted) return { ...base, available: false, subtitles: [] }
         const { source } = result
         // Pass this provider's caption tracks alongside its label so the
         // player can offer every answering provider's subtitles — not just
@@ -90,7 +148,8 @@ export function createPlayback({ providers, store, region }: { providers: readon
           .map(({ track }) => track)
           .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
         return {
-          id: registration.adapter.id, label: registration.adapter.id,
+          ...base,
+          available: true,
           detail: source.qualityHint ?? `${source.type} · ${source.language}`,
           subtitles,
         } satisfies PlaybackProvider
@@ -105,8 +164,9 @@ export function createPlayback({ providers, store, region }: { providers: readon
       return playbackProviderListSchema.parse({ providers: listed }).providers
     },
     async switchProvider(owner, id, providerId, signal) {
-      if (recoveryLocks.has(id)) throw new ApiError('CONFLICT', 'Playback is already recovering.', { retryable: true })
-      recoveryLocks.add(id)
+      const lockExpiry = recoveryLocks.get(id)
+      if (lockExpiry && lockExpiry > Date.now()) throw new ApiError('CONFLICT', 'Playback is already recovering.', { retryable: true })
+      recoveryLocks.set(id, Date.now() + 30_000)
       try {
         const record = await read(owner, id)
         const target = providers.find((registration) => registration.adapter.id === providerId && registration.enabled && registration.approvedRegions.includes(region))
@@ -123,21 +183,32 @@ export function createPlayback({ providers, store, region }: { providers: readon
       } finally { recoveryLocks.delete(id) }
     },
     async recover(owner, id, failure, refresh, signal) {
-      if (recoveryLocks.has(id)) throw new ApiError('CONFLICT', 'Playback is already recovering.', { retryable: true })
-      recoveryLocks.add(id)
+      const lockExpiry = recoveryLocks.get(id)
+      if (lockExpiry && lockExpiry > Date.now()) throw new ApiError('CONFLICT', 'Playback is already recovering.', { retryable: true })
+      recoveryLocks.set(id, Date.now() + 30_000)
       try {
         const record = await read(owner, id)
         if (record.session.source.id !== failure.sourceId) return record.session
         if (!refresh) {
-          if (record.session.fallbackCount >= 3) throw unavailable()
+          const windowed = prunedFallbacks(record.fallbackAt)
+          if (windowed.length >= MAX_FALLBACKS_PER_WINDOW) throw unavailable()
           record.excluded.push(record.group)
-          record.session.fallbackCount++
-          record.session.capabilities.fallback = record.session.fallbackCount < 3
+          windowed.push(Date.now())
+          record.fallbackAt = windowed
+          record.session.fallbackCount = windowed.length
+          record.session.capabilities.fallback = windowed.length < MAX_FALLBACKS_PER_WINDOW
           resolver.recordFailure(record.session.source.providerId, record.input.ref.kind)
           await store.set(`session:${id}`, JSON.stringify(record), (Date.parse(record.session.expiresAt) - Date.now()) / 1000)
         }
         const result = await resolver.resolve(record.input, signal, record.excluded, refresh ? record.session.source.providerId : undefined, true)
-        if (!result || signal.aborted) throw unavailable()
+        if (!result || signal.aborted) {
+          // A failed same-provider refresh still teaches the circuit breaker:
+          // without this, a dead preferred provider would be retried at full
+          // 8s cost on every expiry instead of cooling down and letting the
+          // follow-up fallback win fast.
+          if (refresh) resolver.recordFailure(record.session.source.providerId, record.input.ref.kind)
+          throw unavailable()
+        }
         return save(owner, record.input, result, record)
       } finally { recoveryLocks.delete(id) }
     },

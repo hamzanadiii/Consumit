@@ -1,22 +1,41 @@
 'use client'
 
-import { titleHref, watchHref, type CatalogMovieDetail, type CatalogPerson, type CatalogSeason, type CatalogSeriesDetail, type CatalogTitleDetail, type CatalogTitleSummary } from '@consumit/contracts'
-import { Play, RotateCcw } from 'lucide-react'
+import { watchHref, type CatalogMovieDetail, type CatalogPerson, type CatalogSeason, type CatalogSeriesDetail, type CatalogTitleDetail, type CatalogTitleSummary } from '@consumit/contracts'
+import { Play, Star } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRef, useState } from 'react'
 
-import { Button, CarouselRow, CastCard, EmptyState, EpisodeRow, SeasonSelector, SectionHeading, Tabs, TitleMasthead, WatchCard, buttonVariants } from '@consumit/ui'
+import { CastCard, SectionHeading, Tabs } from '@consumit/ui'
 
 import { browserCatalogSeason } from '@/lib/catalog-browser'
-import { CatalogStaleNotice, detailMeta, makerByline } from './catalog-ui'
+import { makerByline } from './catalog-ui'
+import { EpisodesSection } from './episodes-section'
 import { MemberActionPanel } from './member-action-panel'
-import { SaveTitleButton } from './save-title-button'
-import { ScreenShell } from '../screens/screen-shell'
+import { TitleReviews } from './title-reviews'
+import { FilScreenShell, TitleRail } from '../shared'
 
 function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
+  // One person can appear as both cast and creator under the same id;
+  // collapse duplicates (cast entry wins) so keys stay unique.
+  const seen = new Set<number>()
+  const people = cast.filter((person) => {
+    if (seen.has(person.id)) return false
+    seen.add(person.id)
+    return true
+  })
   return (
     <div className="mt-8 grid auto-cols-[minmax(9.5rem,42vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[11rem] xl:grid-flow-row xl:grid-cols-6 xl:overflow-visible xl:pb-0">
-      {cast.slice(0, 6).map((person) => <CastCard character={person.character ?? undefined} imageSrc={person.profileUrl ?? undefined} key={person.id} name={person.name} role={person.role ?? undefined} />)}
+      {people.slice(0, 6).map((person) => (
+        <CastCard
+          character={person.character ?? undefined}
+          className="transition-transform duration-200 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:transform-none"
+          imageSrc={person.profileUrl ?? undefined}
+          key={person.id}
+          name={person.name}
+          role={person.role ?? undefined}
+        />
+      ))}
     </div>
   )
 }
@@ -25,27 +44,22 @@ function RelatedRail({ current, items }: {
   current: Pick<CatalogTitleSummary, 'id' | 'kind'>
   items: readonly CatalogTitleSummary[]
 }) {
-  const related = items.filter((item) => item.id !== current.id || item.kind !== current.kind)
+  const seen = new Set<string>()
+  const related = items.filter((item) => {
+    if (item.id === current.id && item.kind === current.kind) return false
+    const key = `${item.kind}:${item.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
   if (related.length === 0) return null
   return (
-    <div className="mt-8">
-      <CarouselRow aria-label="Related titles">
-        {related.slice(0, 15).map((item) => (
-          <WatchCard
-            artworkSrc={item.posterUrl ?? undefined}
-            bookmark={<SaveTitleButton id={item.id} kind={item.kind} title={item.title} />}
-            className="w-[145px] sm:w-[170px] md:w-[195px] lg:w-[215px] shrink-0"
-            href={watchHref(item)}
-            key={`${item.kind}:${item.id}`}
-            linkComponent={Link}
-            meta={item.year ? String(item.year) : undefined}
-            rating={item.tmdbRating ?? undefined}
-            title={item.title}
-            titleHref={titleHref(item)}
-          />
-        ))}
-      </CarouselRow>
-    </div>
+    <TitleRail
+      description="Real titles recommended by TMDB"
+      id="detail-related-titles"
+      items={related.slice(0, 15)}
+      title={current.kind === 'movie' ? 'If this stays with you' : 'Watch next'}
+    />
   )
 }
 
@@ -59,57 +73,178 @@ function DetailFacts({ detail }: { detail: CatalogTitleDetail }) {
     ['Released', detail.releaseDate ?? 'Not listed'],
   ]
   return (
-    <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-border pt-7 text-xs sm:grid-cols-2 xl:grid-cols-3">
-      {facts.map(([term, value]) => <div className="grid grid-cols-[7rem_1fr] gap-3" key={term}><dt className="text-muted">{term}</dt><dd className="font-bold text-copy">{value}</dd></div>)}
+    <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-[var(--fs-line)] pt-7 text-xs sm:grid-cols-2 xl:grid-cols-3">
+      {facts.map(([term, value]) => (
+        <div className="grid grid-cols-[7rem_1fr] gap-3" key={term}>
+          <dt className="text-[var(--fs-muted)]">{term}</dt>
+          <dd className="font-bold text-[var(--fs-ink)]">{value}</dd>
+        </div>
+      ))}
     </dl>
   )
 }
 
-function DetailMasthead({ detail }: { detail: CatalogTitleDetail }) {
+function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
   const byline = makerByline(detail)
+  const seasonCount = detail.kind === 'series' ? (detail.seasons?.length ?? 0) : 0
+  const duration = detail.kind === 'movie'
+    ? (detail.runtimeMinutes ? `${Math.floor(detail.runtimeMinutes / 60)}h ${detail.runtimeMinutes % 60}m` : null)
+    : (seasonCount > 0 ? `${seasonCount} ${seasonCount === 1 ? 'season' : 'seasons'}` : null)
+  const contentRating = detail.kind === 'series' ? detail.contentRating : detail.certification
+  const rating = detail.tmdbRating !== null ? detail.tmdbRating.toFixed(1) : null
+
   return (
-    <TitleMasthead
-      actions={(
-        <Link className={buttonVariants()} href={watchHref(detail)}><Play aria-hidden="true" /> Watch</Link>
+    <header
+      className="relative isolate overflow-hidden rounded-2xl border border-[var(--fs-line)] bg-[#0b0b0e] text-white shadow-2xl"
+      data-consumit-title-masthead
+    >
+      {detail.backdropUrl ? (
+        <Image
+          alt=""
+          className="object-cover"
+          fill
+          priority
+          sizes="(max-width: 1280px) 100vw, 1400px"
+          src={detail.backdropUrl}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{ background: 'radial-gradient(120% 90% at 78% 8%, #f7b267 0%, #d97b3f 28%, #7a3a22 55%, #2a1a12 100%)' }}
+        />
       )}
-      backgroundSrc={detail.backdropUrl ?? undefined}
-      byline={byline}
-      className="consumit-detail-masthead px-5 py-14 sm:px-8 lg:min-h-[42rem] lg:px-[50px] lg:py-24"
-      headingLevel="h1"
-      lede={detail.tagline ?? undefined}
-      logoUrl={detail.logoUrl ?? undefined}
-      metadata={detailMeta(detail)}
-      socialProof={<MemberActionPanel id={detail.id} kind={detail.kind} posterUrl={detail.posterUrl ?? undefined} title={detail.title} year={detail.year} />}
-      synopsis={detail.overview || 'More information will be available soon.'}
-      synopsisClassName="line-clamp-3"
-      title={detail.title}
-    />
+      {/* Dark atmospheric cinematic overlays matching Home hero */}
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.18)_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,14,0.98)_0%,rgba(11,11,14,0.4)_40%,transparent_100%)]" />
+
+      <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
+        <div className="flex max-w-2xl flex-col justify-center gap-3">
+          {detail.logoUrl ? (
+            <div>
+              <Image
+                alt={detail.title}
+                className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28"
+                height={240}
+                priority
+                src={detail.logoUrl}
+                width={640}
+              />
+              <h1 className="sr-only">{detail.title}</h1>
+            </div>
+          ) : (
+            <h1 className="font-display text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">
+              {detail.title}
+            </h1>
+          )}
+
+          {detail.tagline ? (
+            <p className="max-w-[48ch] font-display text-xl sm:text-2xl leading-snug text-white/95">
+              {detail.tagline}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            {rating ? (
+              <strong className="inline-flex items-center gap-1 font-bold text-[#ffb800] tabular-nums">
+                <Star aria-hidden="true" className="size-3.5 fill-current" />
+                ★ {rating}
+                <span className="sr-only">on TMDB</span>
+              </strong>
+            ) : null}
+            {detail.year ? <span className="font-bold text-white tabular-nums">{detail.year}</span> : null}
+            {duration ? <span className="text-white/70">{duration}</span> : null}
+            {detail.genreNames.length ? <span className="text-white/70">{detail.genreNames.slice(0, 3).join(' · ')}</span> : null}
+            {contentRating ? (
+              <span className="rounded border border-white/30 bg-black/40 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                {contentRating}
+              </span>
+            ) : null}
+          </div>
+
+          {byline ? <p className="text-xs font-bold tracking-wide text-white/75">{byline}</p> : null}
+
+          {detail.overview ? (
+            <p className="max-w-[62ch] text-sm leading-6 text-white/85 line-clamp-3">
+              {detail.overview}
+            </p>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Link
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-6 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+              href={watchHref(detail)}
+            >
+              <Play aria-hidden="true" className="size-4 fill-current" />
+              Watch
+            </Link>
+          </div>
+        </div>
+
+        {/* Member Action Shelf */}
+        <div className="w-full max-w-2xl lg:max-w-none">
+          <MemberActionPanel
+            id={detail.id}
+            kind={detail.kind}
+            posterUrl={detail.posterUrl ?? undefined}
+            title={detail.title}
+            year={detail.year}
+          />
+        </div>
+      </div>
+    </header>
   )
 }
 
-export function TitleDetailScreen({ detail, stale }: { detail: CatalogMovieDetail; stale: boolean }) {
+export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
   return (
-    <ScreenShell activeHref="/movies">
-      {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
+    <FilScreenShell activeKindTab="movies" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
-        <DetailMasthead detail={detail} />
-        <div className="px-5 sm:px-8 lg:px-[50px]">
-          <Tabs activeValue="overview" aria-label={`${detail.title} sections`} items={[{ href: '#overview', label: 'Overview', value: 'overview' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#cast', label: 'Cast & crew', value: 'cast' }, { href: '#related', label: 'Related', value: 'related' }]} />
-          <section className="py-12 sm:py-14 lg:py-16" id="overview" aria-labelledby="movie-about-heading">
-            <div className="max-w-5xl"><SectionHeading id="movie-about-heading" title="About the film" /><p className="mt-5 max-w-[70ch] text-sm leading-7 text-copy">{detail.overview || 'No synopsis is currently available.'}</p><DetailFacts detail={detail} /></div>
+        <FilScreenTitleHero detail={detail} />
+        <div className="mt-8 px-1 sm:px-3 lg:px-4">
+          <Tabs
+            activeValue="overview"
+            aria-label={`${detail.title} sections`}
+            items={[
+              { href: '#overview', label: 'Overview', value: 'overview' },
+              { href: '#reviews', label: 'Reviews', value: 'reviews' },
+              { href: '#cast', label: 'Cast & crew', value: 'cast' },
+              { href: '#related', label: 'Related', value: 'related' },
+            ]}
+          />
+          <section className="py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="movie-about-heading">
+            <div className="max-w-5xl">
+              <SectionHeading id="movie-about-heading" title="About the film" />
+              <p className="mt-5 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
+              <DetailFacts detail={detail} />
+            </div>
           </section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="cast" aria-labelledby="movie-cast-heading"><SectionHeading id="movie-cast-heading" title="Cast & crew" /><CastRail cast={[...detail.cast, ...detail.creators]} /></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="movie-reviews-heading"><SectionHeading id="movie-reviews-heading" title="Member reviews" /><div className="mt-8"><EmptyState description="Reviews will appear here only after members publish real writing about this film." title="No member reviews yet" /></div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="related" aria-labelledby="movie-related-heading"><SectionHeading description="Real titles recommended by TMDB" id="movie-related-heading" title="If this stays with you" /><RelatedRail current={detail} items={detail.recommendations} /></section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="movie-cast-heading">
+            <SectionHeading id="movie-cast-heading" title="Cast & crew" />
+            <CastRail cast={[...detail.cast, ...detail.creators]} />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="movie-reviews-heading">
+            <SectionHeading id="movie-reviews-heading" title="Member reviews" />
+            <TitleReviews
+              id={detail.id}
+              kind={detail.kind}
+              posterUrl={detail.posterUrl}
+              title={detail.title}
+              year={detail.year}
+            />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="movie-related-heading">
+            <RelatedRail current={detail} items={detail.recommendations} />
+          </section>
         </div>
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }
 
-type SeriesDetailScreenProps = { detail: CatalogSeriesDetail; initialSeason: CatalogSeason | null; stale: boolean }
+type SeriesDetailScreenProps = { detail: CatalogSeriesDetail; initialSeason: CatalogSeason | null }
 
-export function SeriesDetailScreen({ detail, initialSeason, stale }: SeriesDetailScreenProps) {
+export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreenProps) {
   const [season, setSeason] = useState(initialSeason)
   const [failedSeason, setFailedSeason] = useState<number | null>(initialSeason ? null : (detail.seasons[0]?.number ?? 1))
   const [loadingSeason, setLoadingSeason] = useState(false)
@@ -133,27 +268,57 @@ export function SeriesDetailScreen({ detail, initialSeason, stale }: SeriesDetai
   }
 
   return (
-    <ScreenShell activeHref="/series">
-      {stale ? <CatalogStaleNotice meta={{ fetchedAt: new Date(0).toISOString(), language: 'en-US', region: 'US', source: 'tmdb', stale }} /> : null}
+    <FilScreenShell activeKindTab="series" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
-        <DetailMasthead detail={detail} />
-        <div className="px-5 sm:px-8 lg:px-[50px]">
-          <Tabs activeValue="episodes" aria-label={`${detail.title} sections`} items={[{ href: '#episodes', label: 'Episodes', value: 'episodes' }, { href: '#overview', label: 'Overview', value: 'overview' }, { href: '#reviews', label: 'Reviews', value: 'reviews' }, { href: '#cast', label: 'Cast & crew', value: 'cast' }]} />
-          <section className="py-12 sm:py-14 lg:py-16" id="episodes" aria-labelledby="episodes-heading">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-              <SectionHeading id="episodes-heading" title="Episodes" />
-              {detail.seasons.length ? <SeasonSelector disabled={loadingSeason} onValueChange={(value) => void loadSeason(Number(value))} options={detail.seasons.map((item) => ({ label: `${item.name} · ${item.episodeCount} episodes`, value: String(item.number) }))} value={String(season?.seasonNumber ?? detail.seasons[0]?.number ?? 1)} /> : null}
-            </div>
-            {loadingSeason ? <p className="mt-5 text-xs text-muted" role="status">Loading season…</p> : null}
-            {failedSeason !== null ? <div className="mt-6 flex flex-wrap items-center gap-4 rounded-card border border-border bg-surface p-5" role="alert"><p className="text-sm text-copy">Season {failedSeason} could not be loaded. The current season is still here.</p><Button onClick={() => void loadSeason(failedSeason)} size="sm" variant="secondary"><RotateCcw aria-hidden="true" /> Retry</Button></div> : null}
-            {season && season.episodes.length ? <div className="mt-8 space-y-3">{season.episodes.map((episode) => <EpisodeRow action={<Link className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={watchHref(detail, { episode: episode.episodeNumber, season: episode.seasonNumber })}>Watch</Link>} artworkSrc={episode.stillUrl ?? undefined} description={episode.overview || undefined} episode={`Episode ${episode.episodeNumber}`} key={episode.id} meta={[episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null, episode.airDate].filter(Boolean).join(' · ')} title={episode.title} />)}</div> : (!failedSeason ? <p className="mt-8 text-sm text-muted">No regular episodes are listed for this season.</p> : null)}
+        <FilScreenTitleHero detail={detail} />
+        <div className="mt-8 px-1 sm:px-3 lg:px-4">
+          <Tabs
+            activeValue="episodes"
+            aria-label={`${detail.title} sections`}
+            items={[
+              { href: '#episodes', label: 'Episodes', value: 'episodes' },
+              { href: '#overview', label: 'Overview', value: 'overview' },
+              { href: '#reviews', label: 'Reviews', value: 'reviews' },
+              { href: '#cast', label: 'Cast & crew', value: 'cast' },
+            ]}
+          />
+          <section className="py-10 sm:py-12 lg:py-14" id="episodes" aria-labelledby="episodes-heading">
+            {/* Keyed by season so pagination restarts on the first page for each season. */}
+            <EpisodesSection
+              detail={detail}
+              failedSeason={failedSeason}
+              key={season?.seasonNumber ?? 'no-season'}
+              loadingSeason={loadingSeason}
+              onRetrySeason={() => failedSeason !== null && void loadSeason(failedSeason)}
+              onSelectSeason={(number) => void loadSeason(number)}
+              season={season}
+              seasons={detail.seasons}
+            />
           </section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="overview" aria-labelledby="series-about-heading"><SectionHeading id="series-about-heading" title={`About ${detail.title}`} /><p className="mt-5 max-w-[72ch] text-sm leading-7 text-copy">{detail.overview || 'No synopsis is currently available.'}</p><DetailFacts detail={detail} /></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="cast" aria-labelledby="series-cast-heading"><SectionHeading id="series-cast-heading" title="Cast & crew" /><CastRail cast={[...detail.cast, ...detail.creators]} /></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" id="reviews" aria-labelledby="series-reviews-heading"><SectionHeading id="series-reviews-heading" title="Member reviews" /><div className="mt-8"><EmptyState description="Reviews will appear here only after members publish real writing about this series." title="No member reviews yet" /></div></section>
-          <section className="border-t border-border py-12 sm:py-14 lg:py-16" aria-labelledby="series-related-heading"><SectionHeading description="Real series recommended by TMDB" id="series-related-heading" title="Watch next" /><RelatedRail current={detail} items={detail.recommendations} /></section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="series-about-heading">
+            <SectionHeading id="series-about-heading" title={`About ${detail.title}`} />
+            <p className="mt-5 max-w-[72ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
+            <DetailFacts detail={detail} />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="series-cast-heading">
+            <SectionHeading id="series-cast-heading" title="Cast & crew" />
+            <CastRail cast={[...detail.cast, ...detail.creators]} />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="series-reviews-heading">
+            <SectionHeading id="series-reviews-heading" title="Member reviews" />
+            <TitleReviews
+              id={detail.id}
+              kind={detail.kind}
+              posterUrl={detail.posterUrl}
+              title={detail.title}
+              year={detail.year}
+            />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="series-related-heading">
+            <RelatedRail current={detail} items={detail.recommendations} />
+          </section>
         </div>
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }

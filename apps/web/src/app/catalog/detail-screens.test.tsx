@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('series season selection', () => {
   it('keeps computed taste and numeric scores out of title details', () => {
-    render(<TitleDetailScreen detail={movieDetail} stale={false} />)
+    render(<TitleDetailScreen detail={movieDetail} />)
 
     expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
     expect(screen.queryByText(/taste match|% match|TMDB ratings|TMDB votes|average/i)).not.toBeInTheDocument()
@@ -35,13 +35,13 @@ describe('series season selection', () => {
       creators: [{ character: null, id: 1, name: 'Denis Villeneuve', profileUrl: null, role: 'Director' }],
       tagline: 'Long live the fighters.',
     }
-    render(<TitleDetailScreen detail={detail} stale={false} />)
+    render(<TitleDetailScreen detail={detail} />)
 
     expect(screen.getByText('Long live the fighters.')).toBeInTheDocument()
     expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
     expect(screen.getByText('★ 8.2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
-    expect(screen.getByText('Rated')).toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/library')
     const synopses = screen.getAllByText('Paul unites with Chani and the Fremen.')
     expect(synopses).toHaveLength(2)
@@ -50,18 +50,18 @@ describe('series season selection', () => {
   })
 
   it('shelves rating in the hero panel with no separate section', () => {
-    render(<TitleDetailScreen detail={movieDetail} stale={false} />)
+    render(<TitleDetailScreen detail={movieDetail} />)
 
     expect(screen.queryByRole('heading', { name: 'Your rating' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
-    expect(screen.getByText('Rated')).toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
   })
 
   it('toggles the title save action between add and saved states', async () => {    const user = userEvent.setup()
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], saved: [], watched: [] }), { status: 200 })))
     vi.stubGlobal('fetch', fetchMock)
-    render(<SessionProvider initialMember={{ avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-09-07T12:00:00.000Z', displayName: null, email: 'member@example.com', emailVerified: true, id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca', username: 'cinema_fan' }} initialStatus="authenticated"><TitleDetailScreen detail={movieDetail} stale={false} /></SessionProvider>)
+    render(<SessionProvider initialMember={{ avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-09-07T12:00:00.000Z', displayName: null, email: 'member@example.com', emailVerified: true, id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca', role: 'member', username: 'cinema_fan' }} initialStatus="authenticated"><TitleDetailScreen detail={movieDetail} /></SessionProvider>)
 
     const save = screen.getByRole('button', { name: 'Save Dune: Part Two to library' })
     expect(save).toHaveAttribute('aria-pressed', 'false')
@@ -70,20 +70,41 @@ describe('series season selection', () => {
     expect(fetchMock).toHaveBeenCalledWith('/v1/me/library/titles/movie/693134', expect.objectContaining({ method: 'PUT' }))
   })
 
+  it('renders a cast-and-crew member once when both lists share their id', () => {
+    const detail = {
+      ...movieDetail,
+      cast: [{ character: 'Paul Atreides', id: 55251, name: 'Timothée Chalamet', profileUrl: null, role: 'Actor' }],
+      creators: [{ character: null, id: 55251, name: 'Timothée Chalamet', profileUrl: null, role: 'Director' }],
+    }
+    const { container } = render(<TitleDetailScreen detail={detail} />)
+
+    const cards = container.querySelectorAll('[data-consumit-cast-card]')
+    expect(cards).toHaveLength(1)
+    expect(screen.getByText('Directed by Timothée Chalamet')).toBeInTheDocument()
+  })
+
   it('switches through Fastify and preserves the current season when a later load fails', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.fn()
+    const seasonFetch = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ item: { ...firstSeason, episodes: [{ ...firstSeason.episodes[0], episodeNumber: 2, id: 11, seasonNumber: 2, title: 'Second Season Premiere' }], name: 'Season 2', seasonNumber: 2 }, meta }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'CATALOG_UNAVAILABLE', message: 'TMDB is unavailable.', retryable: true } }), { status: 503 }))
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      if (String(input).includes('/v1/reviews/')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [], page: 1, totalPages: 0, totalResults: 0 }), { status: 200 }))
+      }
+      return seasonFetch()
+    })
     vi.stubGlobal('fetch', fetchMock)
-    render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} stale={false} />)
+    render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} />)
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Season' }), '2')
+    await user.click(screen.getByRole('button', { name: 'Season Season 1 · 9 episodes' }))
+    await user.click(screen.getByRole('option', { name: 'Season 2 · 10 episodes' }))
     expect(await screen.findByText('Second Season Premiere')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Season' }), '1')
+    await user.click(screen.getByRole('button', { name: 'Season Season 2 · 10 episodes' }))
+    await user.click(screen.getByRole('option', { name: 'Season 1 · 9 episodes' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('current season is still here')
     expect(screen.getByText('Second Season Premiere')).toBeInTheDocument()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(seasonFetch).toHaveBeenCalledTimes(2))
   })
 })

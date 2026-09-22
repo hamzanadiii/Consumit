@@ -37,4 +37,32 @@ describe('search screen', () => {
     expect(screen.getByRole('heading', { name: 'What kind of night is it?' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Surprise me tonight/ })).toHaveAttribute('href', '#results')
   })
+
+  it('routes anime matches to AniList detail pages, never TMDB', async () => {
+    const user = userEvent.setup()
+    const onePiece = {
+      anilistId: 21,
+      kind: 'anime' as const,
+      titles: { preferred: 'One Piece', english: 'One Piece', romaji: 'One Piece', native: 'ワンピース' },
+      format: 'TV' as const,
+      status: 'RELEASING' as const,
+      season: null,
+      seasonYear: 1999,
+      episodes: null,
+      episodeDuration: 24,
+      genres: ['Adventure'],
+      coverImage: { url: null, color: null },
+      bannerImage: null,
+      averageScore: 87,
+      popularity: 1000,
+      description: 'Pirates.',
+      nextAiringEpisode: null,
+    }
+    render(<SearchScreen animeResults={[onePiece]} initialQuery="one piece" page={page} queryTooShort={false} />)
+
+    await user.click(screen.getByRole('button', { name: 'Anime' }))
+    expect(screen.getByRole('link', { name: 'One Piece' })).toHaveAttribute('href', '/anime/21')
+    expect(screen.getByText(/Anime metadata by AniList/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Severance' })).not.toBeInTheDocument()
+  })
 })

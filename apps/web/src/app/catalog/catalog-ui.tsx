@@ -1,5 +1,5 @@
-import { titleHref, watchHref, type CatalogPerson, type CatalogResponseMeta, type CatalogTitleSummary } from '@consumit/contracts'
-import { AlertTriangle, RotateCcw } from 'lucide-react'
+import { titleHref, watchHref, type CatalogPerson, type CatalogTitleSummary } from '@consumit/contracts'
+import { RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
@@ -56,16 +56,6 @@ export function makerByline(detail: Pick<HeroDetail, 'creators' | 'kind'>): stri
     : (detail.creators ?? []).map((person) => person.name)
   if (makers.length === 0) return undefined
   return `${detail.kind === 'movie' ? 'Directed' : 'Created'} by ${makers.slice(0, 3).join(', ')}`
-}
-
-export function CatalogStaleNotice({ meta }: { meta: CatalogResponseMeta }) {
-  if (!meta.stale) return null
-  return (
-    <p className="flex items-center gap-2 border-b border-border bg-surface px-5 py-3 text-xs text-copy sm:px-8" role="status">
-      <AlertTriangle aria-hidden="true" className="size-4 text-orange" />
-      Showing saved catalog data while fresh titles load.
-    </p>
-  )
 }
 
 export function CatalogGrid({

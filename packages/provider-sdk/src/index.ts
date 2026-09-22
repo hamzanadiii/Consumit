@@ -5,27 +5,46 @@ import { z } from 'zod'
 export { createVixsrcProvider } from './adapters/vixsrc.ts'
 export { createNhdapiProvider } from './adapters/nhdapi.ts'
 export { createVaPlayerProvider } from './adapters/vaplayer.ts'
-export { createVidcoreProvider } from './adapters/vidcore.ts'
-export { createInsertunitProvider } from './adapters/insertunit.ts'
 export { createMappleProvider } from './adapters/mapple.ts'
-export { createStigstreamProvider } from './adapters/stigstream.ts'
+
 export { createWecollegeProvider, type WecollegeMetadata, type WecollegeMetadataResolver } from './adapters/wecollege.ts'
 export { createPersesProvider } from './adapters/perses.ts'
 export { createRivestreamProvider } from './adapters/rivestream.ts'
 export { createVidapiProvider } from './adapters/vidapi.ts'
-export { createVidloveProvider } from './adapters/vidlove.ts'
+
 export { createScreenscapeProvider } from './adapters/screenscape.ts'
 export { createVidrockProvider } from './adapters/vidrock.ts'
 export { createVidnestProvider, decipherPayload } from './adapters/vidnest.ts'
 export { createNetmirrorProvider } from './adapters/netmirror.ts'
 export { createVidstormProvider } from './adapters/vidstorm.ts'
 export { createVidlinkProvider } from './adapters/vidlink.ts'
-export { createVidvaultProvider } from './adapters/vidvault.ts'
-export { createModiplayProvider } from './adapters/modiplay.ts'
+
 export { createCinehdProvider } from './adapters/cinehd.ts'
-export { createNxshaProvider, encodeNxshaPayload } from './adapters/nxsha.ts'
+export { createNxshaProvider, decodeNxshaPayload, encodeNxshaPayload } from './adapters/nxsha.ts'
 export { createStellarProvider, createAphroditeProvider } from './adapters/stellar.ts'
+export { createVidluxProvider } from './adapters/vidlux.ts'
+
+export { createVidsrcbuzzProvider } from './adapters/vidsrcbuzz.ts'
+export { createVidsrcProvider } from './adapters/vidsrc.ts'
+export { createModiplayProvider } from './adapters/modiplay.ts'
+export { createVideasyProvider } from './adapters/videasy.ts'
+export { createVidcoreProvider } from './adapters/vidcore.ts'
+export { createFilmuProvider } from './adapters/filmu.ts'
+export { createAnixoProvider, type AnimeTitleResolver } from './adapters/anixo.ts'
+export { createKyrenProvider } from './adapters/kyren.ts'
+export { createNagareProvider } from './adapters/nagare.ts'
+export { createAnime123Provider } from './adapters/anime123.ts'
+export { createZokoProvider, type ZokoMetaResolver } from './adapters/zoko.ts'
+export { createNineAnimeProvider } from './adapters/nineanime.ts'
+export { createAnibdProvider } from './adapters/anibd.ts'
 export type { ProviderHttp } from './adapters/http.ts'
+
+export const skipSegmentSchema = z.object({
+  kind: z.enum(['intro', 'outro', 'recap']),
+  start: z.number().min(0).max(86400),
+  end: z.number().min(0).max(86400),
+})
+export type SkipSegment = z.infer<typeof skipSegmentSchema>
 
 export const providerSourceSchema = z.object({
   // This key describes the rendition, never its temporary URL signature.
@@ -37,6 +56,8 @@ export const providerSourceSchema = z.object({
   qualityHint: z.string().min(1).max(24).optional(),
   segmentTransform: z.literal('mpegts-image-prefix').optional(),
   subtitles: z.array(playbackTrackSchema).max(32).default([]),
+  /** Opening/ending/recap ranges in seconds for skip-intro UI. */
+  skipSegments: z.array(skipSegmentSchema).max(8).optional(),
 })
 export const providerResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), sources: z.array(providerSourceSchema).max(32) }),
@@ -50,6 +71,7 @@ export interface ProviderAdapter {
   readonly id: string
   resolve(input: ProviderInput, signal: AbortSignal): Promise<ProviderResult>
 }
+export type MediaKind = 'movie' | 'series' | 'anime'
 export type ProviderRegistration = {
   adapter: ProviderAdapter
   enabled: boolean
@@ -58,9 +80,16 @@ export type ProviderRegistration = {
   upstreamGroup: string
   concurrency: number
   requestsPerMinute: number
+  /** Media kinds this provider can resolve. Anime providers declare ['anime'];
+   *  streaming providers declare ['movie', 'series']. Used to route playback
+   *  requests to the correct provider pool. */
+  mediaKinds: readonly MediaKind[]
   /** Operator-pinned resolve order; higher tries first. Health and circuit
    *  breakers still apply, and ties keep learned latency ranking. */
   priority?: number
+  /** Route sources through the Worker CORS proxy. Disabled for providers
+   *  that reject proxy requests (cookie-gated, IP-locked). */
+  proxy: boolean
 }
 
 export function sourceIdentity(providerId: string, ref: PlaybackRef, key: string) {

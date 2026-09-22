@@ -55,10 +55,26 @@ async function matchItem(catalog: Catalog, item: StoredImportItem) {
     if (title) return { candidates: [candidate(title)], id: item.id, selectedTmdbId: title.id, status: 'exact' as const }
   }
   if (!item.title) return { candidates: [], id: item.id, selectedTmdbId: null, status: 'skipped' as const }
-  const page = await catalog.search({ kind: 'movie', page: 1, query: item.title })
-  const exact = page.items.filter((title) => normalizeLetterboxdTitle(title.title) === item.normalizedTitle && (item.year === null || title.year === item.year))
-  if (exact.length === 1) return { candidates: [candidate(exact[0]!)], id: item.id, selectedTmdbId: exact[0]!.id, status: 'confident' as const }
-  const candidates = page.items.slice(0, 5).map(candidate)
+
+  const searchQuery = item.year ? `${item.title} ${item.year}` : item.title
+  const allItems: Awaited<ReturnType<typeof catalog.search>> extends { items: infer T } ? T extends Array<infer U> ? U[] : never : never[] = []
+
+  for (let page = 1; page <= 3; page += 1) {
+    const result = await catalog.search({ kind: 'movie', page, query: searchQuery })
+    allItems.push(...result.items)
+
+    const exact = allItems.filter((title) => {
+      const titleMatch = normalizeLetterboxdTitle(title.title) === item.normalizedTitle
+      if (!item.year || !title.year) return titleMatch
+      return titleMatch && Math.abs(title.year - item.year) <= 1
+    })
+    if (exact.length === 1) return { candidates: [candidate(exact[0]!)], id: item.id, selectedTmdbId: exact[0]!.id, status: 'confident' as const }
+
+    if (result.totalResults <= page * 20) break
+  }
+
+  const deduped = allItems.filter((item, index, self) => self.findIndex((other) => other.id === item.id) === index)
+  const candidates = deduped.slice(0, 5).map(candidate)
   return candidates.length
     ? { candidates, id: item.id, selectedTmdbId: null, status: 'needs_review' as const }
     : { candidates: [], id: item.id, selectedTmdbId: null, status: 'unmatched' as const }

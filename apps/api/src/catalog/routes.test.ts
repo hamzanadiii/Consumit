@@ -52,6 +52,7 @@ const movie: CatalogMovieDetail = {
   certification: 'R',
   countries: ['United States of America'],
   creators: [],
+  heroBackdropUrl: null,
   homepageUrl: null,
   languages: ['English'],
   recommendations: [],

@@ -13,7 +13,8 @@
     "resolutionHosts": [],
     "upstreamGroup": "vixsrc",
     "concurrency": 2,
-    "requestsPerMinute": 30
+    "requestsPerMinute": 30,
+    "priority": 100
   },
   {
     "id": "nhdapi",
@@ -63,46 +64,6 @@
     "requestsPerMinute": 30
   },
   {
-    "id": "vidcore",
-    "adapter": "vidcore",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "moon.peakstorm.top",
-      "keenanchor.top",
-      "ashenlion.top",
-      "cybergate.top",
-      "media.vidrift.in",
-      "sun.peakstorm.top",
-      "*.hakunaymatata.com",
-      "remoteconsultinggroup.site",
-      "highperformancebrands.site"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidcore-cineplay",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "insertunit",
-    "adapter": "insertunit",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "*.interkh.com"
-    ],
-    "resolutionHosts": [
-      "api.insertunit.ws"
-    ],
-    "upstreamGroup": "insertunit",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
     "id": "mapple",
     "adapter": "mapple",
     "enabled": false,
@@ -117,28 +78,6 @@
       "mapple.rip"
     ],
     "upstreamGroup": "mapple",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "stigstream",
-    "adapter": "stigstream",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "*.yflix.ru",
-      "closeload.top",
-      "*.closeload.top",
-      "cache.vdrk.site",
-      "*.vdrk.site",
-      "sub.vdrk.site"
-    ],
-    "resolutionHosts": [
-      "api.stigstream.ru"
-    ],
-    "upstreamGroup": "stigstream",
     "concurrency": 2,
     "requestsPerMinute": 30
   },
@@ -241,28 +180,6 @@
     "requestsPerMinute": 30
   },
   {
-    "id": "vidlove",
-    "adapter": "vidlove",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "player.vidlove.cc",
-      "*.whysosigmabro.cfd",
-      "cache.vdrk.site",
-      "*.vdrk.site",
-      "sub.vdrk.site"
-    ],
-    "resolutionHosts": [
-      "api.tungtungtungtungsahur.app",
-      "api.vidlove.cc"
-    ],
-    "upstreamGroup": "vidlove",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
     "id": "screenscape",
     "adapter": "screenscape",
     "enabled": false,
@@ -287,7 +204,7 @@
       "US"
     ],
     "mediaHosts": [
-      "vidrock.ru",
+      "vidrock.to",
       "streamrk.site",
       "*.ngcorp.dad"
     ],
@@ -364,36 +281,6 @@
       "enc-dec.app"
     ],
     "upstreamGroup": "vidlink",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vidvault",
-    "adapter": "vidvault",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "vidvault.ru"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidvault",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "modiplay",
-    "adapter": "modiplay",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "rozgarlelo.modiplay.xyz"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "modiplay",
     "concurrency": 2,
     "requestsPerMinute": 30
   },

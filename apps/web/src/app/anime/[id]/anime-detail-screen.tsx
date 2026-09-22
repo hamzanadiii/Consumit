@@ -1,0 +1,462 @@
+'use client'
+
+import type { AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule } from '@consumit/contracts'
+import { watchHref } from '@consumit/contracts'
+import { ArtworkFrame, CastCard, SectionHeading, Tabs } from '@consumit/ui'
+import { CalendarClock, ChevronLeft, ChevronRight, Play, Star } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useState } from 'react'
+
+import { FilScreenShell, AnimeTitleRail } from '@/app/shared'
+
+const ANIME_EPISODES_PER_PAGE = 8
+
+function formatScore(score: number | null): string | null {
+  if (score === null) return null
+  return (score / 10).toFixed(1)
+}
+
+function formatDuration(minutes: number | null): string | null {
+  if (minutes === null) return null
+  if (minutes < 60) return `${minutes}m`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+function formatStatus(status: string): string {
+  return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function formatSeason(season: string | null, year: number | null): string | null {
+  if (!season || !year) return null
+  return `${season.charAt(0) + season.slice(1).toLowerCase()} ${year}`
+}
+
+function formatAirDate(iso: string): string {
+  // Explicit locale + timezone: bare toLocaleDateString renders the server
+  // locale during SSR and the browser locale on hydration, which splits the
+  // tree. This stays identical on both sides.
+  return new Date(iso).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'numeric', day: 'numeric', year: 'numeric' })
+}
+
+function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
+  const score = formatScore(detail.averageScore)
+  const seasonLabel = formatSeason(detail.season, detail.seasonYear)
+  const episodeCount = detail.episodes ? `${detail.episodes} ep` : null
+  const duration = formatDuration(detail.episodeDuration)
+
+  return (
+    <header
+      className="relative isolate overflow-hidden rounded-2xl border border-[var(--fs-line)] bg-[#0b0b0e] text-white shadow-2xl"
+      data-consumit-anime-masthead
+    >
+      {detail.bannerImage ? (
+        <Image
+          alt=""
+          className="object-cover"
+          fill
+          priority
+          sizes="(max-width: 1280px) 100vw, 1400px"
+          src={detail.bannerImage}
+        />
+      ) : detail.coverImage.url ? (
+        <Image
+          alt=""
+          className="object-cover"
+          fill
+          priority
+          sizes="(max-width: 1280px) 100vw, 1400px"
+          src={detail.coverImage.url}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{ background: `radial-gradient(120% 90% at 78% 8%, ${detail.coverImage.color ?? '#6366f1'} 0%, #1a1a2e 55%, #0b0b0e 100%)` }}
+        />
+      )}
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.18)_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,14,0.98)_0%,rgba(11,11,14,0.4)_40%,transparent_100%)]" />
+
+      <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
+        <div className="flex max-w-2xl flex-col justify-center gap-3">
+          <h1 className="font-display text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">
+            {detail.titles.preferred}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            {score ? (
+              <strong className="inline-flex items-center gap-1 font-bold text-[#ffb800] tabular-nums">
+                <Star aria-hidden="true" className="size-3.5 fill-current" />
+                ★ {score}
+                <span className="sr-only">on AniList</span>
+              </strong>
+            ) : null}
+            {detail.seasonYear ? <span className="font-bold text-white tabular-nums">{detail.seasonYear}</span> : null}
+            {seasonLabel ? <span className="text-white/70">{seasonLabel}</span> : null}
+            {episodeCount ? <span className="text-white/70">{episodeCount}</span> : null}
+            {duration ? <span className="text-white/70">{duration}</span> : null}
+            {detail.genres.length ? <span className="text-white/70">{detail.genres.slice(0, 3).join(' · ')}</span> : null}
+            <span className="rounded border border-white/30 bg-black/40 px-1.5 py-0.5 text-[11px] font-bold text-white">
+              {detail.format.replace(/_/g, ' ')}
+            </span>
+          </div>
+
+          {detail.description ? (
+            <p className="max-w-[62ch] text-sm leading-6 text-white/85 line-clamp-3">
+              {detail.description}
+            </p>
+          ) : null}
+
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Link
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-6 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+              href={watchHref({ kind: 'anime', id: detail.anilistId }, { episode: 1, season: 1 })}
+            >
+              <Play aria-hidden="true" className="size-4 fill-current" />
+              Watch
+            </Link>
+          </div>
+        </div>
+
+        <div className="w-full max-w-2xl lg:max-w-none">
+          {detail.nextAiringEpisode ? (
+            <div className="rounded-xl border border-[var(--fs-accent)]/30 bg-[var(--fs-accent)]/5 px-4 py-3">
+              <p className="text-xs font-bold text-[var(--fs-accent)]">
+                Next Episode: #{detail.nextAiringEpisode.episode}
+              </p>
+              <p className="mt-0.5 text-xs text-white/70">
+                Airing {formatAirDate(detail.nextAiringEpisode.airingAt)}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </header>
+  )
+}
+
+function AnimeEpisodeCard({ anilistId, duration, episode, upcoming }: {
+  anilistId: number
+  duration: string | null
+  episode: number
+  upcoming: boolean
+}) {
+  return (
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none" data-filscreen-episode-card>
+      <ArtworkFrame
+        alt={`Episode ${episode} still`}
+        className="rounded-none border-0"
+        ratio="landscape"
+        src={undefined}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
+        <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
+          Episode {episode}
+          {upcoming ? (
+            <span className="rounded border border-white/30 bg-black/40 px-1.5 py-0.5 text-[10px] font-bold normal-case tracking-normal text-white">
+              Upcoming
+            </span>
+          ) : null}
+        </p>
+        {duration ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{duration}</p> : null}
+        <div className="mt-3">
+          {upcoming ? (
+            <span className="inline-flex min-h-9 cursor-not-allowed items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] opacity-60">
+              <Play aria-hidden="true" className="size-3 fill-current" />
+              Upcoming
+            </span>
+          ) : (
+            <Link
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+              href={watchHref({ kind: 'anime', id: anilistId }, { episode, season: 1 })}
+            >
+              <Play aria-hidden="true" className="size-3 fill-current" />
+              Watch
+            </Link>
+          )}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
+  const [page, setPage] = useState(1)
+  // AniList omits the count for some long-runners; the airing position still
+  // tells us how many episodes have aired. Per-episode titles and stills are
+  // not mapped (AniList streaming thumbnails carry no reliable episode
+  // numbers), so cards stay honest: number, duration, airing state.
+  const airedBefore = detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : null
+  const total = detail.episodes ?? (airedBefore !== null && airedBefore > 0 ? airedBefore : 0)
+  const upcomingFrom = detail.nextAiringEpisode?.episode ?? null
+  const episodes = total > 0 ? Array.from({ length: total }, (_, index) => index + 1) : []
+  const duration = formatDuration(detail.episodeDuration)
+  const totalPages = Math.max(1, Math.ceil(episodes.length / ANIME_EPISODES_PER_PAGE))
+  const safePage = Math.min(page, totalPages)
+  const start = (safePage - 1) * ANIME_EPISODES_PER_PAGE
+  const visible = episodes.slice(start, start + ANIME_EPISODES_PER_PAGE)
+
+  return (
+    <div data-filscreen-episodes>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <SectionHeading id="episodes-heading" title="Episodes" />
+        {episodes.length ? (
+          <p className="text-xs tabular-nums text-[var(--fs-muted)]">
+            {episodes.length} {episodes.length === 1 ? 'episode' : 'episodes'}
+          </p>
+        ) : null}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">
+        Episode numbers and airing state come from AniList. Unaired episodes unlock as they broadcast.
+      </p>
+      {episodes.length ? (
+        <>
+          <ul aria-label={`Episodes, page ${safePage} of ${totalPages}`} className="mt-8 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visible.map((episode) => (
+              <li className="min-w-0" key={episode}>
+                <AnimeEpisodeCard
+                  anilistId={detail.anilistId}
+                  duration={duration}
+                  episode={episode}
+                  upcoming={upcomingFrom !== null && episode >= upcomingFrom}
+                />
+              </li>
+            ))}
+          </ul>
+          {totalPages > 1 ? (
+            <nav aria-label="Episode pages" className="mt-8 flex flex-wrap items-center gap-3">
+              <p className="w-full text-xs tabular-nums text-[var(--fs-muted)] sm:w-auto sm:flex-1" role="status">
+                Showing {start + 1}–{Math.min(start + ANIME_EPISODES_PER_PAGE, episodes.length)} of {episodes.length} episodes
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  aria-label="Go to previous episode page"
+                  className="grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40 disabled:hover:text-[var(--fs-muted)]"
+                  disabled={safePage === 1}
+                  onClick={() => setPage(safePage - 1)}
+                  type="button"
+                >
+                  <ChevronLeft aria-hidden="true" className="size-4" />
+                </button>
+                {totalPages <= 10 ? (
+                  Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                    <button
+                      aria-current={pageNumber === safePage ? 'page' : undefined}
+                      aria-label={`Go to episode page ${pageNumber}`}
+                      className={
+                        pageNumber === safePage
+                          ? 'grid h-11 min-w-11 cursor-pointer place-items-center rounded-xl bg-[var(--fs-accent-soft)] px-3 text-sm font-bold text-[var(--fs-ink)] shadow-[inset_0_0_0_1px_var(--fs-accent)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                          : 'grid h-11 min-w-11 cursor-pointer place-items-center rounded-xl px-3 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                      }
+                      key={pageNumber}
+                      onClick={() => setPage(pageNumber)}
+                      type="button"
+                    >
+                      <span className="tabular-nums">{pageNumber}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p aria-current="page" className="px-2 text-sm tabular-nums text-[var(--fs-secondary)]">
+                    Page {safePage} of {totalPages}
+                  </p>
+                )}
+                <button
+                  aria-label="Go to next episode page"
+                  className="grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40 disabled:hover:text-[var(--fs-muted)]"
+                  disabled={safePage === totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                  type="button"
+                >
+                  <ChevronRight aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+            </nav>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-8 text-sm text-[var(--fs-muted)]">No episode list is available for this anime yet.</p>
+      )}
+    </div>
+  )
+}
+
+function AnimeCastRail({ characters }: { characters: AnimeTitleDetail['characters'] }) {
+  if (!characters.length) return null
+  return (
+    <div className="mt-8 grid auto-cols-[minmax(9.5rem,42vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[11rem] xl:grid-flow-row xl:grid-cols-6 xl:overflow-visible xl:pb-0">
+      {characters.slice(0, 6).map((char) => (
+        <CastCard
+          character={char.name}
+          className="transition-transform duration-200 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:transform-none"
+          imageSrc={char.image ?? undefined}
+          key={char.id}
+          name={char.name}
+          role={char.voiceActors[0]?.name ? `VA: ${char.voiceActors[0].name}` : undefined}
+        />
+      ))}
+    </div>
+  )
+}
+
+function AnimeStaffRail({ staff }: { staff: AnimeTitleDetail['staff'] }) {
+  if (!staff.length) return null
+  return (
+    <div className="mt-8 grid auto-cols-[minmax(9.5rem,42vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[11rem] xl:grid-flow-row xl:grid-cols-6 xl:overflow-visible xl:pb-0">
+      {staff.slice(0, 12).map((member, index) => (
+        <CastCard
+          className="transition-transform duration-200 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:transform-none"
+          imageSrc={member.image ?? undefined}
+          // AniList repeats people across roles, so bare ids collide.
+          key={`${member.id}:${index}`}
+          name={member.name}
+          role={member.role ?? undefined}
+        />
+      ))}
+    </div>
+  )
+}
+
+function formatCountdown(totalSeconds: number): string {
+  if (totalSeconds <= 0) return 'Airing now'
+  const days = Math.floor(totalSeconds / 86_400)
+  const hours = Math.floor((totalSeconds % 86_400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  if (days > 0) return `in ${days}d ${hours}h`
+  if (hours > 0) return `in ${hours}h ${minutes}m`
+  return `in ${minutes}m`
+}
+
+function AnimeAiringSection({ airing }: { airing: AnimeAiringSchedule }) {
+  if (!airing.episodes.length) return <p className="mt-8 text-sm text-[var(--fs-muted)]">No upcoming episodes are scheduled right now.</p>
+  return (
+    <ul className="mt-8 grid list-none gap-3 p-0 sm:grid-cols-2 lg:grid-cols-3">
+      {airing.episodes.slice(0, 12).map((entry) => (
+        <li
+          className="flex items-center gap-4 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4"
+          key={`${entry.mediaTitle}:${entry.episode}`}
+        >
+          <span aria-hidden="true" className="grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--fs-accent-soft)] text-[var(--fs-accent)]">
+            <CalendarClock className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-[var(--fs-ink)]">Episode {entry.episode}</p>
+            <p className="mt-0.5 text-xs tabular-nums text-[var(--fs-muted)]">
+              {formatCountdown(entry.timeUntilAiring)} · {formatAirDate(entry.airingAt)}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function AnimeDetailFacts({ detail }: { detail: AnimeTitleDetail }) {
+  const facts = [
+    ['Format', detail.format.replace(/_/g, ' ')],
+    ['Episodes', detail.episodes ? String(detail.episodes) : 'Ongoing'],
+    ['Duration', formatDuration(detail.episodeDuration) ?? 'Not listed'],
+    ['Status', formatStatus(detail.status)],
+    ['Season', formatSeason(detail.season, detail.seasonYear) ?? 'Not listed'],
+    ['Source', detail.source ?? 'Not listed'],
+    ['Origin', detail.countryOfOrigin ?? 'Not listed'],
+  ]
+  return (
+    <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-[var(--fs-line)] pt-7 text-xs sm:grid-cols-2 xl:grid-cols-3">
+      {facts.map(([term, value]) => (
+        <div className="grid grid-cols-[7rem_1fr] gap-3" key={term}>
+          <dt className="text-[var(--fs-muted)]">{term}</dt>
+          <dd className="font-bold text-[var(--fs-ink)]">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+export function AnimeDetailScreen({ airing, detail, relations }: {
+  airing: AnimeAiringSchedule | null
+  detail: AnimeTitleDetail
+  relations: AnimeFranchise | null
+}) {
+  const tabs = [
+    { href: '#episodes', label: 'Episodes', value: 'episodes' },
+    { href: '#overview', label: 'Overview', value: 'overview' },
+    { href: '#cast', label: 'Characters', value: 'cast' },
+    ...(detail.staff.length ? [{ href: '#staff', label: 'Staff', value: 'staff' }] : []),
+    ...(airing && airing.episodes.length ? [{ href: '#airing', label: 'Airing', value: 'airing' }] : []),
+    ...(relations?.relations.length ? [{ href: '#related', label: 'Related', value: 'related' }] : []),
+  ]
+  return (
+    <FilScreenShell activeKindTab="anime" pageHeading={undefined}>
+      <main className="mx-auto w-full max-w-[90rem]" data-consumit-anime-detail data-anilist-id={detail.anilistId}>
+        <AnimeHero detail={detail} />
+        <div className="mt-8 px-1 sm:px-3 lg:px-4">
+          <Tabs
+            activeValue="episodes"
+            aria-label={`${detail.titles.preferred} sections`}
+            items={tabs}
+          />
+          <section className="py-10 sm:py-12 lg:py-14" id="episodes" aria-labelledby="episodes-heading">
+            <AnimeEpisodesSection detail={detail} key={detail.anilistId} />
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="anime-about-heading">
+            <div className="max-w-5xl">
+              <SectionHeading id="anime-about-heading" title={`About ${detail.titles.preferred}`} />
+              <p className="mt-5 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)]">
+                {detail.description || 'No synopsis is currently available.'}
+              </p>
+              <AnimeDetailFacts detail={detail} />
+            </div>
+          </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="anime-cast-heading">
+            <SectionHeading id="anime-cast-heading" title="Characters & voice actors" />
+            <AnimeCastRail characters={detail.characters} />
+          </section>
+          {detail.staff.length ? (
+            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="staff" aria-labelledby="anime-staff-heading">
+              <SectionHeading id="anime-staff-heading" title="Staff" />
+              <AnimeStaffRail staff={detail.staff} />
+            </section>
+          ) : null}
+          {airing && airing.episodes.length ? (
+            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="airing" aria-labelledby="anime-airing-heading">
+              <SectionHeading description="Broadcast schedule from AniList" id="anime-airing-heading" title="Airing schedule" />
+              <AnimeAiringSection airing={airing} />
+            </section>
+          ) : null}
+          {relations?.relations.length ? (
+            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="anime-related-heading">
+              <SectionHeading id="anime-related-heading" title="Related" />
+              <AnimeTitleRail
+                description="Franchise relations from AniList"
+                id="anime-detail-related"
+                items={relations.relations.map((r) => r.anime)}
+                title="Relations"
+              />
+            </section>
+          ) : null}
+          {detail.externalLinks.length > 0 ? (
+            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="anime-links-heading">
+              <SectionHeading id="anime-links-heading" title="Links" />
+              <div className="mt-4 flex flex-wrap gap-2">
+                {detail.externalLinks.map((link) => (
+                  <a
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fs-line)] bg-[var(--fs-surface)] px-3 py-1.5 text-xs font-bold text-[var(--fs-ink)] transition-colors hover:border-[var(--fs-accent)]"
+                    href={link.url}
+                    key={link.id}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {link.site}
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      </main>
+    </FilScreenShell>
+  )
+}

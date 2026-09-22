@@ -37,6 +37,12 @@ services:
     ports:
       - "6379:6379"
 
+  playback-valkey:
+    # Published for host-run dev servers (`bun run dev`); the containerized
+    # API keeps using the internal network. 6380 stays reserved for valkey-test.
+    ports:
+      - "6381:6379"
+
   api:
     build:
       context: .
@@ -47,6 +53,9 @@ services:
     command: ["bun", "--filter", "@consumit/api", "dev"]
     environment:
       GENERATE_PRISMA: "1"
+      # The host .env points PLAYBACK_MEDIA_CONFIG at a Windows path for
+      # host-run dev; inside the container it must be the mounted copy.
+      PLAYBACK_MEDIA_CONFIG: /app/infra/playback/providers.local.json
     ports:
       - "3001:3001"
     volumes:
@@ -57,6 +66,9 @@ services:
       - /app/packages/contracts/node_modules
       - ./packages/provider-sdk:/app/packages/provider-sdk
       - /app/packages/provider-sdk/node_modules
+      # Writable so admin provider overrides persist to
+      # providers.local.overrides.json and survive API restarts.
+      - ./infra/playback:/app/infra/playback
     develop:
       watch:
         - path: ./apps/api

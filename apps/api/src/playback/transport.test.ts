@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
 import type { IncomingMessage } from 'node:http'
 import type { RequestOptions } from 'node:https'
+import { gzipSync } from 'node:zlib'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), request: vi.fn() }))
@@ -49,5 +50,26 @@ describe('provider network boundary', () => {
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, controller.signal)).rejects.toThrow()
     await expect(fetchMedia('https://user:password@media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow()
     expect(mocks.lookup).not.toHaveBeenCalled()
+  })
+  it('decodes gzip documents and strips transport framing headers', async () => {
+    const compressed = gzipSync('media')
+    mocks.request.mockImplementation((_url: URL, _options: RequestOptions, callback: (value: IncomingMessage) => void) => {
+      const request = Object.assign(new EventEmitter(), {
+        setTimeout: vi.fn(), destroy: vi.fn(),
+        end() { queueMicrotask(() => callback(Object.assign(Readable.from([compressed]), { statusCode: 200, headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', 'content-length': String(compressed.length) } }) as IncomingMessage)) },
+      })
+      return request
+    })
+    const result = await fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)
+    const chunks: Buffer[] = []
+    for await (const chunk of result.body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('media')
+    expect(result.headers.get('content-encoding')).toBeNull()
+    expect(result.headers.get('content-length')).toBeNull()
+    result.body.destroy()
+  })
+  it('rejects unknown content codings instead of handing over opaque bytes', async () => {
+    mocks.request.mockImplementationOnce(response(200, { 'content-type': 'application/json', 'content-encoding': 'zstd' }))
+    await expect(fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow('Unsupported provider document encoding')
   })
 })

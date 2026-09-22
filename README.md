@@ -8,28 +8,30 @@ The project now includes the shared interface system, core product screens, and 
 
 ## Local development
 
-Use Bun 1.4.0 and Node 24 LTS (pinned in `.node-version`).
+Use Bun 1.4.0 and Node 24 LTS (pinned in `.node-version`). The default loop is hybrid: data stores in Docker, app natively on the host for instant reload with no file-sync step and no restart.
 
-```bash
+```powershell
 bun install
+bun run dev:infra
+```
+
+In a second terminal, point the workspaces at the published stores. Copy the examples once, then set host addresses (Postgres is on 5434, Valkey on 6379, playback Valkey on 6381) and enable playback with the repo path to the local provider file:
+
+```powershell
+Copy-Item apps/api/.env.example apps/api/.env
+Copy-Item apps/web/.env.example apps/web/.env
+bun --filter @consumit/api db:migrate:deploy
 bun run dev
 ```
 
-Before starting the catalog locally, copy the two committed examples to ignored local files:
+Required in `apps/api/.env`: `TMDB_API_READ_TOKEN`, `AUTH_CODE_PEPPER`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM` (see the root `.env` for working values), plus `APP_ORIGIN=http://localhost:3000`, `DATABASE_URL=postgresql://consumit:consumit-local@127.0.0.1:5434/consumit`, `VALKEY_URL=valkey://127.0.0.1:6379/0`, `PLAYBACK_ENABLED=true`, `PLAYBACK_VALKEY_URL=valkey://127.0.0.1:6381/0`, `PLAYBACK_MEDIA_CONFIG=<absolute-path-to>/infra/playback/providers.local.json`. In `apps/web/.env`: `CONSUMIT_API_URL=http://127.0.0.1:3001`, `NEXT_PUBLIC_SITE_URL=http://localhost:3000`.
 
-```bash
-cp apps/api/.env.example apps/api/.env.local
-cp apps/web/.env.example apps/web/.env.local
-```
+Then open `http://localhost:3000` directly — Next.js rewrites `/v1/*` to the API in development, so no gateway is involved. Edits reload instantly: the API watcher runs from the repo root so `apps/api` and the shared `packages/*` are all watched, and Fast Refresh updates the web app. Do not re-copy the `.env.example` files afterwards — that wipes the working values above.
 
-Set `TMDB_API_READ_TOKEN` in `apps/api/.env.local` to a TMDB API Read Access Token. Keep it server-only; the web application talks to the Consumit API and never calls TMDB directly. Bun does not automatically load a package-level `.env.local` from the monorepo root, so either start each workspace from its package directory or export the variables in your shell before `bun run dev`.
-
-For PowerShell from the repository root:
+If a stale dev server blocks startup (`Another next dev server is already running`), kill the listed PID and rerun:
 
 ```powershell
-$env:TMDB_API_READ_TOKEN = '<your-read-access-token>'
-$env:TMDB_LANGUAGE = 'en-US'
-$env:TMDB_REGION = 'US'
+taskkill /PID <pid> /F
 bun run dev
 ```
 
@@ -57,11 +59,11 @@ Build individual Consumit images with `docker build --target api`, `--target web
 
 Production images bake the source in at build time, so edits stay invisible until the next `docker compose up --build`. For development, run the dev overlay instead: it builds the `api`, `web`, and `letterboxd-worker` services from source and runs their watch-mode dev servers, syncing every saved change into the running containers (bind mounts alone are not used because Windows mounts do not reliably emit the file events the dev servers watch for). Edits reach `http://localhost:8080` within seconds, including Next.js hot updates through the gateway. Postgres, Valkey, migrations, and the gateway stay exactly as in production:
 
-```bash
-bun run docker:dev
+```powershell
+bun run docker:dev:watch
 ```
 
-Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and production stacks share the same Postgres and Valkey volumes, so run only one at a time. Return to production-like images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart.
+Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and production stacks share the same Postgres and Valkey volumes, so run only one at a time. Return to production-like images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart. For the containerized stack with playback enabled (same watch behavior, API served through the gateway), use `bun run docker:dev:playback` and open `http://localhost:8080` — without the playback file the API boots with zero providers and every `/v1/playback/resolve` returns 503.
 
 ## Project guide
 

@@ -11,7 +11,10 @@ const STANDARD_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0
 export function decipherPayload(data: string): any {
   const map: Record<string, string> = {}
   for (let i = 0; i < CIPHER_ALPHABET.length; i++) {
-    map[CIPHER_ALPHABET[i]] = STANDARD_ALPHABET[i]
+    const from = CIPHER_ALPHABET[i]
+    const to = STANDARD_ALPHABET[i]
+    if (from === undefined || to === undefined) continue
+    map[from] = to
   }
   const standardB64 = data.split('').map((c) => map[c] ?? c).join('')
   const jsonStr = Buffer.from(standardB64, 'base64').toString('utf8')

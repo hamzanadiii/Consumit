@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default async function FriendsPage() {
   const session = await getServerSession()
   if (session.status === 'anonymous') redirect('/sign-in?next=%2Ffriends')
-  if (session.status === 'unavailable') return <SessionUnavailableScreen activeHref="/friends" />
+  if (session.status === 'unavailable') redirect('/sign-in?next=%2Ffriends')
 
   return <FriendsScreen />
 }

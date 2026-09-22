@@ -1,9 +1,11 @@
+import type { AnimeTitleSummary } from '@consumit/contracts'
 import type { Metadata } from 'next'
 
 import { SearchScreen } from './search-screen'
 
 import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
 
+import { getAnimeTrending, searchAnime } from '@/lib/anime-api'
 import { getCatalogDiscovery, searchCatalog } from '@/lib/catalog-api'
 
 export const metadata: Metadata = {
@@ -19,6 +21,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const { q } = await searchParams
   const initialQuery = (Array.isArray(q) ? (q[0] ?? '') : (q ?? '')).trim().slice(0, 100)
   const queryTooShort = initialQuery.length === 1
+  // Anime is an AniList domain: TMDB never serves it (the catalog adapter
+  // rejects `anime`), so search AniList alongside TMDB. Best-effort — an
+  // anime outage must not take down movie/series results.
+  let animeItems: AnimeTitleSummary[] = []
+  try {
+    const anime = initialQuery.length >= 2
+      ? await searchAnime(initialQuery)
+      : await getAnimeTrending(1)
+    animeItems = anime.items
+  } catch {
+    animeItems = []
+  }
   let page
   try {
     page = initialQuery.length >= 2
@@ -28,5 +42,5 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     return <CatalogUnavailableScreen error={error} />
   }
 
-  return <SearchScreen initialQuery={initialQuery} page={page} queryTooShort={queryTooShort} />
+  return <SearchScreen animeResults={animeItems} initialQuery={initialQuery} page={page} queryTooShort={queryTooShort} />
 }

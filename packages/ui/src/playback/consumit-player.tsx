@@ -10,22 +10,31 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  AudioLines,
+  ArrowLeft,
   Captions,
-  CaptionsOff,
   Check,
-  ChevronLeft,
+  ChevronRight,
+  Gauge,
+  Heart,
   Loader2,
   Maximize,
   Minimize,
+  Minus,
+  Moon,
+  Music,
   PictureInPicture2,
+  Plus,
   RotateCcw,
   RotateCw,
   Server,
-  SunMedium,
+  Settings,
+  SkipForward,
+  Sun,
   TriangleAlert,
   Volume2,
   VolumeX,
+  Wand2,
+  X,
 } from 'lucide-react'
 
 import { cn } from '../lib/cn'
@@ -36,13 +45,50 @@ import {
   type DirectMediaSource,
 } from './media-source'
 import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
+import {
+  clampSubtitleDelayMs,
+  computeSyncDelayMs,
+  cueTextAt,
+  fetchVttCues,
+  formatSubtitleDelayMs,
+  nativeLanguageName,
+  PREFERRED_LANGUAGE_CODES,
+  readStoredSubtitleDelayMs,
+  readStoredSubtitleLanguages,
+  savePreferredSubtitleLanguages,
+  SUBTITLE_DELAY_KEY,
+  type SubtitleCue,
+} from './subtitle-sync'
 
-export type PlayerMenuId = 'audio' | 'display' | 'server' | 'subtitles'
+export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync'
+
+export type CaptionSize = 'small' | 'medium' | 'large' | 'xlarge'
+export type CaptionBackground = 'cinematic' | 'boxed' | 'subtle'
+export type CaptionPosition = 'bottom' | 'top'
+/** FilScreen vibe default: Charter film-poster serif. `sans` is the compact DejaVu interface voice. */
+export type CaptionFont = 'filscreen' | 'sans'
 
 export type PlayerOption = {
   detail?: string | undefined
   label: string
   value: string
+  /** ISO-3166 alpha-2 serving region; rendered as the server flag. */
+  region?: string | undefined
+  /** Breaker-derived serving state; shown, never blocking. */
+  health?: 'ok' | 'degraded' | undefined
+  /** Mirror family (base adapter) and mirror name (`auto` for the
+   *  whole-provider aggregate). The server menu groups by family so
+   *  members choose between mirrors with their qualities. Absent for
+   *  legacy callers, which render as one ungrouped family. */
+  family?: string | undefined
+  mirror?: string | undefined
+  /** False when this mirror did not answer for the title. The row stays
+   *  selectable: a tap attempts a fresh resolve and auto-advances on
+   *  failure. Absent means available (legacy payloads). */
+  available?: boolean | undefined
+  /** BCP-47-ish language code for subtitle tracks; rendered natively
+   *  (العربية, Español, …) PROVE-embed style. Absent for Off. */
+  language?: string | undefined
 }
 
 export type ConsumitPlayerProps = Omit<
@@ -57,12 +103,17 @@ export type ConsumitPlayerProps = Omit<
   statusTone?: 'healthy' | 'neutral' | 'unavailable' | undefined
   title: string
   videoClassName?: string | undefined
-  /** When set, renders the prototype top bar: back control, title context, brand mark. */
+  /** When set, renders the top bar: back control, title context, quality and subtitle shortcuts. */
   backHref?: string | undefined
   onBack?: (() => void) | undefined
   /** Secondary top-line context, e.g. "Playing from Consumit · 4K". */
   topMeta?: ReactNode | undefined
-  brandSrc?: string | undefined
+  /** Pause-overlay facts line, e.g. "2026 · 1h 40m · ★ 6.5 · PG-13". Shown while paused. */
+  pauseFacts?: ReactNode | undefined
+  /** Pause-overlay title artwork logo (TMDB artwork mark). Falls back to the serif title. Shown while paused. */
+  pauseLogoUrl?: string | undefined
+  /** Pause-overlay synopsis, clamped to three lines. Shown while paused. */
+  pauseOverview?: string | undefined
   chapters?: readonly ChapterCue[] | undefined
 
   audioOptions?: readonly PlayerOption[] | undefined
@@ -77,6 +128,25 @@ export type ConsumitPlayerProps = Omit<
   extraSubtitles?: readonly { id: string; label: string; language: string; url: string }[] | undefined
   /** Current cue text rendered in the prototype subtitle bar. Native <track> cues still render natively. */
   caption?: string | undefined
+  /** Caption appearance. Uncontrolled by default: stored on the device and applied after mount. */
+  captionSize?: CaptionSize | undefined
+  captionBackground?: CaptionBackground | undefined
+  captionPosition?: CaptionPosition | undefined
+  captionFont?: CaptionFont | undefined
+  onCaptionSizeChange?: ((value: CaptionSize) => void) | undefined
+  onCaptionBackgroundChange?: ((value: CaptionBackground) => void) | undefined
+  onCaptionPositionChange?: ((value: CaptionPosition) => void) | undefined
+  onCaptionFontChange?: ((value: CaptionFont) => void) | undefined
+  /** Subtitle sync offset in milliseconds (old-player semantics: the cue
+   *  shown at time `t` contains `t + delayMs / 1000`). Uncontrolled by
+   *  default: stored on the device and applied after mount. */
+  subtitleDelayMs?: number | undefined
+  onSubtitleDelayMsChange?: ((value: number) => void) | undefined
+  /** Preferred subtitle languages in priority order (max 3). The engine
+   *  tries these first from every subtitle provider. Uncontrolled by
+   *  default: stored on the device and applied after mount. */
+  subtitleLanguages?: readonly string[] | undefined
+  onSubtitleLanguagesChange?: ((value: string[]) => void) | undefined
   qualityOptions?: readonly PlayerOption[] | undefined
   selectedQuality?: string | undefined
   onQualityChange?: ((value: string) => void) | undefined
@@ -85,6 +155,10 @@ export type ConsumitPlayerProps = Omit<
   onRateChange?: ((value: number) => void) | undefined
   brightness?: number | undefined
   onBrightnessChange?: ((value: number) => void) | undefined
+  /** Skip intro/outro automatically when ranges are known. Uncontrolled by
+   *  default: stored on the device and applied after mount. */
+  autoSkip?: boolean | undefined
+  onAutoSkipChange?: ((value: boolean) => void) | undefined
   /** Inactivity delay before the control chrome fades. */
   autoHideMs?: number | undefined
   /** Alternative playback providers for manual source switching. */
@@ -94,7 +168,7 @@ export type ConsumitPlayerProps = Omit<
   onRetry?: (() => void) | undefined
   resumeAt?: number | undefined
   resumePlaying?: boolean | undefined
-  onSourceError?: ((reason: 'network' | 'media') => void) | undefined
+  onSourceError?: ((reason: 'network' | 'media' | 'gone') => void) | undefined
   onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
 }
 
@@ -117,6 +191,71 @@ const DEFAULT_QUALITIES: readonly PlayerOption[] = [
 const DEFAULT_RATES: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
 const SEEK_STEP = 10
+
+const CAPTION_SIZE_KEY = 'consumit.player.caption-size'
+const CAPTION_BACKGROUND_KEY = 'consumit.player.caption-background'
+const CAPTION_POSITION_KEY = 'consumit.player.caption-position'
+const CAPTION_FONT_KEY = 'consumit.player.caption-font'
+
+const CAPTION_SIZES: readonly CaptionSize[] = ['small', 'medium', 'large', 'xlarge']
+const CAPTION_BACKGROUNDS: readonly CaptionBackground[] = ['cinematic', 'boxed', 'subtle']
+const CAPTION_POSITIONS: readonly CaptionPosition[] = ['bottom', 'top']
+const CAPTION_FONTS: readonly CaptionFont[] = ['filscreen', 'sans']
+
+function readStoredCaption<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw != null && (allowed as readonly string[]).includes(raw)) return raw as T
+    return fallback
+  } catch {
+    return fallback
+  }
+}
+
+function captionSizeClass(size: CaptionSize, fullscreen: boolean) {
+  switch (size) {
+    case 'small':
+      return 'text-[15px] sm:text-base'
+    case 'large':
+      return fullscreen ? 'text-2xl sm:text-3xl' : 'text-xl sm:text-2xl'
+    case 'xlarge':
+      return fullscreen ? 'text-[28px] sm:text-4xl' : 'text-2xl sm:text-3xl'
+    case 'medium':
+    default:
+      return fullscreen ? 'text-xl sm:text-2xl' : 'text-lg sm:text-xl'
+  }
+}
+
+function captionFontClass(font: CaptionFont) {
+  // FilScreen vibe default: Charter film-poster serif with tight tracking.
+  // Sans falls back to the compact DejaVu interface voice.
+  return font === 'sans'
+    ? 'font-interface font-bold tracking-[-0.01em]'
+    : 'font-display font-normal tracking-[-0.02em]'
+}
+
+/** Cursive RTL scripts (Arabic) break letter joining under non-zero
+ *  letter-spacing in Chromium, so cues carrying them render untracked.
+ *  Hex ranges keep the source ASCII-only. */
+function hasCursiveRtlScript(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0
+    if ((code >= 0x0590 && code <= 0x08ff) || (code >= 0xfb50 && code <= 0xfdff) || (code >= 0xfe70 && code <= 0xfeff)) return true
+  }
+  return false
+}
+
+function captionBackgroundClass(background: CaptionBackground) {
+  switch (background) {
+    case 'boxed':
+      return 'rounded-lg bg-black/85 px-4 py-2 backdrop-blur-sm drop-shadow-md'
+    case 'subtle':
+      return 'rounded-md bg-black/60 px-3 py-1.5 backdrop-blur-[2px] [text-shadow:0_1px_8px_rgb(0_0_0/0.9)]'
+    case 'cinematic':
+    default:
+      return 'bg-transparent px-4 py-1 [text-shadow:0_2px_10px_rgb(0_0_0/0.95),0_0_28px_rgb(0_0_0/0.7)]'
+  }
+}
 
 function readStoredNumber(key: string, fallback: number, min: number, max: number) {
   try {
@@ -146,6 +285,35 @@ function storeValue(key: string, value: string) {
   }
 }
 
+const FAVORITE_SERVERS_KEY = 'consumit.favorite-servers'
+
+function readFavoriteServers(): string[] {
+  try {
+    const raw = window.localStorage.getItem(FAVORITE_SERVERS_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+const REGION_NAMES: Record<string, string> = {
+  US: 'United States', DE: 'Germany', FR: 'France', IN: 'India', GB: 'United Kingdom',
+  JP: 'Japan', CA: 'Canada', AU: 'Australia', NL: 'Netherlands', SG: 'Singapore',
+}
+
+function regionFlag(code: string | undefined): string | null {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return null
+  return String.fromCodePoint(...[...code.toUpperCase()].map((char) => 127397 + char.charCodeAt(0)))
+}
+
+function regionName(code: string | undefined): string | null {
+  if (!code) return null
+  const upper = code.toUpperCase()
+  return REGION_NAMES[upper] ?? upper
+}
+
 /**
  * Menus are keyed by `option.value`. Upstream subtitle sessions have produced
  * duplicate values (e.g. two `external:consumit-external-stellar-sub-0`
@@ -163,6 +331,64 @@ function dedupePlayerOptions(options: readonly PlayerOption[]): PlayerOption[] {
     unique.push(option)
   }
   return unique
+}
+
+/**
+ * FilScreen-flavored settings row: calm hover wash, soft orange wash plus an
+ * inset accent ring and a check for selection — the sidebar-active language.
+ * Keyboard focus keeps its own visible ring.
+ */
+function settingsRowClass(selected: boolean) {
+  return cn(
+    'flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm outline-none transition-all motion-reduce:transition-none',
+    selected
+      ? 'bg-orange/15 font-bold text-ink shadow-[inset_0_0_0_1px_var(--color-orange)] focus-visible:ring-2 focus-visible:ring-orange'
+      : 'text-copy hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange',
+  )
+}
+
+/**
+ * Floating frosted-glass settings menu for the FilScreen vibe:
+ * a clean bottom sheet on small screens, and a sleek floating popover card
+ * anchored in the bottom-right above the player controls on desktop.
+ */
+const RAIL_PANEL_CLASS =
+  'absolute inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-[#0b0b0e] p-1 sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card sm:border sm:border-white/15 sm:p-2'
+
+/**
+ * FilScreen-flavored option chip for quality and speed: a real bordered chip
+ * that reads selected through the signal-orange glow and ink contrast.
+ */
+function settingsChipClass(selected: boolean, wide = false) {
+  return cn(
+    'min-h-10 rounded-control text-sm tabular-nums outline-none transition-all motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:opacity-40',
+    wide ? 'px-3.5' : 'min-w-11 px-2.5',
+    selected
+      ? 'border border-orange bg-orange/20 font-bold text-orange'
+      : 'border border-white/15 bg-white/5 text-copy hover:border-white/30 hover:bg-white/10 hover:text-ink',
+  )
+}
+
+function QualityIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className ?? 'size-5'}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.75}
+      viewBox="0 0 24 24"
+    >
+      <rect height="15" rx="3" width="19" x="2.5" y="4.5" />
+      <path d="M6.5 8.5v7" />
+      <path d="M10.5 8.5v7" />
+      <path d="M6.5 12h4" />
+      <path d="M14.5 8.5v7" />
+      <path d="M14.5 8.5h1.75a3.5 3.5 0 0 1 0 7H14.5" />
+    </svg>
+  )
 }
 
 function PlayerIconButton({
@@ -191,10 +417,12 @@ function PlayerIconButton({
       aria-label={label}
       aria-pressed={menuId ? undefined : active}
       className={cn(
-        'grid size-11 shrink-0 place-items-center rounded-control outline-none transition-colors motion-reduce:transition-none',
-        'hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-orange',
-        'disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent',
-        active ? 'text-orange' : 'text-ink',
+        'grid size-10 shrink-0 place-items-center rounded-control border outline-none transition-all motion-reduce:transition-none',
+        'focus-visible:ring-2 focus-visible:ring-orange',
+        active
+          ? 'border-orange bg-orange/15 text-orange'
+          : 'border-white/10 bg-white/5 text-ink hover:border-white/25 hover:bg-white/10',
+        'disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:text-muted',
       )}
       disabled={disabled}
       onClick={onClick}
@@ -210,8 +438,9 @@ export function ConsumitPlayer({
   autoPlay,
   audioOptions: suppliedAudioOptions,
   autoHideMs = 3000,
+  autoSkip: controlledAutoSkip,
+  onAutoSkipChange,
   backHref,
-  brandSrc = '/assets/consumit-mark.svg',
   brightness: controlledBrightness,
   caption,
   chapters,
@@ -222,6 +451,18 @@ export function ConsumitPlayer({
   onAudioChange,
   onBack,
   onBrightnessChange,
+  onCaptionBackgroundChange,
+  onCaptionFontChange,
+  onCaptionPositionChange,
+  onCaptionSizeChange,
+  onSubtitleDelayMsChange,
+  onSubtitleLanguagesChange,
+  subtitleDelayMs: controlledSubtitleDelayMs,
+  subtitleLanguages: controlledSubtitleLanguages,
+  captionBackground: controlledCaptionBackground,
+  captionFont: controlledCaptionFont,
+  captionPosition: controlledCaptionPosition,
+  captionSize: controlledCaptionSize,
   onDurationChange,
   onPause,
   onPlay,
@@ -238,6 +479,9 @@ export function ConsumitPlayer({
   onSubtitleChange,
   onTimeUpdate,
   onVolumeChange,
+  pauseFacts,
+  pauseLogoUrl,
+  pauseOverview,
   playbackRates = DEFAULT_RATES,
   posterSrc,
   preload = 'metadata',
@@ -269,11 +513,53 @@ export function ConsumitPlayer({
     () => dedupePlayerOptions(suppliedSubtitleOptions ?? (source ? [...(engineState?.subtitles ?? []), { value: 'off', label: 'Off' }] : DEFAULT_SUBTITLES)),
     [suppliedSubtitleOptions, source, engineState?.subtitles],
   )
+  /* PROVE-embed style track count (Off excluded) for the menu header
+   *  and the toolbar badge. */
+  const subtitleTrackCount = subtitleOptions.filter((option) => option.value !== 'off').length
   const dedupedServerOptions = useMemo(
     () => (serverOptions ? dedupePlayerOptions(serverOptions) : undefined),
     [serverOptions],
   )
+  // Favorite servers persist on the device and sort first. Storage reads stay
+  // in the mount effect so SSR and first paint never disagree (hydration).
+  const [favoriteServers, setFavoriteServers] = useState<readonly string[]>([])
+  useEffect(() => { setFavoriteServers(readFavoriteServers()) }, [])
+  const toggleFavoriteServer = useCallback((value: string) => {
+    setFavoriteServers((current) => {
+      const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value]
+      storeValue(FAVORITE_SERVERS_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+  const orderedServerOptions = useMemo(() => {
+    if (!dedupedServerOptions) return undefined
+    const favorites = new Set(favoriteServers)
+    return [...dedupedServerOptions].sort((a, b) => Number(favorites.has(b.value)) - Number(favorites.has(a.value)))
+  }, [dedupedServerOptions, favoriteServers])
+  // Mirror families: options carrying a family group under it (each mirror
+  // keeps its own quality detail); legacy flat options render ungrouped
+  // exactly as before.
+  const displayMirrorName = (option: PlayerOption) => {
+    if (!option.family || !option.mirror || option.mirror === 'auto') return option.family ? 'Auto' : option.label
+    return option.mirror.charAt(0).toUpperCase() + option.mirror.slice(1)
+  }
+  const displayFamilyName = (family: string) => family.charAt(0).toUpperCase() + family.slice(1)
+  const serverGroups = useMemo(() => {
+    if (!orderedServerOptions) return undefined
+    if (!orderedServerOptions.some((option) => option.family)) {
+      return [{ family: '', options: orderedServerOptions }]
+    }
+    const groups: { family: string; options: PlayerOption[] }[] = []
+    for (const option of orderedServerOptions) {
+      const family = option.family ?? option.value
+      let group = groups.find((entry) => entry.family === family)
+      if (!group) { group = { family, options: [] }; groups.push(group) }
+      group.options.push(option)
+    }
+    return groups
+  }, [orderedServerOptions])
   const dedupedRates = useMemo(() => [...new Set(playbackRates)], [playbackRates])
+  const showServerSection = (dedupedServerOptions?.length ?? 0) > 1
   const shellRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hideTimer = useRef<number | undefined>(undefined)
@@ -289,16 +575,8 @@ export function ConsumitPlayer({
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [bufferedEnd, setBufferedEnd] = useState(0)
-  const [isMuted, setIsMuted] = useState(() => {
-    if (typeof muted === 'boolean') return muted
-    if (typeof window === 'undefined') return false
-    try {
-      return window.localStorage.getItem('consumit.player.muted') === '1'
-    } catch {
-      return false
-    }
-  })
-  const [volume, setVolume] = useState(() => (typeof window === 'undefined' ? 0.9 : readStoredNumber('consumit.player.volume', 0.9, 0, 1)))
+  const [isMuted, setIsMuted] = useState(() => (typeof muted === 'boolean' ? muted : false))
+  const [volume, setVolume] = useState(0.9)
   const [isPlaying, setIsPlaying] = useState(Boolean(autoPlay))
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPip, setIsPip] = useState(false)
@@ -307,25 +585,167 @@ export function ConsumitPlayer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [activeMenu, setActiveMenu] = useState<PlayerMenuId | null>(null)
   const [controlsVisible, setControlsVisible] = useState(true)
+  /* Visual sync panel (old-player HUD): click the cue line the moment it is
+   * spoken to solve the offset, plus ±50ms fine tuning. */
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  const [syncHovering, setSyncHovering] = useState(false)
+  const syncListRef = useRef<HTMLDivElement>(null)
+  const syncStatusTimer = useRef<number | undefined>(undefined)
+  useEffect(
+    () => () => {
+      if (syncStatusTimer.current != null) window.clearTimeout(syncStatusTimer.current)
+    },
+    [],
+  )
+  /* Old-master-inspired transient feedback: brief ±10s flash on seek. */
+  const [lastSkip, setLastSkip] = useState<{ amount: number; at: number; direction: 'forward' | 'backward' } | null>(null)
+  const lastSkipTimer = useRef<number | undefined>(undefined)
+  /* Old-master-inspired scrub hover preview (desktop pointer only). */
+  const [hoverTime, setHoverTime] = useState<number | null>(null)
 
   const [internalAudio, setInternalAudio] = useState(() => audioOptions[0]?.value ?? 'english')
-  const [internalSubtitle, setInternalSubtitle] = useState(() =>
-    typeof window === 'undefined' ? 'english' : readStoredString('consumit.player.subtitles', 'english'),
-  )
+  const [internalSubtitle, setInternalSubtitle] = useState('english')
+  const [activeCue, setActiveCue] = useState<string>('')
   const [internalQuality, setInternalQuality] = useState(() => qualityOptions[0]?.value ?? 'auto')
-  const [internalRate, setInternalRate] = useState(() =>
-    typeof window === 'undefined' ? 1 : readStoredNumber('consumit.player.rate', 1, 0.25, 4),
-  )
-  const [internalBrightness, setInternalBrightness] = useState(() =>
-    typeof window === 'undefined' ? 1 : readStoredNumber('consumit.player.brightness', 1, 0.6, 1.3),
-  )
+  const [internalRate, setInternalRate] = useState(1)
+  const [internalBrightness, setInternalBrightness] = useState(1)
+  const [internalCaptionSize, setInternalCaptionSize] = useState<CaptionSize>('medium')
+  const [internalCaptionBackground, setInternalCaptionBackground] = useState<CaptionBackground>('cinematic')
+  const [internalCaptionPosition, setInternalCaptionPosition] = useState<CaptionPosition>('bottom')
+  const [internalCaptionFont, setInternalCaptionFont] = useState<CaptionFont>('filscreen')
+  const [internalSubtitleDelayMs, setInternalSubtitleDelayMs] = useState(0)
+  const [internalSubtitleLanguages, setInternalSubtitleLanguages] = useState<string[]>([])
+  const [internalAutoSkip, setInternalAutoSkip] = useState(true)
+  const autoSkip = controlledAutoSkip ?? internalAutoSkip
+  /* Parsed cues for the sync path (delay ≠ 0) and the visual sync panel.
+   * Bounded in-memory cache; each entry is one fetched subtitle file. */
+  const [subtitleCues, setSubtitleCues] = useState<readonly SubtitleCue[]>([])
+  const subtitleCueCache = useRef(new Map<string, readonly SubtitleCue[]>())
+
+  // Stored player preferences apply after mount, never during render:
+  // reading localStorage in the first render makes the client HTML differ
+  // from SSR for anyone with non-default stored values (hydration mismatch
+  // on the subtitles toggle, volume slider, rate, and brightness).
+  useEffect(() => {
+    if (typeof muted !== 'boolean') {
+      try {
+        if (window.localStorage.getItem('consumit.player.muted') === '1') setIsMuted(true)
+      } catch {
+        /* Storage is optional. */
+      }
+    }
+    setVolume(readStoredNumber('consumit.player.volume', 0.9, 0, 1))
+    setInternalSubtitle(readStoredString('consumit.player.subtitles', 'english'))
+    setInternalRate(readStoredNumber('consumit.player.rate', 1, 0.25, 4))
+    setInternalBrightness(readStoredNumber('consumit.player.brightness', 1, 0.6, 1.3))
+    setInternalCaptionSize(readStoredCaption(CAPTION_SIZE_KEY, 'medium', CAPTION_SIZES))
+    setInternalCaptionBackground(readStoredCaption(CAPTION_BACKGROUND_KEY, 'cinematic', CAPTION_BACKGROUNDS))
+    setInternalCaptionPosition(readStoredCaption(CAPTION_POSITION_KEY, 'bottom', CAPTION_POSITIONS))
+    setInternalCaptionFont(readStoredCaption(CAPTION_FONT_KEY, 'filscreen', CAPTION_FONTS))
+    setInternalSubtitleDelayMs(readStoredSubtitleDelayMs())
+    setInternalSubtitleLanguages(readStoredSubtitleLanguages())
+    if (controlledAutoSkip == null) {
+      try {
+        if (window.localStorage.getItem('consumit.player.auto-skip') === '0') setInternalAutoSkip(false)
+      } catch {
+        /* Storage is optional. */
+      }
+    }
+  }, [muted, controlledAutoSkip])
 
   const selectedAudio = controlledAudio ?? (source ? engineState?.audioTrack : undefined) ?? internalAudio
   const selectedSubtitle = controlledSubtitle ?? (source ? engineState?.subtitleTrack : undefined) ?? internalSubtitle
   const selectedQuality = controlledQuality ?? (source ? engineState?.quality : undefined) ?? internalQuality
   const selectedRate = controlledRate ?? internalRate
   const brightness = controlledBrightness ?? internalBrightness
+  const captionSize = controlledCaptionSize ?? internalCaptionSize
+  const captionBackground = controlledCaptionBackground ?? internalCaptionBackground
+  const captionPosition = controlledCaptionPosition ?? internalCaptionPosition
+  const captionFont = controlledCaptionFont ?? internalCaptionFont
+  const subtitleDelayMs = controlledSubtitleDelayMs ?? internalSubtitleDelayMs
+  const subtitleLanguages = controlledSubtitleLanguages ?? internalSubtitleLanguages
   const captionsOn = selectedSubtitle !== 'off'
+  /* Overlay cue text and its script: Arabic cues render untracked so letter
+   *  joining survives Chromium's letter-spacing handling. */
+  const overlayCueText = caption ?? (activeCue || undefined)
+  const overlayCueUntracked = overlayCueText != null && hasCursiveRtlScript(overlayCueText)
+
+  /* The old player reset the sync offset on episode change. Titles carry
+   * the episode identity here, so a new title restarts the offset. */
+  const titleRef = useRef(title)
+  useEffect(() => {
+    if (titleRef.current !== title) {
+      titleRef.current = title
+      if (controlledSubtitleDelayMs == null) setInternalSubtitleDelayMs(0)
+      storeValue(SUBTITLE_DELAY_KEY, '0')
+      onSubtitleDelayMsChange?.(0)
+    }
+  }, [title, controlledSubtitleDelayMs, onSubtitleDelayMsChange])
+
+  /* Skip-intro ranges ride the resolved source. The button offers a manual
+   * jump; auto-skip jumps on entry while playing and re-arms on exit, so a
+   * deliberate rewind back into the range is respected, not fought. */
+  const skipSegments = source?.skipSegments ?? []
+  const activeSkip = skipSegments.find((segment) => currentTime >= segment.start && currentTime < segment.end - 0.25 && segment.end > segment.start)
+  const skipArmed = useRef<string | null>(null)
+  const jumpSkip = useCallback(() => {
+    const video = videoRef.current
+    if (!video || !activeSkip) return
+    const end = Number.isFinite(video.duration) && video.duration > 0 ? Math.min(activeSkip.end, video.duration) : activeSkip.end
+    try {
+      video.currentTime = end
+    } catch {
+      /* Seeking is best-effort. */
+    }
+  }, [activeSkip])
+  function toggleAutoSkip() {
+    if (controlledAutoSkip != null) {
+      onAutoSkipChange?.(!autoSkip)
+      return
+    }
+    setInternalAutoSkip((current) => {
+      const next = !current
+      storeValue('consumit.player.auto-skip', next ? '1' : '0')
+      return next
+    })
+  }
+  useEffect(() => {
+    const video = videoRef.current
+    if (!activeSkip) {
+      skipArmed.current = null
+      return
+    }
+    if (!video || !autoSkip || video.paused || !hasSource || hasError) return
+    const key = `${source?.src ?? ''}:${activeSkip.kind}:${activeSkip.start}`
+    if (skipArmed.current === key) return
+    skipArmed.current = key
+    jumpSkip()
+  }, [autoSkip, activeSkip, hasSource, hasError, isPlaying, source, jumpSkip])
+
+  const [sleepTimer, setSleepTimer] = useState<number | null>(null)
+  const sleepTimerTimeout = useRef<number | undefined>(undefined)
+
+  const cycleSleepTimer = useCallback(() => {
+    const sequence: (number | null)[] = [null, 15, 30, 45, 60]
+    setSleepTimer((prev) => {
+      const next = sequence[(sequence.indexOf(prev) + 1) % sequence.length] ?? null
+      if (sleepTimerTimeout.current != null) window.clearTimeout(sleepTimerTimeout.current)
+      if (next != null) {
+        sleepTimerTimeout.current = window.setTimeout(() => {
+          videoRef.current?.pause()
+          setIsPlaying(false)
+          setSleepTimer(null)
+        }, next * 60 * 1000)
+      }
+      return next
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (sleepTimerTimeout.current != null) window.clearTimeout(sleepTimerTimeout.current)
+    }
+  }, [])
 
   const sortedChapters = useMemo(
     () => (chapters ? [...chapters].sort((a, b) => a.startTime - b.startTime) : []),
@@ -346,16 +766,30 @@ export function ConsumitPlayer({
 
   const pipSupported = typeof window !== 'undefined' && typeof document !== 'undefined' && (document.pictureInPictureEnabled === true || 'webkitSetPresentationMode' in HTMLVideoElement.prototype)
 
-  const pokeControls = useCallback(() => {
-    setControlsVisible(true)
-    if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
-    hideTimer.current = undefined
-  }, [])
-
   const scheduleHide = useCallback(() => {
     if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
-    hideTimer.current = window.setTimeout(() => setControlsVisible(false), autoHideMs)
-  }, [autoHideMs])
+    if (isPlaying && activeMenu == null) {
+      hideTimer.current = window.setTimeout(() => setControlsVisible(false), autoHideMs)
+    }
+  }, [autoHideMs, isPlaying, activeMenu])
+
+  const pokeControls = useCallback(() => {
+    setControlsVisible(true)
+    scheduleHide()
+  }, [scheduleHide])
+
+  useEffect(() => {
+    if (isPlaying && activeMenu == null) {
+      scheduleHide()
+    } else {
+      setControlsVisible(true)
+      if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+      hideTimer.current = undefined
+    }
+    return () => {
+      if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+    }
+  }, [isPlaying, activeMenu, scheduleHide])
 
   /* Visual controls subscribe to a headless controller; fixtures may still use src. */
   useEffect(() => {
@@ -368,7 +802,10 @@ export function ConsumitPlayer({
         setHasError(snapshot.phase === 'failed')
         if (snapshot.needsGesture) { setIsPlaying(false); setControlsVisible(true) }
       },
-      fatal(reason) { setErrorMessage('This source could not keep playing.'); playbackCallbacks.current.onSourceError?.(reason) },
+      fatal(reason) {
+        setErrorMessage(reason === 'gone' ? 'This source is no longer available.' : 'This source could not keep playing.')
+        playbackCallbacks.current.onSourceError?.(reason)
+      },
       event(event) { playbackCallbacks.current.onPlaybackEvent?.(event) },
     })
     controllerRef.current = controller
@@ -379,9 +816,22 @@ export function ConsumitPlayer({
     if (source) void controllerRef.current?.load(source, playbackCallbacks.current.resumeAt, playbackCallbacks.current.resumePlaying)
   }, [source])
 
+  /* One merged track list — the active source's tracks plus every
+   *  aggregated extra track — owned by a single call, so server switches
+   *  reconcile the shared subtitle menu instead of dropping it. */
+  const allExternalSubtitles = useMemo(() => {
+    const fromSource = (source?.subtitles ?? []).map((track) => ({
+      id: track.id,
+      label: track.label,
+      language: track.language,
+      url: track.url,
+    }))
+    return [...fromSource, ...(extraSubtitles ?? [])]
+  }, [source, extraSubtitles])
+
   useEffect(() => {
-    controllerRef.current?.externalSubtitles(extraSubtitles ?? [])
-  }, [extraSubtitles])
+    controllerRef.current?.externalSubtitles(allExternalSubtitles)
+  }, [allExternalSubtitles])
 
   useEffect(() => {
     if (typeof muted === 'boolean') setIsMuted(muted)
@@ -428,6 +878,88 @@ export function ConsumitPlayer({
       /* subtitle tracks are enhancement-only */
     }
   }, [captionsOn, children, source])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const updateCues = () => {
+      if (!captionsOn) {
+        setActiveCue('')
+        return
+      }
+      // Sync path (old-player semantics): match parsed cues against the
+      // delay-shifted clock. Falls through to native cues while the file
+      // loads or when it cannot be fetched.
+      if (subtitleDelayMs !== 0 && subtitleCues.length > 0) {
+        try {
+          setActiveCue(cueTextAt(subtitleCues, video.currentTime || 0, subtitleDelayMs))
+        } catch {
+          /* cue matching is best-effort */
+        }
+        return
+      }
+      let foundText = ''
+      try {
+        for (const track of Array.from(video.textTracks)) {
+          if (track.mode === 'showing' || track.mode === 'hidden') {
+            const cues = track.activeCues
+            if (cues && cues.length > 0) {
+              const texts: string[] = []
+              for (let i = 0; i < cues.length; i++) {
+                const cue = cues[i] as VTTCue | undefined
+                if (cue?.text) {
+                  const cleaned = cue.text.replace(/<[^>]+>/g, '').trim()
+                  if (cleaned) texts.push(cleaned)
+                }
+              }
+              if (texts.length > 0) {
+                foundText = texts.join('\n')
+                break
+              }
+            }
+          }
+        }
+      } catch {
+        /* cue inspection is best-effort */
+      }
+      setActiveCue(foundText)
+    }
+
+    const textTracks = video.textTracks
+    const listeners: { track: TextTrack; listener: () => void }[] = []
+
+    const attachTrackListeners = () => {
+      try {
+        for (const track of Array.from(video.textTracks)) {
+          track.removeEventListener('cuechange', updateCues)
+          track.addEventListener('cuechange', updateCues)
+          listeners.push({ track, listener: updateCues })
+        }
+      } catch {
+        /* best effort */
+      }
+      updateCues()
+    }
+
+    attachTrackListeners()
+    textTracks?.addEventListener?.('addtrack', attachTrackListeners)
+    textTracks?.addEventListener?.('change', updateCues)
+    video.addEventListener('timeupdate', updateCues)
+    video.addEventListener('seeking', updateCues)
+    video.addEventListener('seeked', updateCues)
+
+    return () => {
+      textTracks?.removeEventListener?.('addtrack', attachTrackListeners)
+      textTracks?.removeEventListener?.('change', updateCues)
+      video.removeEventListener('timeupdate', updateCues)
+      video.removeEventListener('seeking', updateCues)
+      video.removeEventListener('seeked', updateCues)
+      for (const { track, listener } of listeners) {
+        track.removeEventListener('cuechange', listener)
+      }
+    }
+  }, [captionsOn, selectedSubtitle, subtitleDelayMs, subtitleCues])
 
   useEffect(() => {
     const video = videoRef.current
@@ -523,6 +1055,7 @@ export function ConsumitPlayer({
   useEffect(
     () => () => {
       if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+      if (lastSkipTimer.current != null) window.clearTimeout(lastSkipTimer.current)
     },
     [],
   )
@@ -551,6 +1084,10 @@ export function ConsumitPlayer({
       const next = Math.min(Math.max(0, video.currentTime + deltaSeconds), Number.isFinite(video.duration) ? video.duration : video.currentTime + deltaSeconds)
       video.currentTime = next
       setCurrentTime(next)
+      /* Transient flash mirrors the old-master ±seconds cue; never blocks playback. */
+      if (lastSkipTimer.current != null) window.clearTimeout(lastSkipTimer.current)
+      setLastSkip({ amount: Math.abs(deltaSeconds), at: Date.now(), direction: deltaSeconds >= 0 ? 'forward' : 'backward' })
+      lastSkipTimer.current = window.setTimeout(() => setLastSkip(null), 800)
     } catch {
       /* seeking past live edges must never crash */
     }
@@ -645,6 +1182,14 @@ export function ConsumitPlayer({
     setActiveMenu(null)
   }
 
+  function toggleSubtitlesSwitch() {
+    const next = captionsOn ? 'off' : (subtitleOptions.find((o) => o.value !== 'off')?.value ?? 'english')
+    controllerRef.current?.subtitle(next)
+    if (!controlledSubtitle) setInternalSubtitle(next)
+    storeValue('consumit.player.subtitles', next)
+    onSubtitleChange?.(next)
+  }
+
   function chooseServer(value: string) {
     onServerChange?.(value)
     setActiveMenu(null)
@@ -670,6 +1215,146 @@ export function ConsumitPlayer({
     storeValue('consumit.player.brightness', String(clamped))
     onBrightnessChange?.(clamped)
   }
+
+  function chooseCaptionSize(next: CaptionSize) {
+    if (controlledCaptionSize == null) setInternalCaptionSize(next)
+    storeValue(CAPTION_SIZE_KEY, next)
+    onCaptionSizeChange?.(next)
+  }
+
+  function chooseCaptionBackground(next: CaptionBackground) {
+    if (controlledCaptionBackground == null) setInternalCaptionBackground(next)
+    storeValue(CAPTION_BACKGROUND_KEY, next)
+    onCaptionBackgroundChange?.(next)
+  }
+
+  function chooseCaptionPosition(next: CaptionPosition) {
+    if (controlledCaptionPosition == null) setInternalCaptionPosition(next)
+    storeValue(CAPTION_POSITION_KEY, next)
+    onCaptionPositionChange?.(next)
+  }
+
+  function chooseCaptionFont(next: CaptionFont) {
+    if (controlledCaptionFont == null) setInternalCaptionFont(next)
+    storeValue(CAPTION_FONT_KEY, next)
+    onCaptionFontChange?.(next)
+  }
+
+  function chooseSubtitleDelayMs(next: number) {
+    const clamped = clampSubtitleDelayMs(next)
+    if (controlledSubtitleDelayMs == null) setInternalSubtitleDelayMs(clamped)
+    storeValue(SUBTITLE_DELAY_KEY, String(clamped))
+    onSubtitleDelayMsChange?.(clamped)
+  }
+
+  function adjustSubtitleDelayMs(delta: number) {
+    chooseSubtitleDelayMs(subtitleDelayMs + delta)
+  }
+
+  function chooseSubtitleLanguages(next: readonly string[]) {
+    const clean = savePreferredSubtitleLanguages(next)
+    if (controlledSubtitleLanguages == null) setInternalSubtitleLanguages(clean)
+    onSubtitleLanguagesChange?.(clean)
+  }
+
+  function toggleSubtitleLanguage(code: string) {
+    if (subtitleLanguages.includes(code)) {
+      chooseSubtitleLanguages(subtitleLanguages.filter((entry) => entry !== code))
+    } else {
+      chooseSubtitleLanguages([...subtitleLanguages, code].slice(0, 3))
+    }
+  }
+
+  function flashSyncStatus(message: string) {
+    setSyncStatus(message)
+    if (syncStatusTimer.current != null) window.clearTimeout(syncStatusTimer.current)
+    syncStatusTimer.current = window.setTimeout(() => setSyncStatus(null), 2000)
+  }
+
+  function syncToCue(cue: SubtitleCue) {
+    const video = videoRef.current
+    if (!video) return
+    const next = computeSyncDelayMs(cue.startTime, video.currentTime || 0, !video.paused)
+    chooseSubtitleDelayMs(next)
+    flashSyncStatus(`Synced to “${cue.text.slice(0, 24)}…”`)
+  }
+
+  const syncCueWindow = useMemo(() => {
+    if (!subtitleCues.length) return { visible: [] as readonly SubtitleCue[], activeIndex: -1 }
+    const t = currentTime + subtitleDelayMs / 1000
+    let closest = 0
+    let minDiff = Number.POSITIVE_INFINITY
+    for (let i = 0; i < subtitleCues.length; i++) {
+      const cue = subtitleCues[i]!
+      if (t >= cue.startTime && t <= cue.endTime) {
+        closest = i
+        break
+      }
+      const diff = Math.abs(cue.startTime - t)
+      if (diff < minDiff) {
+        minDiff = diff
+        closest = i
+      }
+    }
+    const start = Math.max(0, closest - 20)
+    const end = Math.min(subtitleCues.length, closest + 20)
+    return { visible: subtitleCues.slice(start, end), activeIndex: closest - start }
+  }, [subtitleCues, currentTime, subtitleDelayMs])
+
+  useEffect(() => {
+    if (activeMenu !== 'sync' || !syncListRef.current || syncHovering || syncCueWindow.activeIndex === -1) return
+    const container = syncListRef.current
+    const activeEl = container.children[syncCueWindow.activeIndex] as HTMLElement | undefined
+    if (!activeEl) return
+    const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+    container.scrollTo({
+      top: activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2,
+      behavior: reduced ? 'auto' : 'smooth',
+    })
+  }, [activeMenu, syncHovering, syncCueWindow])
+
+  /* File URL behind the selected external track (the controller registers
+   * external entries as `consumit-external-<id>`). Engine (HLS-manifest)
+   * tracks carry no URL, so delay falls back to native timing for them. */
+  const activeSubtitleUrl = useMemo(() => {
+    if (!captionsOn || !selectedSubtitle.startsWith('external:')) return undefined
+    const trackId = selectedSubtitle.slice('external:'.length)
+    const prefix = 'consumit-external-'
+    if (!trackId.startsWith(prefix)) return undefined
+    return allExternalSubtitles.find((entry) => entry.id === trackId.slice(prefix.length))?.url
+  }, [captionsOn, selectedSubtitle, allExternalSubtitles])
+
+  useEffect(() => {
+    if (!captionsOn || !activeSubtitleUrl) {
+      setSubtitleCues([])
+      return
+    }
+    const cached = subtitleCueCache.current.get(activeSubtitleUrl)
+    if (cached) {
+      setSubtitleCues(cached)
+      return
+    }
+    let cancelled = false
+    // No AbortController on purpose (see watch-playback subtitle effect):
+    // a bounded timeout signal plus the `cancelled` guard gives the same
+    // behavior with no abort() call site for dev overlays to blame.
+    void fetchVttCues(activeSubtitleUrl, AbortSignal.timeout(30_000))
+      .then((cues) => {
+        if (cancelled) return
+        const cache = subtitleCueCache.current
+        cache.delete(activeSubtitleUrl)
+        cache.set(activeSubtitleUrl, cues)
+        if (cache.size > 5) {
+          const oldest = cache.keys().next()
+          if (!oldest.done && oldest.value !== activeSubtitleUrl) cache.delete(oldest.value)
+        }
+        setSubtitleCues(cues)
+      })
+      .catch(() => {
+        if (!cancelled) setSubtitleCues([])
+      })
+    return () => { cancelled = true }
+  }, [captionsOn, activeSubtitleUrl])
 
   function retryPlayback() {
     if (onRetry) {
@@ -772,9 +1457,16 @@ export function ConsumitPlayer({
 
   return (
     <div
-      className={cn('overflow-hidden rounded-card border border-border bg-black', className)}
+      className={cn(
+        'overflow-hidden rounded-card border border-border bg-black',
+        /* Fullscreen must feel like the old-master room: no card radius or
+           hairline, true edge-to-edge bleed instead of a boxed video. */
+        isFullscreen && 'rounded-none border-0',
+        className,
+      )}
       data-consumit-player
       data-controls-visible={chromeVisible ? 'true' : 'false'}
+      data-fullscreen={isFullscreen ? 'true' : 'false'}
       ref={shellRef}
     >
       {status ? (
@@ -797,11 +1489,24 @@ export function ConsumitPlayer({
       ) : null}
       <div
         aria-label={`${title} player controls`}
-        className="relative m-auto aspect-video max-h-full w-full overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange"
+        className={cn(
+          'relative m-auto w-full overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange',
+          /* Inline keeps the catalog aspect box; fullscreen fills the room
+             like the old-master fixed inset-0 shell. */
+          isFullscreen ? 'aspect-auto h-full max-h-none flex-1' : 'aspect-video max-h-full',
+          !chromeVisible && isPlaying && 'cursor-none',
+        )}
         onKeyDown={onShellKeyDown}
         onMouseMove={pokeControls}
         onPointerDown={pokeControls}
         onTouchStart={pokeControls}
+        onMouseLeave={() => {
+          if (isPlaying && activeMenu == null) {
+            setControlsVisible(false)
+            if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+            hideTimer.current = undefined
+          }
+        }}
         role="region"
         tabIndex={0}
       >
@@ -813,6 +1518,7 @@ export function ConsumitPlayer({
           aria-label={`${title} player`}
           autoPlay={autoPlay}
           className={cn('size-full object-contain', videoClassName)}
+          crossOrigin={props.crossOrigin ?? 'anonymous'}
           muted={isMuted}
           onClick={() => void togglePlayback()}
           onDurationChange={(event) => {
@@ -868,37 +1574,36 @@ export function ConsumitPlayer({
         {showTopBar ? (
           <div
             className={cn(
-              'pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-4 bg-[linear-gradient(180deg,rgba(9,9,11,0.78),transparent)] px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-12 transition-opacity motion-reduce:transition-none sm:px-6',
-              chromeVisible ? 'opacity-100' : 'opacity-0',
+              'pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-16 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
+              isFullscreen && 'px-6 pt-[max(1.75rem,env(safe-area-inset-top))] sm:px-10',
+              chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
           >
             <div className="pointer-events-auto grid w-11 shrink-0 place-items-center">
               {onBack ? (
                 <button
                   aria-label="Back"
-                  className="grid size-11 place-items-center rounded-control border border-white/10 bg-black/70 text-ink backdrop-blur-md outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
+                  className="grid size-11 place-items-center rounded-control border border-white/15 bg-black/60 text-ink backdrop-blur-md outline-none transition-colors hover:border-white/30 hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-orange"
                   onClick={onBack}
                   type="button"
                 >
-                  <ChevronLeft aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                  <ArrowLeft aria-hidden="true" className="size-5" strokeWidth={2} />
                 </button>
               ) : backHref ? (
                 <a
                   aria-label="Back"
-                  className="grid size-11 place-items-center rounded-control border border-white/10 bg-black/70 text-ink backdrop-blur-md outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
+                  className="grid size-11 place-items-center rounded-control border border-white/15 bg-black/60 text-ink backdrop-blur-md outline-none transition-colors hover:border-white/30 hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-orange"
                   href={backHref}
                 >
-                  <ChevronLeft aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                  <ArrowLeft aria-hidden="true" className="size-5" strokeWidth={2} />
                 </a>
               ) : null}
             </div>
-            <div className="min-w-0 flex-1 px-4 text-center">
-              <p className="truncate text-sm leading-6 font-bold tracking-wide text-ink">{title}</p>
-              {topMeta ? <p className="mt-0.5 truncate text-[11px] leading-4 tracking-wider text-muted">{topMeta}</p> : null}
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md">{title}</p>
+              {topMeta ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta}</p> : null}
             </div>
-            <div className="grid w-11 shrink-0 place-items-center">
-              <img alt="" aria-hidden="true" className="size-7" src={brandSrc} />
-            </div>
+            <div aria-hidden="true" className="w-11 shrink-0" />
           </div>
         ) : null}
 
@@ -913,6 +1618,34 @@ export function ConsumitPlayer({
           <div className="pointer-events-none absolute inset-x-0 top-1/3 text-center text-sm font-bold text-ink" role="status">Tap play to start watching</div>
         ) : null}
 
+        {!isPlaying && hasSource && !hasError && activeMenu == null && (pauseFacts != null || pauseLogoUrl != null || pauseOverview != null) ? (
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-0 flex items-center justify-start pb-16',
+              isFullscreen ? 'px-6 sm:px-10' : 'px-6 sm:px-6',
+            )}
+            data-consumit-player-pause
+          >
+            <div className="w-full max-w-3xl text-left [text-shadow:0_1px_16px_rgb(0_0_0/0.85)]">
+              {pauseLogoUrl ? (
+                <>
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    className="mr-auto max-h-32 w-auto max-w-full object-contain object-left [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-44"
+                    src={pauseLogoUrl}
+                  />
+                  <span className="sr-only">{title}</span>
+                </>
+              ) : (
+                <p className="font-display text-4xl leading-tight font-normal tracking-tight text-balance text-ink sm:text-6xl">{title}</p>
+              )}
+              {pauseFacts ? <p className="mt-3 text-sm tabular-nums text-copy sm:text-base">{pauseFacts}</p> : null}
+              {pauseOverview ? <p className="mt-3 line-clamp-3 max-w-[62ch] text-sm leading-6 text-copy sm:text-base sm:leading-7">{pauseOverview}</p> : null}
+            </div>
+          </div>
+        ) : null}
+
         {hasError && hasSource ? (
           <div className="absolute inset-0 grid place-items-center bg-black/70 p-6" role="alert">
             <div className="max-w-md text-center">
@@ -921,12 +1654,22 @@ export function ConsumitPlayer({
               <p className="mt-2 text-sm leading-6 text-copy">{errorMessage ?? 'The current source could not play this title.'}</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <button
-                  className="inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
+                  className="inline-flex min-h-11 items-center rounded-control bg-ink px-4 text-sm font-bold text-canvas outline-none transition-colors hover:bg-ink/85 focus-visible:ring-2 focus-visible:ring-orange"
                   onClick={retryPlayback}
                   type="button"
                 >
                   Retry
                 </button>
+                {(dedupedServerOptions?.length ?? 0) > 1 ? (
+                  <button
+                    className="inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={() => setActiveMenu('server')}
+                    title="Switch to another server"
+                    type="button"
+                  >
+                    Try another server
+                  </button>
+                ) : null}
                 <a
                   className="inline-flex min-h-11 items-center rounded-control px-4 text-sm font-bold text-copy outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
                   href="/settings#support"
@@ -938,34 +1681,104 @@ export function ConsumitPlayer({
           </div>
         ) : null}
 
-        {captionsOn && caption && !hasError ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-32 flex justify-center px-6 sm:bottom-36">
-            <p className="max-w-3xl bg-black/70 px-4 py-2 text-center text-[15px] font-bold leading-7 text-ink sm:text-base">
-              {caption}
+        {captionsOn && overlayCueText && !hasError ? (
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6 transition-[top,bottom] duration-300 motion-reduce:transition-none',
+              captionPosition === 'top'
+                ? (isFullscreen ? 'top-24 sm:top-28' : 'top-20 sm:top-24')
+                : isFullscreen
+                  ? (chromeVisible ? 'bottom-28 sm:bottom-32' : 'bottom-8 sm:bottom-10')
+                  : (chromeVisible ? 'bottom-20 sm:bottom-24' : 'bottom-4 sm:bottom-6'),
+            )}
+            data-consumit-player-caption-position={captionPosition}
+          >
+            <p
+              className={cn(
+                'max-w-3xl text-center leading-snug text-balance whitespace-pre-line',
+                captionSizeClass(captionSize, isFullscreen),
+                captionFontClass(captionFont),
+                overlayCueUntracked && 'tracking-normal',
+                captionBackgroundClass(captionBackground),
+              )}
+              data-consumit-player-caption
+              data-caption-font={captionFont}
+              data-caption-size={captionSize}
+              dir="auto"
+            >
+              {overlayCueText}
             </p>
+          </div>
+        ) : null}
+
+        {lastSkip && hasSource && !hasError ? (
+          <div
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 text-center',
+              lastSkip.direction === 'forward' ? 'right-[10%] sm:right-[12%]' : 'left-[10%] sm:left-[12%]',
+            )}
+          >
+            <p className="font-display text-4xl leading-none font-normal text-ink [text-shadow:0_2px_24px_rgb(0_0_0/0.8)] sm:text-5xl">
+              {lastSkip.direction === 'forward' ? `+${lastSkip.amount}` : `-${lastSkip.amount}`}
+            </p>
+            <p className="mt-1 text-[10px] font-bold tracking-[0.2em] text-copy uppercase">Seconds</p>
+          </div>
+        ) : null}
+
+        {activeSkip && !autoSkip && hasSource && !hasError ? (
+          <div className="absolute right-4 bottom-28 z-20">
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-control border border-control-outline bg-black/80 px-4 text-sm font-bold text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
+              onClick={jumpSkip}
+              type="button"
+            >
+              <SkipForward aria-hidden="true" className="size-4" />
+              Skip {activeSkip.kind}
+            </button>
           </div>
         ) : null}
 
         <div
           className={cn(
-            'absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(9,9,11,0.96)_42%)] px-4 pt-12 pb-3 transition-opacity motion-reduce:transition-none sm:px-6',
+            'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-4 pt-16 pb-4 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
+            isFullscreen && 'px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10',
             chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
         >
-          <div className="flex items-baseline justify-between gap-4">
-            <p className="min-w-0 truncate text-xs font-bold text-ink">{chapterLabel}</p>
-            <p className="shrink-0 text-xs tabular-nums text-muted">
+          <div className="flex items-baseline justify-between gap-4 text-xs">
+            <p className="min-w-0 truncate font-semibold text-ink drop-shadow-sm">{chapterLabel}</p>
+            <p className="shrink-0 tabular-nums text-muted drop-shadow-sm">
               {formatPlaybackTime(currentTime)} / {formatPlaybackTime(duration)}
             </p>
           </div>
-          <div className="group relative mt-1 flex h-6 items-center rounded-micro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange">
-            <div aria-hidden="true" className="absolute inset-x-0 h-1 overflow-hidden rounded-full bg-white/15 transition-all group-hover:h-1.5 motion-reduce:transition-none">
-              <div className="absolute inset-y-0 left-0 bg-white/25" style={{ width: `${bufferedRatio * 100}%` }} />
-              <div className="absolute inset-y-0 left-0 bg-orange" style={{ width: `${progressRatio * 100}%` }} />
+          <div
+            className="group relative mt-1.5 flex h-6 items-center rounded-micro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange"
+            onMouseLeave={() => setHoverTime(null)}
+            onMouseMove={(event) => {
+              if (duration <= 0) return
+              const rect = event.currentTarget.getBoundingClientRect()
+              if (rect.width <= 0) return
+              const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+              setHoverTime(ratio * duration)
+            }}
+          >
+            {hoverTime != null && duration > 0 ? (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-full z-20 hidden -translate-x-1/2 rounded-control border border-white/15 bg-black/90 px-3 py-1 text-xs font-bold tabular-nums text-ink shadow-lg backdrop-blur-md sm:block"
+                style={{ left: `${Math.min(96, Math.max(4, (hoverTime / duration) * 100))}%` }}
+              >
+                {formatPlaybackTime(hoverTime)}
+              </div>
+            ) : null}
+            <div aria-hidden="true" className="absolute inset-x-0 h-1.5 overflow-hidden rounded-full bg-white/20 transition-all duration-200 group-hover:h-2 motion-reduce:transition-none">
+              <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: `${bufferedRatio * 100}%` }} />
+              <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-orange to-[#ff7a5c]" style={{ width: `${progressRatio * 100}%` }} />
             </div>
             <div
               aria-hidden="true"
-              className="absolute size-3.5 -translate-x-1/2 rounded-full border-2 border-orange bg-ink"
+              className="absolute size-4 -translate-x-1/2 rounded-full border-2 border-orange bg-white shadow-[0_0_8px_rgba(0,0,0,0.5)] transition-transform duration-150 scale-75 group-hover:scale-110"
               style={{ left: `${progressRatio * 100}%` }}
             />
             <input
@@ -993,184 +1806,50 @@ export function ConsumitPlayer({
             />
           </div>
 
-          {activeMenu ? (
-            <div className="relative" ref={menuRef}>
-              <div
-                aria-label={`${activeMenu} options`}
-                className="absolute right-0 bottom-1 z-10 w-72 max-w-[calc(100vw-3rem)] rounded-control border border-border bg-surface p-2 shadow-none"
-                id={`consumit-player-menu-${activeMenu}`}
-                role="menu"
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
+              <button
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="grid size-11 shrink-0 place-items-center rounded-control bg-ink font-bold text-canvas outline-none transition-colors duration-200 motion-reduce:transition-none hover:bg-ink/85 shadow-[0_2px_12px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:bg-ink/30 disabled:text-muted"
+                disabled={!hasSource || hasError}
+                onClick={() => void togglePlayback()}
+                title={isPlaying ? 'Pause (K)' : 'Play (K)'}
+                type="button"
               >
-                {activeMenu === 'subtitles' ? (
-                  <>
-                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Subtitles</p>
-                    {subtitleOptions.map((option) => {
-                      const selected = selectedSubtitle === option.value
-                      return (
-                        <button
-                          aria-checked={selected}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-micro px-3 text-left text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
-                          key={option.value}
-                          onClick={() => chooseSubtitle(option.value)}
-                          role="menuitemradio"
-                          type="button"
-                        >
-                          <span className="flex-1">{option.label}</span>
-                          {selected ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}
-                        </button>
-                      )
-                    })}
-                  </>
-                ) : null}
-                {activeMenu === 'audio' ? (
-                  <>
-                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Audio</p>
-                    {audioOptions.map((option) => {
-                      const selected = selectedAudio === option.value
-                      return (
-                        <button
-                          aria-checked={selected}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-micro px-3 text-left text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
-                          key={option.value}
-                          onClick={() => chooseAudio(option.value)}
-                          role="menuitemradio"
-                          type="button"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate">{option.label}</span>
-                            {option.detail ? <span className="mt-0.5 block text-xs text-muted">{option.detail}</span> : null}
-                          </span>
-                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-                        </button>
-                      )
-                    })}
-                  </>
-                ) : null}
-                {activeMenu === 'server' && dedupedServerOptions ? (
-                  <>
-                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Server</p>
-                    {dedupedServerOptions.map((option) => {
-                      const selected = (selectedServer ?? dedupedServerOptions[0]?.value) === option.value
-                      return (
-                        <button
-                          aria-checked={selected}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-micro px-3 text-left text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
-                          key={option.value}
-                          onClick={() => chooseServer(option.value)}
-                          role="menuitemradio"
-                          type="button"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate">{option.label}</span>
-                            {option.detail ? <span className="mt-0.5 block text-xs text-muted">{option.detail}</span> : null}
-                          </span>
-                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-                        </button>
-                      )
-                    })}
-                  </>
-                ) : null}
-                {activeMenu === 'display' ? (
-                  <div className="max-h-80 overflow-y-auto">
-                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Quality</p>
-                    {qualityOptions.map((option) => {
-                      const selected = selectedQuality === option.value
-                      return (
-                        <button
-                          aria-checked={selected}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-micro px-3 text-left text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange"
-                          key={option.value}
-                          onClick={() => chooseQuality(option.value)}
-                          role="menuitemradio"
-                          type="button"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate">{option.label}</span>
-                            {option.detail ? <span className="mt-0.5 block text-xs text-muted">{option.detail}</span> : null}
-                          </span>
-                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-                        </button>
-                      )
-                    })}
-                    <p className="px-3 pt-3 pb-1 text-[11px] font-bold tracking-[0.12em] text-muted uppercase">Speed</p>
-                    <div className="flex flex-wrap gap-1 px-3 pb-2" role="group" aria-label="Playback speed">
-                      {dedupedRates.map((rate) => {
-                        const selected = selectedRate === rate
-                        return (
-                          <button
-                            aria-pressed={selected}
-                            className={cn(
-                              'min-h-11 min-w-11 rounded-micro px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-orange',
-                              selected ? 'bg-ink font-bold text-canvas' : 'text-copy hover:bg-surface-raised hover:text-ink',
-                            )}
-                            key={rate}
-                            onClick={() => chooseRate(rate)}
-                            type="button"
-                          >
-                            {rate}×
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="flex items-center justify-between gap-3 px-3 py-2">
-                      <label className="text-sm text-ink" htmlFor="consumit-player-brightness">
-                        Brightness
-                      </label>
-                      <input
-                        aria-label="Brightness"
-                        className="h-11 w-32 cursor-pointer accent-orange"
-                        id="consumit-player-brightness"
-                        max={1.3}
-                        min={0.6}
-                        onChange={(event) => changeBrightness(Number(event.currentTarget.value))}
-                        step={0.05}
-                        type="range"
-                        value={brightness}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-1 flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1 sm:gap-2">
-              <PlayerIconButton disabled={!hasSource || hasError} label={isPlaying ? 'Pause' : 'Play'} onClick={() => void togglePlayback()}>
                 {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              </PlayerIconButton>
+              </button>
               <button
                 aria-label="Back 10 seconds"
-                className="grid size-11 shrink-0 place-items-center rounded-control text-ink outline-none hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
+                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-all hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
                 disabled={!hasSource || hasError}
                 onClick={() => seekBy(-SEEK_STEP)}
                 title="Back 10 seconds (J)"
                 type="button"
               >
                 <span aria-hidden="true" className="relative grid place-items-center">
-                  <RotateCcw className="size-6" strokeWidth={1.5} />
+                  <RotateCcw className="size-5" strokeWidth={1.75} />
                   <span className="absolute text-[8px] font-bold">10</span>
                 </span>
               </button>
               <button
                 aria-label="Forward 10 seconds"
-                className="grid size-11 shrink-0 place-items-center rounded-control text-ink outline-none hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
+                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-all hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
                 disabled={!hasSource || hasError}
                 onClick={() => seekBy(SEEK_STEP)}
                 title="Forward 10 seconds (L)"
                 type="button"
               >
                 <span aria-hidden="true" className="relative grid place-items-center">
-                  <RotateCw className="size-6" strokeWidth={1.5} />
+                  <RotateCw className="size-5" strokeWidth={1.75} />
                   <span className="absolute text-[8px] font-bold">10</span>
                 </span>
               </button>
               <PlayerIconButton disabled={!hasSource} label={isMuted || volume === 0 ? 'Unmute' : 'Mute'} onClick={toggleMute} title="Mute (M)">
-                {isMuted || volume === 0 ? <VolumeX aria-hidden="true" className="size-6" strokeWidth={1.5} /> : <Volume2 aria-hidden="true" className="size-6" strokeWidth={1.5} />}
+                {isMuted || volume === 0 ? <VolumeX aria-hidden="true" className="size-5" strokeWidth={1.75} /> : <Volume2 aria-hidden="true" className="size-5" strokeWidth={1.75} />}
               </PlayerIconButton>
               <input
                 aria-label="Volume"
-                className="hidden h-11 w-20 cursor-pointer accent-orange sm:block"
+                className="h-10 w-16 cursor-pointer accent-orange sm:w-20"
                 disabled={!hasSource}
                 max={1}
                 min={0}
@@ -1180,60 +1859,86 @@ export function ConsumitPlayer({
                 value={isMuted ? 0 : volume}
               />
             </div>
-            <div className="flex shrink-0 items-start gap-1 sm:gap-2">
-              <span className="flex flex-col items-center">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none sm:gap-2">
+              {hasSource ? (
                 <PlayerIconButton
-                  active={captionsOn}
+                  active={activeMenu === 'quality'}
                   disabled={!hasSource}
-                  expanded={activeMenu === 'subtitles'}
-                  label={captionsOn ? 'Subtitles on. Change subtitles' : 'Subtitles off. Change subtitles'}
-                  menuId="subtitles"
-                  onClick={() => toggleMenu('subtitles')}
-                  title="Subtitles (C)"
+                  expanded={activeMenu === 'quality'}
+                  label={`Change quality, current ${qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality}`}
+                  menuId="quality"
+                  onClick={() => toggleMenu('quality')}
+                  title={`Quality: ${qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality}`}
                 >
-                  {captionsOn ? <Captions aria-hidden="true" className="size-6" strokeWidth={1.5} /> : <CaptionsOff aria-hidden="true" className="size-6" strokeWidth={1.5} />}
+                  <QualityIcon className="size-5" />
                 </PlayerIconButton>
-              </span>
-              <span className="hidden md:contents">
+              ) : null}
+              {showServerSection ? (
                 <PlayerIconButton
-                  disabled={!hasSource}
-                  expanded={activeMenu === 'audio'}
-                  label="Audio tracks"
-                  menuId="audio"
-                  onClick={() => toggleMenu('audio')}
-                >
-                  <AudioLines aria-hidden="true" className="size-6" strokeWidth={1.5} />
-                </PlayerIconButton>
-              </span>
-              {dedupedServerOptions && dedupedServerOptions.length > 1 ? (
-                <PlayerIconButton
-                  disabled={!hasSource}
+                  active={activeMenu === 'server'}
                   expanded={activeMenu === 'server'}
                   label="Change server"
                   menuId="server"
                   onClick={() => toggleMenu('server')}
+                  title={`Server: ${dedupedServerOptions?.find((s) => s.value === selectedServer)?.label ?? selectedServer ?? 'Default'}`}
                 >
-                  <Server aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                  <Server aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                </PlayerIconButton>
+              ) : null}
+              {hasSource ? (
+                <span className="relative inline-flex shrink-0">
+                  <PlayerIconButton
+                    active={activeMenu === 'subtitles' || captionsOn}
+                    disabled={!hasSource}
+                    expanded={activeMenu === 'subtitles'}
+                    label="Subtitles"
+                    menuId="subtitles"
+                    onClick={() => toggleMenu('subtitles')}
+                    title={captionsOn ? `Subtitles: ${selectedSubtitle}` : 'Subtitles'}
+                  >
+                    <Captions aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                  </PlayerIconButton>
+                  {subtitleTrackCount > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute -top-1 -right-1 z-10 min-w-5 rounded-full border border-orange bg-orange px-1 text-center text-[10px] leading-4 font-bold tabular-nums text-canvas"
+                    >
+                      {subtitleTrackCount}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+              {hasSource ? (
+                <PlayerIconButton
+                  active={activeMenu === 'sync'}
+                  disabled={!hasSource}
+                  expanded={activeMenu === 'sync'}
+                  label={`Subtitle sync offset, current ${formatSubtitleDelayMs(subtitleDelayMs)}`}
+                  menuId="sync"
+                  onClick={() => toggleMenu('sync')}
+                  title={`Sync: ${formatSubtitleDelayMs(subtitleDelayMs)}`}
+                >
+                  <Wand2 aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
               ) : null}
               <PlayerIconButton
-                active={activeMenu === 'display'}
+                active={activeMenu === 'settings'}
                 disabled={!hasSource}
-                expanded={activeMenu === 'display'}
-                label="Display, quality, and speed"
-                menuId="display"
-                onClick={() => toggleMenu('display')}
+                expanded={activeMenu === 'settings'}
+                label="Settings: audio, speed, brightness"
+                menuId="settings"
+                onClick={() => toggleMenu('settings')}
               >
-                <SunMedium aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                <Settings aria-hidden="true" className="size-5" strokeWidth={1.75} />
               </PlayerIconButton>
-              <span className="hidden sm:contents">
+              <span className="contents">
                 <PlayerIconButton
                   active={isPip}
                   disabled={!hasSource || hasError || !pipSupported}
                   label={isPip ? 'Exit picture in picture' : 'Enter picture in picture'}
                   onClick={() => void togglePip()}
                 >
-                  <PictureInPicture2 aria-hidden="true" className="size-6" strokeWidth={1.5} />
+                  <PictureInPicture2 aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
               </span>
               <PlayerIconButton
@@ -1242,11 +1947,687 @@ export function ConsumitPlayer({
                 onClick={() => void toggleFullscreen()}
                 title="Fullscreen (F)"
               >
-                {isFullscreen ? <Minimize aria-hidden="true" className="size-6" strokeWidth={1.5} /> : <Maximize aria-hidden="true" className="size-6" strokeWidth={1.5} />}
+                {isFullscreen ? <Minimize aria-hidden="true" className="size-5" strokeWidth={1.75} /> : <Maximize aria-hidden="true" className="size-5" strokeWidth={1.75} />}
               </PlayerIconButton>
             </div>
           </div>
         </div>
+        {activeMenu === 'settings' ? (
+          <div className="contents" ref={menuRef}>
+            <div
+              aria-label="Settings options"
+              className={cn(RAIL_PANEL_CLASS, 'w-80 sm:w-[340px]')}
+              id="consumit-player-menu-settings"
+              role="menu"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
+                <p className="text-base font-bold text-ink">Settings</p>
+                <button
+                  aria-label="Close settings"
+                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setActiveMenu(null)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div className="space-y-3 p-3">
+                {/* 2x2 Quick Status Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={() => setActiveMenu('quality')}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <QualityIcon className="size-3.5" />
+                      <span>Quality</span>
+                    </div>
+                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
+                      {qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality ?? 'Auto'}
+                    </span>
+                  </button>
+
+                  <button
+                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={() => setActiveMenu('server')}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <Server className="size-3.5" />
+                      <span>Server</span>
+                    </div>
+                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
+                      {dedupedServerOptions?.find((s) => s.value === selectedServer)?.label ?? selectedServer ?? 'Default'}
+                    </span>
+                  </button>
+
+                  <button
+                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={() => setActiveMenu('subtitles')}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <Captions className="size-3.5" />
+                      <span>Subtitles</span>
+                    </div>
+                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
+                      {captionsOn ? (subtitleOptions.find((s) => s.value === selectedSubtitle)?.label ?? selectedSubtitle) : 'Off'}
+                    </span>
+                  </button>
+
+                  <button
+                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={() => {
+                      if (audioOptions.length > 1) {
+                        const currentIndex = audioOptions.findIndex((a) => a.value === selectedAudio)
+                        const nextIndex = (currentIndex + 1) % audioOptions.length
+                        chooseAudio(audioOptions[nextIndex]!.value)
+                      }
+                    }}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <Music className="size-3.5" />
+                      <span>Audio</span>
+                    </div>
+                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
+                      {audioOptions.find((a) => a.value === selectedAudio)?.label ?? selectedAudio ?? 'Default'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Interactive Rows: Sleep Timer & Enable Subtitles */}
+                <div className="space-y-0.5 border-t border-white/10 pt-2">
+                  <button
+                    className="flex w-full items-center justify-between rounded-control px-2.5 py-2 text-left transition-colors hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                    onClick={cycleSleepTimer}
+                    type="button"
+                  >
+                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                      <Moon className="size-4 text-muted" strokeWidth={1.75} />
+                      <span>Sleep Timer</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted">
+                      <span className={sleepTimer ? 'font-bold text-orange' : ''}>
+                        {sleepTimer ? `${sleepTimer}m` : 'Off'}
+                      </span>
+                      <ChevronRight className="size-3.5" />
+                    </div>
+                  </button>
+
+                  <div className="flex w-full items-center justify-between rounded-control px-2.5 py-2">
+                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                      <Captions className="size-4 text-muted" strokeWidth={1.75} />
+                      <span>Enable Subtitles</span>
+                    </div>
+                    <button
+                      aria-checked={captionsOn}
+                      className={cn(
+                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus-visible:ring-2 focus-visible:ring-orange',
+                        captionsOn ? 'bg-orange' : 'bg-white/20 hover:bg-white/30',
+                      )}
+                      onClick={toggleSubtitlesSwitch}
+                      role="switch"
+                      type="button"
+                    >
+                      <span
+                        className={cn(
+                          'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          captionsOn ? 'translate-x-4' : 'translate-x-0',
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Playback Settings (Speed & Brightness) */}
+                <div className="space-y-2 border-t border-white/10 pt-2">
+                  <div className="flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
+                    <Gauge className="size-3.5" />
+                    <span>Playback Settings</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 px-1 pb-1" role="group" aria-label="Playback speed">
+                    {dedupedRates.map((rate) => {
+                      const selected = selectedRate === rate
+                      return (
+                        <button
+                          aria-pressed={selected}
+                          className={settingsChipClass(selected)}
+                          key={rate}
+                          onClick={() => chooseRate(rate)}
+                          type="button"
+                        >
+                          {rate}×
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 px-1 pt-1 pb-1">
+                    <label className="flex items-center gap-2 text-sm text-ink" htmlFor="consumit-player-brightness">
+                      <Sun className="size-3.5 text-muted" />
+                      <span>Brightness</span>
+                    </label>
+                    <input
+                      aria-label="Brightness"
+                      className="h-9 w-28 cursor-pointer accent-orange"
+                      id="consumit-player-brightness"
+                      max={1.3}
+                      min={0.6}
+                      onChange={(event) => changeBrightness(Number(event.currentTarget.value))}
+                      step={0.05}
+                      type="range"
+                      value={brightness}
+                    />
+                  </div>
+                </div>
+
+                {/* Auto-skip intros */}
+                <div className="space-y-2 border-t border-white/10 pt-2">
+                  <div className="flex w-full items-center justify-between rounded-control px-2.5 py-2">
+                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                      <SkipForward className="size-4 text-muted" strokeWidth={1.75} />
+                      <span>Auto-skip intros</span>
+                    </div>
+                    <button
+                      aria-checked={autoSkip}
+                      className={cn(
+                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus-visible:ring-2 focus-visible:ring-orange',
+                        autoSkip ? 'bg-orange' : 'bg-white/20 hover:bg-white/30',
+                      )}
+                      onClick={toggleAutoSkip}
+                      role="switch"
+                      type="button"
+                    >
+                      <span
+                        className={cn(
+                          'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                          autoSkip ? 'translate-x-4' : 'translate-x-0',
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Audio Tracks (if multi-audio) */}
+                {audioOptions.length > 1 ? (
+                  <div role="group" aria-label="Audio" className="space-y-1 border-t border-white/10 pt-2">
+                    <p className="px-1 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Audio Track</p>
+                    {audioOptions.map((option) => {
+                      const selected = selectedAudio === option.value
+                      return (
+                        <button
+                          aria-checked={selected}
+                          className={settingsRowClass(selected)}
+                          key={option.value}
+                          onClick={() => chooseAudio(option.value)}
+                          role="menuitemradio"
+                          type="button"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate leading-5">{option.label}</span>
+                            {option.detail ? <span className="block truncate text-xs font-normal text-muted leading-4">{option.detail}</span> : null}
+                          </span>
+                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeMenu === 'quality' ? (
+          <div className="contents" ref={menuRef}>
+            <div
+              aria-label="Quality"
+              className={RAIL_PANEL_CLASS}
+              id="consumit-player-menu-quality"
+              role="menu"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
+                <p className="text-base font-bold text-ink">Quality</p>
+                <button
+                  aria-label="Close quality"
+                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setActiveMenu(null)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div className="p-3">
+                <div className="flex flex-wrap gap-2 px-1 pb-1" role="group" aria-label="Quality options">
+                  {qualityOptions.map((option) => {
+                    const selected = selectedQuality === option.value
+                    return (
+                      <button
+                        aria-checked={selected}
+                        className={settingsChipClass(selected, true)}
+                        key={option.value}
+                        onClick={() => chooseQuality(option.value)}
+                        role="menuitemradio"
+                        title={option.detail ?? option.label}
+                        type="button"
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeMenu === 'server' ? (
+          <div className="contents" ref={menuRef}>
+            <div
+              aria-label="Server"
+              className={RAIL_PANEL_CLASS}
+              id="consumit-player-menu-server"
+              role="menu"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
+                <p className="text-base font-bold text-ink">Server</p>
+                <button
+                  aria-label="Close server"
+                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setActiveMenu(null)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div className="space-y-1 p-3">
+                {(serverGroups ?? []).map((group) => (
+                  <div key={group.family || 'servers'} role="group" aria-label={group.family ? displayFamilyName(group.family) : 'Servers'}>
+                    {group.family && (serverGroups?.length ?? 0) > 1 ? (
+                      <p className="px-3 pt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{displayFamilyName(group.family)}</p>
+                    ) : null}
+                    {group.options.map((option) => {
+                      const selected = (selectedServer ?? orderedServerOptions?.[0]?.value) === option.value
+                      const favorite = favoriteServers.includes(option.value)
+                      const flag = regionFlag(option.region)
+                      const region = regionName(option.region)
+                      const degraded = option.health === 'degraded'
+                      const answering = option.available !== false
+                      const detail = option.detail ?? (answering ? null : 'Unavailable for this title')
+                      return (
+                        <div
+                          className={cn('flex items-center gap-1 rounded-control transition-all motion-reduce:transition-none', selected ? 'bg-orange/15 shadow-[inset_0_0_0_1px_var(--color-orange)]' : 'hover:bg-white/10', !answering && 'opacity-60')}
+                          key={option.value}
+                        >
+                          <button
+                            aria-checked={selected}
+                            className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-control px-3 text-left text-sm outline-none transition-all motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange"
+                            onClick={() => chooseServer(option.value)}
+                            role="menuitemradio"
+                            title={answering ? undefined : 'Unavailable for this title — tap to retry it'}
+                            type="button"
+                          >
+                            {flag ? <span aria-hidden="true" className="shrink-0 text-base leading-none" title={region ?? undefined}>{flag}</span> : null}
+                            <span className="min-w-0 flex-1">
+                              <span className={cn('block truncate leading-5', selected ? 'font-bold text-ink' : 'font-medium')}>{displayMirrorName(option)}</span>
+                              {detail ? <span className="block truncate text-xs leading-4 font-normal text-muted">{detail}</span> : null}
+                            </span>
+                        {degraded ? (
+                          <span className="grid shrink-0 place-items-center text-orange" title="Server degraded">
+                            <TriangleAlert aria-hidden="true" className="size-4" />
+                            <span className="sr-only">Server degraded</span>
+                          </span>
+                        ) : null}
+                        {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                      </button>
+                      <button
+                        aria-label={favorite ? `Unfavorite ${option.label} server` : `Favorite ${option.label} server`}
+                        aria-pressed={favorite}
+                        className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-muted outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none"
+                        onClick={() => toggleFavoriteServer(option.value)}
+                        title={favorite ? 'Favorited — pins to the top' : 'Favorite server'}
+                        type="button"
+                      >
+                        <Heart aria-hidden="true" className={cn('size-4', favorite && 'fill-current text-orange')} />
+                      </button>
+                        </div>
+                      )
+                    })}
+                    </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeMenu === 'sync' ? (
+          <div className="contents" ref={menuRef}>
+            <div
+              aria-label="Subtitle sync"
+              className={cn(RAIL_PANEL_CLASS, 'w-80 sm:w-[340px]')}
+              id="consumit-player-menu-sync"
+              role="menu"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
+                <p className="text-base font-bold text-ink">Subtitle sync</p>
+                <button
+                  aria-label="Close subtitle sync"
+                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setActiveMenu(null)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div className="space-y-3 p-3">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Current offset</p>
+                  <p aria-live="polite" className="text-sm font-bold tabular-nums text-orange">
+                    {formatSubtitleDelayMs(subtitleDelayMs)}
+                  </p>
+                </div>
+                <p className="px-1 text-center text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
+                  Click a line when you hear it spoken
+                </p>
+                <div
+                  className="flex h-40 flex-col gap-1 overflow-y-auto overscroll-contain rounded-control border border-white/10 bg-white/[0.03] p-1.5"
+                  onMouseEnter={() => setSyncHovering(true)}
+                  onMouseLeave={() => setSyncHovering(false)}
+                  onTouchStart={() => setSyncHovering(true)}
+                  ref={syncListRef}
+                  role="group"
+                  aria-label="Subtitle lines"
+                >
+                  {syncCueWindow.visible.length === 0 ? (
+                    <p className="grid h-full place-items-center text-center text-xs font-bold uppercase tracking-wider text-muted">
+                      {captionsOn ? 'No subtitles loaded' : 'Subtitles are off'}
+                    </p>
+                  ) : (
+                    syncCueWindow.visible.map((cue, index) => {
+                      const isActive = index === syncCueWindow.activeIndex
+                      return (
+                        <button
+                          className={cn(
+                            'group flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-2 text-left text-xs outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange',
+                            isActive
+                              ? 'bg-orange/15 text-ink shadow-[inset_0_0_0_1px_var(--color-orange)]'
+                              : 'text-copy hover:bg-white/10 hover:text-ink',
+                          )}
+                          key={`${cue.startTime}-${index}`}
+                          onClick={() => syncToCue(cue)}
+                          type="button"
+                        >
+                          <span className="line-clamp-2 min-w-0 flex-1">{cue.text}</span>
+                          <span
+                            className={cn(
+                              'shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-opacity',
+                              isActive ? 'bg-orange text-canvas opacity-100' : 'bg-white/10 opacity-0 group-hover:opacity-100',
+                            )}
+                          >
+                            Sync
+                          </span>
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+                <div className="flex items-center justify-center gap-1.5" role="group" aria-label="Fine tune offset">
+                  <button
+                    aria-label="Shift subtitles backwards 50 milliseconds"
+                    className={settingsChipClass(false)}
+                    onClick={() => { adjustSubtitleDelayMs(-50); flashSyncStatus('Adjusted −50ms') }}
+                    type="button"
+                  >
+                    <Minus aria-hidden="true" className="size-3.5" />
+                    <span className="ml-1 text-[10px] font-bold">50</span>
+                  </button>
+                  <button
+                    aria-label="Reset subtitle sync offset"
+                    className={settingsChipClass(subtitleDelayMs === 0, true)}
+                    onClick={() => { chooseSubtitleDelayMs(0); flashSyncStatus('Offset reset') }}
+                    type="button"
+                  >
+                    <RotateCcw aria-hidden="true" className="size-3.5" />
+                  </button>
+                  <button
+                    aria-label="Shift subtitles forwards 50 milliseconds"
+                    className={settingsChipClass(false)}
+                    onClick={() => { adjustSubtitleDelayMs(50); flashSyncStatus('Adjusted +50ms') }}
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" className="size-3.5" />
+                    <span className="ml-1 text-[10px] font-bold">50</span>
+                  </button>
+                </div>
+                {syncStatus ? (
+                  <p aria-live="polite" className="rounded-control bg-orange/15 px-3 py-2 text-center text-xs font-bold text-orange" role="status">
+                    {syncStatus}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {activeMenu === 'subtitles' ? (
+          <div className="contents" ref={menuRef}>
+            <div
+              aria-label="Subtitles"
+              className={RAIL_PANEL_CLASS}
+              id="consumit-player-menu-subtitles"
+              role="menu"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
+                <p className="text-base font-bold text-ink">
+                  Subtitles
+                  {subtitleTrackCount > 0 ? (
+                    <span className="ml-2 align-middle text-xs font-bold tabular-nums text-muted">
+                      {subtitleTrackCount} {subtitleTrackCount === 1 ? 'sub' : 'subs'}
+                    </span>
+                  ) : null}
+                </p>
+                <button
+                  aria-label="Close subtitles"
+                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setActiveMenu(null)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div className="space-y-1 p-3">
+                {subtitleOptions.map((option) => {
+                  const selected = selectedSubtitle === option.value
+                  const isOff = option.value === 'off'
+                  const nativeName = isOff ? option.label : nativeLanguageName(option.language, option.label)
+                  const showDetail = !isOff
+                  return (
+                    <button
+                      aria-checked={selected}
+                      className={settingsRowClass(selected)}
+                      key={option.value}
+                      onClick={() => chooseSubtitle(option.value)}
+                      role="menuitemradio"
+                      type="button"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate leading-5 font-medium">{nativeName}</span>
+                        {showDetail ? <span className="block truncate text-xs leading-4 font-normal text-muted">{option.label}</span> : null}
+                      </span>
+                      {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                    </button>
+                  )
+                })}
+                <div className="mt-2 space-y-3 border-t border-white/10 pt-3">
+                  <div aria-label="Preferred subtitle languages" className="space-y-1.5 px-1" role="group">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
+                        Preferred languages
+                      </p>
+                      <p className="text-[11px] tabular-nums text-faint">{subtitleLanguages.length}/3</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PREFERRED_LANGUAGE_CODES.map((code) => {
+                        const order = subtitleLanguages.indexOf(code)
+                        const selected = order !== -1
+                        const capped = !selected && subtitleLanguages.length >= 3
+                        return (
+                          <button
+                            aria-pressed={selected}
+                            className={settingsChipClass(selected, true)}
+                            disabled={capped}
+                            key={code}
+                            onClick={() => toggleSubtitleLanguage(code)}
+                            title={selected ? `Preferred language ${order + 1}, remove` : capped ? 'Remove one first (3 max)' : 'Add as preferred language'}
+                            type="button"
+                          >
+                            {selected ? (
+                              <span aria-hidden="true" className="mr-1 inline-grid size-4 place-items-center rounded-full bg-orange text-[10px] font-bold text-canvas">
+                                {order + 1}
+                              </span>
+                            ) : null}
+                            {nativeLanguageName(code, code.toUpperCase())}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="text-[11px] leading-4 text-faint">
+                      Subtitles are fetched in these languages first, in order.
+                    </p>
+                  </div>
+                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
+                    Captions appearance
+                  </p>
+                  <div aria-label="Caption size" className="space-y-1.5 px-1" role="group">
+                    <p className="text-xs font-medium text-copy">Size</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['small', 'medium', 'large', 'xlarge'] as const).map((size) => (
+                        <button
+                          aria-pressed={captionSize === size}
+                          className={settingsChipClass(captionSize === size, true)}
+                          key={size}
+                          onClick={() => chooseCaptionSize(size)}
+                          type="button"
+                        >
+                          {size === 'small' ? 'Small' : size === 'medium' ? 'Medium' : size === 'large' ? 'Large' : 'XL'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div aria-label="Caption style" className="space-y-1.5 px-1" role="group">
+                    <p className="text-xs font-medium text-copy">Style</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['cinematic', 'boxed', 'subtle'] as const).map((style) => (
+                        <button
+                          aria-pressed={captionBackground === style}
+                          className={settingsChipClass(captionBackground === style, true)}
+                          key={style}
+                          onClick={() => chooseCaptionBackground(style)}
+                          type="button"
+                        >
+                          {style === 'cinematic' ? 'Cinematic' : style === 'boxed' ? 'Boxed' : 'Subtle'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 px-1">
+                    <div aria-label="Caption position" className="space-y-1.5" role="group">
+                      <p className="text-xs font-medium text-copy">Position</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(['bottom', 'top'] as const).map((position) => (
+                          <button
+                            aria-pressed={captionPosition === position}
+                            className={settingsChipClass(captionPosition === position, true)}
+                            key={position}
+                            onClick={() => chooseCaptionPosition(position)}
+                            type="button"
+                          >
+                            {position === 'bottom' ? 'Bottom' : 'Top'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div aria-label="Caption font" className="space-y-1.5" role="group">
+                      <p className="text-xs font-medium text-copy">Font</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(['filscreen', 'sans'] as const).map((font) => (
+                          <button
+                            aria-pressed={captionFont === font}
+                            className={settingsChipClass(captionFont === font, true)}
+                            key={font}
+                            onClick={() => chooseCaptionFont(font)}
+                            type="button"
+                          >
+                            {font === 'filscreen' ? 'FilScreen' : 'Sans'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div aria-label="Subtitle sync delay" className="space-y-1.5 px-1" role="group">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-copy">Sync delay</p>
+                      <p aria-live="polite" className="text-xs font-bold tabular-nums text-orange">
+                        {formatSubtitleDelayMs(subtitleDelayMs)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        aria-label="Shift subtitles backwards 500 milliseconds"
+                        className={settingsChipClass(false, true)}
+                        onClick={() => adjustSubtitleDelayMs(-500)}
+                        type="button"
+                      >
+                        −500
+                      </button>
+                      <button
+                        aria-label="Shift subtitles backwards 100 milliseconds"
+                        className={settingsChipClass(false)}
+                        onClick={() => adjustSubtitleDelayMs(-100)}
+                        type="button"
+                      >
+                        <Minus aria-hidden="true" className="size-3.5" />
+                      </button>
+                      <button
+                        aria-label="Reset subtitle sync offset"
+                        className={settingsChipClass(subtitleDelayMs === 0, true)}
+                        onClick={() => chooseSubtitleDelayMs(0)}
+                        type="button"
+                      >
+                        <RotateCcw aria-hidden="true" className="size-3.5" />
+                      </button>
+                      <button
+                        aria-label="Shift subtitles forwards 100 milliseconds"
+                        className={settingsChipClass(false)}
+                        onClick={() => adjustSubtitleDelayMs(100)}
+                        type="button"
+                      >
+                        <Plus aria-hidden="true" className="size-3.5" />
+                      </button>
+                      <button
+                        aria-label="Shift subtitles forwards 500 milliseconds"
+                        className={settingsChipClass(false, true)}
+                        onClick={() => adjustSubtitleDelayMs(500)}
+                        type="button"
+                      >
+                        +500
+                      </button>
+                    </div>
+                    <button
+                      className="flex w-full items-center justify-between rounded-control px-2.5 py-2 text-left text-sm transition-colors hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-orange"
+                      onClick={() => setActiveMenu('sync')}
+                      type="button"
+                    >
+                      <span className="flex items-center gap-2 font-medium text-ink">
+                        <Wand2 aria-hidden="true" className="size-4 text-muted" strokeWidth={1.75} />
+                        Visual sync…
+                      </span>
+                      <ChevronRight aria-hidden="true" className="size-3.5 text-muted" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

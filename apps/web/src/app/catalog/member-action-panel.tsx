@@ -55,23 +55,25 @@ function ShelfToggle({ active, activeLabel, engagedLabel, fillClass, icon, inact
     <button
       aria-label={active ? activeLabel : inactiveLabel}
       aria-pressed={active}
-      className="group flex min-h-16 flex-1 flex-col items-center justify-center gap-1.5 rounded-control text-copy outline-none transition-all duration-150 hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none"
+      className={active
+        ? 'group flex min-h-[76px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl bg-[rgba(255,93,56,0.16)] px-2 text-white shadow-[inset_0_0_0_1px_rgba(255,93,56,0.55)] outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-[rgba(255,93,56,0.24)] active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'
+        : 'group flex min-h-[76px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-white/65 outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-white/10 hover:text-white active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'}
       onClick={onToggle}
       type="button"
     >
       <span
         aria-hidden="true"
         className={active
-          ? `text-orange transition-transform duration-150 group-hover:scale-110 group-active:scale-90 motion-reduce:transition-none motion-reduce:transform-none ${fillClass}`
-          : 'transition-all duration-150 group-hover:scale-110 group-hover:text-ink group-active:scale-90 motion-reduce:transition-none motion-reduce:transform-none'}
+          ? `text-[#ff5d38] transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-95 motion-reduce:transition-none motion-reduce:transform-none ${fillClass}`
+          : 'transition-all duration-200 ease-out group-hover:scale-110 group-hover:text-white group-active:scale-95 motion-reduce:transition-none motion-reduce:transform-none'}
       >
         {icon}
       </span>
       <span className="grid text-xs font-bold" aria-hidden="true">
-        <span className="col-start-1 row-start-1 translate-y-0 opacity-100 transition-all duration-150 group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0 motion-reduce:transition-none motion-reduce:transform-none">
+        <span className="col-start-1 row-start-1 translate-y-0 opacity-100 transition-all duration-200 ease-out group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0 motion-reduce:transition-none motion-reduce:transform-none">
           {active ? engagedLabel : restLabel}
         </span>
-        <span className="col-start-1 row-start-1 translate-y-1 opacity-0 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 motion-reduce:transition-none motion-reduce:transform-none">
+        <span className="col-start-1 row-start-1 translate-y-1 opacity-0 transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 motion-reduce:transition-none motion-reduce:transform-none">
           {active ? 'Remove' : engagedLabel}
         </span>
       </span>
@@ -79,11 +81,22 @@ function ShelfToggle({ active, activeLabel, engagedLabel, fillClass, icon, inact
   )
 }
 
+const SHELF_ROW_CLASS =
+  'group flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-white/80 outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-white/10 hover:text-white active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'
+
+const SHELF_ICON_CLASS =
+  'grid place-items-center text-white/50 transition-all duration-200 ease-out group-hover:scale-110 group-hover:text-white motion-reduce:transition-none motion-reduce:transform-none'
+
 /**
  * Member shelf for title heroes: watched / liked / saved toggles with
  * real backing records, interactive rating, a native review composer, a
  * copy-link share row, and the library activity destination. Every row
  * reads or writes stored member data; nothing here is implied.
+ *
+ * The shelf lives inside the dark cinematic title hero, so it speaks the
+ * FilScreen row language (rounded-xl hover-lift rows, accent-soft actives,
+ * white focus rings) in fixed dark-glass tones that stay legible over
+ * backdrop art in either theme.
  */
 export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }: MemberActionPanelProps) {
   const session = useSession()
@@ -170,15 +183,15 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
   }
 
   return (
-    <div className="rounded-card border border-border bg-canvas/70 p-5 backdrop-blur-md" data-consumit-member-shelf>
+    <div className="rounded-2xl border border-white/10 bg-[rgba(18,18,22,0.72)] p-4 text-[#f4f0e8] backdrop-blur-md" data-consumit-member-shelf>
       {session.member ? (
-        <div className="grid grid-cols-3 gap-1" role="group" aria-label="Your shelf for this title">
+        <div className="grid grid-cols-3 gap-2" role="group" aria-label="Your shelf for this title">
           <ShelfToggle
             active={watched}
             activeLabel={`Mark ${title} as not watched`}
             engagedLabel="Watched"
-            fillClass="fill-orange/20"
-            icon={<Eye aria-hidden="true" className="size-8" />}
+            fillClass="fill-[#ff5d38]/20"
+            icon={<Eye aria-hidden="true" className="size-6" />}
             inactiveLabel={`Mark ${title} as watched`}
             onToggle={() => void toggle('watched')}
             restLabel="Watch"
@@ -188,7 +201,7 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
             activeLabel={`Unlike ${title}`}
             engagedLabel="Liked"
             fillClass="fill-current"
-            icon={<Heart aria-hidden="true" className="size-8" />}
+            icon={<Heart aria-hidden="true" className="size-6" />}
             inactiveLabel={`Like ${title}`}
             onToggle={() => void toggle('liked')}
             restLabel="Like"
@@ -198,7 +211,7 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
             activeLabel={`Remove ${title} from library`}
             engagedLabel="Saved"
             fillClass="fill-current"
-            icon={<Bookmark aria-hidden="true" className="size-8" />}
+            icon={<Bookmark aria-hidden="true" className="size-6" />}
             inactiveLabel={`Save ${title} to library`}
             onToggle={() => void toggle('saved')}
             restLabel="Save"
@@ -206,41 +219,49 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
         </div>
       ) : null}
       {error ? <p className="mt-3 text-xs text-orange" role="alert">{error}</p> : null}
-      <p className="mt-4 border-t border-border pt-4 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-muted">Rated</p>
-      <div className="mt-2">
-        <RatingWidget id={id} kind={kind} title={title} />
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
+        <p className="text-sm font-bold text-white">Your rating</p>
+        <div className="mt-2">
+          <RatingWidget id={id} kind={kind} title={title} />
+        </div>
       </div>
-      <div className="mt-4 divide-y divide-border border-t border-border">
+      <div className="mt-3 grid gap-1 border-t border-white/10 pt-3">
         {session.member ? (
           <button
-            className="flex min-h-11 w-full items-center gap-3 text-left text-sm font-bold text-copy outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset motion-reduce:transition-none"
+            className={SHELF_ROW_CLASS}
             onClick={() => {
               setLogged(false)
               setLogging(true)
             }}
             type="button"
           >
-            <PenLine aria-hidden="true" className="size-4" />
+            <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+              <PenLine aria-hidden="true" className="size-[18px]" />
+            </span>
             Add review
           </button>
         ) : null}
         <button
-          className="flex min-h-11 w-full items-center gap-3 text-left text-sm font-bold text-copy outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset motion-reduce:transition-none"
+          className={SHELF_ROW_CLASS}
           onClick={() => void share()}
           type="button"
         >
-          {copied ? <Check aria-hidden="true" className="size-4 text-lime" /> : <Link2 aria-hidden="true" className="size-4" />}
+          <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+            {copied ? <Check aria-hidden="true" className="size-[18px] text-[#ff5d38]" /> : <Link2 aria-hidden="true" className="size-[18px]" />}
+          </span>
           {copied ? 'Link copied' : 'Share'}
         </button>
         <Link
-          className="flex min-h-11 w-full items-center gap-3 text-left text-sm font-bold text-copy outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset motion-reduce:transition-none"
+          className={SHELF_ROW_CLASS}
           href="/library"
         >
-          <ArrowRight aria-hidden="true" className="size-4" />
+          <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+            <ArrowRight aria-hidden="true" className="size-[18px]" />
+          </span>
           Your activity
         </Link>
       </div>
-      {logged ? <p className="mt-3 text-xs text-lime" role="status">Logged.</p> : null}
+      {logged ? <p className="mt-3 text-xs font-bold text-[#ff5d38]" role="status">Logged.</p> : null}
       {shareFailed ? <p className="mt-3 text-xs text-orange" role="alert">The link could not be copied.</p> : null}
       {/*
         * Portaled to document.body: the shelf's backdrop glass establishes a

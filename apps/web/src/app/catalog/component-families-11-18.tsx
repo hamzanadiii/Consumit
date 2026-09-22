@@ -296,7 +296,7 @@ export function ComponentFamiliesCatalog1118() {
               asideDescription="Return to the films, people, and lists that know what your next night should feel like."
               asideTitle="Your taste is waiting."
               description="Sign in to continue your library and circle."
-              footer={<>New to Consumit? <a className="font-bold text-ink" href="#create">Create your taste space</a></>}
+              footer={<>New to Consumit? <a className="font-bold text-ink" href="#create">Create your account</a></>}
               title="Welcome back."
             >
               <form className="space-y-5">

@@ -41,8 +41,8 @@ export function RatingWidget({ id, kind, title }: RatingWidgetProps) {
 
   if (!session.member) {
     return (
-      <p className="text-sm text-muted">
-        <Link className="font-bold text-ink hover:text-orange" href="/sign-in">Sign in</Link> to rate {title}.
+      <p className="text-sm leading-6 text-white/70">
+        <Link className="font-bold text-white underline decoration-white/40 underline-offset-4 outline-none transition-colors hover:text-[#ff5d38] hover:decoration-[#ff5d38] focus-visible:ring-2 focus-visible:ring-white" href="/sign-in">Sign in</Link> to rate {title}.
       </p>
     )
   }
@@ -74,7 +74,7 @@ export function RatingWidget({ id, kind, title }: RatingWidgetProps) {
       />
       {saving || error ? (
         <div className="mt-3 flex min-h-6 flex-wrap items-center gap-4">
-          {saving ? <p className="text-xs text-muted" role="status">Saving your rating…</p> : null}
+          {saving ? <p className="text-xs text-white/60" role="status">Saving your rating…</p> : null}
           {error ? <p className="text-xs text-orange" role="alert">{error}</p> : null}
         </div>
       ) : null}

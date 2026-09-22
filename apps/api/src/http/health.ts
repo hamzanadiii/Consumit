@@ -16,17 +16,23 @@ const noLimit = { config: { rateLimit: false } }
  */
 export function registerHealthRoutes(app: FastifyInstance, state: HealthState) {
   const live = async () => ({ status: 'ok' as const })
-  const ready = async () => {
+  const ready = async (): Promise<{ dependencies: Record<string, 'ok' | 'unavailable'>; status: 'ok' | 'degraded' }> => {
     const dependencies = {
       catalog: state.catalogConfigured ? 'ok' as const : 'unavailable' as const,
       identity: state.identityConfigured ? 'ok' as const : 'unavailable' as const,
     }
-    return Object.values(dependencies).every((value) => value === 'ok')
-      ? { dependencies, status: 'ok' as const }
-      : { dependencies, status: 'degraded' as const }
+    const healthy = Object.values(dependencies).every((value) => value === 'ok')
+    if (!healthy) {
+      app.log.warn({ dependencies }, 'readiness degraded')
+    }
+    return { dependencies, status: healthy ? 'ok' : 'degraded' }
   }
 
   app.get('/health', noLimit, live)
   app.get('/health/live', noLimit, live)
-  app.get('/health/ready', noLimit, ready)
+  app.get('/health/ready', noLimit, async (request, reply) => {
+    const result = await ready()
+    if (result.status === 'degraded') reply.code(503)
+    return result
+  })
 }

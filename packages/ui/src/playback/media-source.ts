@@ -13,6 +13,8 @@
 
 export type DirectMediaType = 'native' | 'hls' | 'dash'
 
+export type SkipSegment = { kind: 'intro' | 'outro' | 'recap'; start: number; end: number }
+
 export type DirectMediaSource = {
   subtitles?: readonly { id: string; label: string; language: string; url: string }[] | undefined
   /** Direct delivery type. `native` is progressive MP4/WebM. */
@@ -21,6 +23,8 @@ export type DirectMediaSource = {
   src: string
   /** Optional caller hint, e.g. "4K", shown in the top meta line. */
   qualityHint?: string | undefined
+  /** Opening/ending ranges in seconds for the skip control. */
+  skipSegments?: readonly SkipSegment[] | undefined
 }
 
 export type ChapterCue = {
@@ -84,6 +88,23 @@ export function deviceAutoCapHeight(viewport?: { width: number; height: number }
   if (smallest < 500) return 720
   if (smallest < 900) return 1080
   return Number.POSITIVE_INFINITY
+}
+
+/**
+ * Human label for one HLS audio rendition in the player menu. Some upstreams
+ * tag every rendition `Audio N` with no LANGUAGE attribute — and the tag is
+ * missing down to the fMP4 init segments (`mdhd` reads `und`) — so there is
+ * no language to show and inventing one would mislead. The only honest
+ * signal left is the manifest DEFAULT flag: the provider's primary rendition
+ * becomes "Main audio" while the rest keep their stable numbers.
+ */
+export function audioTrackLabel(track: { name?: string | undefined; lang?: string | undefined; isDefault?: boolean | undefined }, index: number): string {
+  const name = track.name?.trim()
+  if (name && !/^audio\s*\d+$/i.test(name)) return name
+  const lang = track.lang?.trim()
+  if (lang) return name || lang
+  if (track.isDefault) return 'Main audio'
+  return name || `Audio ${index + 1}`
 }
 
 export class UnsafeMediaSourceError extends Error {

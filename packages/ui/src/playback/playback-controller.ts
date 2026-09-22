@@ -10,7 +10,7 @@ export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' 
 /** One controller per media element; async engine loads are serialized and generation-guarded. */
 export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   change: (snapshot: ControllerSnapshot) => void
-  fatal: (reason: 'network' | 'media') => void
+  fatal: (reason: 'network' | 'media' | 'gone') => void
   event?: (event: ControllerEvent) => void
 }, attach = attachMediaEngine) {
   let engine: MediaEngine | undefined
@@ -35,6 +35,28 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     })
     update({ ...engineOptions, subtitles })
   }
+  /** First-party converted caption files live on the app origin under
+   *  whatever scheme it uses (http in dev). Same-host files are ours, so
+   *  they pass alongside strict-https upstream tracks. */
+  function isPlayableSubtitleUrl(url: string): boolean {
+    if (isSafeMediaUrl(url)) return true
+    try {
+      if (typeof window === 'undefined' || !window.location?.hostname) return false
+      const parsed = new URL(url, window.location.href)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+      if (parsed.username || parsed.password) return false
+      return parsed.hostname === window.location.hostname
+    } catch {
+      return false
+    }
+  }
+  /**
+   * The single owner of the external track list. The caller passes the
+   * active source's tracks together with every aggregated extra track, so
+   * server switches reconcile the menu instead of wiping it: tracks that
+   * survive stay selected, vanished ones fall back to the language
+   * preference. `load()` never touches these elements.
+   */
   function appendExternal(entries: readonly { id: string; label: string; language: string; url: string }[]) {
     tracks.forEach((track) => track.remove()); tracks = []
     externalOptions = []
@@ -46,7 +68,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     const seenExternalIds = new Set<string>()
     const seenExternalUrls = new Set<string>()
     for (const entry of entries) {
-      if (!isSafeMediaUrl(entry.url)) continue
+      if (!isPlayableSubtitleUrl(entry.url)) continue
       if (seenExternalIds.has(entry.id) || seenExternalUrls.has(entry.url)) continue
       seenExternalIds.add(entry.id)
       seenExternalUrls.add(entry.url)
@@ -82,7 +104,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       else if (!destroyed) fatal('media')
     }
   }
-  function fatal(reason: 'network' | 'media') {
+  function fatal(reason: 'network' | 'media' | 'gone') {
     if (destroyed || snapshot.phase === 'failed') return
     if (retries++ === 0 && engine?.recover()) {
       update({ phase: 'buffering' })
@@ -95,18 +117,50 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     engine?.subtitle(value.startsWith('external:') ? 'off' : value)
     // A track element without a TextTrack (e.g. in test DOMs) must never
     // crash selection; real browsers always provide one.
-    tracks.forEach((track) => { const textTrack = track.track as TextTrack | undefined; if (textTrack) textTrack.mode = value === `external:${track.id}` ? 'showing' : 'disabled' })
+    tracks.forEach((track) => {
+      const textTrack = track.track as TextTrack | undefined
+      if (textTrack) {
+        const isSelected = value === `external:${track.id}`
+        textTrack.mode = isSelected ? 'showing' : 'disabled'
+        track.default = isSelected
+      }
+    })
+    if (typeof video.textTracks !== 'undefined') {
+      Array.from(video.textTracks).forEach((textTrack) => {
+        if (!textTrack.id.startsWith('consumit-external-')) {
+          if (value === 'off' || value.startsWith('external:')) {
+            textTrack.mode = 'disabled'
+          } else if (textTrack.id === value || textTrack.language === value) {
+            textTrack.mode = 'showing'
+          }
+        }
+      })
+    }
     update({ subtitleTrack: value })
   }
   function preferredSubtitle() {
-    const match = snapshot.subtitles.find((option) => option.language?.split('-')[0] === subtitlePreference.split('-')[0])
+    const match = snapshot.subtitles.find((option) =>
+      option.language?.split('-')[0] === subtitlePreference.split('-')[0] ||
+      option.label.toLowerCase() === subtitlePreference.toLowerCase()
+    )
     selectSubtitle(subtitlePreference === 'off' ? 'off' : match?.value ?? 'off')
   }
   function subtitle(value: string) {
-    if (value !== 'off' && !snapshot.subtitles.some((option) => option.value === value)) return
-    subtitlePreference = value === 'off' ? 'off' : snapshot.subtitles.find((option) => option.value === value)?.language ?? 'en'
+    let target = snapshot.subtitles.find((option) => option.value === value)
+    if (!target && value !== 'off') {
+      target = snapshot.subtitles.find(
+        (option) =>
+          option.value.toLowerCase() === value.toLowerCase() ||
+          option.language?.toLowerCase() === value.toLowerCase() ||
+          option.label.toLowerCase() === value.toLowerCase() ||
+          (option.language && value.toLowerCase().startsWith(option.language.toLowerCase())),
+      )
+    }
+    if (value !== 'off' && !target) return
+    const resolvedValue = target ? target.value : 'off'
+    subtitlePreference = resolvedValue === 'off' ? 'off' : target?.language ?? 'en'
     try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Storage is optional. */ }
-    selectSubtitle(value)
+    selectSubtitle(resolvedValue)
   }
   function preferredAudio() {
     const match = snapshot.audio.find((option) => option.language === audioPreference || option.label.toLowerCase() === audioPreference)
@@ -134,6 +188,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       startedAt = performance.now(); firstFrame = false
       attachment?.abort(); metadataCleanup()
       clearTimeout(recoveryTimer); retries = 0
+      const previousSubtitle = snapshot.subtitleTrack
       update({ phase: engine ? 'switching' : 'loading', needsGesture: false, quality: 'auto', audioTrack: '', subtitleTrack: 'off', qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [] })
       queue = queue.catch(() => undefined).then(async () => {
         if (destroyed || current !== generation) return
@@ -141,7 +196,11 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         attachment = new AbortController()
         const controller = attachment
         engineOptions = { qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [] }
-        appendExternal(source.subtitles ?? [])
+        // External track elements stay owned by appendExternal (driven by
+        // the caller's merged list): a source switch must reconcile the
+        // shared menu, never wipe it. Republish so the fresh engine tracks
+        // join the surviving external set immediately.
+        publishTracks()
         const restore = () => {
           if (destroyed || current !== generation) return
           if (Number.isFinite(position) && position > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(position, Math.max(0, video.duration - 0.25))
@@ -156,7 +215,16 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
             if (current !== generation || destroyed) return
             engineOptions = next
             publishTracks()
-            if (engine) { preferredSubtitle(); preferredAudio() }
+            if (engine) {
+              // A server switch must not steal an explicit caption pick:
+              // when the previous external track survives the reload, keep
+              // it instead of re-solving the language preference.
+              const kept = previousSubtitle.startsWith('external:') &&
+                snapshot.subtitles.some((option) => option.value === previousSubtitle)
+              if (kept) selectSubtitle(previousSubtitle)
+              else preferredSubtitle()
+              preferredAudio()
+            }
           },
           fatal(reason) { if (current === generation) fatal(reason) },
         }, controller.signal)
@@ -179,7 +247,15 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
           ...attached,
           destroy() { video.removeEventListener('loadedmetadata', restore); attached.destroy() },
         }
-        preferredSubtitle()
+        // The tracks callback above runs before any engine exists, so an
+        // explicit pick can only be honored here: when the pre-load
+        // external track survives the reload, keep it instead of
+        // re-solving the language preference. Otherwise solve the
+        // preference (first-load auto-select takes this branch).
+        const reselected = previousSubtitle.startsWith('external:') &&
+          snapshot.subtitles.some((option) => option.value === previousSubtitle)
+        if (reselected) selectSubtitle(previousSubtitle)
+        else preferredSubtitle()
         preferredAudio()
         if (video.readyState >= 1) { video.removeEventListener('loadedmetadata', restore); restore() }
       }).catch(() => { if (current === generation && !destroyed) { metadataCleanup(); fatal('media') } })

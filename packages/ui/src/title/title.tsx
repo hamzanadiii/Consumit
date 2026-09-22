@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
 import { ArtworkFrame } from '../media/media'
+import { Select } from '../selection/selection'
 import { ProgressRail, RatingDisplay } from '../signals/signals'
 
 export type TitleMastheadProps = Omit<ComponentProps<'header'>, 'children'> & {
@@ -194,36 +195,39 @@ export type SeasonOption = {
   value: string
 }
 
-export type SeasonSelectorProps = Omit<ComponentProps<'select'>, 'children' | 'onChange'> & {
+export type SeasonSelectorProps = {
+  className?: string | undefined
+  disabled?: boolean | undefined
+  id?: string | undefined
   label?: string | undefined
+  name?: string | undefined
   onValueChange?: ((value: string) => void) | undefined
   options: readonly SeasonOption[]
+  value?: string | undefined
 }
 
 export function SeasonSelector({
   className,
+  disabled,
+  id,
   label = 'Season',
+  name,
   onValueChange,
   options,
-  ...props
+  value,
 }: SeasonSelectorProps) {
   return (
-    <label className="inline-flex items-center gap-3 text-sm font-bold text-ink">
-      <span>{label}</span>
-      <select
-        className={cn(
-          'h-11 rounded-control border border-control-outline bg-surface px-3 text-sm text-ink outline-none focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
-          className,
-        )}
-        data-consumit-season-selector
-        onChange={(event) => onValueChange?.(event.currentTarget.value)}
-        {...props}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </label>
+    <Select
+      className={className}
+      data-consumit-season-selector
+      disabled={disabled}
+      id={id}
+      label={label}
+      name={name}
+      onValueChange={onValueChange}
+      options={options}
+      value={value}
+    />
   )
 }
 

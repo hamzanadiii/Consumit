@@ -42,7 +42,7 @@ function readLocalProgress(ref: PlaybackRef, memberId?: string) {
 export async function writePlaybackProgress(ref: PlaybackRef, position: number, duration: number, completed: boolean, memberId?: string, keepalive = false) {
   if (!Number.isFinite(position) || !Number.isFinite(duration) || duration < 1) return
   const payload: ProgressWriteRequest = { ...ref, positionSeconds: Math.floor(Math.min(duration, 86400, Math.max(0, position))), durationSeconds: Math.floor(Math.min(86400, duration)), completed }
-  try { localStorage.setItem(progressKey(ref, memberId), JSON.stringify(payload)) } catch { /* Storage denial must not interrupt playback. */ }
+  try { localStorage.setItem(progressKey(ref, memberId), JSON.stringify({ ...payload, updatedAt: new Date().toISOString() })) } catch { /* Storage denial must not interrupt playback. */ }
   if (!memberId) return
   const response = await fetch('/v1/progress', { method: 'PUT', body: JSON.stringify(payload), credentials: 'same-origin', headers: { 'content-type': 'application/json' }, keepalive, signal: AbortSignal.timeout(5000) })
   if (!response.ok) throw new Error('Progress is saved on this device. Account sync will retry.')

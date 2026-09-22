@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { CastCard, EpisodeRow, MemberPulse, SeasonSelector, TitleMasthead } from './title'
@@ -39,11 +40,14 @@ describe('title and series components', () => {
     expect(screen.getByLabelText('Member rating 4.3 out of 5 from 12,846 ratings')).toBeInTheDocument()
   })
 
-  it('keeps season selection native', () => {
+  it('selects seasons through the shared themed listbox', async () => {
+    const user = userEvent.setup()
     const onValueChange = vi.fn()
-    render(<SeasonSelector onValueChange={onValueChange} options={[{ label: 'Season 1', value: '1' }, { label: 'Season 2', value: '2' }]} />)
+    render(<SeasonSelector onValueChange={onValueChange} options={[{ label: 'Season 1', value: '1' }, { label: 'Season 2', value: '2' }]} value="1" />)
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Season' }), { target: { value: '2' } })
+    await user.click(screen.getByRole('button', { name: 'Season Season 1' }))
+    expect(screen.getByRole('listbox', { name: 'Season' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: 'Season 2' }))
     expect(onValueChange).toHaveBeenCalledWith('2')
   })
 

@@ -14,11 +14,19 @@ const envSchema = z.object({
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
   RESEND_API_KEY: z.string().trim().min(1).optional(),
+  SUBDL_API_KEY: z.string().trim().min(1).optional(),
+  JIMAKU_API_KEY: z.string().trim().min(1).optional(),
+  OPENSUBTITLES_API_KEY: z.string().trim().min(1).optional(),
+  OPENSUBTITLES_USER: z.string().trim().min(1).optional(),
+  OPENSUBTITLES_PASS: z.string().trim().min(1).optional(),
   TMDB_API_READ_TOKEN: z.string().trim().min(1).optional(),
   TMDB_LANGUAGE: z.string().trim().min(1).default('en-US'),
   TMDB_REGION: z.string().trim().length(2).default('US'),
   TRUSTED_PROXIES: z.string().optional(),
   VALKEY_URL: z.string().trim().min(1).optional(),
+  WORKER_URL: z.string().url().optional(),
+  EMBED_HMAC_SECRET: z.string().min(16).optional(),
+  EMBED_ALLOWED_DOMAINS: z.string().optional(),
 })
 
 export type ApiEnv = {
@@ -37,11 +45,19 @@ export type ApiEnv = {
   nodeEnv: 'development' | 'test' | 'production'
   port: number
   resendApiKey: string | undefined
+  subtitleKeys: {
+    subdl: string | undefined
+    jimaku: string | undefined
+    openSubtitles: { apiKey: string; user: string; pass: string } | undefined
+  }
   tmdbLanguage: string
   tmdbRegion: string
   tmdbToken: string | undefined
   trustedProxies: string[]
   valkeyUrl: string | undefined
+  workerUrl: string | undefined
+  embedHmacSecret: string | undefined
+  embedAllowedDomains: string | undefined
 }
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): ApiEnv {
@@ -61,6 +77,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     const playbackUrl = new URL(value.PLAYBACK_VALKEY_URL)
     const authUrl = new URL(value.VALKEY_URL)
     if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
+  }
+  if (value.WORKER_URL && !value.EMBED_HMAC_SECRET) {
+    throw new Error('Invalid API configuration: EMBED_HMAC_SECRET is required when WORKER_URL is set.')
   }
   if (value.NODE_ENV === 'production') {
     const required = {
@@ -89,10 +108,20 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     nodeEnv: value.NODE_ENV,
     port: value.PORT,
     resendApiKey: value.RESEND_API_KEY,
+    subtitleKeys: {
+      subdl: value.SUBDL_API_KEY,
+      jimaku: value.JIMAKU_API_KEY,
+      openSubtitles: value.OPENSUBTITLES_API_KEY && value.OPENSUBTITLES_USER && value.OPENSUBTITLES_PASS
+        ? { apiKey: value.OPENSUBTITLES_API_KEY, user: value.OPENSUBTITLES_USER, pass: value.OPENSUBTITLES_PASS }
+        : undefined,
+    },
     tmdbLanguage: value.TMDB_LANGUAGE,
     tmdbRegion: value.TMDB_REGION.toUpperCase(),
     tmdbToken: value.TMDB_API_READ_TOKEN,
     trustedProxies: (value.TRUSTED_PROXIES ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
     valkeyUrl: value.VALKEY_URL,
+    workerUrl: value.WORKER_URL,
+    embedHmacSecret: value.EMBED_HMAC_SECRET,
+    embedAllowedDomains: value.EMBED_ALLOWED_DOMAINS,
   }
 }

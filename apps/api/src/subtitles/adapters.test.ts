@@ -1,0 +1,290 @@
+import { createCipheriv } from 'node:crypto'
+import { describe, expect, it } from 'vitest'
+
+import { decodeNxshaPayload, encodeNxshaPayload } from '@consumit/provider-sdk'
+
+import { createCastleSubsProvider } from './castlesubs.ts'
+import type { SubtitleHttp } from './http.ts'
+import { createJimakuProvider } from './jimaku.ts'
+import { createNxshaSubsProvider } from './nxshasubs.ts'
+import { createOpenSubtitlesProvider } from './opensubtitles.ts'
+import { createSubDlProvider } from './subdl.ts'
+import { createSubSourceProvider } from './subsource.ts'
+import { createTvSubtitlesProvider } from './tvsubtitles.ts'
+import type { RawSubtitle } from './types.ts'
+import { createVdrkProvider } from './vdrk.ts'
+import { createYifyProvider } from './yify.ts'
+
+function stubHttp(routes: { match: string; text: string; cookies?: string[] }[]): SubtitleHttp {
+  const get = async (url: string) => {
+    const route = routes.find((entry) => url.includes(entry.match))
+    if (!route) throw new Error(`Unexpected GET ${url}`)
+    return { text: route.text, cookies: route.cookies ?? [] }
+  }
+  return {
+    get: get as SubtitleHttp['get'],
+    post: (async () => {
+      throw new Error('Unexpected POST')
+    }) as SubtitleHttp['post'],
+  }
+}
+
+const YIFY_PAGE = `<table>
+<tr data-id="1"><td><span class="label">9</span></td><td><span class="sub-lang">English</span> YIFY-720p</a></td><td><a href="/subtitles/movie-man-english-yify-1">dl</a></td></tr>
+<tr data-id="2"><td><span class="label">4</span></td><td><span class="sub-lang">French</span> release WEB-DL</a></td><td><a href="/subtitles/movie-man-french-yify-2">dl</a></td></tr>
+</table>`
+
+describe('yify', () => {
+  const provider = createYifyProvider(stubHttp([{ match: 'movie-imdb', text: YIFY_PAGE, cookies: ['sess=abc'] }]))
+
+  it('supports movies with an IMDb id only', () => {
+    expect(provider.supports({ type: 'movie', imdbId: 'tt1234567' })).toBe(true)
+    expect(provider.supports({ type: 'tv', imdbId: 'tt1234567' })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('parses rows into gated zip candidates', async () => {
+    const found = await provider.search({ type: 'movie', imdbId: 'tt1234567' }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'yify', needsExtract: true })
+    expect(found[0]?.url).toBe('https://yifysubtitles.ch/subtitle/movie-man-english-yify-1.zip')
+    expect(found[0]?.headers).toMatchObject({ Referer: expect.stringContaining('movie-imdb'), Cookie: 'sess=abc' })
+  })
+})
+
+const TV_INDEX = `<a href="tvshow-42-7.html"><b>Example Show</b></a><a href="tvshow-9-2.html"><b>Other</b></a>`
+const TV_SEASON = `<tr><td>1x01</td><td><a href="subtitle-11.html"><img alt="en"></a><a href="subtitle-12.html"><img alt="fr"></a></td></tr>`
+const TV_SUBPAGE = `<a href="download-77.html">download</a>`
+const TV_DLPAGE = `<script>var s1='https://cdn.example/';var s2='files/a.zip';</script>`
+
+describe('tvsubtitles', () => {
+  const provider = createTvSubtitlesProvider(stubHttp([
+    { match: 'tvshows.html', text: TV_INDEX },
+    { match: 'tvshow-42-1.html', text: TV_SEASON },
+    { match: 'subtitle-11.html', text: TV_SUBPAGE },
+    { match: 'subtitle-12.html', text: TV_SUBPAGE },
+    { match: 'download-77.html', text: TV_DLPAGE },
+  ]))
+
+  it('supports TV and anime by title', () => {
+    expect(provider.supports({ type: 'tv', title: 'Example Show' })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Example Show' })).toBe(true)
+    expect(provider.supports({ type: 'movie', title: 'Example Show' })).toBe(false)
+  })
+
+  it('resolves episode rows to zip candidates', async () => {
+    const found = await provider.search({ type: 'tv', title: 'Example Show', season: 1, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'tvsubtitles' })
+    expect(found[0]?.url).toBe('https://cdn.example/files/a.zip')
+  })
+})
+
+const SUB_LIST = `<a href="/subtitle/example-2024/english/100">YIFY 720p s01e02</a>
+<a href="/subtitle/example-2024/french/101">YIFY 720p s01e02</a>`
+const SUB_ENTRY = `<a href="https://api.subsource.net/v1/subtitle/download/${'a'.repeat(40)}">dl</a>`
+
+describe('subsource', () => {
+  const http = stubHttp([
+    { match: '/subtitles/example-first-season', text: SUB_LIST },
+    { match: '/subtitle/example-2024/english/100', text: SUB_ENTRY },
+    { match: '/subtitle/example-2024/french/101', text: SUB_ENTRY },
+  ])
+  const provider = createSubSourceProvider(http)
+
+  it('supports movies and TV with title and year', () => {
+    expect(provider.supports({ type: 'movie', title: 'Example', year: 2024 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Example', year: 2024 })).toBe(false)
+    expect(provider.supports({ type: 'movie', title: 'Example' })).toBe(false)
+  })
+
+  it('resolves entry pages to download zips', async () => {
+    const found = await provider.search({ type: 'tv', title: 'Example', year: 2024, season: 1, episode: 2 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'subsource' })
+    expect(found[0]?.url).toContain('api.subsource.net')
+  })
+})
+
+function castleEncrypt(payload: unknown, securityKeyB64: string): string {
+  const keyBytes = Buffer.from(securityKeyB64, 'base64')
+  const suffix = Buffer.from('T!BgJB', 'utf8')
+  const combined = Buffer.concat([keyBytes, suffix])
+  const key = combined.length < 16 ? Buffer.concat([combined, Buffer.alloc(16 - combined.length, 0)]) : combined.subarray(0, 16)
+  const cipher = createCipheriv('aes-128-cbc', key, key)
+  return Buffer.concat([cipher.update(Buffer.from(JSON.stringify(payload), 'utf8')), cipher.final()]).toString('base64')
+}
+
+describe('castlesubs', () => {
+  const secKey = Buffer.from('testkey12345678').toString('base64')
+  const enc = (value: unknown) => castleEncrypt(value, secKey)
+  const http: SubtitleHttp = {
+    get: (async (url: string) => {
+      if (url.includes('getSecurityKey')) return { text: JSON.stringify({ code: 200, data: secKey }), cookies: [] }
+      if (url.includes('searchByKeyword')) return { text: enc({ data: { rows: [{ id: 7, title: 'Example' }] } }), cookies: [] }
+      if (url.includes('/movie?')) {
+        if (url.includes('movieId=7')) return { text: enc({ data: { seasons: [{ number: 1, movieId: 8 }], episodes: [] } }), cookies: [] }
+        return { text: enc({ data: { episodes: [{ number: 2, id: 55, tracks: [{ languageId: '10', abbreviate: 'en' }] }] } }), cookies: [] }
+      }
+      throw new Error(`Unexpected GET ${url}`)
+    }) as SubtitleHttp['get'],
+    post: (async () => enc({ data: { subtitles: [
+      { url: 'https://cdn.castle.example/sub123.vtt', title: 'English', abbreviate: 'en' },
+      { url: 'https://cdn.castle.example/en.vtt', title: 'Albanian', abbreviate: '[ar] Albanian' },
+    ] } })) as SubtitleHttp['post'],
+  }
+  const provider = createCastleSubsProvider(http)
+
+  it('supports movies and TV by title', () => {
+    expect(provider.supports({ type: 'movie', title: 'Example' })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Example' })).toBe(false)
+  })
+
+  it('harvests direct subtitle files through season resolution', async () => {
+    const found = await provider.search({ type: 'tv', title: 'Example', year: 2024, season: 1, episode: 2 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
+    expect(found[0]?.url).toBe('https://cdn.castle.example/sub123.vtt')
+  })
+
+  it('trusts the file name over a mislabeled upstream language', async () => {
+    const found = await provider.search({ type: 'tv', title: 'Example', year: 2024, season: 1, episode: 2 }, new AbortController().signal)
+    const fixed = found.find((track) => track.url.endsWith('/en.vtt'))
+    expect(fixed).toMatchObject({ lang: 'en', label: 'en' })
+  })
+})
+
+describe('vdrk', () => {
+  const provider = createVdrkProvider(stubHttp([{ match: '/v1/movie/550', text: JSON.stringify([
+    { file: 'https://cache.vdrk.site/a.vtt', label: 'English' },
+    { file: 'https://cache.vdrk.site/b.vtt', label: 'Czech2' },
+    { file: 'https://cache.vdrk.site/c.vtt', label: 'French hi' },
+    { file: '', label: 'Broken' },
+  ]) }]))
+
+  it('supports TMDB-keyed movies and TV', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
+    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('normalizes labels and HI markers into direct VTT tracks', async () => {
+    const found = await provider.search({ type: 'movie', tmdbId: 550 }, new AbortController().signal)
+    expect(found).toHaveLength(3)
+    expect(found[0]).toMatchObject({ lang: 'en', label: 'English', format: 'vtt', provider: 'vdrk' })
+    expect(found[1]).toMatchObject({ lang: 'cs', label: 'Czech' })
+    expect(found[2]).toMatchObject({ lang: 'fr', label: 'French [HI]', hi: true })
+  })
+})
+
+describe('subdl', () => {
+  const http = stubHttp([{ match: '/subtitles?', text: JSON.stringify({
+    status: true,
+    subtitles: [
+      { url: '/subtitle/1/en.srt', language: 'EN', name: 'WEB-DL', hi: false, release_name: 'Show.S01E01' },
+      { language: 'FR', name: 'FR sub', hi: true, release_name: 'Show.S01E01', unpack_files: [
+        { url: 'https://dl.subdl.com/subtitle/2/fr.srt', language: 'FR', name: 'FR', hi: false, season: 1, episode: 1 },
+        { url: 'https://dl.subdl.com/subtitle/3/fr.srt', language: 'FR', name: 'FR', hi: false, season: 1, episode: 2 },
+      ] },
+    ],
+  }) }])
+  const provider = createSubDlProvider(http, 'test-key')
+
+  it('declines without an API key', () => {
+    expect(createSubDlProvider(http).supports({ type: 'movie', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+  })
+
+  it('unpacks per-file subtitles and filters the episode', async () => {
+    const found = await provider.search({ type: 'tv', tmdbId: 1100, season: 1, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'subdl' })
+    expect(found[0]?.url).toBe('https://dl.subdl.com/subtitle/1/en.srt')
+    expect(found[1]).toMatchObject({ lang: 'fr' })
+  })
+})
+
+describe('jimaku', () => {
+  const http = stubHttp([{ match: '/entries/search', text: JSON.stringify([
+    { id: 1, name: 'Show', files: [{ url: 'https://cdn.jimaku.example/e01.srt', name: '[Sub] Show - 01.srt' }, { url: 'https://cdn.jimaku.example/e02.srt', name: '[Sub] Show - 02.srt' }] },
+  ]) }])
+  const provider = createJimakuProvider(http, 'test-key')
+
+  it('declines without a key or a non-anime query', () => {
+    expect(createJimakuProvider(http).supports({ type: 'anime', anilistId: 21 })).toBe(false)
+    expect(provider.supports({ type: 'anime', anilistId: 21 })).toBe(true)
+    expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(false)
+  })
+
+  it('prefers the requested episode file', async () => {
+    const found = await provider.search({ type: 'anime', anilistId: 21, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'jimaku' })
+    expect(found[0]?.url).toContain('e01.srt')
+  })
+})
+
+describe('opensubtitles', () => {
+  const keys = { apiKey: 'key', user: 'user', pass: 'pass' }
+  const http: SubtitleHttp = {
+    get: (async (url: string) => {
+      if (url.includes('/subtitles?')) {
+        return { text: JSON.stringify({ data: [
+          { attributes: { language: 'en', release: 'Show.S01E01', hearing_impaired: false, files: [{ file_id: 11, file_name: 'en.srt' }] } },
+          { attributes: { language: 'fr', release: 'Show.S01E01', hearing_impaired: true, files: [{ file_id: 12, file_name: 'fr.srt' }] } },
+        ] }), cookies: [] }
+      }
+      throw new Error(`Unexpected GET ${url}`)
+    }) as SubtitleHttp['get'],
+    post: (async (url: string) => {
+      if (url.endsWith('/login')) return JSON.stringify({ token: 'tok' })
+      if (url.endsWith('/download')) return JSON.stringify({ link: 'https://dl.os.example/f.srt' })
+      throw new Error(`Unexpected POST ${url}`)
+    }) as SubtitleHttp['post'],
+  }
+  const provider = createOpenSubtitlesProvider(http, keys)
+
+  it('declines without credentials', () => {
+    expect(createOpenSubtitlesProvider(http).supports({ type: 'movie', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', anilistId: 1 })).toBe(false)
+  })
+
+  it('logs in and resolves download links', async () => {
+    const found = await provider.search({ type: 'tv', tmdbId: 1100, season: 1, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'opensubtitles' })
+    expect(found[1]).toMatchObject({ lang: 'fr', hi: true })
+  })
+})
+
+describe('nxshasubs', () => {
+  const payload = encodeNxshaPayload({ subtitles: [
+    { uri: 'https://cdn.nxsha.example/en.srt', title: 'English', language: 'en', type: 'srt' },
+    { uri: 'https://cdn.nxsha.example/fr.ass', title: 'French', language: 'fr', type: 'ass' },
+    { uri: 'https://cdn.nxsha.example/pt.srt', title: 'Legenda', language: 'Brazilian Portuguese', type: 'srt' },
+  ] })
+  const decodedCheck = decodeNxshaPayload(payload) as { subtitles: unknown[] }
+  if (decodedCheck.subtitles.length !== 3) throw new Error('Nxsha envelope fixture broken.')
+  const provider = createNxshaSubsProvider(stubHttp([{ match: '/api/subtitles', text: JSON.stringify({ _hash: payload }) }]))
+
+  it('supports TMDB-keyed movies and TV', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('parses direct subtitle URIs with formats', async () => {
+    const found: RawSubtitle[] = await provider.search({ type: 'movie', tmdbId: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(3)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'nxshasubs' })
+    expect(found[1]).toMatchObject({ lang: 'fr', format: 'ass' })
+  })
+
+  it('normalizes full language names to codes', async () => {
+    const found: RawSubtitle[] = await provider.search({ type: 'movie', tmdbId: 1 }, new AbortController().signal)
+    expect(found[2]).toMatchObject({ lang: 'pt' })
+  })
+})

@@ -19,6 +19,7 @@ const member = {
   id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca',
   avatarStyle: 'dusk',
   avatarUrl: null,
+  role: 'member',
   username: 'cinema_fan',
 } as const
 

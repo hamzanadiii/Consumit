@@ -10,6 +10,13 @@ describe('canonical playback progress', () => {
     expect(await readPlaybackProgress({ ...ref, episode: 4 }, new AbortController().signal)).toBe(0)
     expect(progressKey(ref, 'member')).not.toBe(progressKey(ref))
   })
+  it('stamps local writes so continue watching can sort last-watched-first', async () => {
+    await writePlaybackProgress(ref, 35, 90, false)
+    const stored = JSON.parse(localStorage.getItem(progressKey(ref)) ?? 'null') as { updatedAt?: unknown }
+    expect(typeof stored.updatedAt).toBe('string')
+    expect(Number.isNaN(Date.parse(stored.updatedAt as string))).toBe(false)
+    expect(await readPlaybackProgress(ref, new AbortController().signal)).toBe(35)
+  })
   it('retains a local member copy when API writes fail and resumes it offline', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')))
     await expect(writePlaybackProgress(ref, 21, 90, false, 'member')).rejects.toThrow()

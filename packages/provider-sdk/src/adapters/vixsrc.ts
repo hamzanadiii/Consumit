@@ -5,8 +5,9 @@ const origin = 'https://vixsrc.to'
 const responseSchema = z.object({ src: z.string().min(1).max(4096) })
 
 /** Port of the supplied VixSrc API recipe; no page scripts are executed. */
-export function createVixsrcProvider(http: ProviderHttp, now = Date.now) {
-  return adapter('vixsrc', async (input, signal) => {
+export function createVixsrcProvider(http: ProviderHttp, now = Date.now, options: { id?: string } = {}) {
+  const id = options.id ?? 'vixsrc'
+  return adapter(id, async (input, signal) => {
     const apiUrl = `${origin}/api${titlePath(input)}`
     const headers = { referer: `${origin}/`, origin }
     const api = await document(http, apiUrl, signal, headers)

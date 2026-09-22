@@ -3,9 +3,10 @@ import type { FastifyError, FastifyInstance } from 'fastify'
 import type { ApiErrorCode, ApiErrorResponse } from '@consumit/contracts'
 
 import { CatalogError } from '../catalog/errors.ts'
-import { AnilistError } from '../anilist/errors.ts'
+import { AnimeError } from '../anime/errors.ts'
 import { IdentityError } from '../identity/errors.ts'
 import { LetterboxdImportError } from '../imports/letterboxd/errors.ts'
+import { SubtitleError } from '../subtitles/errors.ts'
 
 export class ApiError extends Error {
   readonly code: ApiErrorCode
@@ -20,6 +21,8 @@ export class ApiError extends Error {
 }
 
 const statusByCode: Record<ApiErrorCode, number> = {
+  ANIME_NOT_FOUND: 404,
+  ANILIST_UNAVAILABLE: 503,
   AUTH_STATE_UNAVAILABLE: 503,
   BAD_REQUEST: 400,
   CATALOG_INVALID_QUERY: 400,
@@ -43,6 +46,8 @@ const statusByCode: Record<ApiErrorCode, number> = {
   PASSWORD_INVALID: 400,
   PLAYBACK_UNAVAILABLE: 503,
   RATE_LIMITED: 429,
+  SUBTITLES_NOT_FOUND: 404,
+  SUBTITLES_UNAVAILABLE: 503,
   UNAUTHENTICATED: 401,
   USERNAME_CHANGE_COOLDOWN: 409,
   USERNAME_UNAVAILABLE: 409,
@@ -53,7 +58,7 @@ export function errorEnvelope(code: ApiErrorCode, message: string, requestId: st
 }
 
 function translate(error: FastifyError | Error, requestId: string): { body: ApiErrorResponse; statusCode: number } {
-  if (error instanceof ApiError || error instanceof CatalogError || error instanceof AnilistError || error instanceof IdentityError || error instanceof LetterboxdImportError) {
+  if (error instanceof ApiError || error instanceof AnimeError || error instanceof CatalogError || error instanceof IdentityError || error instanceof LetterboxdImportError || error instanceof SubtitleError) {
     return {
       body: errorEnvelope(error.code, error.message, requestId, error.retryable),
       statusCode: statusByCode[error.code],

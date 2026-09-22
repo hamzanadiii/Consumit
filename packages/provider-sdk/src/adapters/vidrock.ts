@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, mediaType, ProviderFailure, type ProviderHttp } from './http.ts'
 
-const origin = 'https://vidrock.ru'
+const origin = 'https://vidrock.to'
 const keyHex = '7f3e9c2a8b5d1f4e6a9c3b7d2e5f8a1c4b6d9e2f5a8c1b4d7e9f2a5c8b1d4e7f'
 
 async function decryptUrl(ciphertext: string): Promise<string> {
@@ -21,8 +21,12 @@ const playlistItemSchema = z.object({
   url: z.string().max(4096),
 })
 
-export function createVidrockProvider(http: ProviderHttp, now = Date.now) {
-  return adapter('vidrock', async (input, signal) => {
+export type VidrockScope = { id?: string; servers?: string[] }
+
+export function createVidrockProvider(http: ProviderHttp, now = Date.now, scope: VidrockScope = {}) {
+  const { id = 'vidrock', servers } = scope
+  const wanted = servers?.map((server) => server.toLowerCase())
+  return Object.assign(adapter('vidrock', async (input, signal) => {
     const { ref } = input
     const path = ref.kind === 'movie' ? `/api/movie/${ref.id}` : `/api/tv/${ref.id}/${ref.season}/${ref.episode}`
     const url = `${origin}${path}`
@@ -45,8 +49,13 @@ export function createVidrockProvider(http: ProviderHttp, now = Date.now) {
     const serverEntries = Object.entries(serversObj)
 
     for (let idx = 0; idx < serverEntries.length; idx++) {
-      const [serverName, entry] = serverEntries[idx]
+      const serverEntry = serverEntries[idx]
+      if (!serverEntry) continue
+      const [serverName, entry] = serverEntry
       if (!entry.url) continue
+      // Scoped mirrors (e.g. Nova) match by substring so upstream renames
+      // (`Nova Prime`) keep working; unknown scopes answer empty, never wide.
+      if (wanted && !wanted.some((name) => serverName.toLowerCase().includes(name))) continue
 
       let decUrl = ''
       try {
@@ -62,6 +71,7 @@ export function createVidrockProvider(http: ProviderHttp, now = Date.now) {
           const items = z.array(playlistItemSchema).parse(JSON.parse(plRes.text))
           for (let pIdx = 0; pIdx < items.length; pIdx++) {
             const item = items[pIdx]
+            if (!item) continue
             const type = mediaType(item.url) || 'hls'
             const res = item.resolution
             sources.push({
@@ -98,5 +108,5 @@ export function createVidrockProvider(http: ProviderHttp, now = Date.now) {
 
     if (!sources.length) throw new ProviderFailure('empty')
     return sources
-  })
+  }), { id })
 }

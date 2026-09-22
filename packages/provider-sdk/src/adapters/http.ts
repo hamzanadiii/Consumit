@@ -1,6 +1,24 @@
 import { playbackRefSchema } from '@consumit/contracts'
 import { z } from 'zod'
-import type { ProviderAdapter, ProviderInput, ProviderSource } from '../index.ts'
+import type { ProviderAdapter, ProviderInput, ProviderSource, SkipSegment } from '../index.ts'
+
+/** Intro/outro/recap ranges in seconds from upstream skip metadata. Only
+ *  finite, ordered, in-day ranges survive; anything else is dropped. */
+export function parseSkipSegments(value: unknown): SkipSegment[] {
+  if (!value || typeof value !== 'object') return []
+  const record = value as Record<string, unknown>
+  const out: SkipSegment[] = []
+  for (const kind of ['intro', 'outro', 'recap'] as const) {
+    const segment = record[kind]
+    if (!segment || typeof segment !== 'object') continue
+    const fields = segment as Record<string, unknown>
+    const start = Number(fields.start)
+    const end = Number(fields.end)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > 86400) continue
+    out.push({ kind, start, end })
+  }
+  return out
+}
 
 /** The host application supplies bounded, DNS-pinned HTTP; adapters never call global fetch. */
 export type ProviderHttpRequest = { method?: 'POST'; body?: string }
@@ -29,7 +47,9 @@ export function adapter(id: string, resolve: (input: ProviderInput, signal: Abor
 }
 
 export function titlePath({ ref }: ProviderInput) {
-  return ref.kind === 'movie' ? `/movie/${ref.id}` : `/tv/${ref.id}/${ref.season}/${ref.episode}`
+  if (ref.kind === 'movie') return `/movie/${ref.id}`
+  if (ref.kind === 'anime') return `/anime/${ref.id}/${ref.episode}`
+  return `/tv/${ref.id}/${ref.season}/${ref.episode}`
 }
 
 export async function document(http: ProviderHttp, url: string, signal: AbortSignal, headers: Record<string, string> = {}, init?: ProviderHttpRequest) {

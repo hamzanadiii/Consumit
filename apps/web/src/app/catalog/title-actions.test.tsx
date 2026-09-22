@@ -24,6 +24,7 @@ const member = {
   email: 'member@example.com',
   emailVerified: true,
   id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca',
+  role: 'member',
   username: 'cinema_fan',
 } as const
 

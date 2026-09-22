@@ -16,7 +16,7 @@ const titles: CatalogMovieDetail[] = [1, 2, 3, 4].map((id) => ({
   overview: 'Generated color bars and tone for playback verification.', genreNames: [],
   backdropUrl: null, posterUrl: null, logoUrl: null, popularity: 0, releaseDate: '2026-09-09',
   tmdbRating: null, tmdbVoteCount: 0, year: 2026, cast: [], certification: null, countries: [],
-  creators: [], homepageUrl: null, languages: ['English'], recommendations: [], runtimeMinutes: 1, status: 'Released', tagline: null,
+  creators: [], heroBackdropUrl: null, homepageUrl: null, languages: ['English'], recommendations: [], runtimeMinutes: 1, status: 'Released', tagline: null,
 }))
 const store = createMemoryPlaybackStore()
 const transport: MediaTransport = async (url, _hosts, headers) => {

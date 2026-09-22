@@ -19,6 +19,10 @@ const second = { ...movieSummary, id: 2, title: 'Arrival' }
 const discover = vi.mocked(browserDiscoverCatalog)
 const results = () => within(screen.getByRole('region', { name: 'Popular now' }))
 function show() { return render(<CatalogBrowseContent current={page} currentYear={2026} kind="movie" popular={page} />) }
+async function chooseOption(user: ReturnType<typeof userEvent.setup>, triggerName: string, optionName: string) {
+  await user.click(screen.getByRole('button', { name: triggerName }))
+  await user.click(screen.getByRole('option', { name: optionName }))
+}
 
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
 
@@ -28,7 +32,7 @@ describe('catalog browsing', () => {
     discover.mockResolvedValue({ ...page, items: [movieSummary, second], page: 2, totalPages: 2 })
     show()
     await user.click(screen.getByRole('button', { name: 'Load more' }))
-    expect(await results().findByRole('link', { name: 'Arrival' })).toHaveAttribute('href', '/title/2')
+    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toHaveAttribute('href', '/title/2')
     expect(results().getAllByRole('link')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
     expect(discover).toHaveBeenCalledWith({ kind: 'movie', feed: 'popular', genre: undefined, year: undefined }, 2, expect.any(AbortSignal))
@@ -40,25 +44,27 @@ describe('catalog browsing', () => {
     show()
     await user.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('couldn’t load more titles')
-    expect(results().getByRole('link', { name: movieSummary.title })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await results().findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
+    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toBeInTheDocument()
     expect(discover.mock.calls.map((call) => call[1])).toEqual([2, 2])
   })
 
-  it('aborts an old query and ignores its late response when filters change', async () => {
+  it('drops a superseded query without aborting it when filters change', async () => {
     const user = userEvent.setup()
     let resolveOld: (value: CatalogPage) => void = () => undefined
     discover.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
     discover.mockResolvedValueOnce({ ...page, items: [second], totalPages: 1 })
     show()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Genre' }), 'Adventure')
+    await chooseOption(user, 'Genre All genres', 'Adventure')
     const oldSignal = discover.mock.calls[0]?.[2]
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Year' }), '2024')
-    expect(oldSignal?.aborted).toBe(true)
-    expect(await results().findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
+    await chooseOption(user, 'Year All years', '2024')
+    // The superseded fetch is left to settle, never aborted: aborting leaked
+    // an AbortError that Next surfaces as a runtime error.
+    expect(oldSignal?.aborted).toBe(false)
+    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toBeInTheDocument()
     await act(async () => resolveOld(page))
-    expect(results().queryByRole('link', { name: movieSummary.title })).not.toBeInTheDocument()
+    expect(results().queryByRole('link', { name: 'Dune: Part Two, 2024' })).not.toBeInTheDocument()
     expect(discover.mock.calls[1]?.[0]).toMatchObject({ genre: 'Adventure', year: 2024 })
   })
 
@@ -66,10 +72,10 @@ describe('catalog browsing', () => {
     const user = userEvent.setup()
     discover.mockResolvedValue({ ...page, items: [], totalPages: 0, totalResults: 0 })
     show()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'top-rated')
+    await chooseOption(user, 'Sort by Popular', 'Top rated')
     expect(await screen.findByRole('heading', { name: 'No titles found' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(results().getByRole('link', { name: movieSummary.title })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
     expect(discover).toHaveBeenCalledTimes(1)
   })
 
@@ -90,7 +96,7 @@ describe('catalog browsing', () => {
     expect(discover).toHaveBeenCalledTimes(1)
     await act(async () => finish({ ...page, items: [], page: 2 }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument())
-    expect(results().getByRole('link', { name: movieSummary.title })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
     expect(disconnect).toHaveBeenCalled()
   })
 })

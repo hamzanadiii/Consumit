@@ -48,6 +48,23 @@ describe('configured real provider integration', () => {
       { tmdbToken: 'token' },
     )).toThrow()
   })
+  it('supports alias rows that scope one adapter by city or audio', async () => {
+    const [phoenix] = configuredProviders(
+      [{ id: 'wecollege-phoenix', adapter: 'wecollege', regions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'wecollege-phoenix' }],
+      { tmdbToken: 'token' },
+    )
+    expect(phoenix!.adapter.id).toBe('wecollege-phoenix')
+    expect(phoenix!.upstreamGroup).toBe('wecollege-phoenix')
+    const [hindi] = configuredProviders(
+      [{ id: 'cinehd-hindi', adapter: 'cinehd', regions: ['IN', 'US'], mediaHosts: ['media.example'], upstreamGroup: 'cinehd-hindi' }],
+      { tmdbToken: 'token' },
+    )
+    expect(hindi!.adapter.id).toBe('cinehd-hindi')
+    expect(() => configuredProviders(
+      [{ id: 'unrelated', adapter: 'wecollege', regions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'unrelated' }],
+      { tmdbToken: 'token' },
+    )).toThrow('must match its adapter')
+  })
   it('wires VAPlayer through trusted TMDB identity and caps the pilot at three active providers', async () => {
     const transport = vi.fn<MediaTransport>(async (url) => ({
       status: 200, url, headers: new Headers(), body: Readable.from([url.includes('themoviedb')

@@ -17,6 +17,7 @@ model Member {
   email           String       @unique
   emailVerifiedAt DateTime?
   authVersion     Int          @default(1)
+  role            MemberRole   @default(MEMBER)
   status          MemberStatus @default(ACTIVE)
   deletedAt       DateTime?
   createdAt       DateTime     @default(now())
@@ -29,6 +30,9 @@ model Member {
   ratings         Rating[]
   likes           TitleLike[]
   reviews         Review[]
+  reviewLikes     ReviewLike[]
+  followers       Follow[]         @relation("Following")
+  following       Follow[]         @relation("Follower")
   savedTitles     SavedTitle[]
   favorites       Favorite[]
   progress        PlaybackProgress[]
@@ -39,6 +43,11 @@ model Member {
 enum MemberStatus {
   ACTIVE
   DELETED
+}
+
+enum MemberRole {
+  MEMBER
+  ADMIN
 }
 
 model Credential {
@@ -196,9 +205,34 @@ model Review {
   importBatchId String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  likes         ReviewLike[]
 
   @@unique([memberId, origin, sourceKey])
   @@index([memberId, reviewedOn])
+}
+
+model ReviewLike {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, memberId])
+  @@index([reviewId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    Member   @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   Member   @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
 }
 
 model SavedTitle {
@@ -341,4 +375,9 @@ model ImportStagedRecord {
 
   @@unique([importBatchId, rowKind, sourceKey])
   @@index([importBatchId, matchStatus])
+}
+
+model AllowedDomain {
+  domain    String   @id
+  createdAt DateTime @default(now())
 }

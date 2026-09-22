@@ -1,6 +1,8 @@
 'use client'
 
 import type { ChangeEvent, ComponentProps } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Check, ChevronDown } from 'lucide-react'
 
 import { cn } from '../lib/cn'
 
@@ -171,6 +173,202 @@ export function SegmentedControl({
         ))}
       </div>
     </fieldset>
+  )
+}
+
+export type SelectProps = Omit<ComponentProps<'div'>, 'children' | 'onChange'> & {
+  disabled?: boolean | undefined
+  hideLabel?: boolean | undefined
+  id?: string | undefined
+  label: string
+  name?: string | undefined
+  onValueChange?: ((value: string) => void) | undefined
+  options: readonly SelectionOption[]
+  placeholder?: string | undefined
+  value?: string | undefined
+}
+
+/**
+ * FilScreen dropdown: a fully styled listbox that replaces the OS-rendered
+ * native select popup (which no stylesheet can theme). Trigger, popup, and
+ * options all honor the Consumit tokens — including the FilScreen remap —
+ * in both themes, with complete listbox keyboard support.
+ */
+export function Select({
+  className,
+  disabled = false,
+  hideLabel = false,
+  id,
+  label,
+  name,
+  onValueChange,
+  options,
+  placeholder = 'Select…',
+  value,
+  ...props
+}: SelectProps) {
+  const generatedId = useId()
+  const triggerId = id ?? `consumit-select-${generatedId}`
+  const labelId = `${triggerId}-label`
+  const listboxId = `${triggerId}-listbox`
+  const selectedIndex = options.findIndex((option) => option.value === value)
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(selectedIndex)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  function openListbox(atIndex?: number) {
+    if (disabled) return
+    const fallback = selectedIndex >= 0 ? selectedIndex : 0
+    setActiveIndex(atIndex ?? fallback)
+    setOpen(true)
+  }
+
+  function closeListbox(focusTrigger = true) {
+    setOpen(false)
+    if (focusTrigger) triggerRef.current?.focus()
+  }
+
+  function choose(index: number) {
+    const option = options[index]
+    if (!option || option.disabled) return
+    onValueChange?.(option.value)
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  // Outside dismissal; runs only while open, after mount.
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: PointerEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [open ])
+
+  // Move keyboard focus with the active option while open.
+  useEffect(() => {
+    if (open) optionRefs.current[activeIndex]?.focus()
+  }, [activeIndex, open])
+
+  function move(delta: 1 | -1) {
+    if (options.length === 0) return
+    let next = activeIndex
+    for (let step = 0; step < options.length; step += 1) {
+      next = (next + delta + options.length) % options.length
+      if (!options[next]?.disabled) break
+    }
+    setActiveIndex(next)
+  }
+
+  function onListboxKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      move(1)
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      move(-1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      const first = options.findIndex((option) => !option.disabled)
+      if (first >= 0) setActiveIndex(first)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      for (let index = options.length - 1; index >= 0; index -= 1) {
+        if (!options[index]?.disabled) {
+          setActiveIndex(index)
+          break
+        }
+      }
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      choose(activeIndex)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      closeListbox()
+    } else if (event.key === 'Tab') {
+      setOpen(false)
+    }
+  }
+
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined
+
+  return (
+    <div className={cn('relative min-w-0', className)} data-consumit-select ref={rootRef} {...props}>
+      <span className={hideLabel ? 'sr-only' : 'mb-2 block text-xs font-bold uppercase tracking-[0.12em] text-copy'} id={labelId}>
+        {label}
+      </span>
+      {name ? <input disabled={disabled} name={name} type="hidden" value={value ?? ''} /> : null}
+      <button
+        aria-controls={listboxId}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-labelledby={`${labelId} ${triggerId}-value`}
+        className="flex h-11 w-full cursor-pointer items-center gap-2 rounded-xl border border-control-outline bg-field pr-3 pl-4 text-left text-sm text-ink outline-none transition-colors hover:border-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={disabled}
+        id={triggerId}
+        onClick={() => (open ? closeListbox(false) : openListbox())}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            openListbox()
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault()
+            openListbox(options.length - 1)
+          }
+        }}
+        ref={triggerRef}
+        type="button"
+      >
+        <span className="min-w-0 flex-1 truncate font-bold" id={`${triggerId}-value`}>
+          {selected ? selected.label : <span className="font-normal text-muted">{placeholder}</span>}
+        </span>
+        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-muted transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-180')} />
+      </button>
+      {open ? (
+        <ul
+          aria-labelledby={labelId}
+          className="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-xl border border-control-outline bg-surface p-1.5 shadow-xl outline-none"
+          id={listboxId}
+          onKeyDown={onListboxKeyDown}
+          role="listbox"
+          tabIndex={-1}
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === value
+            return (
+              <li key={option.value} role="presentation">
+                <button
+                  aria-selected={isSelected}
+                  className={cn(
+                    'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors motion-reduce:transition-none',
+                    isSelected
+                      ? 'bg-orange/10 font-bold text-ink'
+                      : 'text-copy hover:bg-surface-raised hover:text-ink focus-visible:bg-surface-raised focus-visible:text-ink',
+                    option.disabled && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-copy',
+                  )}
+                  disabled={option.disabled}
+                  onClick={() => choose(index)}
+                  ref={(node) => {
+                    optionRefs.current[index] = node
+                  }}
+                  role="option"
+                  tabIndex={index === activeIndex ? 0 : -1}
+                  type="button"
+                >
+                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </div>
   )
 }
 

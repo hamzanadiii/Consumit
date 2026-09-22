@@ -11,6 +11,7 @@ import { ArtworkFrame, Button, FilterChip, Input } from '@consumit/ui'
 import { browserSearchCatalog } from '@/lib/catalog-browser'
 import { updateMemberProfile } from '@/lib/identity-browser'
 
+import { ProfileEditorDialog } from './profile-editor-dialog'
 import { useProfileEdit } from './profile-edit'
 
 const SEARCH_DEBOUNCE_MS = 150
@@ -48,7 +49,7 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const requestIdRef = useRef(0)
   const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<'all' | 'movie' | 'series'>('all')
+  const [scope, setScope] = useState<'all' | 'movie' | 'series' | 'anime'>('all')
   const [results, setResults] = useState<readonly CatalogTitleSummary[]>([])
   const [staged, setStaged] = useState<string | null>(currentBannerUrl)
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
@@ -115,54 +116,80 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
   if (!bannerOpen) return null
 
   return (
-    <div className="mt-8 rounded-card border border-border bg-surface p-5 sm:p-8" data-consumit-banner-editor>
-      {staged ? (
-        <div className="relative aspect-[21/9] overflow-hidden rounded-card border border-border">
-          <Image alt="Banner preview" className="object-cover object-[center_25%]" fill sizes="(min-width: 1024px) 60rem, 100vw" src={staged} />
-        </div>
-      ) : (
-        <p className="text-sm text-muted">No banner set. Your favorites artwork shows behind your profile instead.</p>
+    <ProfileEditorDialog
+      description="A wide cinematic backdrop for your profile. Only titles with wide artwork qualify."
+      eyebrow="Profile"
+      footer={(
+        <>
+          {saveError ? <p className="mb-4 text-xs text-[var(--fs-danger)]" role="alert">{saveError}</p> : null}
+          <div className="flex flex-wrap gap-3">
+            <Button disabled={saving} loading={saving} onClick={() => void save()} variant="accent">Save banner</Button>
+            {staged ? (
+              <Button disabled={saving} onClick={() => setStaged(null)} type="button" variant="secondary">
+                <Trash2 aria-hidden="true" /> Remove
+              </Button>
+            ) : null}
+            <Button disabled={saving} onClick={close} variant="ghost">Cancel</Button>
+          </div>
+        </>
       )}
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <SearchBox inputRef={searchInputRef} onChange={handleQuery} value={query} />
-        <div className="flex gap-2">
-          {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series']] as const).map(([value, label]) => (
-            <FilterChip className="h-12 flex-1 px-4 sm:flex-none" key={value} onClick={() => setScope(value)} selected={scope === value}>
-              {label}
-            </FilterChip>
-          ))}
-        </div>
-      </div>
-      {query.trim().length < 2 ? <p className="mt-3 text-xs text-muted">Type at least two characters to search backdrops in real time. Only titles with wide artwork can be banners.</p> : null}
-      {searchState === 'loading' ? <p className="mt-5 text-xs text-muted" role="status">Searching the catalog…</p> : null}
-      {searchState === 'error' ? <p className="mt-5 text-xs text-orange" role="alert">Search could not load. Your current banner is preserved.</p> : null}
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-        {results.map((title) => (
-          <button
-            aria-label={`Use ${title.title} as banner`}
-            className="group rounded-card text-left outline-none focus-visible:ring-2 focus-visible:ring-orange"
-            key={`${title.kind}:${title.id}`}
-            onClick={() => setStaged(title.backdropUrl ?? null)}
-            type="button"
-          >
-            <ArtworkFrame alt={`${title.title} backdrop`} ratio="landscape" src={title.backdropUrl ?? undefined} />
-            <span className="mt-2 block truncate text-xs font-bold text-ink group-hover:text-orange">{title.title}</span>
-            <span className="mt-0.5 block text-[0.6875rem] text-muted">{[title.year, title.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · ')}</span>
-          </button>
-        ))}
-      </div>
-      {query.trim().length >= 2 && results.length === 0 && searchState !== 'loading' ? <p className="mt-6 text-sm text-muted">No wide backdrops match that search yet.</p> : null}
-      {saveError ? <p className="mt-5 text-xs text-orange" role="alert">{saveError}</p> : null}
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Button disabled={saving} loading={saving} onClick={() => void save()} variant="accent">Save banner</Button>
+      labelledBy="banner-editor-heading"
+      onClose={close}
+      title="Edit banner"
+    >
+      <div data-consumit-banner-editor>
         {staged ? (
-          <Button disabled={saving} onClick={() => setStaged(null)} type="button" variant="secondary">
-            <Trash2 aria-hidden="true" /> Remove
-          </Button>
-        ) : null}
-        <Button disabled={saving} onClick={close} variant="ghost">Cancel</Button>
+          <div className="relative aspect-[21/9] overflow-hidden rounded-[16px] border border-[var(--fs-accent)]/50">
+            <Image alt="Banner preview" className="object-cover object-[center_25%]" fill sizes="(min-width: 1024px) 48rem, 100vw" src={staged} />
+            <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,0.45)_0%,transparent_55%)]" />
+          </div>
+        ) : (
+          <div className="rounded-[16px] border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] px-6 py-8 text-sm leading-6 text-[var(--fs-muted)]">
+            No banner set. Your favorites artwork shows behind your profile instead.
+          </div>
+        )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <SearchBox inputRef={searchInputRef} onChange={handleQuery} value={query} />
+          <div className="flex gap-2">
+            {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => (
+              <FilterChip className="h-12 flex-1 px-4 sm:flex-none" key={value} onClick={() => setScope(value)} selected={scope === value}>
+                {label}
+              </FilterChip>
+            ))}
+          </div>
+        </div>
+        {query.trim().length < 2 ? <p className="mt-3 text-xs text-[var(--fs-muted)]">Type at least two characters to search backdrops in real time. Only titles with wide artwork can be banners.</p> : null}
+        {searchState === 'loading' ? <p className="mt-5 text-xs text-[var(--fs-muted)]" role="status">Searching the catalog…</p> : null}
+        {searchState === 'error' ? <p className="mt-5 text-xs text-[var(--fs-danger)]" role="alert">Search could not load. Your current banner is preserved.</p> : null}
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          {results.map((title) => {
+            const selected = staged === title.backdropUrl
+            return (
+              <button
+                aria-label={`Use ${title.title} as banner`}
+                aria-pressed={selected}
+                className="group rounded-[16px] text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+                key={`${title.kind}:${title.id}`}
+                onClick={() => setStaged(title.backdropUrl ?? null)}
+                type="button"
+              >
+                <span className={`relative block overflow-hidden rounded-[16px] border transition-all duration-200 motion-reduce:transition-none ${selected ? 'border-[var(--fs-accent)] ring-2 ring-[var(--fs-accent)]' : 'border-[var(--fs-field-border)] group-hover:-translate-y-1 group-hover:border-[var(--fs-accent)]/60 motion-reduce:transform-none'}`}>
+                  <ArtworkFrame alt={`${title.title} backdrop`} className="rounded-none border-0" ratio="landscape" src={title.backdropUrl ?? undefined} />
+                  {selected ? (
+                    <span className="absolute top-2 right-2 rounded-full bg-[var(--fs-accent-strong)] px-2.5 py-1 text-[10px] font-bold tracking-wide text-[var(--fs-on-accent)] uppercase">
+                      Selected
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-2 block truncate text-xs font-bold text-[var(--fs-ink)] group-hover:text-[var(--fs-accent)]">{title.title}</span>
+                <span className="mt-0.5 block text-[0.6875rem] text-[var(--fs-muted)] tabular-nums">{[title.year, title.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · ')}</span>
+              </button>
+            )
+          })}
+        </div>
+        {query.trim().length >= 2 && results.length === 0 && searchState !== 'loading' ? <p className="mt-5 text-sm text-[var(--fs-muted)]">No wide backdrops match that search yet.</p> : null}
       </div>
-    </div>
+    </ProfileEditorDialog>
   )
 }

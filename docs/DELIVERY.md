@@ -98,7 +98,7 @@ Identity and the first durable member-data slice are implemented: verified email
 1. Identity: create account, verification, sign in, secure server session, recovery, profile, export, and deletion. **Implemented.**
 2. Catalog: title identity, search, movie and series details. **Implemented for the TMDB metadata slice.**
 3. Library: native saves and Favorites plus imported watchlist, history, diary, ratings, reviews, and lists. **Durable import/read slice implemented; native authoring (diary/list/review edits, ratings), Top-6 favorites editing, profile/banner/avatar customization, and member-keyed playback progress with resume are implemented.** Playback-driven history and the native player remain.
-4. Social: follow, activity, public reviews, and list collaboration. **Not implemented; product screens use honest empty states.**
+4. Social: follow, activity, public reviews, and list collaboration. **Partially implemented: members follow each other with live follower counts, title pages show paged recent/popular/circle reviews from public profiles with author ratings and member review likes, plus a dedicated per-title reviews archive; circle activity and list collaboration remain unimplemented with honest empty states.**
 5. Playback: resolve, session, source selection, reporting, fallback.
 6. Personalization: Taste Match, circle signals, ranking, onboarding seeds.
 

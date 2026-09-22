@@ -1,4 +1,4 @@
-import { canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUrl, type DirectMediaSource } from './media-source'
+import { audioTrackLabel, canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUrl, type DirectMediaSource } from './media-source'
 
 export type MediaOption = { value: string; label: string; language?: string | undefined }
 export type EngineTracks = { qualities: MediaOption[]; audio: MediaOption[]; subtitles: MediaOption[] }
@@ -9,7 +9,7 @@ export type MediaEngine = {
   audio(value: string): void
   subtitle(value: string): void
 }
-export type EngineEvents = { tracks(value: EngineTracks): void; fatal(reason: 'network' | 'media'): void }
+export type EngineEvents = { tracks(value: EngineTracks): void; fatal(reason: 'network' | 'media' | 'gone'): void }
 type NativeAudio = { id: string; label: string; language: string; enabled: boolean }
 
 export async function attachMediaEngine(video: HTMLVideoElement, source: DirectMediaSource, events: EngineEvents, signal?: AbortSignal): Promise<MediaEngine> {
@@ -48,7 +48,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     // Direct CDN media must stay credential-free so wildcard CORS remains
     // valid and no member cookies can cross the provider boundary.
     const hls = new Hls({ enableWorker: true, backBufferLength: 30, maxBufferLength: 30, capLevelToPlayerSize: true, renderTextTracksNatively: true })
-    let lastError: 'network' | 'media' = 'network'
+    let lastError: 'network' | 'media' | 'gone' = 'network'
     const publish = () => {
       try {
         // Device-tier Auto ceiling (ADR-0002 amendment A): phones never burn
@@ -64,7 +64,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       }
       events.tracks({
       qualities: [...auto, ...hls.levels.map((level, index) => ({ value: String(index), label: level.height ? `${level.height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps` }))],
-      audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: track.name || track.lang || `Audio ${index + 1}`, language: track.lang })),
+      audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: audioTrackLabel({ name: track.name, lang: track.lang, isDefault: track.default }, index), language: track.lang })),
       subtitles: hls.subtitleTracks.map((track, index) => ({ value: String(index), label: track.name || track.lang || `Subtitles ${index + 1}`, language: track.lang })),
       })
     }
@@ -73,15 +73,32 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, publish)
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal) return
-      lastError = data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'network'
+      // HTTP 410 Gone is definitive: the bytes are not coming back, so a
+      // same-source retry or re-mint is pointless — the application should
+      // switch sources instead of recovering in place.
+      const gone = (data as unknown as { response?: { code?: unknown } }).response?.code === 410
+      lastError = gone ? 'gone' : data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'network'
       events.fatal(lastError)
     })
     hls.loadSource(source.src); hls.attachMedia(video)
     return {
       quality(value) { hls.currentLevel = value === 'auto' ? -1 : Number(value) },
       audio(value) { hls.audioTrack = Number(value) },
-      subtitle(value) { hls.subtitleTrack = value === 'off' ? -1 : Number(value) },
-      recover() { if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(); return true },
+      subtitle(value) {
+        if (value === 'off') {
+          hls.subtitleTrack = -1
+          hls.subtitleDisplay = false
+        } else {
+          hls.subtitleTrack = Number(value)
+          hls.subtitleDisplay = true
+        }
+      },
+      recover() {
+        // Gone sources never recover in place; report false so the controller
+        // skips its retry wait and asks the application to switch sources.
+        if (lastError === 'gone') return false
+        if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(); return true
+      },
       destroy() { hls.destroy(); video.removeAttribute('src'); video.load() },
     }
   }

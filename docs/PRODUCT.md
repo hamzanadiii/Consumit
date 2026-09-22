@@ -43,7 +43,7 @@ Social activity is asynchronous and discovery-led. It does not include private o
 
 ## Active desktop screen inventory
 
-The design manifest defines 18 active desktop references:
+The design manifest defines 20 active desktop references:
 
 1. Home / Discover
 2. Public Profile
@@ -56,13 +56,15 @@ The design manifest defines 18 active desktop references:
 9. My Library
 10. Friends Activity
 11. List Detail
-12. Sign In
-13. Create Account
-14. Onboarding — History
-15. Onboarding — Favorites
-16. Onboarding — Circle
-17. Help Center
-18. Report Issue
+12. Lists (the member's own lists with collage cards; discovery stays an honest placeholder until the social slice lands)
+13. Sign In
+14. Create Account
+15. Onboarding — History
+16. Onboarding — Favorites
+17. Onboarding — Circle
+18. Help Center
+19. Report Issue
+20. Title Reviews (member-review archive per title, reached from title detail)
 
 Other screen files may be present in the package. A file becomes active only when added to the manifest; the archived custom-player concept remains historical.
 
@@ -70,24 +72,17 @@ These screens describe the intended product surface, not an automatic first-rele
 
 ## Home composition
 
-The live catalog Home currently uses this order:
+The live Home at `/` uses the FilScreen world: a full-page shell, dark by default with a member-flippable light theme, with a sidebar (Home, Categories, Favorites, Circle, History, theme switch, Settings, Sign in/Log out), a utility row with compact universal search, kind tabs (New, Series, Movies), Circle entry, and the member avatar, a rotating hero tracking Trending now with direct Watch and title actions, device-local Continue watching (stored progress records resolved through the catalog batch endpoint, with loading, empty, and retry states, last-watched-first ordering, finished-title dropout at 95 percent watched, and per-title removal through its edit action), a Trending Movies rail, a Trending Series rail, and Circle activity, which stays an honest empty state until follows and real activity exist.
 
-1. Bounded featured masthead beneath the original global navigation, with direct Watch and More info actions
-2. Popular now
-3. Top rated
-4. Editorial selection
-5. Browse by genre
-6. Footer
-
-Circle activity, continue-watching progress, and community lists return only when their real backing behavior exists. Live routes never fill those sections with invented member evidence.
+Circle activity, community lists, and computed Taste Match return only when their real backing behavior exists. A "Coming soon" rail returns only with an upcoming catalog feed; existing feeds are never relabeled to fake it. Live routes never fill sections with invented member evidence.
 
 ## Movies and Series browsing
 
-Movies (`/movies`) and Series (`/series`) help a member choose a title through a current-release rail followed by a filterable catalog. Movies labels its rail “Now playing”; Series uses “On air”. Opening artwork leads to the title detail.
+Movies (`/movies`) and Series (`/series`) help a member choose a title through a rail followed by a filterable catalog. Movies labels its rail “Now playing” (current releases); Series uses “Trending now” (weekly trending). Opening artwork leads to the title detail.
 
-The main catalog starts with Popular and offers genre, year, and Top rated controls. Available genre choices come from the initial current and popular titles; they are not an exhaustive genre directory. A chosen filter queries the catalog beyond the titles already shown, while the current-release rail remains independent. Reset returns to the default Popular catalog.
+The main catalog starts with Popular and offers genre, year, and Top rated controls. Available genre choices come from the initial current and popular titles; they are not an exhaustive genre directory. A chosen filter queries the catalog beyond the titles already shown, while the rail remains independent. Reset returns to the default Popular catalog.
 
-Scrolling near the end appends another page without duplicate titles. A keyboard-accessible Load more action remains available. Filter changes start a fresh result set; loading announces progress, failed requests offer Try again while retaining previously loaded titles, and stale results are identified. An empty result offers Clear filters; the final page explains that the member has reached the end.
+Scrolling near the end appends another page without duplicate titles. A keyboard-accessible Load more action remains available. Filter changes start a fresh result set; loading announces progress and failed requests offer Try again while retaining previously loaded titles. An empty result offers Clear filters; the final page explains that the member has reached the end.
 
 ## Confirmed scope constraints
 
@@ -101,7 +96,7 @@ Scrolling near the end appends another page without duplicate titles. A keyboard
 - Computed Taste Match, overlap, member scores, and public numeric rating presentation are hidden until their product logic is implemented. A member authors and sees only their own ratings on title detail. Written reviews, catalog metadata, and watch progress remain visible.
 - Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
 - Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Six ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.
-- Profile, Library, and List screens render stored member records. Unsupported presence, follows, activity, and engagement counts render zero or honest empty states.
+- Profile, Library, and List screens render stored member records. Members follow each other from profiles with live follower counts; unsupported presence, activity, and engagement counts render zero or honest empty states.
 - Signed-out navigation keeps public catalog destinations visible and replaces the member avatar with Sign in. A signed-in member sees Friends and the existing profile entry.
 - Global navigation, recommendations, reviews, circle activity, and promotions stay out of active playback.
 - Mobile layouts will be composed intentionally; desktop screens will not simply be shrunk.
@@ -129,4 +124,4 @@ The Library presents a member's saved titles on subtle display shelves in the ex
 
 The Profile is the central expression of a member's taste: a cinematic identity cover, six ordered Favorites, recurring genres derived from those Favorites, diary entries, authored reviews, and lists. Owner editing controls keep their real backing behavior. Unsupported social controls are omitted.
 
-[Letterboxd's diary, Favorites, watchlist, and list concepts](https://letterboxd.com/about/faq/) inform these personal jobs. Consumit's visual system remains its own. Anime and manga sections were explicitly removed from this redesign's scope by the member commissioning the work.
+[Letterboxd's diary, Favorites, watchlist, and list concepts](https://letterboxd.com/about/faq/) inform these personal jobs. Consumit's visual system remains its own. Anime is now a first-class bounded domain with AniList as its metadata source, integrated into the same playback, library, social, and recommendation systems as movies and series.

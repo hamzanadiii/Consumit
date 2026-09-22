@@ -2,6 +2,7 @@ import { lookup } from 'node:dns/promises'
 import { request } from 'node:https'
 import { BlockList, isIP } from 'node:net'
 import type { Readable } from 'node:stream'
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 
 const blocked = new BlockList()
@@ -51,7 +52,27 @@ export const fetchMedia: MediaTransport = async (value, hosts, headers, signal, 
           if (Array.isArray(entry)) entry.forEach((item) => resultHeaders.append(key, item))
           else if (entry !== undefined) resultHeaders.set(key, entry)
         }
-        resolve({ status: res.statusCode ?? 502, headers: resultHeaders, body: res, url: current })
+        // Upstreams (notably Cloudflare-fronted JSON APIs) compress even when
+        // asked for identity. Decode the known codings so resolution documents
+        // and manifests arrive as plain bytes; the body cap downstream still
+        // bounds decompressed output, and anything else stays rejected.
+        const encoding = res.headers['content-encoding']
+        let body: Readable = res
+        if (encoding !== undefined && encoding !== 'identity') {
+          const decoder = encoding === 'gzip' ? createGunzip()
+            : encoding === 'deflate' ? createInflate()
+            : encoding === 'br' ? createBrotliDecompress() : null
+          if (!decoder) {
+            res.destroy()
+            reject(new Error('Unsupported provider document encoding.'))
+            return
+          }
+          decoder.on('error', () => res.destroy())
+          body = res.pipe(decoder)
+          resultHeaders.delete('content-encoding')
+          resultHeaders.delete('content-length')
+        }
+        resolve({ status: res.statusCode ?? 502, headers: resultHeaders, body, url: current })
       })
       req.setTimeout(15000, () => req.destroy(new Error('Media transfer stalled.')))
       req.on('error', reject)

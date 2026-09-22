@@ -18,6 +18,7 @@ export type IdentityRecord = {
     usernameChangedAt: Date | null
     visibility: 'private' | 'public'
   }
+  role: 'MEMBER' | 'ADMIN'
   status: 'ACTIVE' | 'DELETED'
 }
 
@@ -30,6 +31,8 @@ export interface IdentityRepository {
   findById(memberId: string): Promise<IdentityRecord | null>
   findByUsername(username: string): Promise<{ canonical: boolean; record: IdentityRecord } | null>
   isUsernameAvailable(username: string): Promise<boolean>
+  listAll(limit?: number, offset?: number): Promise<{ members: IdentityRecord[]; total: number }>
+  setRole(memberId: string, role: 'MEMBER' | 'ADMIN'): Promise<IdentityRecord | null>
   tombstone(memberId: string): Promise<void>
   updateProfile(memberId: string, input: UpdateProfileRequest, changedAt: Date): Promise<IdentityRecord | null>
 }

@@ -6,8 +6,22 @@ const streamApi = 'https://streamdata.vaplayer.ru/api.php'
 const playerOrigin = 'https://nextgencloudfabric.com'
 const responseSchema = z.object({
   status_code: z.union([z.literal(200), z.literal('200')]),
-  data: z.object({ stream_urls: z.array(z.url().max(4096)).max(8) }),
+  data: z.object({
+    file_name: z.string().max(200).optional(),
+    stream_urls: z.array(z.url().max(4096)).max(8),
+  }),
 })
+
+function inferQuality(fileName?: string): { qualityHint: string; height?: number } {
+  const name = (fileName ?? '').toLowerCase()
+  if (/2160|4k/.test(name)) return { qualityHint: '4K', height: 2160 }
+  const match = name.match(/(1080|720|480|360)p/)
+  if (match?.[1]) {
+    const height = Number.parseInt(match[1], 10)
+    return { qualityHint: `${height}p`, height }
+  }
+  return { qualityHint: 'Auto · up to 1080p' }
+}
 
 /** VAPlayer resolves by IMDb identity and returns adaptive HLS/progressive media. */
 export function createVaPlayerProvider(http: ProviderHttp, identity: ProviderIdentityResolver, now = Date.now) {
@@ -28,6 +42,7 @@ export function createVaPlayerProvider(http: ProviderHttp, identity: ProviderIde
     const parsed = responseSchema.parse(JSON.parse(response.text))
     const seen = new Set<string>()
     const sources: ProviderSource[] = []
+    const { qualityHint, height } = inferQuality(parsed.data.file_name)
     for (const url of parsed.data.stream_urls) {
       if (seen.has(url)) continue
       seen.add(url)
@@ -43,7 +58,8 @@ export function createVaPlayerProvider(http: ProviderHttp, identity: ProviderIde
         type,
         headers: { referer: `${playerOrigin}/`, origin: playerOrigin, 'user-agent': userAgent },
         language: 'original',
-        qualityHint: type === 'hls' ? 'Auto · up to 1080p' : 'Original',
+        qualityHint,
+        ...(height === undefined ? {} : { height }),
         expiresAt: accessDeadline(url, now()),
         subtitles: [],
       })

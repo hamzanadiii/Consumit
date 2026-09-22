@@ -98,8 +98,8 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: { env: ApiEnv
     guardMutation(request)
     const body = parse(loginRequestSchema, request.body, 'Use a valid email address and password.')
     const previous = request.cookies?.[cookieName]
-    if (previous) await identity.logout(previous)
     const result = await identity.login(body)
+    if (previous) await identity.logout(previous)
     setSessionCookie(reply, result.sessionToken)
     return reply.send(sessionMemberResponseSchema.parse({ member: result.member }))
   })

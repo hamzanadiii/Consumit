@@ -38,4 +38,29 @@ describe('identity profile routes', () => {
     const response = await app.inject({ method: 'PATCH', payload: { displayName: 'Member' }, url: '/v1/me/profile' })
     expect(response.statusCode).toBe(403)
   })
+
+  it('preserves a session after failed login and rotates it only after successful login', async () => {
+    const identity = createFakeIdentity()
+    const env = loadEnv({ APP_ORIGIN: origin, NODE_ENV: 'test' })
+    const app = await buildApp({ env, identity })
+    apps.push(app)
+    const credentials = { email: 'member@example.com', password: 'long-enough-password' }
+    await identity.register({ ...credentials, username: 'session_fan' })
+    const delivery = identity.notifier.deliveries.findLast((item) => item.kind === 'verification')
+    if (!delivery || !('code' in delivery)) throw new Error('Expected verification delivery.')
+    const verified = await identity.verifyEmail({ code: delivery.code, email: credentials.email })
+    const cookies = { [sessionCookieName(env)]: verified.sessionToken }
+
+    const failed = await app.inject({ cookies, headers: { origin }, method: 'POST', payload: { ...credentials, password: 'incorrect-password' }, url: '/v1/auth/login' })
+    expect(failed.statusCode).toBe(401)
+    expect((await app.inject({ cookies, method: 'GET', url: '/v1/me' })).statusCode).toBe(200)
+
+    const login = await app.inject({ cookies, headers: { origin }, method: 'POST', payload: credentials, url: '/v1/auth/login' })
+    expect(login.statusCode).toBe(200)
+    const replacement = login.cookies.find((cookie) => cookie.name === sessionCookieName(env))
+    expect(replacement?.value).toBeTruthy()
+    expect(replacement?.value).not.toBe(verified.sessionToken)
+    expect((await app.inject({ cookies, method: 'GET', url: '/v1/me' })).statusCode).toBe(401)
+    expect(await identity.getSession(replacement!.value)).toEqual(verified.member)
+  })
 })

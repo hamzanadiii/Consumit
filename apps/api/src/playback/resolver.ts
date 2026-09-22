@@ -9,10 +9,10 @@ export type ResolvedSource = { source: ProviderSource; registration: ProviderReg
 /** A caption track plus the provider context needed to lease it: subtitle and
  *  video sources stay independent decisions behind one resolve. */
 export type SubtitleCandidate = { track: z.infer<typeof playbackTrackSchema>; hosts: readonly string[]; headers: Record<string, string> }
-/** Extra resolve latency granted to in-flight attempts so their subtitle tracks
- *  can join; the fast path (nothing else in flight) returns immediately. */
+/** Legacy hedged-subtitle window; kept for compatibility. Static sequential
+ *  resolution returns the winning provider's tracks immediately. */
 export const SUBTITLE_SETTLE_MS = 500
-const MAX_SESSION_SUBTITLES = 16
+const MAX_SESSION_SUBTITLES = 24
 
 /** Tracks from every validated source, not just the played one. */
 export function collectSubtitleCandidates(sources: readonly ProviderSource[], registration: ProviderRegistration): SubtitleCandidate[] {
@@ -60,7 +60,7 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; hedgeMs?: number; now?: () => number; store?: PlaybackStore }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore }) {
   const now = options.now ?? Date.now
   const cache = new Map<string, Cached>()
   const pending = new Map<string, Pending>()
@@ -150,74 +150,47 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
 
   async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string) {
     await Promise.all(providers.map((provider) => hydrate(provider.adapter.id, input.ref.kind)))
-    const groups = new Set<string>()
+    // Static order: operator priority first (higher tries first), ties keep
+    // the configured file order. No learned re-ranking, no hedging, no
+    // upstream-group dedupe window — the player tries the first provider,
+    // then the next, so the server list stays fixed.
     const candidates = providers.filter((p) => p.enabled && p.approvedRegions.includes(options.region) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
-      // Operator-pinned order first (higher priority tries first), then learned
-      // health: failures, then latency. Breakers still gate inside attempt().
-      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)
-        || state(a.adapter.id, input.ref.kind).failures - state(b.adapter.id, input.ref.kind).failures
-        || (state(b.adapter.id, input.ref.kind).outcomes ? state(b.adapter.id, input.ref.kind).success / state(b.adapter.id, input.ref.kind).outcomes : 0.5)
-          - (state(a.adapter.id, input.ref.kind).outcomes ? state(a.adapter.id, input.ref.kind).success / state(a.adapter.id, input.ref.kind).outcomes : 0.5)
-        || (state(a.adapter.id, input.ref.kind).latency || 1000) - (state(b.adapter.id, input.ref.kind).latency || 1000))
-      .filter((p) => { if (groups.has(p.upstreamGroup)) return false; groups.add(p.upstreamGroup); return true }).slice(0, 3)
+      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
     if (!candidates.length) return null
     const controller = new AbortController()
     const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), options.deadlineMs ?? 8000)
     const signal = AbortSignal.any([parent, controller.signal])
+    // One hung provider must not hold the whole request: bound each
+    // sequential attempt so a stalled first provider falls through to the
+    // next instead of burning the full deadline.
+    const perAttemptMs = Math.min(5000, options.deadlineMs ?? 8000)
     try {
-      return await new Promise<ResolvedSource | null>((resolve) => {
-        let cursor = 0; let active = 0; let finished = false
-        let settle: ReturnType<typeof setTimeout> | undefined
-        let held: ResolvedSource | null | undefined
-        const gathered: SubtitleCandidate[] = []
-        const finish = (value: ResolvedSource | null) => {
-          finished = true; clearTimeout(hedge); clearTimeout(settle); settle = undefined; held = undefined
-          signal.removeEventListener('abort', aborted)
-          controller.abort(); resolve(value)
-        }
-        const release = () => {
-          clearTimeout(settle)
-          settle = undefined
-          const value: ResolvedSource | null = held ?? null
-          held = undefined
-          finish(value && { ...value, subtitles: dedupeSubtitleTracks(gathered) })
-        }
-        const done = (value: ResolvedSource | null) => {
-          if (finished || held !== undefined) return
-          if (value && active > 0) {
-            // A hedged companion is still in flight: hold the decision briefly
-            // so its subtitle tracks join the session. Drained companions
-            // release immediately; only a hung companion costs the window.
-            held = value
-            settle = setTimeout(release, SUBTITLE_SETTLE_MS)
-            return
-          }
-          held = value
-          release()
-        }
-        const aborted = () => finish(null)
-        const start = () => {
-          if (finished || held !== undefined || signal.aborted) { done(null); return }
-          if (active >= 2 || cursor >= candidates.length) { if (!active) done(null); return }
-          const candidate = candidates[cursor++]!
-          active++
-          void attempt(candidate, input, signal).then((value) => {
-            active--
-            if (value) for (const track of value.subtitles) gathered.push(track)
-            if (finished) return
-            if (held !== undefined) {
-              if (active === 0) release()
-              return
-            }
-            if (value) done(value)
-            else start()
-          })
-        }
-        signal.addEventListener('abort', aborted, { once: true })
-        const hedge = setTimeout(start, options.hedgeMs ?? 600)
-        start()
-      })
+      for (const candidate of candidates) {
+        if (signal.aborted) return null
+        const perAttempt = new AbortController()
+        const onAbort = () => perAttempt.abort(signal.reason)
+        signal.addEventListener('abort', onAbort, { once: true })
+        const attemptSignal = AbortSignal.any([signal, perAttempt.signal])
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, perAttemptMs) })
+        try {
+          const value = await Promise.race([attempt(candidate, input, attemptSignal), timeout])
+          if (value) return { ...value, subtitles: dedupeSubtitleTracks(value.subtitles) }
+        } finally { clearTimeout(timer); signal.removeEventListener('abort', onAbort); perAttempt.abort() }
+      }
+      return null
     } finally { clearTimeout(deadline); controller.abort() }
+  }
+
+  function invalidateProvider(providerId: string) {
+    // One playback failure must not evict every title's good source (the old
+    // cache.clear() caused a thundering herd that tripped provider rate
+    // limits and turned one failure into "No compatible source" everywhere).
+    // Drop only entries that served this provider plus stale negative caches;
+    // healthy titles keep playing from cache while the failed provider cools.
+    for (const [key, cached] of cache) {
+      if (!cached.value || cached.value.registration.adapter.id === providerId) cache.delete(key)
+    }
   }
 
   return {
@@ -268,7 +241,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       try { return await cancellable(work.promise, signal) } catch { return null }
       finally { if (--work.waiters === 0) work.controller.abort() }
     },
-    recordFailure(providerId: string, kind: ResolvePlaybackRequest['ref']['kind']) { const value = state(providerId, kind); value.failures++; value.outcomes++; if (value.failures >= 3) value.openUntil = now() + 60000; persist(providerId, kind, value); cache.clear() },
+    recordFailure(providerId: string, kind: ResolvePlaybackRequest['ref']['kind']) { const value = state(providerId, kind); value.failures++; value.outcomes++; if (value.failures >= 3) value.openUntil = now() + 60000; persist(providerId, kind, value); invalidateProvider(providerId) },
     status(kind: ResolvePlaybackRequest['ref']['kind'] = 'movie') { return providers.map((p) => ({ id: p.adapter.id, enabled: p.enabled, ...state(p.adapter.id, kind) })) },
   }
 }

@@ -13,7 +13,7 @@ const apps: Awaited<ReturnType<typeof buildApp>>[] = []
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())) })
 async function setup() {
   const store = createMemoryPlaybackStore()
-  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, ...(id === 'primary' ? { priority: 1 } : {}) }))
+  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const, ...(id === 'primary' ? { priority: 1 } : {}) }))
   const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
   apps.push(app)
   return app
@@ -61,7 +61,7 @@ describe('playback session API', () => {
   it('returns direct subtitles for every answering provider', async () => {
     const store = createMemoryPlaybackStore()
     const frTrack = { id: 'fr', label: 'French', language: 'fr', url: 'https://media.example/subs/fr.vtt', format: 'vtt' as const }
-    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30 }))
+    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const }))
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
     apps.push(app)
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
@@ -72,11 +72,28 @@ describe('playback session API', () => {
     expect(byId.backup!.subtitles).toMatchObject([{ id: 'fr', format: 'vtt' }])
     await store.close()
   })
+  it('lists the whole fleet with availability, answering or not', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = [
+      { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const },
+      { adapter: createStaticProvider('ghost', [{ ref: { kind: 'movie', id: 999 }, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'ghost', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const },
+    ]
+    const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
+    apps.push(app)
+    const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
+    expect(listed.statusCode).toBe(200)
+    const byId = Object.fromEntries(listed.json().providers.map((entry: { id: string }) => [entry.id, entry])) as Record<string, { available: boolean; detail?: string }>
+    expect(byId.primary!.available).toBe(true)
+    expect(byId.ghost!.available).toBe(false)
+    expect(byId.ghost!.detail).toBeUndefined()
+    await store.close()
+  })
   it('lists available providers and switches sessions between them', async () => {
     const app = await setup()
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
     expect(listed.statusCode).toBe(200)
     expect(listed.json().providers.map((entry: { id: string }) => entry.id).sort()).toEqual(['backup', 'primary'])
+    expect(listed.json().providers.find((entry: { id: string }) => entry.id === 'primary')).toMatchObject({ regions: ['US'], health: 'ok' })
     const resolved = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers: { origin: 'http://localhost:3000' }, payload: body })
     const session = resolved.json()
     expect(session.source.providerId).toBe('primary')

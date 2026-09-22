@@ -21,8 +21,12 @@
   --consumit-border: rgb(255 255 255 / 10%);
   --consumit-control-outline: rgb(244 240 232 / 40%);
 
-  --consumit-font-display: 'Charter', 'Bitstream Charter', Georgia, serif;
-  --consumit-font-interface: 'DejaVu Sans', Arial, sans-serif;
+  /* Script-coverage tail: neither Charter/Georgia nor DejaVu Sans carries
+   *  Arabic glyphs, so Arabic falls through to a naskh voice (display) or a
+   *  system Arabic sans (interface). Latin rendering is untouched —
+   *  fallbacks only resolve glyphs the primaries lack. */
+  --consumit-font-display: 'Charter', 'Bitstream Charter', Georgia, 'Noto Naskh Arabic', 'Amiri', 'Traditional Arabic', 'Sakkal Majalla', 'Segoe UI', Tahoma, Arial, serif;
+  --consumit-font-interface: 'DejaVu Sans', 'Noto Sans Arabic', 'Segoe UI', Tahoma, Arial, sans-serif;
 
   --consumit-radius-micro: 3px;
   --consumit-radius-control: 5px;
@@ -176,43 +180,43 @@
 /* Library: covers on a quiet shelf, with the catalog immediately accessible. */
 .consumit-library-opening { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 48px; padding: 48px 50px 40px; }
 .consumit-library-opening h1 { font: 400 clamp(38px, 4vw, 56px)/1.05 var(--consumit-font-display); letter-spacing: -.025em; }
-.consumit-library-opening h1 span { color: var(--consumit-orange); }
-.consumit-library-opening p { max-width: 46ch; margin: 16px 0 24px; color: var(--consumit-copy); font-size: 14px; line-height: 1.7; }
-.consumit-library-display { display: flex; align-items: end; justify-content: center; gap: 12px; padding: 0 16px; border-bottom: 5px solid var(--consumit-surface-raised); box-shadow: 0 12px 18px -14px #000; }
+.consumit-library-opening h1 span { color: var(--fs-accent); }
+.consumit-library-opening p { max-width: 46ch; margin: 16px 0 24px; color: var(--fs-secondary); font-size: 14px; line-height: 1.7; }
+.consumit-library-display { display: flex; align-items: end; justify-content: center; gap: 12px; padding: 0 16px; border-bottom: 5px solid var(--fs-hover); box-shadow: 0 12px 18px -14px #000; }
 .consumit-library-display > a { flex: 1; min-width: 0; max-width: 94px; outline-offset: 4px; }
-.consumit-library-display > a:focus-visible { outline: 2px solid var(--consumit-orange); }
+.consumit-library-display > a:focus-visible { outline: 2px solid var(--fs-accent); }
 .consumit-library-bookplate { width: 100%; padding: 24px; text-align: center; }
-.consumit-library-bookplate > svg { width: 28px; height: 28px; margin: 0 auto 12px; color: var(--consumit-muted); }
+.consumit-library-bookplate > svg { width: 28px; height: 28px; margin: 0 auto 12px; color: var(--fs-muted); }
 .consumit-library-bookplate > span { display: block; font: 24px/1.2 var(--consumit-font-display); }
-.consumit-library-bookplate a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 12px; color: var(--consumit-copy); font-size: 12px; }
+.consumit-library-bookplate a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 12px; color: var(--fs-secondary); font-size: 12px; }
 .consumit-library-bookplate a svg { width: 16px; }
 .consumit-library-body { padding: 0 50px 48px; }
-.consumit-shelf-index { display: flex; gap: 32px; border-block: 1px solid var(--consumit-border); }
-.consumit-shelf-index a { display: flex; align-items: center; gap: 12px; min-height: 56px; font-size: 13px; color: var(--consumit-copy); }
-.consumit-shelf-index a > span:last-child { color: var(--consumit-muted); font-variant-numeric: tabular-nums; }
-.consumit-shelf-index a:hover { color: var(--consumit-orange); }
+.consumit-shelf-index { display: flex; gap: 32px; border-block: 1px solid var(--fs-line); }
+.consumit-shelf-index a { display: flex; align-items: center; gap: 12px; min-height: 56px; font-size: 13px; color: var(--fs-secondary); }
+.consumit-shelf-index a > span:last-child { color: var(--fs-muted); font-variant-numeric: tabular-nums; }
+.consumit-shelf-index a:hover { color: var(--fs-accent); }
 .consumit-library-section { padding: 40px 0; scroll-margin-top: 24px; }
-.consumit-library-section + section { border-top: 1px solid var(--consumit-border); }
+.consumit-library-section + section { border-top: 1px solid var(--fs-line); }
 .consumit-shelf-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 24px; }
-.consumit-shelf-search { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; padding-inline: 12px; background: var(--consumit-field); border: 1px solid var(--consumit-control-outline); border-radius: var(--consumit-radius-control); }
-.consumit-shelf-search svg { width: 17px; flex-shrink: 0; color: var(--consumit-muted); }
+.consumit-shelf-search { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; padding-inline: 12px; background: var(--fs-field); border: 1px solid var(--fs-field-border); border-radius: var(--consumit-radius-control); }
+.consumit-shelf-search svg { width: 17px; flex-shrink: 0; color: var(--fs-muted); }
 .consumit-shelf-search input { min-width: 0; width: 100%; height: 42px; outline: none; font-size: 13px; background: transparent; }
-.consumit-shelf-search input::placeholder { color: var(--consumit-muted); opacity: 1; }
-.consumit-shelf-search:focus-within { outline: 2px solid var(--consumit-orange); outline-offset: 3px; }
+.consumit-shelf-search input::placeholder { color: var(--fs-muted); opacity: 1; }
+.consumit-shelf-search:focus-within { outline: 2px solid var(--fs-accent); outline-offset: 3px; }
 .consumit-saved-display { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 32px 24px; }
 .consumit-saved-display--shelves { gap: 40px 24px; padding: 8px 12px 24px; }
 .consumit-saved-display--shelves [data-consumit-saved-title-card] { display: grid; grid-template-rows: auto 5px 1fr; }
 .consumit-saved-display--shelves [data-consumit-artwork-frame] { grid-row: 1; }
-.consumit-saved-display--shelves [data-consumit-saved-title-card]::after { content: ''; grid-row: 2; margin-inline: -12px; border-top: 1px solid var(--consumit-control-outline); background: var(--consumit-surface-raised); box-shadow: 0 12px 18px -10px #000; }
+.consumit-saved-display--shelves [data-consumit-saved-title-card]::after { content: ''; grid-row: 2; margin-inline: -12px; border-top: 1px solid var(--fs-field-border); background: var(--fs-hover); box-shadow: 0 12px 18px -10px #000; }
 .consumit-saved-display--shelves [data-consumit-saved-title-card] > div:last-child { grid-row: 3; margin-top: 12px; }
 .consumit-saved-display--list { display: flex; flex-direction: column; gap: 0; }
-.consumit-saved-display--list [data-consumit-saved-title-card] { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--consumit-border); }
+.consumit-saved-display--list [data-consumit-saved-title-card] { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--fs-line); }
 .consumit-saved-display--list [data-consumit-saved-title-card] > div:last-child { margin: 0; }
 .consumit-saved-display--list [data-consumit-saved-title-card] [data-consumit-artwork-frame] > div:last-child { top: 4px; right: 4px; }
-.consumit-shelf-empty { padding: 40px 20px; text-align: center; background: var(--consumit-surface); border: 1px solid var(--consumit-border); border-radius: var(--consumit-radius-card); }
-.consumit-shelf-empty > svg { width: 30px; height: 30px; margin: 0 auto 16px; color: var(--consumit-muted); }
+.consumit-shelf-empty { padding: 40px 20px; text-align: center; background: var(--fs-field); border: 1px solid var(--fs-line); border-radius: var(--consumit-radius-card); }
+.consumit-shelf-empty > svg { width: 30px; height: 30px; margin: 0 auto 16px; color: var(--fs-muted); }
 .consumit-shelf-empty h3 { font: 28px/1.2 var(--consumit-font-display); }
-.consumit-shelf-empty p { max-width: 50ch; margin: 12px auto 24px; line-height: 1.7; color: var(--consumit-copy); }
+.consumit-shelf-empty p { max-width: 50ch; margin: 12px auto 24px; line-height: 1.7; color: var(--fs-secondary); }
 
 /* Profile: identity, six equal favorites, and the member's actual writing. */
 .consumit-profile-cover { margin: 0; min-height: 360px; padding: 128px 50px 36px; border-radius: 0; border-inline: 0; border-top: 0; }
@@ -270,3 +274,11 @@
   .consumit-taste-portrait { grid-template-columns: 1fr; gap: 20px; }
   .consumit-profile-journal { grid-template-columns: 1fr; gap: 0; }
 }
+
+video::cue {
+  display: none !important;
+  opacity: 0 !important;
+  color: transparent !important;
+  background: transparent !important;
+}
+

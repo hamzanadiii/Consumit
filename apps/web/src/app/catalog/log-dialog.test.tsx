@@ -38,6 +38,9 @@ function dialogFetch() {
     if (url === '/v1/me/reviews') {
       return Promise.resolve(new Response(JSON.stringify(storedReview), { status: 201 }))
     }
+    if (url === '/v1/me/reviews/review-9' && method === 'PATCH') {
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }
     return Promise.resolve(new Response(JSON.stringify(emptyLibrary), { status: 200 }))
   })
 }
@@ -108,5 +111,42 @@ describe('log dialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('edits the stored review in place instead of writing a new one', async () => {
+    const user = userEvent.setup()
+    const fetchMock = dialogFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const onSaved = vi.fn()
+    render(<LogDialog existingReview={{ body: 'A patient masterpiece.', reviewId: 'review-9', reviewedOn: '2026-09-09' }} id={550} kind="movie" onClose={() => {}} onSaved={onSaved} title="Fight Club" year={1999} />)
+
+    expect(screen.getByLabelText('Review', { selector: 'textarea' })).toHaveValue('A patient masterpiece.')
+    expect(screen.getByLabelText('Watched date')).toHaveValue('2026-09-09')
+
+    const textarea = screen.getByLabelText('Review', { selector: 'textarea' })
+    await user.clear(textarea)
+    await user.type(textarea, 'Even better on rewatch.')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(fetchMock).toHaveBeenCalledWith('/v1/me/reviews/review-9', expect.objectContaining({
+      body: expect.stringContaining('Even better on rewatch.'),
+      method: 'PATCH',
+    }))
+    expect(fetchMock).not.toHaveBeenCalledWith('/v1/me/reviews', expect.objectContaining({ method: 'POST' }))
+    expect(onSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the review write when the stored text is unchanged', async () => {
+    const user = userEvent.setup()
+    const fetchMock = dialogFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const onSaved = vi.fn()
+    render(<LogDialog existingReview={{ body: 'A patient masterpiece.', reviewId: 'review-9', reviewedOn: '2026-09-09' }} id={550} kind="movie" onClose={() => {}} onSaved={onSaved} title="Fight Club" year={1999} />)
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(fetchMock).not.toHaveBeenCalledWith('/v1/me/reviews/review-9', expect.anything())
+    expect(fetchMock).not.toHaveBeenCalledWith('/v1/me/reviews', expect.objectContaining({ method: 'POST' }))
+    expect(onSaved).toHaveBeenCalledTimes(1)
   })
 })

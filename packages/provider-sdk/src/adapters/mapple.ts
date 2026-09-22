@@ -38,6 +38,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
     const tokenMatch = page.text.match(/window\.__REQUEST_TOKEN__\s*=\s*"([^"]+)"/)
     if (!tokenMatch) throw new ProviderFailure('empty')
     const requestToken = tokenMatch[1]
+    if (!requestToken) throw new ProviderFailure('empty')
 
     const tvSlug = isTv ? `${ref.season}-${ref.episode}` : ''
     const initPayload: Record<string, unknown> = {
@@ -65,7 +66,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
         const hash = createHash('sha256').update(challenge + nonce).digest('hex')
         if (BigInt('0x' + hash) < target) break
         nonce++
-        if (nonce > 5000000) throw new ProviderFailure('timeout')
+        if (nonce > 5000000) throw new ProviderFailure('unavailable')
       }
 
       const powPayload = { ...initPayload, challengeId, nonce, pow: { challengeId, nonce } }
@@ -118,8 +119,9 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
     let height: number | undefined
     let qualityHint = 'Auto'
     const resMatch = manifestRes.text.match(/RESOLUTION=\d+x(\d+)/i)
-    if (resMatch) {
-      height = Number.parseInt(resMatch[1], 10)
+    const heightText = resMatch?.[1]
+    if (heightText) {
+      height = Number.parseInt(heightText, 10)
       qualityHint = `${height}p`
     }
 

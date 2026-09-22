@@ -35,6 +35,7 @@ function toRecord(row: IdentityRow): IdentityRecord {
       usernameChangedAt: row.profile.usernameChangedAt,
       visibility: row.profile.visibility === 'public' ? 'public' : 'private',
     },
+    role: row.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
     status: row.status,
   }
 }
@@ -127,6 +128,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
           avatarStyle: member.profile.avatarStyle,
           avatarUrl: member.profile.avatarUrl,
           id: member.id,
+          role: member.role === 'ADMIN' ? 'admin' as const : 'member' as const,
         },
         profile: {
           avatarStyle: member.profile.avatarStyle,
@@ -171,6 +173,22 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         prisma.usernameAlias.findUnique({ select: { memberId: true }, where: { username } }),
       ])
       return !profile && !alias
+    },
+    async listAll(limit = 50, offset = 0) {
+      const [rows, total] = await Promise.all([
+        prisma.member.findMany({ include: includeIdentity, where: { status: 'ACTIVE' }, orderBy: { createdAt: 'desc' }, skip: offset, take: limit }),
+        prisma.member.count({ where: { status: 'ACTIVE' } }),
+      ])
+      return { members: rows.map(toRecord), total }
+    },
+    async setRole(memberId, role) {
+      const member = await prisma.member.findFirst({ where: { id: memberId, status: 'ACTIVE' } })
+      if (!member) return null
+      return toRecord(await prisma.member.update({
+        data: { role },
+        include: includeIdentity,
+        where: { id: memberId },
+      }))
     },
     async tombstone(memberId) {
       await prisma.$transaction(async (tx) => {

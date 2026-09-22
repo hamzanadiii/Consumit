@@ -12,6 +12,9 @@ export function useCatalogFeed(query: BrowseCatalogQuery, initialPage?: CatalogP
   const [error, setError] = useState(false)
   const requestRef = useRef<AbortController | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  // Set when this feed instance unmounts (filter changes remount the feed
+  // via key). Late responses check it instead of relying on abort.
+  const cancelledRef = useRef(false)
   const hasMore = !page || (page.items.length > 0 && page.page < Math.min(page.totalPages, 500))
 
   const requestPage = useCallback(async () => {
@@ -20,7 +23,7 @@ export function useCatalogFeed(query: BrowseCatalogQuery, initialPage?: CatalogP
     requestRef.current = controller
     try {
       const next = await browserDiscoverCatalog(query, (page?.page ?? 0) + 1, controller.signal)
-      if (controller.signal.aborted) return
+      if (cancelledRef.current || requestRef.current !== controller || controller.signal.aborted) return
       setPage((previous) => {
         const items = new Map(previous?.items.map((item) => [`${item.kind}:${item.id}`, item]))
         next.items.forEach((item) => items.set(`${item.kind}:${item.id}`, item))
@@ -33,9 +36,9 @@ export function useCatalogFeed(query: BrowseCatalogQuery, initialPage?: CatalogP
         }
       })
     } catch {
-      if (!controller.signal.aborted) setError(true)
+      if (!cancelledRef.current && requestRef.current === controller && !controller.signal.aborted) setError(true)
     } finally {
-      if (!controller.signal.aborted) {
+      if (!cancelledRef.current && requestRef.current === controller) {
         requestRef.current = null
         setLoading(false)
       }
@@ -50,11 +53,14 @@ export function useCatalogFeed(query: BrowseCatalogQuery, initialPage?: CatalogP
   }, [hasMore, requestPage])
 
   useEffect(() => {
-    // requestPage handles cancellation. Stop network work when a filter change
-    // replaces this feed, and prevent late results from updating its state.
+    // Never abort here. Aborting the in-flight discover on unmount rejected
+    // its fetch with an AbortError that Next surfaces as a runtime error,
+    // even though requestPage catches it. A late response is harmless: the
+    // cancelled flag and ref-identity checks above ignore it, and the
+    // request still has its own 8s timeout in catalog-browser.
+    cancelledRef.current = false
     return () => {
-      requestRef.current?.abort()
-      requestRef.current = null
+      cancelledRef.current = true
     }
   }, [])
 

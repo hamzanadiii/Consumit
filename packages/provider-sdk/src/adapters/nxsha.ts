@@ -148,10 +148,10 @@ export function createNxshaProvider(http: ProviderHttp, now = Date.now) {
       const response = await http(`${apiOrigin}/api/subtitles?q=${encodeURIComponent(query)}`, baseHeaders, scoped)
       if (response.status >= 200 && response.status < 300) {
         const tracks = subtitlesSchema.parse(unwrapEnvelope(response.text)).subtitles ?? []
-        const subtitles = tracks.filter((track) => !/\.ass$/i.test(track.uri)).slice(0, 20).map((track, index) => ({
+        const subtitles = tracks.slice(0, 20).map((track, index) => ({
           id: `nxsha-sub-${index}`, label: (track.title || track.language || 'Unknown').slice(0, 64),
           language: (track.language || track.title || 'Unknown').slice(0, 32), url: track.uri,
-          format: (/\.srt/i.test(track.uri) ? 'srt' : 'vtt') as 'srt' | 'vtt',
+          format: (/\.ass/i.test(track.uri) ? 'ass' : /\.srt/i.test(track.uri) ? 'srt' : 'vtt') as 'srt' | 'vtt' | 'ass',
         }))
         return sources.map((source) => ({ ...source, subtitles }))
       }

@@ -5,7 +5,7 @@ import { createMemoryPlaybackStore } from './state.ts'
 
 const source: ProviderSource = { key: 'main', url: 'https://media.example/test.m3u8', type: 'hls', language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }
 const input = { ref: { kind: 'movie' as const, id: 1 }, capabilities: { hls: true, dash: false, native: true, nativeHls: true }, audioLanguage: 'en' }
-function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30 } }
+function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] } }
 afterEach(() => vi.useRealTimers())
 describe('bounded playback resolution', () => {
   it('shares disposable access across resolvers but never reuses expired credentials', async () => {
@@ -22,17 +22,16 @@ describe('bounded playback resolution', () => {
     expect(await createResolver([first], options).resolve(input, new AbortController().signal)).not.toBeNull()
     expect(first.adapter.resolve).toHaveBeenCalledTimes(2)
   })
-  it('hedges a stalled primary, cancels it, and chooses a compatible backup', async () => {
+  it('tries providers in static order, times out a stalled primary, and falls through to backup', async () => {
     vi.useFakeTimers()
     const first = provider('first'); const backup = provider('backup')
     let cancelled = false
     first.adapter.resolve = async (_input, signal) => new Promise(() => { signal.addEventListener('abort', () => { cancelled = true }) })
     const resolver = createResolver([first, backup], { region: 'US' })
     const task = resolver.resolve(input, new AbortController().signal)
-    await vi.advanceTimersByTimeAsync(600)
-    // The answered backup holds briefly for the hung primary's tracks, then
-    // releases and cancels it; failover still completes well inside deadline.
-    await vi.advanceTimersByTimeAsync(500)
+    // The stalled first provider burns its bounded attempt window, is
+    // cancelled, and the next provider in fixed order wins.
+    await vi.advanceTimersByTimeAsync(5000)
     expect((await task)?.registration.adapter.id).toBe('backup')
     expect(cancelled).toBe(true)
   })
@@ -81,7 +80,7 @@ describe('bounded playback resolution', () => {
     expect(resolved?.source.key).toBe('a')
     expect(resolved?.subtitles.map((candidate) => candidate.track.id)).toEqual(['en', 'ar'])
   })
-  it('settles briefly for a hedged companion so its tracks join without slowing the fast path', async () => {
+  it('keeps static order and returns only the winning provider tracks', async () => {
     vi.useFakeTimers()
     const winner = provider('winner'); const companion = provider('companion')
     const track = { id: 'en', label: 'English', language: 'en', url: 'https://media.example/subs/en.vtt', format: 'vtt' as const }
@@ -90,18 +89,28 @@ describe('bounded playback resolution', () => {
     const resolver = createResolver([winner, companion], { region: 'US' })
     const task = resolver.resolve(input, new AbortController().signal)
     await vi.advanceTimersByTimeAsync(700)
-    await vi.advanceTimersByTimeAsync(100)
-    await vi.advanceTimersByTimeAsync(500)
     const resolved = await task
+    // Static sequential resolution tries the first provider and stops at
+    // the first success — the companion is never consulted, so only the
+    // winner's (trackless) subtitles are returned and the server list stays
+    // fixed instead of merging companion tracks.
     expect(resolved?.source.key).toBe('main')
     expect(resolved?.registration.adapter.id).toBe('winner')
-    expect(resolved?.subtitles.map((candidate) => candidate.track.id)).toEqual(['en'])
+    expect(resolved?.subtitles).toEqual([])
   })
-  it('tries operator-pinned providers before learned health ranking', async () => {
+  it('tries operator-pinned providers first in static order', async () => {
     const low = provider('low'); const high = provider('high')
     high.priority = 90
     const resolver = createResolver([low, high], { region: 'US' })
     expect((await resolver.resolve(input, new AbortController().signal))?.registration.adapter.id).toBe('high')
+  })
+  it('falls through to the next provider in fixed order when the first is empty', async () => {
+    const first = provider('first'); const second = provider('second')
+    first.adapter.resolve = vi.fn(async () => ({ ok: false as const, code: 'empty' as const, retryable: false }))
+    const resolver = createResolver([first, second], { region: 'US' })
+    const resolved = await resolver.resolve(input, new AbortController().signal)
+    expect(resolved?.registration.adapter.id).toBe('second')
+    expect(first.adapter.resolve).toHaveBeenCalledTimes(1)
   })
   it('prefers adaptive media, then the best fixed rendition that fits the display', async () => {
     const registration = provider('quality')

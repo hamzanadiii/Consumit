@@ -38,6 +38,8 @@ Thumbs.db
 /design/
 /provider_example/
 /infra/playback/providers.local.json
+/infra/playback/providers.local.overrides.json
+worker/.wrangler/
 **/.terraform/
 *.tfstate
 *.tfstate.*

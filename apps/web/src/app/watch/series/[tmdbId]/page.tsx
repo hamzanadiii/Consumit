@@ -4,11 +4,11 @@ import { notFound } from 'next/navigation'
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
 
 import { CatalogUnavailableScreen } from '../../../catalog/catalog-ui'
-import { WatchScreen } from '../../watch-screen'
+import { sanitizePinnedProvider, WatchScreen } from '../../watch-screen'
 
 type SeriesWatchPageProps = {
   params: Promise<{ tmdbId: string }>
-  searchParams: Promise<{ episode?: string | string[]; season?: string | string[] }>
+  searchParams: Promise<{ episode?: string | string[]; season?: string | string[]; provider?: string | string[] | undefined }>
 }
 
 export async function generateMetadata({ params }: SeriesWatchPageProps): Promise<Metadata> {
@@ -34,5 +34,9 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   const next = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber + 1)
   const nextSeason = titleResponse.item.seasons.find((item) => item.number === seasonNumber + 1 && item.episodeCount > 0)
   const nextHref = next ? `/watch/series/${id}?season=${seasonNumber}&episode=${next.episodeNumber}` : nextSeason ? `/watch/series/${id}?season=${nextSeason.number}&episode=1` : undefined
-  return <WatchScreen interactive nextHref={nextHref} {...(episode ? { episode } : {})} title={titleResponse.item} />
+  const prev = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber - 1)
+  const prevSeason = episodeNumber === 1 ? titleResponse.item.seasons.find((item) => item.number === seasonNumber - 1 && item.episodeCount > 0) : undefined
+  const prevHref = prev ? `/watch/series/${id}?season=${seasonNumber}&episode=${prev.episodeNumber}` : prevSeason ? `/watch/series/${id}?season=${prevSeason.number}&episode=${prevSeason.episodeCount}` : undefined
+  const pinnedProvider = sanitizePinnedProvider(query.provider)
+  return <WatchScreen interactive nextHref={nextHref} prevHref={prevHref} {...(episode ? { episode } : {})} title={titleResponse.item} {...(pinnedProvider ? { pinnedProvider } : {})} />
 }

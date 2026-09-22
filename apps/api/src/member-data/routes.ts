@@ -4,6 +4,8 @@ import {
   createReviewRequestSchema,
   diaryEntrySchema,
   favoriteSelectionRequestSchema,
+  followStateSchema,
+  followStatusSchema,
   memberLibrarySchema,
   memberListDetailSchema,
   memberProfileDataSchema,
@@ -13,7 +15,11 @@ import {
   playbackProgressSchema,
   progressRefSchema,
   progressWriteRequestSchema,
+  reviewLikeSchema,
   setRatingRequestSchema,
+  setReviewLikeRequestSchema,
+  titleReviewsPageSchema,
+  titleReviewsQuerySchema,
   updateDiaryEntryRequestSchema,
   updateMemberListRequestSchema,
   updateMemberReviewRequestSchema,
@@ -226,6 +232,68 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
     const removed = await deps.memberData.removeLike((await viewer(request, true))!, parsed.data)
     if (!removed) throw new ApiError('NOT_FOUND', 'No like for this title.')
+    return reply.code(204).send()
+  })
+
+  app.get('/v1/me/reviews/:kind/:id', async (request, reply) => {
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    const review = await deps.memberData.review((await viewer(request, true))!, parsed.data)
+    if (!review) throw new ApiError('NOT_FOUND', 'No review for this title.')
+    return memberReviewSchema.parse(review)
+  })
+
+  app.get('/v1/reviews/:kind/:id', async (request, reply) => {
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const ref = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!ref.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    const query = titleReviewsQuerySchema.safeParse(request.query)
+    if (!query.success) throw new ApiError('BAD_REQUEST', 'Use a valid reviews page, sort, and audience.')
+    void reply.header('cache-control', 'private, no-store')
+    return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, false), query.data.audience))
+  })
+
+  app.get('/v1/follows/:username', async (request, reply) => {
+    const username = usernameSchema.safeParse((request.params as { username?: unknown }).username)
+    if (!username.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
+    void reply.header('cache-control', 'private, no-store')
+    return followStateSchema.parse({ following: await deps.memberData.isFollowing((await viewer(request, true))!, username.data) })
+  })
+
+  for (const method of ['PUT', 'DELETE'] as const) {
+    app.route({
+      handler: async (request, reply) => {
+        guardMutation(request)
+        const username = usernameSchema.safeParse((request.params as { username?: unknown }).username)
+        if (!username.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
+        void reply.header('cache-control', 'private, no-store')
+        const status = await deps.memberData.setFollow((await viewer(request, true))!, username.data, method === 'PUT')
+        if (!status) throw new ApiError('NOT_FOUND', 'Member not found.')
+        return followStatusSchema.parse(status)
+      },
+      method,
+      url: '/v1/follows/:username',
+    })
+  }
+
+  app.put('/v1/review-likes', async (request, reply) => {
+    guardMutation(request)
+    const parsed = setReviewLikeRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid review identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    const like = await deps.memberData.setReviewLiked((await viewer(request, true))!, parsed.data.reviewId, true)
+    if (!like) throw new ApiError('NOT_FOUND', 'Review not found.')
+    return reviewLikeSchema.parse(like)
+  })
+
+  app.delete('/v1/review-likes/:reviewId', async (request, reply) => {
+    guardMutation(request)
+    const reviewId = (request.params as { reviewId?: unknown }).reviewId
+    if (typeof reviewId !== 'string' || !reviewId || reviewId.length > 128) throw new ApiError('BAD_REQUEST', 'Use a valid review identifier.')
+    const removed = await deps.memberData.removeReviewLike((await viewer(request, true))!, reviewId)
+    if (!removed) throw new ApiError('NOT_FOUND', 'Review not found.')
     return reply.code(204).send()
   })
 

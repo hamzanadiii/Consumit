@@ -76,7 +76,15 @@ export function createFakeCatalog({
       const needle = query.query.trim().toLocaleLowerCase('en-US')
       const items = titles
         .filter((title) => query.kind === 'all' || title.kind === query.kind)
-        .filter((title) => `${title.title} ${title.originalTitle}`.toLocaleLowerCase('en-US').includes(needle))
+        .filter((title) => {
+          const haystack = `${title.title} ${title.originalTitle}`.toLocaleLowerCase('en-US')
+          if (haystack.includes(needle)) return true
+          const yearMatch = needle.match(/^(.+?)\s+(\d{4})$/)
+          if (yearMatch?.[1]) {
+            return haystack.includes(yearMatch[1])
+          }
+          return false
+        })
         .map(summary)
       return page(items, query.page)
     },

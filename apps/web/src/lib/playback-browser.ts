@@ -3,7 +3,11 @@ import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSche
 export async function playbackRequest(path: string, body: ResolvePlaybackRequest | PlaybackFailureRequest, signal: AbortSignal): Promise<PlaybackSession> {
   const response = await fetch(`/v1/playback/${path}`, {
     method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(9000)]),
+    // The resolver runs an 8s deadline plus a 500ms subtitle-settle window, so
+    // a 9s browser abort raced successful late answers and surfaced as flaky
+    // "No compatible source" after a while on slow upstreams. Give resolve and
+    // recovery headroom without changing the server-side bound.
+    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(path === 'resolve' ? 15000 : 12000)]),
   })
   if (!response.ok) {
     const result = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
@@ -28,7 +32,7 @@ export async function listPlaybackProviders(body: ResolvePlaybackRequest, signal
 export async function switchPlaybackProvider(sessionId: string, body: PlaybackSwitchRequest, signal: AbortSignal): Promise<PlaybackSession> {
   const response = await fetch(`/v1/playback/${sessionId}/switch`, {
     method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(9000)]),
+    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]),
   })
   if (!response.ok) {
     const result = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))

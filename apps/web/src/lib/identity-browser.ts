@@ -6,11 +6,16 @@ import {
   diaryEntrySchema,
   profileSchema,
   favoriteSelectionRequestSchema,
+  followStateSchema,
+  followStatusSchema,
   memberLibrarySchema,
   memberRatingSchema,
   memberReviewSchema,
   memberTitleRecordSchema,
+  reviewLikeSchema,
   sessionMemberResponseSchema,
+  titleReviewsPageSchema,
+  updateMemberReviewRequestSchema,
   updateProfileRequestSchema,
   usernameAvailabilityResponseSchema,
   type AcceptedResponse,
@@ -23,6 +28,9 @@ import {
   type RecoveryConfirmRequest,
   type RegisterRequest,
   type SafeMember,
+  type TitleReviewAudience,
+  type TitleReviewSort,
+  type UpdateMemberReviewRequest,
   type UpdateProfileRequest,
   type VerifyEmailRequest,
 } from '@consumit/contracts'
@@ -94,6 +102,18 @@ export const setMemberLiked = async (title: CatalogRef, liked: boolean) => {
   return request('/v1/likes', { body: body({ ...title }), method: 'PUT' }, memberTitleRecordSchema)
 }
 export const createMemberReview = (input: CreateReviewRequest) => request('/v1/me/reviews', { body: body(createReviewRequestSchema.parse(input)), method: 'POST' }, memberReviewSchema)
+export const updateMemberReview = (reviewId: string, changes: UpdateMemberReviewRequest): Promise<void> => request(`/v1/me/reviews/${encodeURIComponent(reviewId)}`, { body: body(updateMemberReviewRequestSchema.parse(changes)), method: 'PATCH' })
+export const getMemberReview = (title: CatalogRef) => request(`/v1/me/reviews/${title.kind}/${title.id}`, { method: 'GET' }, memberReviewSchema)
+export const getFollowState = (username: string) => request(`/v1/follows/${encodeURIComponent(username)}`, { method: 'GET' }, followStateSchema)
+export const setFollowed = (username: string, following: boolean) => request(`/v1/follows/${encodeURIComponent(username)}`, { method: following ? 'PUT' : 'DELETE' }, followStatusSchema)
+export const listTitleReviews = (title: CatalogRef, page = 1, sort: TitleReviewSort = 'recent', audience: TitleReviewAudience = 'all') => request(`/v1/reviews/${title.kind}/${title.id}?page=${page}&sort=${sort}&audience=${audience}`, { method: 'GET' }, titleReviewsPageSchema)
+export const setReviewLiked = async (reviewId: string, liked: boolean) => {
+  if (!liked) {
+    await request(`/v1/review-likes/${encodeURIComponent(reviewId)}`, { method: 'DELETE' })
+    return null
+  }
+  return request('/v1/review-likes', { body: body({ reviewId }), method: 'PUT' }, reviewLikeSchema)
+}
 export const createDiaryEntry = (input: CreateDiaryEntryRequest) => request('/v1/me/diary', { body: body(createDiaryEntryRequestSchema.parse(input)), method: 'POST' }, diaryEntrySchema)
 export const getMemberLibrary = () => request('/v1/me/library', { method: 'GET' }, memberLibrarySchema)
 

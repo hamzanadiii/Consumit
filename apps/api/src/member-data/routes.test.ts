@@ -14,9 +14,11 @@ function memberDataStub(): MemberData {
   const storedRating = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null, value: 9 }
   const storedLike = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null }
   const storedReview = { body: 'A patient masterpiece.', id: 693134, kind: 'movie' as const, origin: 'native' as const, reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] }
+  const storedTitleReview = { author: { avatarStyle: 'dusk' as const, avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }, body: 'A patient masterpiece.', liked: true, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }
   return {
     createDiaryEntry: vi.fn(async () => ({ entryId: 'diary-1', id: 693134, kind: 'movie' as const, origin: 'native' as const, rewatch: false, sourceKey: null, tags: [], watchedOn: '2026-09-09' })),
     createReview: vi.fn(async () => storedReview),
+    isFollowing: vi.fn(async () => false),
     library: vi.fn(async () => emptyLibrary),
     like: vi.fn(async () => storedLike),
     list: vi.fn(async () => null),
@@ -25,7 +27,12 @@ function memberDataStub(): MemberData {
     rating: vi.fn(async () => storedRating),
     removeLike: vi.fn(async () => true),
     removeRating: vi.fn(async () => true),
+    removeReviewLike: vi.fn(async () => true),
+    review: vi.fn(async () => storedReview),
+    setReviewLiked: vi.fn(async () => ({ likesCount: 13, reviewId: 'review-1' })),
+    titleReviews: vi.fn(async (_ref: unknown, page: number) => ({ items: [storedTitleReview], page, totalPages: 3, totalResults: 21 })),
     setFavorites: vi.fn(async () => emptyLibrary),
+    setFollow: vi.fn(async () => ({ followers: 4, following: true })),
     setLiked: vi.fn(async () => storedLike),
     setProgress: vi.fn(async () => storedProgress),
     setRating: vi.fn(async () => storedRating),
@@ -214,5 +221,118 @@ describe('member data mutation routes', () => {
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'POST', payload: { body: '  ', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(400)
     expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'POST', payload: { body: 'Great.', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(403)
     expect((await app.inject({ headers: { origin }, method: 'POST', payload: { body: 'Great.', id: 693134, kind: 'movie' }, url: '/v1/me/reviews' })).statusCode).toBe(401)
+  })
+
+  it('reads owned reviews through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const read = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/reviews/movie/693134' })
+    expect(read.statusCode).toBe(200)
+    expect(read.json()).toMatchObject({ body: 'A patient masterpiece.', id: 693134, reviewId: 'review-1' })
+    expect(memberData.review).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' })
+  })
+
+  it('rejects invalid, unauthenticated, and missing review reads', async () => {
+    const memberData = memberDataStub()
+    vi.mocked(memberData.review).mockResolvedValue(null)
+    const { app, cookie } = await setup(memberData)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/me/reviews/movie/693134' })).statusCode).toBe(404)
+    expect((await app.inject({ headers: { origin }, method: 'GET', url: '/v1/me/reviews/movie/693134' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/me/reviews/novel/693134' })).statusCode).toBe(400)
+  })
+
+  it('lists public title reviews without authentication', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const first = await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134' })
+    expect(first.statusCode).toBe(200)
+    expect(first.json()).toMatchObject({ page: 1, totalPages: 3, totalResults: 21, items: [{ body: 'A patient masterpiece.', liked: true, likesCount: 12, rating: 9, reviewId: 'review-1' }] })
+    expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', undefined, 'all')
+
+    const popular = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/reviews/movie/693134?sort=popular' })
+    expect(popular.statusCode).toBe(200)
+    expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'popular', memberId, 'all')
+
+    const circle = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/reviews/movie/693134?audience=circle' })
+    expect(circle.statusCode).toBe(200)
+    expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', memberId, 'circle')
+
+    const second = await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134?page=2' })
+    expect(second.statusCode).toBe(200)
+    expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 2, 'recent', undefined, 'all')
+  })
+
+  it('rejects invalid title review list queries', async () => {
+    const { app } = await setup()
+    const headers = { origin }
+
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/reviews/novel/693134' })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134?page=0' })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134?page=501' })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134?sort=top' })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/reviews/movie/693134?audience=everyone' })).statusCode).toBe(400)
+  })
+
+  it('writes and removes review likes through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const liked = await app.inject({ cookies: cookie, headers, method: 'PUT', payload: { reviewId: 'review-1' }, url: '/v1/review-likes' })
+    expect(liked.statusCode).toBe(200)
+    expect(liked.json()).toMatchObject({ likesCount: 13, reviewId: 'review-1' })
+    expect(memberData.setReviewLiked).toHaveBeenCalledWith(memberId, 'review-1', true)
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/review-likes/review-1' })).statusCode).toBe(204)
+    expect(memberData.removeReviewLike).toHaveBeenCalledWith(memberId, 'review-1')
+  })
+
+  it('rejects invalid, cross-site, unauthenticated, and missing review likes', async () => {
+    const memberData = memberDataStub()
+    vi.mocked(memberData.setReviewLiked).mockResolvedValue(null)
+    vi.mocked(memberData.removeReviewLike).mockResolvedValue(false)
+    const { app, cookie } = await setup(memberData)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { reviewId: '' }, url: '/v1/review-likes' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', payload: { reviewId: 'review-1' }, url: '/v1/review-likes' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'PUT', payload: { reviewId: 'review-1' }, url: '/v1/review-likes' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { reviewId: 'review-1' }, url: '/v1/review-likes' })).statusCode).toBe(404)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'DELETE', url: '/v1/review-likes/review-1' })).statusCode).toBe(404)
+  })
+
+  it('follows and unfollows members through validated same-origin requests', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+
+    const followed = await app.inject({ cookies: cookie, headers, method: 'PUT', url: '/v1/follows/cinema_fan' })
+    expect(followed.statusCode).toBe(200)
+    expect(followed.json()).toEqual({ followers: 4, following: true })
+    expect(memberData.setFollow).toHaveBeenCalledWith(memberId, 'cinema_fan', true)
+
+    vi.mocked(memberData.setFollow).mockResolvedValue({ followers: 3, following: false })
+    const unfollowed = await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/follows/cinema_fan' })
+    expect(unfollowed.statusCode).toBe(200)
+    expect(unfollowed.json()).toEqual({ followers: 3, following: false })
+    expect(memberData.setFollow).toHaveBeenCalledWith(memberId, 'cinema_fan', false)
+
+    const state = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/follows/cinema_fan' })
+    expect(state.statusCode).toBe(200)
+    expect(state.json()).toEqual({ following: false })
+    expect(memberData.isFollowing).toHaveBeenCalledWith(memberId, 'cinema_fan')
+  })
+
+  it('rejects invalid, cross-site, unauthenticated, and missing follows', async () => {
+    const memberData = memberDataStub()
+    vi.mocked(memberData.setFollow).mockResolvedValue(null)
+    const { app, cookie } = await setup(memberData)
+
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', url: '/v1/follows/admin' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'PUT', url: '/v1/follows/cinema_fan' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { origin }, method: 'PUT', url: '/v1/follows/cinema_fan' })).statusCode).toBe(401)
+    expect((await app.inject({ headers: { origin }, method: 'GET', url: '/v1/follows/cinema_fan' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', url: '/v1/follows/missing_member' })).statusCode).toBe(404)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'DELETE', url: '/v1/follows/missing_member' })).statusCode).toBe(404)
   })
 })

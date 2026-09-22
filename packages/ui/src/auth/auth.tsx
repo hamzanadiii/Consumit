@@ -51,7 +51,7 @@ export function AuthShell({
       data-consumit-auth-shell
       {...props}
     >
-      <section className={cn('relative isolate hidden min-h-full overflow-hidden p-10 lg:flex lg:flex-col lg:justify-between', asideClassName)}>
+      <section className={cn('relative isolate hidden min-h-full overflow-hidden p-10 lg:sticky lg:top-0 lg:flex lg:h-screen lg:min-h-0 lg:flex-col lg:justify-between', asideClassName)}>
         {artworkSrc ? <img alt="" className={cn('absolute inset-0 -z-20 size-full object-cover', artworkClassName)} src={artworkSrc} /> : null}
         <span aria-hidden="true" className={cn('absolute inset-0 -z-10 bg-canvas/35', artworkOverlayClassName)} />
         {header}
@@ -106,16 +106,16 @@ export function AuthField({
         <Label htmlFor={inputId}>{label}</Label>
         {action ? <div className="text-xs">{action}</div> : null}
       </div>
-      <div className="relative">
+      <div className="relative mt-2">
         <Input
           aria-describedby={descriptionId}
           aria-invalid={error ? true : undefined}
-          className={cn('mt-2', trailingAction && 'pr-14', className)}
+          className={cn(trailingAction && 'pr-14', className)}
           id={inputId}
           {...props}
         />
         {trailingAction ? (
-          <div className="absolute inset-y-0 right-1 mt-2 grid w-11 place-items-center">
+          <div className="absolute inset-y-0 right-1.5 grid place-items-center">
             {trailingAction}
           </div>
         ) : null}

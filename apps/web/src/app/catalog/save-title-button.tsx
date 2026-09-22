@@ -5,7 +5,7 @@ import { Bookmark } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
-import { Button, buttonVariants } from '@consumit/ui'
+import { Button, buttonVariants, cn } from '@consumit/ui'
 
 import { getCachedMemberLibrary, replaceCachedMemberLibrary, setMemberSaved } from '@/lib/identity-browser'
 
@@ -42,7 +42,7 @@ export function SaveTitleButton({ className, id, initialSaved = false, kind, tit
     return (
       <Link
         aria-label={`Sign in to save ${title} to your library`}
-        className={buttonVariants({ className, size: 'icon', variant: 'secondary' })}
+        className={cn(buttonVariants({ size: 'icon', variant: 'secondary' }), className)}
         href="/sign-in"
         title="Sign in to save titles"
       >
@@ -73,7 +73,7 @@ export function SaveTitleButton({ className, id, initialSaved = false, kind, tit
         aria-pressed={saved}
         className={className}
         disabled={busy}
-        onClick={() => void toggle()}
+        onClick={(e) => { e.stopPropagation(); void toggle(); }}
         size="icon"
         type="button"
         variant="secondary"

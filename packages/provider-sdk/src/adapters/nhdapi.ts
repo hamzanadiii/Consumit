@@ -71,12 +71,14 @@ export function createNhdapiProvider(http: ProviderHttp, now = Date.now) {
       type: baseType,
       expiresAt: accessDeadline(mediaUrl, now()),
       language: 'original',
+      headers: {},
       subtitles: [],
     })
 
     if (data.audioTracks) {
       for (let i = 0; i < data.audioTracks.length; i++) {
         const track = data.audioTracks[i]
+        if (!track) continue
         const trackType = mediaType(track.url) || 'hls'
         sources.push({
           key: `dub-${i}`,
@@ -84,6 +86,7 @@ export function createNhdapiProvider(http: ProviderHttp, now = Date.now) {
           type: trackType,
           expiresAt: accessDeadline(track.url, now()),
           language: track.language || 'dub',
+          headers: {},
           subtitles: [],
         })
       }

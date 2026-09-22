@@ -35,6 +35,19 @@ const nullableString = z.string().nullish().transform((value) => value ?? null)
 const nonNegativeNumber = z.number().nonnegative().catch(0)
 const nonNegativeInteger = z.number().int().nonnegative().catch(0)
 
+/**
+ * Canonical catalog boundary: TMDB serves movies and series only.
+ * Anime is an AniList domain (own ids, episode identity, airing state).
+ * The TMDB adapter must never normalize TV results as `anime`.
+ */
+function assertNonAnimeKind(kind: CatalogKind | 'all') {
+  if (kind === 'anime') {
+    throw new CatalogError('CATALOG_INVALID_QUERY', 'Anime titles come from AniList, not TMDB.', {
+      statusCode: 400,
+    })
+  }
+}
+
 const tmdbMovieSchema = z.object({
   adult: z.boolean(),
   backdrop_path: nullableString,
@@ -107,9 +120,18 @@ const tmdbLogoSchema = z.object({
   iso_639_1: z.string().nullable().catch(null),
 })
 
+const tmdbBackdropSchema = z.object({
+  file_path: z.string().min(1),
+  iso_639_1: z.string().nullable().catch(null),
+  vote_average: z.number().catch(0),
+  vote_count: z.number().int().catch(0),
+  width: z.number().int().catch(0),
+})
+
 const tmdbImagesSchema = z.object({
+  backdrops: z.array(tmdbBackdropSchema).catch([]),
   logos: z.array(tmdbLogoSchema).catch([]),
-}).catch({ logos: [] })
+}).catch({ backdrops: [], logos: [] })
 
 const tmdbMovieDetailSchema = tmdbMovieSchema.omit({ genre_ids: true }).extend({
   credits: z.object({
@@ -234,6 +256,33 @@ function pickLogoUrl(
     ?? logos.find((logo) => logo.iso_639_1 === null)
     ?? logos[0]
   return preferred ? imageUrl(preferred.file_path, configuration, 'logo') : null
+}
+
+/**
+ * Picks hero banner art from the TMDB backdrops gallery: titled key art
+ * first (the character-and-logo frames members recognize from the media
+ * tab), then textless frames, with community votes deciding inside each
+ * group. Fullscreen-grade frames only. The default backdrop is skipped while
+ * a distinct gallery frame clears the bar, so heroes stop repeating the
+ * catalog thumbnail. List responses never carry galleries, so those heroes
+ * keep the default art.
+ */
+function pickHeroBackdropUrl(
+  backdrops: readonly z.infer<typeof tmdbBackdropSchema>[],
+  configuration: ImageConfiguration,
+  currentPath: string | null,
+) {
+  const ranked = backdrops
+    .filter((backdrop) => backdrop.width >= 1280 && backdrop.file_path !== currentPath)
+    .sort((left, right) => {
+      const leftTitled = left.iso_639_1 !== null
+      const rightTitled = right.iso_639_1 !== null
+      if (leftTitled !== rightTitled) return leftTitled ? -1 : 1
+      if (right.vote_average !== left.vote_average) return right.vote_average - left.vote_average
+      return right.vote_count - left.vote_count
+    })
+  const preferred = ranked[0]
+  return preferred ? imageUrl(preferred.file_path, configuration, 'backdrop') : null
 }
 
 function imageUrl(
@@ -512,6 +561,7 @@ export function createTmdbCatalog({
   }
 
   async function discoverOne(kind: CatalogKind, query: DiscoverCatalogQuery) {
+    assertNonAnimeKind(kind)
     if (query.genre || query.year) {
       if (query.feed !== 'popular' && query.feed !== 'top-rated') {
         throw new CatalogError('CATALOG_INVALID_QUERY', 'Filters require popular or top-rated sorting.', { statusCode: 400 })
@@ -594,6 +644,7 @@ export function createTmdbCatalog({
         .slice(0, 8)
         .map((credit) => person(credit, images.value)),
       genreNames: value.genres.map((genre) => genre.name),
+      heroBackdropUrl: pickHeroBackdropUrl(value.images.backdrops, images.value, value.backdrop_path),
       // TMDB sends "" when no homepage exists; the contract only accepts a
       // real URL or null, so blank strings normalize to null here.
       homepageUrl: value.homepage || null,
@@ -653,6 +704,7 @@ export function createTmdbCatalog({
       creators: value.created_by.slice(0, 8).map((credit) => person(credit, images.value, { role: 'Creator' })),
       episodeRuntimeMinutes: value.episode_run_time[0] ?? null,
       genreNames: value.genres.map((genre) => genre.name),
+      heroBackdropUrl: pickHeroBackdropUrl(value.images.backdrops, images.value, value.backdrop_path),
       // TMDB sends "" when no homepage exists; the contract only accepts a
       // real URL or null, so blank strings normalize to null here.
       homepageUrl: value.homepage || null,
@@ -685,6 +737,7 @@ export function createTmdbCatalog({
   }
 
   async function title(kind: CatalogKind, id: number) {
+    assertNonAnimeKind(kind)
     const cached = await cache.get<CatalogTitleDetail>(`tmdb:title:${kind}:${id}:${language}:${region}`, cachePolicies.detail, () => (
       kind === 'movie' ? movieDetail(id) : seriesDetail(id)
     ))
@@ -777,6 +830,7 @@ export function createTmdbCatalog({
     },
 
     async search(query: SearchCatalogQuery) {
+      assertNonAnimeKind(query.kind)
       const normalizedQuery = query.query.trim().slice(0, 100)
       const key = `tmdb:search:${query.kind}:${query.page}:${language}:${normalizedQuery.toLowerCase()}`
       const cached = await cache.get(key, cachePolicies.search, async () => {

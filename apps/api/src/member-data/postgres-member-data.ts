@@ -13,7 +13,12 @@ import type {
   PlaybackProgress,
   ProgressRef,
   ProgressWriteRequest,
+  FollowStatus,
   RecordOrigin,
+  ReviewLike,
+  TitleReviewsPage,
+  TitleReviewAudience,
+  TitleReviewSort,
   UpdateDiaryEntryRequest,
   UpdateMemberListRequest,
   UpdateMemberReviewRequest,
@@ -38,6 +43,10 @@ function day(value: Date): string {
 // Backward moves within this window are coalesced into the stored position:
 // periodic writers emit near-duplicate positions and only real seeks move back.
 const BACKWARD_TOLERANCE_SECONDS = 5
+
+// One page of the public title-reviews feed. Only members with a public
+// profile appear; private-profile reviews stay invisible to everyone else.
+const TITLE_REVIEWS_PAGE_SIZE = 10
 
 function progressKey(memberId: string, ref: ProgressRef) {
   return {
@@ -84,6 +93,19 @@ function likeView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LE
   }
 }
 
+function reviewView(row: { body: string; catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; reviewedOn: Date | null; sourceKey: string | null; tags: string[]; tmdbId: number; id: string }): MemberReview {
+  return {
+    body: row.body,
+    id: row.tmdbId,
+    kind: kind(row.catalogKind),
+    origin: origin(row.origin),
+    reviewId: row.id,
+    reviewedOn: row.reviewedOn ? day(row.reviewedOn) : null,
+    sourceKey: row.sourceKey,
+    tags: row.tags,
+  }
+}
+
 function progressView(row: { catalogKind: 'MOVIE' | 'SERIES'; completed: boolean; durationSeconds: number | null; episode: number; positionSeconds: number; season: number; tmdbId: number; updatedAt: Date }): PlaybackProgress {
   return {
     completed: row.completed,
@@ -115,6 +137,15 @@ function profileView(profile: { avatarStyle: string; avatarUrl: string | null; b
 }
 
 export function createPostgresMemberData(prisma: PrismaClient): MemberData {
+  async function activeMemberId(username: string): Promise<string | null> {
+    const current = await prisma.profile.findUnique({ select: { memberId: true }, where: { username } })
+    const alias = current ? null : await prisma.usernameAlias.findUnique({ select: { memberId: true }, where: { username } })
+    const memberId = current?.memberId ?? alias?.memberId
+    if (!memberId) return null
+    const active = await prisma.member.findUnique({ select: { id: true }, where: { id: memberId, status: 'ACTIVE' } })
+    return active?.id ?? null
+  }
+
   async function library(memberId: string): Promise<MemberLibrary> {
       const [watched, diary, saved, favorites, lists] = await Promise.all([
         prisma.watchedTitle.findMany({ orderBy: { updatedAt: 'desc' }, take: 5_000, where: { memberId } }),
@@ -148,17 +179,21 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       const memberId = current?.memberId ?? alias?.memberId
       if (!memberId) return null
       const visibleLists = memberId === viewerMemberId ? {} : { visibility: 'public' }
-      const member = await prisma.member.findFirst({
-        include: {
-          diaryEntries: { orderBy: [{ watchedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
-          favorites: { orderBy: { position: 'asc' }, take: 6 },
-          lists: { include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 30, where: visibleLists },
-          profile: true,
-          reviews: { orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
-          _count: { select: { diaryEntries: true, lists: { where: visibleLists }, reviews: true, watchedTitles: true } },
-        },
-        where: { id: memberId, status: 'ACTIVE' },
-      })
+      const [member, followers, following] = await Promise.all([
+        prisma.member.findFirst({
+          include: {
+            diaryEntries: { orderBy: [{ watchedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
+            favorites: { orderBy: { position: 'asc' }, take: 6 },
+            lists: { include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 30, where: visibleLists },
+            profile: true,
+            reviews: { orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
+            _count: { select: { diaryEntries: true, lists: { where: visibleLists }, reviews: true, watchedTitles: true } },
+          },
+          where: { id: memberId, status: 'ACTIVE' },
+        }),
+        prisma.follow.count({ where: { followingId: memberId } }),
+        prisma.follow.count({ where: { followerId: memberId } }),
+      ])
       if (!member?.profile || (member.profile.visibility !== 'public' && member.id !== viewerMemberId)) return null
       return {
         canonicalUsername: member.profile.username,
@@ -167,9 +202,14 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         lists: member.lists.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' : 'private' })),
         profile: profileView(member.profile, member.createdAt),
         reviews: member.reviews.map((item) => ({ body: item.body, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), reviewedOn: item.reviewedOn ? day(item.reviewedOn) : null, reviewId: item.id, sourceKey: item.sourceKey, tags: item.tags })),
-        social: { followers: 0, following: 0 },
+        social: { followers, following },
         statistics: { diaryEntries: member._count.diaryEntries, lists: member._count.lists, reviews: member._count.reviews, watched: member._count.watchedTitles },
       }
+    },
+    async isFollowing(viewerMemberId: string, username: string): Promise<boolean> {
+      const targetId = await activeMemberId(username)
+      if (!targetId || targetId === viewerMemberId) return false
+      return (await prisma.follow.count({ where: { followerId: viewerMemberId, followingId: targetId } })) > 0
     },
     async setFavorites(memberId, favorites) {
       await prisma.$transaction(async (tx) => {
@@ -177,6 +217,24 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         if (favorites.length) await tx.favorite.createMany({ data: favorites.map((favorite, index) => ({ catalogKind: favorite.kind === 'series' ? 'SERIES' : 'MOVIE', memberId, origin: 'NATIVE', position: index + 1, tmdbId: favorite.id })) })
       })
       return library(memberId)
+    },
+    async setFollow(viewerMemberId: string, username: string, follow: boolean): Promise<FollowStatus | null> {
+      const targetId = await activeMemberId(username)
+      if (!targetId || targetId === viewerMemberId) return null
+      if (follow) {
+        await prisma.follow.upsert({
+          create: { followerId: viewerMemberId, followingId: targetId },
+          update: {},
+          where: { followerId_followingId: { followerId: viewerMemberId, followingId: targetId } },
+        })
+      } else {
+        await prisma.follow.deleteMany({ where: { followerId: viewerMemberId, followingId: targetId } })
+      }
+      const [followers, following] = await Promise.all([
+        prisma.follow.count({ where: { followingId: targetId } }),
+        prisma.follow.count({ where: { followerId: viewerMemberId, followingId: targetId } }),
+      ])
+      return { followers, following: following > 0 }
     },
     async rating(memberId: string, ref): Promise<MemberRating | null> {
       const row = await prisma.rating.findUnique({ where: { memberId_catalogKind_tmdbId: ratingKey(memberId, ref) } })
@@ -191,9 +249,90 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       })
       return ratingView(row)
     },
+    async setReviewLiked(memberId: string, reviewId: string, liked: boolean): Promise<ReviewLike | null> {
+      const target = await prisma.review.findUnique({ select: { memberId: true }, where: { id: reviewId } })
+      if (!target || target.memberId === memberId) return null
+      if (!liked) {
+        await prisma.reviewLike.deleteMany({ where: { memberId, reviewId } })
+        return null
+      }
+      await prisma.reviewLike.upsert({
+        create: { memberId, reviewId },
+        update: {},
+        where: { reviewId_memberId: { memberId, reviewId } },
+      })
+      const likesCount = await prisma.reviewLike.count({ where: { reviewId } })
+      return { likesCount, reviewId }
+    },
     async removeRating(memberId: string, ref): Promise<boolean> {
       const result = await prisma.rating.deleteMany({ where: { ...ratingKey(memberId, ref), origin: 'NATIVE' } })
       return result.count === 1
+    },
+    async removeReviewLike(memberId: string, reviewId: string): Promise<boolean> {
+      const result = await prisma.reviewLike.deleteMany({ where: { memberId, reviewId } })
+      return result.count === 1
+    },
+    async review(memberId: string, ref: CatalogRef): Promise<MemberReview | null> {
+      const row = await prisma.review.findFirst({
+        orderBy: { createdAt: 'desc' },
+        where: { catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE', memberId, tmdbId: ref.id },
+      })
+      return row ? reviewView(row) : null
+    },
+    async titleReviews(ref: CatalogRef, page: number, sort: TitleReviewSort, viewerMemberId?: string, audience: TitleReviewAudience = 'all'): Promise<TitleReviewsPage> {
+      const catalogKind = ref.kind === 'series' ? 'SERIES' : 'MOVIE'
+      // Circle-only listings need a signed-in viewer; guests always see an
+      // empty circle. Private profiles stay excluded even from followers.
+      if (audience === 'circle' && !viewerMemberId) {
+        return { items: [], page, totalPages: 0, totalResults: 0 }
+      }
+      const where = {
+        catalogKind,
+        member: {
+          ...(audience === 'circle' && viewerMemberId ? { followers: { some: { followerId: viewerMemberId } } } : {}),
+          profile: { visibility: 'public' },
+          status: 'ACTIVE',
+        },
+        tmdbId: ref.id,
+      } as const
+      const [totalResults, rows] = await Promise.all([
+        prisma.review.count({ where }),
+        prisma.review.findMany({
+          include: { _count: { select: { likes: true } }, member: { select: { id: true, profile: { select: { avatarStyle: true, avatarUrl: true, displayName: true, username: true } } } } },
+          orderBy: sort === 'popular' ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }] : { createdAt: 'desc' },
+          skip: (page - 1) * TITLE_REVIEWS_PAGE_SIZE,
+          take: TITLE_REVIEWS_PAGE_SIZE,
+          where,
+        }),
+      ])
+      const ratings = await prisma.rating.findMany({ where: { catalogKind, memberId: { in: rows.map((row) => row.memberId) }, tmdbId: ref.id } })
+      const ratingByMember = new Map(ratings.map((item) => [item.memberId, item.value]))
+      const likedIds = viewerMemberId
+        ? new Set((await prisma.reviewLike.findMany({ select: { reviewId: true }, where: { memberId: viewerMemberId, reviewId: { in: rows.map((row) => row.id) } } })).map((item) => item.reviewId))
+        : new Set<string>()
+      return {
+        items: rows.flatMap((row) => {
+          const profile = row.member.profile
+          if (!profile) return []
+          return [{
+            author: {
+              avatarStyle: avatarStyleSchema.catch('dusk').parse(profile.avatarStyle),
+              avatarUrl: profile.avatarUrl,
+              displayName: profile.displayName,
+              username: profile.username,
+            },
+            body: row.body,
+            liked: likedIds.has(row.id),
+            likesCount: row._count.likes,
+            rating: ratingByMember.get(row.memberId) ?? null,
+            reviewId: row.id,
+            reviewedOn: row.reviewedOn ? day(row.reviewedOn) : null,
+          }]
+        }),
+        page,
+        totalPages: Math.ceil(totalResults / TITLE_REVIEWS_PAGE_SIZE),
+        totalResults,
+      }
     },
     async setSaved(memberId, title, saved) {
       const catalogKind = title.kind === 'series' ? 'SERIES' : 'MOVIE'

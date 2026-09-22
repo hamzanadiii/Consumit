@@ -61,6 +61,7 @@ export function createScreenscapeProvider(http: ProviderHttp, now = Date.now) {
       const streams = data.streams || []
       for (let idx = 0; idx < streams.length; idx++) {
         const str = streams[idx]
+        if (!str) continue
         const cleanUrl = unwrapUrl(str.url)
         if (!cleanUrl || seen.has(cleanUrl)) continue
         seen.add(cleanUrl)

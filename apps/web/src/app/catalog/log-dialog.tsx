@@ -16,11 +16,19 @@ import {
   setMemberLiked,
   setMemberRating,
   setMemberWatched,
+  updateMemberReview,
 } from '@/lib/identity-browser'
 
+export type LogDialogExistingReview = {
+  body: string
+  reviewId: string
+  reviewedOn: string | null
+}
+
 type LogDialogProps = {
+  existingReview?: LogDialogExistingReview | null | undefined
   id: number
-  kind: 'movie' | 'series'
+  kind: 'movie' | 'series' | 'anime'
   onClose: () => void
   onSaved: () => void
   posterUrl?: string | undefined
@@ -42,13 +50,14 @@ function parseTags(raw: string) {
  * Native watch log in the Letterboxd diary shape: poster and title, watched
  * date plus rewatch flag, review, tags, rating, and like, committed with one
  * Save. Every section writes a real stored record; retrying never duplicates
- * a section that already landed.
+ * a section that already landed. When `existingReview` is provided the dialog
+ * edits that stored review in place (PATCH) instead of writing a new one.
  */
-export function LogDialog({ id, kind, onClose, onSaved, posterUrl, title, year }: LogDialogProps) {
-  const [date, setDate] = useState(today())
+export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, posterUrl, title, year }: LogDialogProps) {
+  const [date, setDate] = useState(existingReview?.reviewedOn ?? today())
   const [logWatch, setLogWatch] = useState(true)
   const [rewatch, setRewatch] = useState(false)
-  const [review, setReview] = useState('')
+  const [review, setReview] = useState(existingReview?.body ?? '')
   const [tags, setTags] = useState('')
   const [rating, setRating] = useState<number | null>(null)
   const [liked, setLiked] = useState(false)
@@ -56,6 +65,7 @@ export function LogDialog({ id, kind, onClose, onSaved, posterUrl, title, year }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const initial = useRef<{ liked: boolean; rating: number | null } | null>(null)
+  const originalReview = useRef(existingReview)
   const done = useRef({ diary: false, liked: false, rating: false, review: false, watched: false })
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -148,8 +158,19 @@ export function LogDialog({ id, kind, onClose, onSaved, posterUrl, title, year }
       }
       const text = review.trim()
       if (!done.current.review && text) {
-        await createMemberReview({ body: text, id, kind, reviewedOn: date })
-        done.current.review = true
+        const original = originalReview.current
+        if (original) {
+          const changes: { body?: string; reviewedOn?: string | null } = {}
+          if (text !== original.body) changes.body = text
+          if (date !== (original.reviewedOn ?? today())) changes.reviewedOn = date
+          if (Object.keys(changes).length > 0) {
+            await updateMemberReview(original.reviewId, changes)
+          }
+          done.current.review = true
+        } else {
+          await createMemberReview({ body: text, id, kind, reviewedOn: date })
+          done.current.review = true
+        }
       }
       onSaved()
     } catch {

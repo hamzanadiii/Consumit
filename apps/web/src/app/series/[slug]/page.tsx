@@ -5,6 +5,7 @@ import { SeriesDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
+import { serializeJsonLd } from '@/lib/json-ld'
 
 type SeriesDetailPageProps = {
   params: Promise<{ slug: string }>
@@ -53,8 +54,8 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
   const seasonResponse = firstSeason ? await getCatalogSeason(id, firstSeason).catch(() => null) : null
   return (
     <>
-      <script dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} type="application/ld+json" />
-      <SeriesDetailScreen detail={response.item} initialSeason={seasonResponse?.item ?? null} stale={response.meta.stale || Boolean(seasonResponse?.meta.stale)} />
+      <script dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} type="application/ld+json" />
+      <SeriesDetailScreen detail={response.item} initialSeason={seasonResponse?.item ?? null} />
     </>
   )
 }

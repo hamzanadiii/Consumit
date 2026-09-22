@@ -1,9 +1,11 @@
 import {
   apiErrorResponseSchema,
+  catalogBatchSchema,
   catalogPageSchema,
   catalogSeasonResponseSchema,
   type CatalogKind,
   type CatalogFeed,
+  type CatalogRef,
 } from '@consumit/contracts'
 
 export class BrowserCatalogError extends Error {
@@ -68,6 +70,13 @@ export async function browserCatalogSeason(
 ) {
   const parsed = catalogSeasonResponseSchema.safeParse(await request(`/v1/titles/series/${seriesId}/seasons/${season}`, signal))
   if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid season response.')
+  return parsed.data
+}
+
+export async function browserCatalogBatch(refs: readonly CatalogRef[], signal?: AbortSignal) {
+  const params = new URLSearchParams({ refs: refs.map((ref) => `${ref.kind}:${ref.id}`).join(',') })
+  const parsed = catalogBatchSchema.safeParse(await request(`/v1/titles/batch?${params}`, signal))
+  if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid batch response.')
   return parsed.data
 }
 

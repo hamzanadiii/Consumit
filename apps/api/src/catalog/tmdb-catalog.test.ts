@@ -230,6 +230,54 @@ describe('TMDB catalog adapter', () => {
     expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('append_to_response=credits%2Crecommendations%2Crelease_dates%2Cimages')
   })
 
+  it.each([
+    {
+      backdrops: [
+        { file_path: '/movie-backdrop.jpg', iso_639_1: null, vote_average: 5.9, vote_count: 40, width: 1920 },
+        { file_path: '/gallery-quiet.jpg', iso_639_1: null, vote_average: 9.9, vote_count: 99, width: 1920 },
+        { file_path: '/gallery-keyart.jpg', iso_639_1: 'en', vote_average: 7.5, vote_count: 20, width: 1920 },
+      ],
+      name: 'prefers titled key art over higher-voted textless frames',
+      wanted: 'https://image.tmdb.org/t/p/w1280/gallery-keyart.jpg',
+    },
+    {
+      backdrops: [
+        { file_path: '/narrow.jpg', iso_639_1: null, vote_average: 9.9, vote_count: 99, width: 780 },
+      ],
+      name: 'skips gallery frames below fullscreen grade',
+      wanted: null,
+    },
+    {
+      backdrops: [],
+      name: 'leaves heroBackdropUrl empty when TMDB has no gallery backdrops',
+      wanted: null,
+    },
+  ])('resolves the hero banner: $name', async ({ backdrops, wanted }) => {
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/3/movie/550') {
+        return json({
+          ...movieSummary,
+          credits: { cast: [], crew: [] },
+          genres: [{ id: 18, name: 'Drama' }],
+          homepage: null,
+          images: { backdrops, logos: [] },
+          recommendations: { page: 1, results: [], total_pages: 0, total_results: 0 },
+          release_dates: { results: [] },
+          runtime: 139,
+          status: 'Released',
+          tagline: 'Mischief. Mayhem. Soap.',
+        })
+      }
+      return supportingResponse(url)
+    })
+    const catalog = createTmdbCatalog({ fetch: fetchMock, token: 'test-token' })
+
+    const result = await catalog.title('movie', 550)
+
+    expect(result.item.heroBackdropUrl).toBe(wanted)
+  })
+
   it('normalizes episode data for a season', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))

@@ -1,4 +1,5 @@
 export { Button, buttonVariants, type ButtonProps } from './button/button'
+export { cn } from './lib/cn'
 export {
   CarouselRow,
   type CarouselRowProps,
@@ -69,12 +70,14 @@ export {
   FilterChip,
   IssueSelector,
   SegmentedControl,
+  Select,
   Tabs,
   Toggle,
   type FilterChipProps,
   type IssueSelectorProps,
   type SegmentedControlProps,
   type SelectionOption,
+  type SelectProps,
   type TabItem,
   type TabsProps,
   type ToggleProps,
@@ -160,6 +163,17 @@ export {
   type PlayerMenuId,
   type PlayerOption,
 } from './playback/consumit-player'
+export {
+  MAX_SUBTITLE_LANGUAGES,
+  PREFERRED_LANGUAGE_CODES,
+  SUBTITLE_LANGUAGES_EVENT,
+  SUBTITLE_LANGUAGES_KEY,
+  cleanSubtitleLanguages,
+  nativeLanguageName,
+  readStoredSubtitleLanguages,
+  savePreferredSubtitleLanguages,
+  storeSubtitleLanguages,
+} from './playback/subtitle-sync'
 export {
   createAdController,
   type AdEvent,

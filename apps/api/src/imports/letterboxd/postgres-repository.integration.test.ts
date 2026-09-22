@@ -13,7 +13,7 @@ const control = new pg.Pool({ connectionString: databaseUrl })
 const db = createDbClient(databaseUrl)
 
 const movie: CatalogMovieDetail = {
-  backdropUrl: null, cast: [], certification: null, countries: [], creators: [], genreNames: [], homepageUrl: null,
+  backdropUrl: null, cast: [], certification: null, countries: [], creators: [], genreNames: [], heroBackdropUrl: null, homepageUrl: null,
   id: 666277, kind: 'movie', languages: [], logoUrl: null, originalTitle: 'Past Lives', overview: '', popularity: 1, posterUrl: null,
   recommendations: [], releaseDate: '2023-01-01', runtimeMinutes: 106, status: 'Released', tagline: null,
   title: 'Past Lives', tmdbRating: null, tmdbVoteCount: 0, year: 2023,

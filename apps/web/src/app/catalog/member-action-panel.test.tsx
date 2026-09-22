@@ -20,6 +20,7 @@ const member = {
   email: 'member@example.com',
   emailVerified: true,
   id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca',
+  role: 'member',
   username: 'cinema_fan',
 } as const
 
@@ -72,7 +73,7 @@ describe('member action panel', () => {
   it('invites sign-in for member rows while keeping share and activity available', () => {
     render(<MemberActionPanel id={693134} kind="movie" title="Dune: Part Two" />)
 
-    expect(screen.getByText('Rated')).toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /watched|Like|library/i })).not.toBeInTheDocument()

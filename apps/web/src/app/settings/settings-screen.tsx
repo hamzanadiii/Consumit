@@ -4,27 +4,78 @@ import type { MemberProfile } from '@consumit/contracts'
 import { Download, ExternalLink, LogOut, RefreshCw, Save, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import {
   Avatar,
   Button,
   Input,
   Label,
+  nativeLanguageName,
   PreferenceRow,
+  PREFERRED_LANGUAGE_CODES,
+  readStoredSubtitleLanguages,
+  savePreferredSubtitleLanguages,
   SegmentedControl,
+  Select,
   ServiceMark,
   SettingsRail,
   SettingsSection,
   Toggle,
 } from '@consumit/ui'
 
-import { ScreenShell } from '../screens/screen-shell'
+import { FilScreenShell } from '../shared'
 import { useSession } from '../session/session'
 import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, invalidateMemberLibraryCache, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
 
 type ToggleKey = 'autoplay' | 'releases' | 'spoilers' | 'subtitles'
+
+/** Preferred subtitle languages (max 3, priority order). Device-local like
+ *  every player preference; the watch screen refetches live on change. */
+function SubtitleLanguagePicker() {
+  const [langs, setLangs] = useState<string[]>([])
+  useEffect(() => { setLangs(readStoredSubtitleLanguages()) }, [])
+  function toggle(code: string) {
+    setLangs(savePreferredSubtitleLanguages(
+      langs.includes(code) ? langs.filter((entry) => entry !== code) : [...langs, code].slice(0, 3),
+    ))
+  }
+  return (
+    <div>
+      <div aria-label="Preferred subtitle languages" className="flex max-w-md flex-wrap gap-2" role="group">
+        {PREFERRED_LANGUAGE_CODES.map((code) => {
+          const order = langs.indexOf(code)
+          const selected = order !== -1
+          const capped = !selected && langs.length >= 3
+          return (
+            <button
+              aria-pressed={selected}
+              className={
+                selected
+                  ? 'inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-3.5 text-sm font-bold text-[var(--fs-ink)] shadow-[inset_0_0_0_1px_var(--fs-accent)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                  : 'inline-flex min-h-10 items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-3.5 text-sm font-bold text-[var(--fs-secondary)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40'
+              }
+              disabled={capped}
+              key={code}
+              onClick={() => toggle(code)}
+              title={selected ? `Preferred language ${order + 1}, remove` : capped ? 'Remove one first (3 max)' : 'Add as preferred language'}
+              type="button"
+            >
+              {selected ? (
+                <span aria-hidden="true" className="grid size-4 place-items-center rounded-full bg-[var(--fs-accent)] text-[10px] font-bold text-[var(--fs-on-accent)]">
+                  {order + 1}
+                </span>
+              ) : null}
+              {nativeLanguageName(code, code.toUpperCase())}
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-2 text-xs tabular-nums text-[var(--fs-muted)]">{langs.length}/3 · subtitles are fetched in these languages first, in order.</p>
+    </div>
+  )
+}
 
 export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
   const router = useRouter()
@@ -37,6 +88,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
   })
   const [profile, setProfile] = useState(initialProfile)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
+  const [visibility, setVisibility] = useState<string>(initialProfile.visibility)
   const [profileSaved, setProfileSaved] = useState(false)
   const [accountAction, setAccountAction] = useState<'delete' | 'password' | null>(null)
   const [accountError, setAccountError] = useState<string | null>(null)
@@ -117,11 +169,13 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
   }
 
   return (
-    <ScreenShell activeHref="/settings">
-      <main className="mx-auto w-full max-w-[90rem] px-5 py-14 sm:px-8 sm:py-16 lg:px-[50px] lg:py-20" data-consumit-settings-screen>
-        <header className="border-b border-border pb-10 sm:pb-12">
-          <h1 className="font-display text-5xl leading-none tracking-[-0.03em] text-ink sm:text-6xl">Settings</h1>
-          <p className="mt-5 max-w-[64ch] text-sm leading-7 text-copy">Shape your account, privacy, playback, and notifications without losing sight of what each choice changes.</p>
+    <FilScreenShell pageHeading={undefined}>
+      <main className="mx-auto w-full max-w-[90rem]" data-consumit-settings-screen>
+        <div className="px-1 sm:px-3 lg:px-4">
+        <header className="border-b border-[var(--fs-line)] pb-10 sm:pb-12">
+          <p className="text-xs font-bold tracking-[0.18em] text-[var(--fs-muted)] uppercase">Account</p>
+          <h1 className="mt-2 font-display text-[clamp(2.25rem,4.5vw,3.75rem)] leading-[0.95] font-normal tracking-[-0.025em] text-[var(--fs-ink)]">Settings.</h1>
+          <p className="mt-4 max-w-[64ch] text-sm leading-7 text-[var(--fs-secondary)]">Shape your account, privacy, playback, and notifications without losing sight of what each choice changes.</p>
         </header>
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start lg:gap-14">
@@ -142,10 +196,10 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               ]}
               memberName={profile.displayName ?? profile.username}
             />
-            <aside className="hidden rounded-card border border-border bg-surface p-5 lg:block">
-              <h2 className="text-sm font-bold text-ink">Need a hand?</h2>
-              <p className="mt-2 text-xs leading-5 text-muted">Playback and account support are kept separate from your social activity.</p>
-              <a className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-orange outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href="#support">Open help center <ExternalLink aria-hidden="true" className="size-4" /></a>
+            <aside className="hidden rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] p-5 lg:block">
+              <h2 className="text-sm font-bold text-[var(--fs-ink)]">Need a hand?</h2>
+              <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">Playback and account support are kept separate from your social activity.</p>
+              <a className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[var(--fs-accent)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#support">Open help center <ExternalLink aria-hidden="true" className="size-4" /></a>
             </aside>
           </div>
 
@@ -181,7 +235,19 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                   {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
                 </div>
                 <div><Label htmlFor="settings-location">Location</Label><Input className="mt-2 w-full" defaultValue={profile.location ?? ''} id="settings-location" maxLength={100} name="location" /></div>
-                <div><Label htmlFor="settings-visibility">Profile visibility</Label><select className="mt-2 h-11 w-full rounded-control border border-control-outline bg-field px-3 text-sm text-ink" defaultValue={profile.visibility} id="settings-visibility" name="visibility"><option value="private">Private</option><option value="public">Public</option></select></div>
+                <div>
+                  <Label htmlFor="settings-visibility">Profile visibility</Label>
+                  <Select
+                    className="mt-2"
+                    id="settings-visibility"
+                    label="Profile visibility"
+                    hideLabel
+                    name="visibility"
+                    onValueChange={setVisibility}
+                    options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]}
+                    value={visibility}
+                  />
+                </div>
                 <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>
@@ -258,6 +324,11 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                 label="Preferred audio"
               />
               <PreferenceRow control={<Toggle checked={values.subtitles} label="Enable subtitles by default" onCheckedChange={() => toggle('subtitles')} />} description="Start playback with English subtitles when available." label="Subtitles by default" />
+              <PreferenceRow
+                control={<SubtitleLanguagePicker />}
+                description="Applies on this device to every movie, series, and anime. The first language also drives automatic track selection."
+                label="Preferred subtitle languages"
+              />
               <PreferenceRow control={<Toggle checked={values.spoilers} label="Hide spoilers" onCheckedChange={() => toggle('spoilers')} />} description="Keep spoiler-marked reviews and comments behind an explicit reveal." label="Hide spoilers" />
             </SettingsSection>
 
@@ -301,14 +372,15 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               ) : null}
             </SettingsSection>
 
-            <section className="rounded-card border border-border bg-surface p-6" id="support">
-              <h2 className="font-display text-3xl text-ink">Something not behaving?</h2>
-              <p className="mt-3 max-w-[62ch] text-sm leading-6 text-muted">Report playback or account trouble without exposing passwords, payment details, or private browsing data.</p>
+            <section className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6" id="support">
+              <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]">Something not behaving?</h2>
+              <p className="mt-3 max-w-[62ch] text-sm leading-6 text-[var(--fs-muted)]">Report playback or account trouble without exposing passwords, payment details, or private browsing data.</p>
               <Button className="mt-6" variant="secondary">Report an issue</Button>
             </section>
           </div>
         </div>
+        </div>
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }

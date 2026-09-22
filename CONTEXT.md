@@ -43,7 +43,7 @@ _Avoid_: Feed item, notification
 ## Catalog and curation
 
 **Title**:
-A catalog work that is either a movie or a series.
+A catalog work that is either a movie, series, or anime.
 _Avoid_: Content, media item, video
 
 **Movie**:
@@ -54,8 +54,12 @@ _Avoid_: Film asset
 An episodic title organized into seasons and episodes.
 _Avoid_: TV item, show asset
 
+**Anime**:
+A title sourced from AniList, identified by AniList ID, with episodes organized by canonical episode number. Anime follows the movie/series classification for playback but has its own metadata domain (AniList), episode identity engine, and provider mapping system.
+_Avoid_: Japanese animation, anime series
+
 **Episode**:
-A single playable installment of a series, identified within a season.
+A single playable installment of a series or anime, identified within a season (series) or by canonical number (anime).
 _Avoid_: Video, chapter
 
 **List**:
@@ -127,3 +131,25 @@ _Avoid_: Watch / Embed, provider frame
 **Consumit Player**:
 The first-party playback surface through which a member watches a configured direct media source while keeping one consistent set of controls.
 _Avoid_: Embed frame, provider player
+
+## Anime domain
+
+**AniList**:
+The primary metadata source for anime titles. AniList supplies search, details, relations, characters, staff, airing schedules, and franchise graphs. Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+_Avoid_: Anime database, metadata API
+
+**Franchise Graph**:
+A directed graph of anime relations (prequel, sequel, side story, spin-off, adaptation, source) derived from AniList relation edges, used to build watch order recommendations and related-title discovery.
+_Avoid_: Relation tree, anime list
+
+**Episode Identity Engine**:
+The system that maps canonical anime episodes to provider-specific episode numbers, handling discrepancies in season numbering, split cours, absolute numbering, specials, and dub numbering.
+_Avoid_: Episode mapper, provider matcher
+
+**SUB / DUB**:
+Audio language variants of the same anime title. SUB is original audio (typically Japanese) with subtitles; DUB is a translated audio track. Consumit treats these as playback variants of one canonical anime, not separate titles.
+_Avoid_: Subbed, dubbed, version
+
+**Canonical Episode**:
+The definitive episode number for an anime as defined by AniList, used as the stable identity for progress tracking and provider mapping regardless of how individual providers number episodes.
+_Avoid_: Episode number, absolute episode

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default async function LibraryPage() {
   const session = await getServerSession()
   if (session.status === 'anonymous') redirect('/sign-in?next=%2Flibrary')
-  if (session.status === 'unavailable') return <SessionUnavailableScreen activeHref="/library" />
+  if (session.status === 'unavailable') redirect('/sign-in?next=%2Flibrary')
   const library = await getMemberLibrary()
   const refs = [...library.saved, ...library.watched, ...library.diary]
   let titles: CatalogTitleSummary[] = []

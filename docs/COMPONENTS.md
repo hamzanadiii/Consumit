@@ -35,7 +35,7 @@ Movies and Series browsing composes the shared `ArtworkFrame`, `Button`, and glo
 | 1 | Action | Button, icon button, loading and disabled states | Complete |
 | 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Complete |
 | 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | In progress |
-| 4 | Selection | Tabs, filter chip, segmented control, toggle, issue selector | Complete |
+| 4 | Selection | Tabs, dropdown select, filter chip, segmented control, toggle, issue selector | Complete |
 | 5 | Identity | Avatar, avatar group, member byline, service mark | Complete |
 | 6 | Signals | Badge, status dot, progress rail, Taste Match meter, rating display | Complete |
 | 7 | Media | Artwork frame, poster card, landscape still, empty/missing art | Complete |
@@ -108,6 +108,7 @@ Source references: Search / Explore, Friends Activity, List Detail, Settings, an
 Included behavior:
 
 - Route tabs with an orange active line and native link semantics
+- Themed dropdown Select: custom listbox popup (the native select popup is OS chrome and cannot be styled) with trigger, rotating chevron, selected check, full keyboard support, outside dismissal, disabled state, and hidden form-input posting
 - Compact pressed-state filter chips with optional semantic signal dots
 - Native-radio segmented controls and issue selectors with keyboard selection
 - Controlled switch semantics for on/off settings, including disabled state
@@ -206,7 +207,7 @@ Included behavior:
 - Rotating hero spotlight with a bounded backdrop, optional portrait poster, 300ms crossfade, and visible Pause/Start control. Rotation pauses on hover, offscreen, in hidden tabs, and for reduced motion. Focus inside slide content or manual selection stops rotation until explicitly restarted. The default cadence is eight seconds. Selector targets are 44px and hidden slides are inert.
 - Member pulse with a single accessible rating label and decorative distribution histogram
 - Cast cards with supplied portrait support and a restrained geometric identity fallback
-- Native season selection with caller-owned state
+- Shared dropdown season selection with caller-owned state
 - Episode rows for available, continuing, and upcoming states, including optional progress and action
 
 ## Component 13 — Library and lists

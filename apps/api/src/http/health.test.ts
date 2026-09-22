@@ -28,7 +28,7 @@ describe('health endpoints', () => {
 
     const response = await app.inject({ method: 'GET', url: '/health/ready' })
 
-    expect(response.statusCode).toBe(200)
+    expect(response.statusCode).toBe(503)
     expect(response.json()).toEqual({ dependencies: { catalog: 'unavailable', identity: 'unavailable' }, status: 'degraded' })
   })
 
