@@ -9,6 +9,14 @@ import { ScreenShell } from '../screens/screen-shell'
 
 import { SaveTitleButton } from './save-title-button'
 
+/** Heuristic: a TMDB title that quacks like anime (Animation genre with a
+ *  Japanese origin) gets an AniList cross-link lookup. Countries arrive as
+ *  names on movies but ISO codes on series — accept both. Server-safe. */
+export function looksLikeAnime(detail: { genreNames: readonly string[]; countries: readonly string[]; languages: readonly string[] }): boolean {
+  if (!detail.genreNames.includes('Animation')) return false
+  return detail.countries.includes('Japan') || detail.countries.includes('JP') || detail.languages.includes('Japanese')
+}
+
 export function titleMeta(title: CatalogTitleSummary) {
   const kind = title.kind === 'movie' ? 'Film' : 'Series'
   return [title.year, kind, title.genreNames.slice(0, 2).join(' · ')].filter(Boolean).join(' · ')

@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
+import { looksLikeAnime } from '../../catalog/catalog-ui'
 import { SeriesDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
+import { getAnimeMatch } from '@/lib/anime-api'
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
 import { serializeJsonLd } from '@/lib/json-ld'
 
@@ -39,6 +41,13 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
   }
   if (response.item.kind !== 'series') notFound()
   const item = response.item
+  // Japanese animation belongs to the anime domain (AniList ids, SUB/DUB
+  // providers, episode art): a confident match redirects straight there
+  // instead of stranding the member on the TMDB mirror.
+  if (looksLikeAnime(item)) {
+    const animeMatch = await getAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
+    if (animeMatch) redirect(`/anime/${animeMatch}`)
+  }
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'TVSeries',

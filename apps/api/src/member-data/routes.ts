@@ -12,6 +12,7 @@ import {
   memberRatingSchema,
   memberReviewSchema,
   memberTitleRecordSchema,
+  memberTitleStateSchema,
   playbackProgressSchema,
   progressRefSchema,
   progressWriteRequestSchema,
@@ -243,6 +244,20 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     const review = await deps.memberData.review((await viewer(request, true))!, parsed.data)
     if (!review) throw new ApiError('NOT_FOUND', 'No review for this title.')
     return memberReviewSchema.parse(review)
+  })
+
+  app.get('/v1/me/titles/:kind/:id', async (request, reply) => {
+    const params = request.params as { id?: unknown; kind?: unknown }
+    const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    void reply.header('cache-control', 'private, no-store')
+    const memberId = (await viewer(request, true))!
+    const [rating, like, review] = await Promise.all([
+      deps.memberData.rating(memberId, parsed.data),
+      deps.memberData.like(memberId, parsed.data),
+      deps.memberData.review(memberId, parsed.data),
+    ])
+    return memberTitleStateSchema.parse({ rating, like, review })
   })
 
   app.get('/v1/reviews/:kind/:id', async (request, reply) => {

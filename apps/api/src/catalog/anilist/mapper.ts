@@ -127,6 +127,9 @@ export function mapTitleDetail(raw: AnilistMedia): AnimeTitleDetail {
   return {
     ...base,
     malId: raw.idMal ?? null,
+    // Hero logos resolve server-side in the anime service (TMDB match);
+    // the mapper never blocks detail on artwork.
+    logoUrl: null,
     source: raw.source ?? null,
     countryOfOrigin: raw.countryOfOrigin ?? null,
     trailer: raw.trailer ? { ...raw.trailer, thumbnail: toHttpUrl(raw.trailer.thumbnail) } : null,

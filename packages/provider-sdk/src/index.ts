@@ -14,14 +14,17 @@ export { createVidapiProvider } from './adapters/vidapi.ts'
 
 export { createScreenscapeProvider } from './adapters/screenscape.ts'
 export { createVidrockProvider } from './adapters/vidrock.ts'
-export { createVidnestProvider, decipherPayload } from './adapters/vidnest.ts'
+export { createVidnestProvider, decipherPayload, type VidnestScope } from './adapters/vidnest.ts'
+export { createPoseidonProvider } from './adapters/poseidon.ts'
 export { createNetmirrorProvider } from './adapters/netmirror.ts'
 export { createVidstormProvider } from './adapters/vidstorm.ts'
 export { createVidlinkProvider } from './adapters/vidlink.ts'
 
 export { createCinehdProvider } from './adapters/cinehd.ts'
 export { createNxshaProvider, decodeNxshaPayload, encodeNxshaPayload } from './adapters/nxsha.ts'
-export { createStellarProvider, createAphroditeProvider } from './adapters/stellar.ts'
+export { createStellarProvider } from './adapters/stellar.ts'
+export { createAphroditeProvider, type AphroditeSign } from './adapters/aphrodite.ts'
+export { invalidateStellarSession, signStellarRequest } from './adapters/aphrodite-gate.ts'
 export { createVidluxProvider } from './adapters/vidlux.ts'
 
 export { createVidsrcbuzzProvider } from './adapters/vidsrcbuzz.ts'
@@ -90,19 +93,36 @@ export type ProviderRegistration = {
   /** Route sources through the Worker CORS proxy. Disabled for providers
    *  that reject proxy requests (cookie-gated, IP-locked). */
   proxy: boolean
+  /** Per-attempt resolve budget in ms. Slow-but-good providers (multi-hop
+   *  scrapes) get more room than the 5s default; the total deadline still
+   *  caps every attempt, so failure latency never grows past it. */
+  attemptMs?: number | undefined
+  /** Regexes for flux CDNs whose hostnames rotate per title (matched
+   *  against the lowercase hostname, case-insensitively). Narrower than
+   *  a wildcard TLD, stricter than trusting upstream outright. */
+  mediaHostPatterns?: readonly RegExp[] | undefined
 }
 
 export function sourceIdentity(providerId: string, ref: PlaybackRef, key: string) {
   return `${providerId}:${createHash('sha256').update(JSON.stringify([ref.kind, ref.id, ref.season, ref.episode, key])).digest('hex').slice(0, 32)}`
 }
 
-export function allowedMediaUrl(value: string, hosts: readonly string[]) {
+export function allowedMediaUrl(value: string, hosts: readonly string[], patterns: readonly RegExp[] = []) {
   try {
     const url = new URL(value)
+    const hostname = url.hostname.toLowerCase()
+    const listed = hosts.some((host) => host.startsWith('*.')
+      ? host.length > 3 && hostname.endsWith(host.slice(1))
+      : hostname === host)
+    const patterned = !listed && patterns.some((pattern) => {
+      try {
+        return pattern.test(hostname)
+      } catch {
+        return false
+      }
+    })
     return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443')
-      && hosts.some((host) => host.startsWith('*.')
-        ? host.length > 3 && url.hostname.toLowerCase().endsWith(host.slice(1))
-        : url.hostname.toLowerCase() === host) && !url.hash
+      && (listed || patterned) && !url.hash
   } catch { return false }
 }
 
@@ -115,19 +135,22 @@ export function validatedSources(result: unknown, registration: ProviderRegistra
   const parsed = providerResultSchema.safeParse(result)
   if (!parsed.success || !parsed.data.ok) return []
   const seen = new Set<string>()
-  return parsed.data.sources.filter((source) => {
-    if (seen.has(source.key) || Date.parse(source.expiresAt) <= now + 30_000) return false
-    if (!allowedMediaUrl(source.url, registration.mediaHosts)) return false
+  const valid: ProviderSource[] = []
+  for (const source of parsed.data.sources) {
+    if (seen.has(source.key) || Date.parse(source.expiresAt) <= now + 30_000) continue
+    if (!allowedMediaUrl(source.url, registration.mediaHosts, registration.mediaHostPatterns)) continue
     // Browser playback cannot attach provider-specific headers. Declared
     // Referer/Origin hints ride with the source, but credentials are
     // never allowed to cross this seam.
-    if (Object.keys(source.headers).some((name) => /^(cookie|authorization)$/i.test(name))) return false
-    if (source.segmentTransform) return false
-    if (source.subtitles.some((track) => !allowedMediaUrl(track.url, registration.mediaHosts))) return false
-    if (Object.entries(source.headers).some(([key, value]) => !/^(referer|origin|user-agent|authorization|cookie|accept)$/i.test(key) || /[\r\n]/.test(value) || value.length > 4096)) return false
+    if (Object.keys(source.headers).some((name) => /^(cookie|authorization)$/i.test(name))) continue
+    if (source.segmentTransform) continue
+    if (Object.entries(source.headers).some(([key, value]) => !/^(referer|origin|user-agent|authorization|cookie|accept)$/i.test(key) || /[\r\n]/.test(value) || value.length > 4096)) continue
     seen.add(source.key)
-    return true
-  })
+    // Captions are enhancement, media is the product: strip off-allowlist
+    // tracks (rotating subtitle CDNs) instead of nuking a playable source.
+    valid.push({ ...source, subtitles: source.subtitles.filter((track) => allowedMediaUrl(track.url, registration.mediaHosts, registration.mediaHostPatterns)) })
+  }
+  return valid
 }
 
 /** Explicitly configured media only. Useful for owned media and deterministic integration fixtures. */

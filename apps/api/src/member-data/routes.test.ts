@@ -60,6 +60,32 @@ describe('member data mutation routes', () => {
     return { app, cookie: { [sessionCookieName(env)]: session.sessionToken }, memberData, memberId: session.member.id }
   }
 
+  it('serves one member title state with 200 instead of three 404-able reads', async () => {
+    const { app, cookie, memberData } = await setup()
+    const headers = { origin }
+
+    const full = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/movie/693134' })
+    expect(full.statusCode).toBe(200)
+    expect(full.json()).toEqual({
+      rating: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null, value: 9 },
+      like: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null },
+      review: { body: 'A patient masterpiece.', id: 693134, kind: 'movie', origin: 'native', reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] },
+    })
+    expect(memberData.rating).toHaveBeenCalledTimes(1)
+    expect(memberData.like).toHaveBeenCalledTimes(1)
+    expect(memberData.review).toHaveBeenCalledTimes(1)
+
+    vi.mocked(memberData.rating).mockResolvedValueOnce(null)
+    vi.mocked(memberData.like).mockResolvedValueOnce(null)
+    vi.mocked(memberData.review).mockResolvedValueOnce(null)
+    const empty = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/movie/1' })
+    expect(empty.statusCode).toBe(200)
+    expect(empty.json()).toEqual({ rating: null, like: null, review: null })
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/novel/1' })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/me/titles/movie/1' })).statusCode).toBe(401)
+  })
+
   it('updates owned diary, review, and list records through validated same-origin requests', async () => {
     const { app, cookie, memberData, memberId } = await setup()
     const headers = { origin }

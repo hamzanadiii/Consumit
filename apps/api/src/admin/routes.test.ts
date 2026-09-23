@@ -2,11 +2,15 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import Fastify from 'fastify'
+import cookie from '@fastify/cookie'
+import { createStaticProvider } from '@consumit/provider-sdk'
 
 import { buildApp } from '../app.ts'
 import { loadEnv } from '../config/env.ts'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
 import { createMemoryDomainWhitelistStore } from './memory-domains.ts'
+import { registerAdminRoutes } from './routes.ts'
 
 async function loginAs(identity: ReturnType<typeof createFakeIdentity>, app: Awaited<ReturnType<typeof buildApp>>, email: string, role: 'admin' | 'member') {
   const username = email.split('@')[0]!
@@ -183,6 +187,30 @@ describe('admin routes', () => {
 
     const after = await app.inject({ method: 'GET', url: '/v1/admin/providers', cookies: { consumit_session: token } })
     expect(after.json().providers.find((p: { id: string }) => p.id === 'vixsrc').proxy).toBe(false)
+  })
+
+  it('merges probe truth into provider health per kind', async () => {
+    const identity = createFakeIdentity()
+    const env = loadEnv({ NODE_ENV: 'test' })
+    const app = Fastify()
+    await app.register(cookie)
+    registerAdminRoutes(app, {
+      env,
+      identity,
+      providers: [
+        { adapter: createStaticProvider('primary', []), enabled: true, approvedRegions: ['US'], mediaHosts: [], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] },
+        { adapter: createStaticProvider('toon', []), enabled: true, approvedRegions: ['US'], mediaHosts: [], upstreamGroup: 'toon', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['anime'] },
+      ],
+      probeStatus: () => ({ primary: { ok: true, ms: 120, at: Date.now() } }),
+    })
+    const token = await loginAs(identity, undefined as never, 'admin-probe@example.com', 'admin')
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/providers/health', cookies: { consumit_session: token } })
+    expect(res.statusCode).toBe(200)
+    const body = res.json() as Record<string, Array<{ id: string; enabled: boolean; probe: { ok: boolean; ms: number } | null }>>
+    expect(body.movie).toMatchObject([{ id: 'primary', enabled: true, probe: { ok: true, ms: 120 } }])
+    expect(body.movie!.some((entry) => entry.id === 'toon')).toBe(false)
+    expect(body.anime).toMatchObject([{ id: 'toon', enabled: true, probe: null }])
+    await app.close()
   })
 
   it('returns health status', async () => {

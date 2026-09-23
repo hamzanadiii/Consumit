@@ -37,6 +37,7 @@ const detail: AnimeTitleDetail = {
   characters: [],
   countryOfOrigin: 'JP',
   externalLinks: [],
+  logoUrl: null,
   malId: null,
   source: null,
   staff: [],
@@ -114,5 +115,160 @@ describe('anime routes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toMatchObject({ anilistId: 1, status: 'FINISHED', coverImage: { url: null } })
+  })
+
+  it('serves episode art through the Kitsu mapping and 404s misses', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const episodeArt = {
+      episodeByMalId: vi.fn(async (malId: number, episode: number) => (
+        malId === 21 && episode === 5
+          ? { kitsuId: '9', episode: 5, title: 'Ballad', synopsis: 'A past.', stillUrl: 'https://media.kitsu.app/x.jpeg', airDate: '1998-05-01' }
+          : null
+      )),
+    }
+    const app = await buildApp({ animeCatalog, animeEpisodeArt: episodeArt })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ anilistId: 21, number: 5, title: 'Ballad', thumbnail: 'https://media.kitsu.app/x.jpeg' })
+    expect(episodeArt.episodeByMalId).toHaveBeenCalledWith(21, 5)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/6' })).statusCode).toBe(404)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/0' })).statusCode).toBe(400)
+  })
+
+  it('404s episode art without a MAL mapping', async () => {
+    const app = await buildApp({ animeCatalog: fakeAnimeCatalog(), animeEpisodeArt: { episodeByMalId: async () => null } })
+    openApps.push(app)
+
+    // detail.malId is null in the fixture.
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })).statusCode).toBe(404)
+  })
+
+  it('prefers TMDB art as the primary source when both answer', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const app = await buildApp({
+      animeCatalog,
+      animeEpisodeArt: {
+        episodeByMalId: async () => ({ kitsuId: '9', episode: 5, title: 'Ballad', synopsis: 'A past.', stillUrl: 'https://media.kitsu.app/x.jpeg', airDate: '1998-05-01' }),
+      },
+      animeTmdbEpisodeArt: {
+        titleLogo: async () => null,
+        episodeByTitle: async () => ({ tmdbId: 34969, season: 1, episode: 5, title: 'Ballad of Fallen Angels', overview: 'Spike...', stillUrl: 'https://image.tmdb.org/t/p/w780/y.jpg', airDate: '1998-05-01' }),
+      },
+    })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ thumbnail: 'https://image.tmdb.org/t/p/w780/y.jpg', title: 'Ballad of Fallen Angels' })
+  })
+
+  it('prefers TMDB stills when Kitsu knows the title but has no art', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 820 })
+    const app = await buildApp({
+      animeCatalog,
+      animeEpisodeArt: {
+        episodeByMalId: async () => ({ kitsuId: '727', episode: 1, title: 'In the Eternal Night', synopsis: null, stillUrl: null, airDate: null }),
+      },
+      animeTmdbEpisodeArt: {
+        titleLogo: async () => null,
+        episodeByTitle: async () => ({ tmdbId: 27660, season: 1, episode: 1, title: 'In the Eternal Night', overview: 'Lupin...', stillUrl: 'https://image.tmdb.org/t/p/w780/logh.jpg', airDate: '1988-04-09' }),
+      },
+    })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/820/episodes/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ anilistId: 820, number: 1, thumbnail: 'https://image.tmdb.org/t/p/w780/logh.jpg' })
+  })
+
+  it('enriches titles with TMDB hero logos without blocking on failure', async () => {
+    const app = await buildApp({
+      animeCatalog: fakeAnimeCatalog(),
+      animeTmdbEpisodeArt: {
+        titleLogo: async () => ({ tmdbId: 1, kind: 'series' as const, logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png' }),
+        episodeByTitle: async () => null,
+      },
+    })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png' })
+
+    const failing = await buildApp({
+      animeCatalog: fakeAnimeCatalog(),
+      animeTmdbEpisodeArt: {
+        titleLogo: async () => { throw new Error('tmdb down') },
+        episodeByTitle: async () => null,
+      },
+    })
+    openApps.push(failing)
+    const fallback = await failing.inject({ method: 'GET', url: '/v1/anime/1' })
+    expect(fallback.statusCode).toBe(200)
+    expect(fallback.json()).toMatchObject({ logoUrl: null })
+  })
+
+  it('matches TMDB titles to anime entries and 404s misses', async () => {
+    const search = vi.fn(async (query: string) => ({
+      items: query === 'Cowboy Bebop' ? [{
+        anilistId: 1,
+        kind: 'anime',
+        titles: { english: 'Cowboy Bebop', romaji: 'Cowboy Bebop', native: null, preferred: 'Cowboy Bebop' },
+        seasonYear: 1998,
+      }] : [],
+      page: 1, totalPages: 1, totalResults: 1,
+    }))
+    const app = await buildApp({ animeCatalog: { ...fakeAnimeCatalog(), search } as never })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/match?title=Cowboy%20Bebop&year=1998' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toEqual({ anilistId: 1 })
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/match?title=Something%20Else&year=1998' })).statusCode).toBe(404)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/match' })).statusCode).toBe(400)
+  })
+
+  it('404s usable-empty art instead of serving blank tracks', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const app = await buildApp({
+      animeCatalog,
+      animeEpisodeArt: {
+        episodeByMalId: async () => ({ kitsuId: '9', episode: 1, title: null, synopsis: null, stillUrl: null, airDate: null }),
+      },
+    })
+    openApps.push(app)
+
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/1' })).statusCode).toBe(404)
+  })
+
+  it('falls back to TMDB when Kitsu misses, staying a 404 on failure', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({
+      ...detail,
+      malId: 21,
+      titles: { english: 'Cowboy Bebop', native: null, preferred: 'Cowboy Bebop', romaji: 'Cowboy Bebop' },
+      seasonYear: 1998,
+    })
+    const tmdbEpisodeArt = {
+      titleLogo: vi.fn(async () => null),
+      episodeByTitle: vi.fn(async (_anilistId: number, _titles: unknown, _year: number | null, episode: number) => (
+        episode === 5
+          ? { tmdbId: 34969, season: 1, episode: 5, title: 'Ballad', overview: 'A past.', stillUrl: 'https://image.tmdb.org/t/p/w780/x.jpg', airDate: '1998-05-01' }
+          : null
+      )),
+    }
+    const app = await buildApp({ animeCatalog, animeEpisodeArt: { episodeByMalId: async () => null }, animeTmdbEpisodeArt: tmdbEpisodeArt })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ anilistId: 21, number: 5, title: 'Ballad', thumbnail: 'https://image.tmdb.org/t/p/w780/x.jpg' })
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/6' })).statusCode).toBe(404)
   })
 })

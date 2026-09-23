@@ -6,7 +6,11 @@ import { decodeNxshaPayload, encodeNxshaPayload } from '@consumit/provider-sdk'
 import { createCastleSubsProvider } from './castlesubs.ts'
 import type { SubtitleHttp } from './http.ts'
 import { createJimakuProvider } from './jimaku.ts'
+import { normTrackLang } from './lang.ts'
+import { createNatsukiProvider, releaseTagRating } from './natsuki.ts'
 import { createNxshaSubsProvider } from './nxshasubs.ts'
+import { createRiveSubsProvider } from './rivesubs.ts'
+import { createVdrkV2Provider } from './vdrkv2.ts'
 import { createOpenSubtitlesProvider } from './opensubtitles.ts'
 import { createSubDlProvider } from './subdl.ts'
 import { createSubSourceProvider } from './subsource.ts'
@@ -286,5 +290,95 @@ describe('nxshasubs', () => {
   it('normalizes full language names to codes', async () => {
     const found: RawSubtitle[] = await provider.search({ type: 'movie', tmdbId: 1 }, new AbortController().signal)
     expect(found[2]).toMatchObject({ lang: 'pt' })
+  })
+})
+
+describe('vdrkv2', () => {
+  const provider = createVdrkV2Provider(stubHttp([{ match: '/v2/movie/550', text: JSON.stringify([
+    { file: 'https://cache.vdrk.site/a2.vtt', label: 'Arabic' },
+    { file: 'https://cache.vdrk.site/b2.srt', label: 'Spanish hi' },
+    { file: '', label: 'Broken' },
+  ]) }]))
+
+  it('supports TMDB-keyed movies and TV', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
+    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 2, episode: 3 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('queries the v2 endpoint and normalizes entries', async () => {
+    const found = await provider.search({ type: 'movie', tmdbId: 550 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'ar', label: 'Arabic', format: 'vtt', provider: 'vdrkv2' })
+    expect(found[1]).toMatchObject({ lang: 'es', label: 'Spanish [HI]', format: 'srt', hi: true })
+  })
+})
+
+describe('rivesubs', () => {
+  const provider = createRiveSubsProvider(stubHttp([
+    { match: 'provider=flowcast', text: JSON.stringify({ data: { captions: [
+      { file: 'https://cdn.example/flow-ar.srt', label: 'اَلْعَرَبِيَّةُ - FlowCast' },
+      { file: 'https://cdn.example/flow-en.srt', label: 'English - FlowCast' },
+    ] } }) },
+    { match: 'provider=citadel', text: JSON.stringify({ data: { captions: [
+      { file: 'https://cdn.example/flow-en.srt', label: 'English - Citadel' },
+      { file: 'https://cdn.example/cit-fr.vtt', label: 'French - Citadel' },
+    ] } }) },
+    { match: 'provider=apex', text: JSON.stringify({ data: { sources: [] } }) },
+  ]))
+
+  it('supports TMDB-keyed movies and TV', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
+    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('fans out to flowcast/citadel/apex with script detection and dedupe', async () => {
+    const found = await provider.search({ type: 'movie', tmdbId: 550 }, new AbortController().signal)
+    expect(found).toHaveLength(3)
+    expect(found[0]).toMatchObject({ lang: 'ar', format: 'srt', provider: 'rivesubs' })
+    expect(found[1]).toMatchObject({ lang: 'en' })
+    expect(found[2]).toMatchObject({ lang: 'fr', format: 'vtt' })
+  })
+})
+
+describe('natsuki', () => {
+  const provider = createNatsukiProvider(stubHttp([{ match: '/subs?tmdbId=550', text: JSON.stringify({ subtitles: [
+    { sid: 1, language: 'English', langCode: 'en', url: 'https://files.example/en.srt', fileName: 'Fight.Club.1080p.BluRay.srt' },
+    { sid: 2, language: 'Arabic', langCode: 'ar', url: 'https://files.example/ar.srt', fileName: 'cam.srt' },
+    { sid: 3, language: 'French', langCode: 'fr', url: '', fileName: 'fr.srt' },
+  ] }) }]))
+
+  it('supports TMDB-keyed movies and TV', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
+    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('signs file URLs, filters preferred langs, and rates releases', async () => {
+    const found = await provider.search({ type: 'movie', tmdbId: 550, langs: ['en', 'ar'] }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'natsuki', rating: 4 })
+    expect(found[0]?.url).toContain('natsuki.hls.lol')
+    expect(found[0]?.headers).toMatchObject({ Referer: 'https://atlantic.st/' })
+    expect(found[1]).toMatchObject({ lang: 'ar', rating: -1 })
+  })
+
+  it('rates scene releases above cams', () => {
+    expect(releaseTagRating('Movie.2160p.WEB-DL.srt')).toBe(4)
+    expect(releaseTagRating('Movie.TELESYNC.srt')).toBe(-1)
+    expect(releaseTagRating('subs.srt')).toBe(0)
+  })
+})
+
+describe('normTrackLang', () => {
+  it('detects native-script labels instead of defaulting to English', () => {
+    expect(normTrackLang('اَلْعَرَبِيَّةُ - FlowCast')).toBe('ar')
+    expect(normTrackLang('English - Citadel')).toBe('en')
+    expect(normTrackLang('French')).toBe('fr')
+    expect(normTrackLang('日本語字幕こんにちは')).toBe('ja')
   })
 })

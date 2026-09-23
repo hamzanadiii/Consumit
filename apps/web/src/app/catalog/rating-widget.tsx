@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 
 import { RatingInput } from '@consumit/ui'
 
-import { clearMemberRating, getMemberRating, IdentityApiError, setMemberRating } from '@/lib/identity-browser'
+import { clearMemberRating, getMemberTitleState, setMemberRating } from '@/lib/identity-browser'
 
 import { useSession } from '../session/session'
 
@@ -25,14 +25,12 @@ export function RatingWidget({ id, kind, title }: RatingWidgetProps) {
   useEffect(() => {
     if (!session.member) return
     let cancelled = false
-    void getMemberRating({ id, kind })
-      .then((rating) => {
-        if (!cancelled) setValue(rating.value)
+    void getMemberTitleState({ id, kind })
+      .then((state) => {
+        if (!cancelled) setValue(state.rating?.value ?? null)
       })
-      .catch((cause) => {
-        if (!cancelled && (!(cause instanceof IdentityApiError) || cause.status !== 404)) {
-          setError('Your rating could not be loaded.')
-        }
+      .catch(() => {
+        if (!cancelled) setError('Your rating could not be loaded.')
       })
     return () => {
       cancelled = true

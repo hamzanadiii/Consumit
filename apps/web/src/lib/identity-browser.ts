@@ -12,6 +12,7 @@ import {
   memberRatingSchema,
   memberReviewSchema,
   memberTitleRecordSchema,
+  memberTitleStateSchema,
   reviewLikeSchema,
   sessionMemberResponseSchema,
   titleReviewsPageSchema,
@@ -25,6 +26,7 @@ import {
   type LoginRequest,
   type CatalogRef,
   type MemberLibrary,
+  type MemberTitleState,
   type RecoveryConfirmRequest,
   type RegisterRequest,
   type SafeMember,
@@ -89,11 +91,12 @@ export const updateMemberProfile = (input: UpdateProfileRequest) => request('/v1
 export const getUsernameAvailability = (username: string) => request(`/v1/usernames/${encodeURIComponent(username)}/availability`, { method: 'GET' }, usernameAvailabilityResponseSchema)
 export const saveMemberFavorites = (favorites: readonly CatalogRef[]) => request('/v1/me/favorites', { body: body(favoriteSelectionRequestSchema.parse({ favorites })), method: 'PUT' }, memberLibrarySchema)
 export const setMemberSaved = (title: CatalogRef, saved: boolean) => request(`/v1/me/library/titles/${title.kind}/${title.id}`, { method: saved ? 'PUT' : 'DELETE' }, memberLibrarySchema)
-export const getMemberRating = (title: CatalogRef) => request(`/v1/ratings/${title.kind}/${title.id}`, { method: 'GET' }, memberRatingSchema)
+/** One 200-answered read for a member's rating, like, and own review.
+//  Nulls mean "never set" — no 404s, so browsers stay quiet. */
+export const getMemberTitleState = (title: CatalogRef) => request(`/v1/me/titles/${title.kind}/${title.id}`, { method: 'GET' }, memberTitleStateSchema)
 export const setMemberRating = (title: CatalogRef, value: number) => request('/v1/ratings', { body: body({ ...title, value }), method: 'PUT' }, memberRatingSchema)
 export const clearMemberRating = (title: CatalogRef): Promise<void> => request(`/v1/ratings/${title.kind}/${title.id}`, { method: 'DELETE' })
 export const setMemberWatched = (title: CatalogRef, watched: boolean) => request(`/v1/me/library/watched/${title.kind}/${title.id}`, { method: watched ? 'PUT' : 'DELETE' }, memberLibrarySchema)
-export const getMemberLike = (title: CatalogRef) => request(`/v1/likes/${title.kind}/${title.id}`, { method: 'GET' }, memberTitleRecordSchema)
 export const setMemberLiked = async (title: CatalogRef, liked: boolean) => {
   if (!liked) {
     await request(`/v1/likes/${title.kind}/${title.id}`, { method: 'DELETE' })
@@ -103,7 +106,6 @@ export const setMemberLiked = async (title: CatalogRef, liked: boolean) => {
 }
 export const createMemberReview = (input: CreateReviewRequest) => request('/v1/me/reviews', { body: body(createReviewRequestSchema.parse(input)), method: 'POST' }, memberReviewSchema)
 export const updateMemberReview = (reviewId: string, changes: UpdateMemberReviewRequest): Promise<void> => request(`/v1/me/reviews/${encodeURIComponent(reviewId)}`, { body: body(updateMemberReviewRequestSchema.parse(changes)), method: 'PATCH' })
-export const getMemberReview = (title: CatalogRef) => request(`/v1/me/reviews/${title.kind}/${title.id}`, { method: 'GET' }, memberReviewSchema)
 export const getFollowState = (username: string) => request(`/v1/follows/${encodeURIComponent(username)}`, { method: 'GET' }, followStateSchema)
 export const setFollowed = (username: string, following: boolean) => request(`/v1/follows/${encodeURIComponent(username)}`, { method: following ? 'PUT' : 'DELETE' }, followStatusSchema)
 export const listTitleReviews = (title: CatalogRef, page = 1, sort: TitleReviewSort = 'recent', audience: TitleReviewAudience = 'all') => request(`/v1/reviews/${title.kind}/${title.id}?page=${page}&sort=${sort}&audience=${audience}`, { method: 'GET' }, titleReviewsPageSchema)

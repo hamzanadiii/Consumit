@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { movieDetail } from '@/test/catalog-fixtures'
 import { WatchPlayback } from './watch-playback'
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), list: vi.fn(), swap: vi.fn(), subs: vi.fn(), push: vi.fn() }))
-vi.mock('../session/session', () => ({ useSession: () => ({ member: null }) }))
+const mocks = vi.hoisted(() => ({ request: vi.fn(), list: vi.fn(), swap: vi.fn(), subs: vi.fn(), push: vi.fn(), pref: vi.fn(), savePref: vi.fn(), member: null as null | { id: string } }))
+vi.mock('../session/session', () => ({ useSession: () => ({ member: mocks.member }) }))
 vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
-vi.mock('@/lib/subtitles-browser', () => ({ fetchAggregatedSubtitles: (...args: unknown[]) => mocks.subs(...args) }))
+vi.mock('@/lib/subtitles-browser', () => ({ fetchAggregatedSubtitles: (...args: unknown[]) => mocks.subs(...args), fetchSubtitlePreference: (...args: unknown[]) => mocks.pref(...args), saveSubtitlePreference: (...args: unknown[]) => mocks.savePref(...args) }))
 vi.mock('@/lib/playback-progress', () => ({ readPlaybackProgress: async () => 0, writePlaybackProgress: async () => undefined, PROGRESS_SYNC_INTERVAL_MS: 25000, hasMeaningfulProgressChange: () => true }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@consumit/ui', () => ({
@@ -15,8 +15,8 @@ vi.mock('@consumit/ui', () => ({
   readStoredSubtitleLanguages: () => JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]') as string[],
   Button: ({ children, loading, onClick }: { children: ReactNode; loading?: boolean; onClick: () => void }) => <button disabled={loading} onClick={onClick}>{children}</button>,
   Toggle: ({ checked, label, onCheckedChange }: { checked: boolean; label: string; onCheckedChange?: (checked: boolean) => void }) => <button role="switch" aria-checked={checked} aria-label={label} onClick={() => onCheckedChange?.(!checked)} />,
-  ConsumitPlayer: ({ onServerChange, serverOptions, extraSubtitles, onSourceError, onEnded }: { onServerChange?: (value: string) => void; serverOptions?: { value: string; label: string }[]; extraSubtitles?: { id: string }[]; onSourceError?: (reason: 'network' | 'media' | 'gone') => void; onEnded?: () => void }) => (
-    <div data-testid="player" data-extra={(extraSubtitles ?? []).map((track) => track.id).join(',')}>{(serverOptions ?? []).map((option) => <button key={option.value} onClick={() => onServerChange?.(option.value)}>{option.label}</button>)}<button onClick={() => onSourceError?.('network')}>simulate-error</button><button onClick={() => onSourceError?.('gone')}>simulate-gone</button><button onClick={() => onEnded?.()}>simulate-ended</button></div>
+  ConsumitPlayer: ({ onServerChange, serverOptions, extraSubtitles, onSourceError, onEnded, subtitleDelayMs, onSubtitleDelayMsChange }: { onServerChange?: (value: string) => void; serverOptions?: { value: string; label: string }[]; extraSubtitles?: { id: string }[]; onSourceError?: (reason: 'network' | 'media' | 'gone') => void; onEnded?: () => void; subtitleDelayMs?: number; onSubtitleDelayMsChange?: (value: number) => void }) => (
+    <div data-testid="player" data-extra={(extraSubtitles ?? []).map((track) => track.id).join(',')} data-delay={subtitleDelayMs ?? 'uncontrolled'}>{(serverOptions ?? []).map((option) => <button key={option.value} onClick={() => onServerChange?.(option.value)}>{option.label}</button>)}<button onClick={() => onSourceError?.('network')}>simulate-error</button><button onClick={() => onSourceError?.('gone')}>simulate-gone</button><button onClick={() => onEnded?.()}>simulate-ended</button><button onClick={() => onSubtitleDelayMsChange?.(1500)}>simulate-delay</button></div>
   ),
   buttonVariants: () => '',
 }))
@@ -225,6 +225,38 @@ describe('watch request lifecycle', () => {
     expect(mocks.swap.mock.calls[0]?.[1]).toEqual({ providerId: 'ghost' })
     expect(mocks.swap.mock.calls[1]?.[1]).toEqual({ providerId: 'primary' })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+  it('loads the stored sync offset for members and persists nudges', async () => {
+    mocks.member = { id: 'member-1' }
+    try {
+      mocks.request.mockReset().mockResolvedValue(session)
+      mocks.list.mockReset().mockResolvedValue([])
+      mocks.pref.mockReset().mockResolvedValue({ trackId: null, offsetMs: 1500 })
+      mocks.savePref.mockReset().mockResolvedValue(undefined)
+      render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
+      expect(await screen.findByText('Source ready')).toBeInTheDocument()
+      await waitFor(() => expect(mocks.pref).toHaveBeenCalledTimes(1))
+      expect(mocks.pref).toHaveBeenCalledWith({ kind: 'movie', id: movieDetail.id }, expect.any(AbortSignal))
+      await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-delay', '1500'))
+      screen.getByRole('button', { name: 'simulate-delay' }).click()
+      await waitFor(() => expect(mocks.savePref).toHaveBeenCalledTimes(1), { timeout: 3000 })
+      expect(mocks.savePref).toHaveBeenCalledWith({ kind: 'movie', id: movieDetail.id }, { offsetMs: 1500 }, expect.any(AbortSignal))
+    } finally {
+      mocks.member = null
+    }
+  })
+  it('keeps guests on device-local subtitles without preference calls', async () => {
+    mocks.member = null
+    mocks.request.mockReset().mockResolvedValue(session)
+    mocks.list.mockReset().mockResolvedValue([])
+    mocks.pref.mockReset()
+    mocks.savePref.mockReset()
+    render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
+    expect(await screen.findByText('Source ready')).toBeInTheDocument()
+    expect(screen.getByTestId('player')).toHaveAttribute('data-delay', 'uncontrolled')
+    expect(mocks.pref).not.toHaveBeenCalled()
+    screen.getByRole('button', { name: 'simulate-delay' }).click()
+    expect(mocks.savePref).not.toHaveBeenCalled()
   })
   it('skips refresh and falls back immediately when the source reports gone', async () => {
     const expiresAt = new Date(Date.now() + 60000).toISOString()

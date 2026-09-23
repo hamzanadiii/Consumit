@@ -40,6 +40,9 @@ const storedReview = {
 function libraryFetch() {
   return vi.fn().mockImplementation((input: string | URL | Request) => {
     const url = String(input)
+    if (url.includes('/v1/me/titles/')) {
+      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null }), { status: 200 }))
+    }
     if (url.includes('/v1/likes/') || url.includes('/v1/ratings/')) {
       return Promise.resolve(new Response('Not found', { status: 404 }))
     }

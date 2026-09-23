@@ -13,8 +13,10 @@ const envSchema = z.object({
   PLAYBACK_VALKEY_URL: z.string().min(1).optional(),
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
+  PLAYBACK_PROBE_INTERVAL_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),
   RESEND_API_KEY: z.string().trim().min(1).optional(),
   SUBDL_API_KEY: z.string().trim().min(1).optional(),
+  SUBTITLES_DIR: z.string().trim().min(1).optional(),
   JIMAKU_API_KEY: z.string().trim().min(1).optional(),
   OPENSUBTITLES_API_KEY: z.string().trim().min(1).optional(),
   OPENSUBTITLES_USER: z.string().trim().min(1).optional(),
@@ -35,6 +37,9 @@ export type ApiEnv = {
     /** Advertised API/resolver instance count. Past one, shared Valkey state
      *  is mandatory (resolver cache, sessions, rate limits, health). */
     instances: number
+    /** Synthetic probe cadence in ms (0 disables). Probes never shape
+     *  traffic; they only report to logs and the admin health endpoint. */
+    probeIntervalMs: number
   }
   appOrigin: string
   authCodePepper: string | undefined
@@ -50,6 +55,9 @@ export type ApiEnv = {
     jimaku: string | undefined
     openSubtitles: { apiKey: string; user: string; pass: string } | undefined
   }
+  /** VPS-disk directory for converted VTT + original subtitle files. Unset
+   *  keeps the store backend (Valkey/memory, converted VTT only). */
+  subtitlesDir: string | undefined
   tmdbLanguage: string
   tmdbRegion: string
   tmdbToken: string | undefined
@@ -98,7 +106,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   return {
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
-      instances: value.PLAYBACK_INSTANCES },
+      instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
     appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,
@@ -115,6 +123,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
         ? { apiKey: value.OPENSUBTITLES_API_KEY, user: value.OPENSUBTITLES_USER, pass: value.OPENSUBTITLES_PASS }
         : undefined,
     },
+    subtitlesDir: value.SUBTITLES_DIR,
     tmdbLanguage: value.TMDB_LANGUAGE,
     tmdbRegion: value.TMDB_REGION.toUpperCase(),
     tmdbToken: value.TMDB_API_READ_TOKEN,

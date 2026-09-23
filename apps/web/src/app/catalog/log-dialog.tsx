@@ -10,9 +10,7 @@ import {
   clearMemberRating,
   createDiaryEntry,
   createMemberReview,
-  getMemberLike,
-  getMemberRating,
-  IdentityApiError,
+  getMemberTitleState,
   setMemberLiked,
   setMemberRating,
   setMemberWatched,
@@ -71,27 +69,12 @@ export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, p
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([
-      getMemberRating({ id, kind }).then(
-        (record) => record.value,
-        (cause: unknown) => {
-          if (cause instanceof IdentityApiError && cause.status === 404) return null
-          throw cause
-        },
-      ),
-      getMemberLike({ id, kind }).then(
-        () => true,
-        (cause: unknown) => {
-          if (cause instanceof IdentityApiError && cause.status === 404) return false
-          throw cause
-        },
-      ),
-    ])
-      .then(([storedRating, storedLiked]) => {
+    void getMemberTitleState({ id, kind })
+      .then((state) => {
         if (cancelled) return
-        initial.current = { liked: storedLiked, rating: storedRating }
-        setRating(storedRating)
-        setLiked(storedLiked)
+        initial.current = { liked: state.like !== null, rating: state.rating?.value ?? null }
+        setRating(state.rating?.value ?? null)
+        setLiked(state.like !== null)
         setLoading(false)
       })
       .catch(() => {

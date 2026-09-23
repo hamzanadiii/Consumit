@@ -105,24 +105,25 @@ export function createPlayback({ providers, store, region, workerUrl, hmacSecret
       if (!result || signal.aborted) throw unavailable()
       return save(owner, input, result)
     },
-    async listProviders(input, signal) {
-      // Fixed server order: operator priority first, ties keep the
-      // configured file order. Only compatible providers for this media
-      // kind are listed, ordered by priority waterfall.
+    async listProviders(input, _signal) {
+      // Fixed fleet, no fan-out: Watch opens resolve exactly one provider
+      // (the waterfall winner). The menu lists every eligible mirror with
+      // its breaker health; tapping one resolves it fresh and auto-advances
+      // on failure. No per-provider upstream work happens here, so opening
+      // Watch never burns rate limits or trips upstream IP blocks.
       const eligible = providers
         .filter((registration) => {
           if (!registration.enabled || !registration.approvedRegions.includes(region)) return false
           return (registration.mediaKinds as readonly string[]).includes(input.ref.kind)
         })
         .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-      // Reuse cached resolution (never fresh): one Watch open must not fan out
-      // a fresh upstream resolve per provider. Fresh upstream work stays on the
-      // resolve/refresh/fallback path; the server list is a read-only snapshot
-      // that rides the same 30s resolver cache instead of hammering provider
-      // rate limits and tripping upstream IP blocks "after a while".
-      const settled = await Promise.allSettled(eligible.map(async (registration) => {
+      const seen = new Set<string>()
+      const listed: PlaybackProvider[] = []
+      for (const registration of eligible) {
+        if (seen.has(registration.adapter.id)) continue
+        seen.add(registration.adapter.id)
         const dash = registration.adapter.id.indexOf('-')
-        const base = {
+        listed.push({
           id: registration.adapter.id, label: registration.adapter.id,
           // Mirror families: `vidcore-nova` serves family `vidcore`,
           // mirror `nova`; a whole-provider aggregate serves mirror `auto`.
@@ -130,36 +131,9 @@ export function createPlayback({ providers, store, region, workerUrl, hmacSecret
           mirror: dash === -1 ? 'auto' : registration.adapter.id.slice(dash + 1),
           regions: [...registration.approvedRegions],
           health: providerHealth(input, registration.adapter.id),
-        }
-        const result = await resolver.resolve(input, signal, [], registration.adapter.id, false)
-        // The menu lists the whole fixed fleet, answering or not: members
-        // pick mirrors, not moving targets. Unavailable rows stay
-        // selectable — a tap attempts a fresh resolve and auto-advances.
-        if (!result || signal.aborted) return { ...base, available: false, subtitles: [] }
-        const { source } = result
-        // Pass this provider's caption tracks alongside its label so the
-        // player can offer every answering provider's subtitles — not just
-        // the winner's — without another resolve round or slower first frame.
-        // Upstream https WebVTT only; no leases, no minting.
-        const subtitles = dedupeSubtitleTracks([
-          ...collectSubtitleCandidates([source], registration),
-          ...result.subtitles,
-        ])
-          .map(({ track }) => track)
-          .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
-        return {
-          ...base,
           available: true,
-          detail: source.qualityHint ?? `${source.type} · ${source.language}`,
-          subtitles,
-        } satisfies PlaybackProvider
-      }))
-      const seen = new Set<string>()
-      const listed: PlaybackProvider[] = []
-      for (const entry of settled) {
-        if (entry.status !== 'fulfilled' || !entry.value || seen.has(entry.value.id)) continue
-        seen.add(entry.value.id)
-        listed.push(entry.value)
+          subtitles: [],
+        } satisfies PlaybackProvider)
       }
       return playbackProviderListSchema.parse({ providers: listed }).providers
     },

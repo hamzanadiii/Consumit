@@ -38,6 +38,7 @@ model Member {
   progress        PlaybackProgress[]
   lists           MemberList[]
   importBatches   ImportBatch[]
+  subtitlePreferences UserSubtitlePreference[]
 }
 
 enum MemberStatus {
@@ -380,4 +381,73 @@ model ImportStagedRecord {
 model AllowedDomain {
   domain    String   @id
   createdAt DateTime @default(now())
+}
+
+enum SubtitleKind {
+  MOVIE
+  SERIES
+  ANIME
+}
+
+enum SubtitleFormat {
+  VTT
+  SRT
+  ASS
+  SSA
+}
+
+// Durable subtitle metadata catalog. Files live on VPS disk (or the
+// Valkey/memory file backend); this table is the content-keyed index that
+// survives cache loss and powers future scoring. IDs default to zero (not
+// null) so the uniqueness constraint stays NULL-safe — same pattern as
+// PlaybackProgress. One row per content/language/provider/file; identical
+// bytes across providers share a checksum for later dedupe.
+model SubtitleTrack {
+  id          String         @id @default(cuid())
+  kind        SubtitleKind
+  tmdbId      Int            @default(0)
+  anilistId   Int            @default(0)
+  season      Int            @default(0)
+  episode     Int            @default(0)
+  language    String
+  label       String
+  format      SubtitleFormat @default(VTT)
+  provider    String
+  storageKey  String
+  originalExt String?
+  checksum    String
+  cueCount    Int?
+  durationMs  Int?
+  hi          Boolean        @default(false)
+  rating      Float?
+  releaseTag  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([kind, tmdbId, anilistId, season, episode, language, provider, storageKey])
+  @@index([kind, tmdbId, anilistId, season, episode, language])
+  @@index([checksum])
+}
+
+// Per-member subtitle sync correction. One row per member/title-episode:
+// offsetMs shifts every cue server-side (?offsetMs=), trackId remembers the
+// chosen track. Crowdsourced correction (median offsets per content) reads
+// this table later; it never writes back into shared files.
+model UserSubtitlePreference {
+  id        String       @id @default(cuid())
+  memberId  String
+  member    Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  kind      SubtitleKind
+  tmdbId    Int          @default(0)
+  anilistId Int          @default(0)
+  season    Int          @default(0)
+  episode   Int          @default(0)
+  trackId   String?
+  offsetMs  Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([memberId, kind, tmdbId, anilistId, season, episode])
+  @@index([memberId])
+  @@index([kind, tmdbId, anilistId, season, episode])
 }

@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react'
 import { Avatar } from '@consumit/ui'
 
 import { memberAvatarSrc } from '@/lib/avatar'
-import { getMemberReview, IdentityApiError, listTitleReviews } from '@/lib/identity-browser'
+import { getMemberTitleState, listTitleReviews } from '@/lib/identity-browser'
 
 import { useSession } from '../session/session'
 import { LogDialog } from './log-dialog'
@@ -46,20 +46,14 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
   useEffect(() => {
     if (!member) return
     let cancelled = false
-    void getMemberReview({ id, kind }).then(
-      (stored) => {
+    void getMemberTitleState({ id, kind }).then(
+      (state) => {
         if (cancelled) return
-        setReview(stored)
-        setStatus('ready')
+        setReview(state.review)
+        setStatus(state.review ? 'ready' : 'empty')
       },
-      (cause: unknown) => {
-        if (cancelled) return
-        if (cause instanceof IdentityApiError && cause.status === 404) {
-          setReview(null)
-          setStatus('empty')
-        } else {
-          setStatus('error')
-        }
+      () => {
+        if (!cancelled) setStatus('error')
       },
     )
     return () => {
@@ -88,16 +82,11 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
   async function reload() {
     setStatus('loading')
     try {
-      const stored = await getMemberReview({ id, kind })
-      setReview(stored)
-      setStatus('ready')
-    } catch (cause) {
-      if (cause instanceof IdentityApiError && cause.status === 404) {
-        setReview(null)
-        setStatus('empty')
-      } else {
-        setStatus('error')
-      }
+      const state = await getMemberTitleState({ id, kind })
+      setReview(state.review)
+      setStatus(state.review ? 'ready' : 'empty')
+    } catch {
+      setStatus('error')
     }
   }
 

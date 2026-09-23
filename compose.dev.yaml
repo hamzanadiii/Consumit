@@ -33,6 +33,12 @@ services:
     ports:
       - "5434:5432"
 
+  # Dev migrations target the local Postgres too, so `up` never touches
+  # Neon. Production (base file only) keeps migrating Neon via .env.
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
+
   valkey:
     ports:
       - "6379:6379"
@@ -53,6 +59,10 @@ services:
     command: ["bun", "--filter", "@consumit/api", "dev"]
     environment:
       GENERATE_PRISMA: "1"
+      # Development runs against the local Docker Postgres (Neon stays
+      # production-only via the base file + root .env). Internal hostname.
+      DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
+      DATABASE_SSL_MODE: disable
       # The host .env points PLAYBACK_MEDIA_CONFIG at a Windows path for
       # host-run dev; inside the container it must be the mounted copy.
       PLAYBACK_MEDIA_CONFIG: /app/infra/playback/providers.local.json
@@ -112,6 +122,8 @@ services:
     command: ["bun", "--watch", "/app/apps/api/src/import-worker.ts"]
     environment:
       GENERATE_PRISMA: "1"
+      DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
+      DATABASE_SSL_MODE: disable
     volumes:
       - ./apps/api:/app/apps/api
       - /app/apps/api/node_modules

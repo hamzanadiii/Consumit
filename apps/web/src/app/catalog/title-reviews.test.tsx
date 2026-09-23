@@ -19,9 +19,7 @@ const mocks = vi.hoisted(() => {
     clearMemberRating: vi.fn(),
     createDiaryEntry: vi.fn(),
     createMemberReview: vi.fn(),
-    getMemberLike: vi.fn(),
-    getMemberRating: vi.fn(),
-    getMemberReview: vi.fn(),
+    getMemberTitleState: vi.fn(),
     listTitleReviews: vi.fn(),
     setMemberLiked: vi.fn(),
     setMemberRating: vi.fn(),
@@ -36,9 +34,7 @@ vi.mock('@/lib/identity-browser', () => ({
   clearMemberRating: mocks.clearMemberRating,
   createDiaryEntry: mocks.createDiaryEntry,
   createMemberReview: mocks.createMemberReview,
-  getMemberLike: mocks.getMemberLike,
-  getMemberRating: mocks.getMemberRating,
-  getMemberReview: mocks.getMemberReview,
+  getMemberTitleState: mocks.getMemberTitleState,
   listTitleReviews: mocks.listTitleReviews,
   setReviewLiked: mocks.setReviewLiked,
   setMemberLiked: mocks.setMemberLiked,
@@ -102,21 +98,21 @@ describe('title reviews', () => {
     render(<SessionProvider><TitleReviews id={693134} kind="movie" title="Dune: Part Two" /></SessionProvider>)
 
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
-    expect(mocks.getMemberReview).not.toHaveBeenCalled()
+    expect(mocks.getMemberTitleState).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Log or review' })).not.toBeInTheDocument()
   })
 
   it('shows the signed-in member’s own stored review', async () => {
-    mocks.getMemberReview.mockResolvedValue(storedReview)
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: storedReview })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
     expect(await screen.findByText('A patient masterpiece.')).toBeInTheDocument()
     expect(screen.getByText('Your review')).toBeInTheDocument()
-    expect(mocks.getMemberReview).toHaveBeenCalledWith({ id: 693134, kind: 'movie' })
+    expect(mocks.getMemberTitleState).toHaveBeenCalledWith({ id: 693134, kind: 'movie' })
   })
 
   it('shows an honest empty state when the member has not reviewed the title', async () => {
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
     expect(await screen.findByText(/No member reviews yet/)).toBeInTheDocument()
@@ -125,22 +121,20 @@ describe('title reviews', () => {
 
   it('retries after a load failure', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview
+    mocks.getMemberTitleState
       .mockRejectedValueOnce(new mocks.IdentityApiError('The account service returned an invalid response.', { status: 503 }))
-      .mockResolvedValueOnce(storedReview)
+      .mockResolvedValueOnce({ rating: null, like: null, review: storedReview })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('A patient masterpiece.')).toBeInTheDocument()
-    await waitFor(() => expect(mocks.getMemberReview).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(mocks.getMemberTitleState).toHaveBeenCalledTimes(2))
   })
 
   it('opens the log dialog from the section action', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
-    mocks.getMemberRating.mockRejectedValue(new mocks.IdentityApiError('No rating for this title.', { status: 404 }))
-    mocks.getMemberLike.mockRejectedValue(new mocks.IdentityApiError('No like for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
     await user.click(await screen.findByRole('button', { name: 'Log or review' }))
@@ -149,9 +143,11 @@ describe('title reviews', () => {
 
   it('edits the stored review in place from the section action', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockResolvedValue(storedReview)
-    mocks.getMemberRating.mockResolvedValue({ id: 693134, kind: 'movie', origin: 'native', sourceKey: null, value: 9 })
-    mocks.getMemberLike.mockResolvedValue({ id: 693134, kind: 'movie', origin: 'native', sourceKey: null })
+    mocks.getMemberTitleState.mockResolvedValue({
+      rating: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null, value: 9 },
+      like: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null },
+      review: storedReview,
+    })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
     await user.click(await screen.findByRole('button', { name: 'Edit review' }))
@@ -182,13 +178,13 @@ describe('title reviews', () => {
     expect(screen.getByText('No stars attached.')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'open_critic' })).toHaveAttribute('href', '/profile/open_critic')
-    expect(mocks.getMemberReview).not.toHaveBeenCalled()
+    expect(mocks.getMemberTitleState).not.toHaveBeenCalled()
     expect(mocks.listTitleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', 'all')
   })
 
   it('expands the recent list in place when there is more to show', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({
       items: [
         recentItem('recent-1', 'critic_one', 'Take one.'),
@@ -214,7 +210,7 @@ describe('title reviews', () => {
 
   it('retries recent reviews after a load failure', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews
       .mockRejectedValueOnce(new mocks.IdentityApiError('The account service returned an invalid response.', { status: 503 }))
       .mockResolvedValueOnce({ ...EMPTY_PAGE })
@@ -227,7 +223,7 @@ describe('title reviews', () => {
 
   it('sorts recent reviews by popularity on request', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({
       items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
       page: 1,
@@ -244,7 +240,7 @@ describe('title reviews', () => {
 
   it('filters reviews to the member’s circle on the friends tab', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({ ...EMPTY_PAGE })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
@@ -257,7 +253,7 @@ describe('title reviews', () => {
 
   it('likes a member review optimistically', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({
       items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
       page: 1,
@@ -279,7 +275,7 @@ describe('title reviews', () => {
 
   it('reverts the like and reports when the write fails', async () => {
     const user = userEvent.setup()
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({
       items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
       page: 1,
@@ -309,7 +305,7 @@ describe('title reviews', () => {
   })
 
   it('hides the like action on the viewer’s own review', async () => {
-    mocks.getMemberReview.mockRejectedValue(new mocks.IdentityApiError('No review for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({
       items: [recentItem('recent-9', 'cinema_fan', 'My own take.', null, 3)],
       page: 1,

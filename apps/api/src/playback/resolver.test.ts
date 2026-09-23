@@ -22,6 +22,23 @@ describe('bounded playback resolution', () => {
     expect(await createResolver([first], options).resolve(input, new AbortController().signal)).not.toBeNull()
     expect(first.adapter.resolve).toHaveBeenCalledTimes(2)
   })
+  it('never lets a movie provider answer an anime ref by numeric-id coincidence', async () => {
+    const movieOnly = provider('movie-only')
+    movieOnly.adapter.resolve = vi.fn(movieOnly.adapter.resolve)
+    const animeOnly: ProviderRegistration = {
+      ...provider('anime-only'),
+      adapter: createStaticProvider('anime-only', [{ ref: { kind: 'anime', id: 793, episode: 1 }, sources: [source] }]),
+      mediaKinds: ['anime'],
+    }
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 793, episode: 1 } }
+    const resolved = await createResolver([movieOnly, animeOnly], { region: 'US' }).resolve(animeInput, new AbortController().signal)
+    expect(resolved?.registration.adapter.id).toBe('anime-only')
+    expect(movieOnly.adapter.resolve).not.toHaveBeenCalled()
+    // And the reverse: an anime-only provider never answers movies.
+    const movieInput = { ...input, ref: { kind: 'movie' as const, id: 1 } }
+    const movieResolved = await createResolver([movieOnly, animeOnly], { region: 'US' }).resolve(movieInput, new AbortController().signal)
+    expect(movieResolved?.registration.adapter.id).toBe('movie-only')
+  })
   it('tries providers in static order, times out a stalled primary, and falls through to backup', async () => {
     vi.useFakeTimers()
     const first = provider('first'); const backup = provider('backup')
@@ -34,6 +51,26 @@ describe('bounded playback resolution', () => {
     await vi.advanceTimersByTimeAsync(5000)
     expect((await task)?.registration.adapter.id).toBe('backup')
     expect(cancelled).toBe(true)
+  })
+  it('honors a custom per-provider attempt budget within the deadline', async () => {
+    vi.useFakeTimers()
+    const slow = provider('slow'); slow.attemptMs = 7000
+    slow.adapter.resolve = vi.fn(async (_input, signal) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(), 6000)
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) }, { once: true })
+      })
+      return { ok: true as const, sources: [source] }
+    })
+    const task = createResolver([slow], { region: 'US', deadlineMs: 12000 }).resolve(input, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(6000)
+    expect((await task)?.registration.adapter.id).toBe('slow')
+    // The same 6s adapter with the default budget dies at 5s instead.
+    const plain = provider('plain')
+    plain.adapter.resolve = slow.adapter.resolve
+    const missed = createResolver([plain], { region: 'US', deadlineMs: 12000 }).resolve(input, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(12000)
+    expect(await missed).toBeNull()
   })
   it('coalesces concurrent requests and keeps work alive for remaining callers', async () => {
     vi.useFakeTimers()
@@ -58,7 +95,7 @@ describe('bounded playback resolution', () => {
     first.adapter.resolve = () => new Promise(() => undefined)
     const resolver = createResolver([first], { region: 'US' })
     const task = resolver.resolve(input, new AbortController().signal)
-    await vi.advanceTimersByTimeAsync(8000)
+    await vi.advanceTimersByTimeAsync(12000)
     expect(await task).toBeNull()
   })
   it('excludes correlated providers and disabled or out-of-region registrations', async () => {

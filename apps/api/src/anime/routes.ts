@@ -3,7 +3,9 @@ import { z } from 'zod'
 import {
   animeAiringScheduleSchema,
   animeBatchSchema,
+  animeEpisodeSchema,
   animeFranchiseSchema,
+  animeMatchSchema,
   animePageSchema,
   animeSearchResultSchema,
   animeTitleDetailSchema,
@@ -20,6 +22,10 @@ type AnimeRoutesDeps = {
 
 const pageSchema = z.coerce.number().int().min(1).max(500).optional().default(1)
 const idParamsSchema = z.object({ anilistId: z.coerce.number().int().positive() })
+const episodeParamsSchema = z.object({
+  anilistId: z.coerce.number().int().positive(),
+  episode: z.coerce.number().int().min(1).max(10000),
+})
 const searchQuerySchema = z.object({
   q: z.string().trim().min(2).max(100),
   page: pageSchema,
@@ -88,6 +94,32 @@ export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps)
     if (!params.success) return invalidQuery('Use a positive whole AniList ID.')
     try {
       return reply.send(proveResponse(animeTitleDetailSchema, await anime.title(params.data.anilistId)))
+    } catch (error) {
+      return sendAnimeError(error)
+    }
+  })
+
+  app.get('/v1/anime/:anilistId/episodes/:episode', async (request, reply) => {
+    const params = episodeParamsSchema.safeParse(request.params)
+    if (!params.success) return invalidQuery('Use a positive whole AniList ID and an episode between 1 and 10000.')
+    try {
+      return reply.send(proveResponse(animeEpisodeSchema, await anime.episode(params.data.anilistId, params.data.episode)))
+    } catch (error) {
+      return sendAnimeError(error)
+    }
+  })
+
+  app.get('/v1/anime/match', async (request, reply) => {
+    const parsed = z.object({
+      title: z.string().trim().min(1).max(200),
+      originalTitle: z.string().trim().min(1).max(200).optional(),
+      year: z.coerce.number().int().min(1917).max(2200).optional(),
+    }).safeParse(request.query)
+    if (!parsed.success) return invalidQuery('Provide a title with an optional original title and year.')
+    try {
+      const anilistId = await anime.matchTmdbTitle(parsed.data.title, parsed.data.originalTitle ?? null, parsed.data.year ?? null)
+      if (!anilistId) throw new AnimeError('ANIME_NOT_FOUND', 'No anime entry matches this title.')
+      return reply.send(proveResponse(animeMatchSchema, { anilistId }))
     } catch (error) {
       return sendAnimeError(error)
     }

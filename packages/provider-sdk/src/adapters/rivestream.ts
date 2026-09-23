@@ -6,11 +6,16 @@ const apiOrigin = 'https://scrapper.rivestream.app'
 const defaultReferer = 'https://nextgencloudfabric.com/'
 // Sub-provider map (languages as codes so resolve-time audio matching
 // works): citadel serves English, hindicast Hindi, apex/solstice multi-audio
-// (English-first with in-player track choice), quasar French, the rest
-// Original. Citadel leads: proven English workhorse, deterministic order.
+// (English-first with in-player track choice), quasar French, vanguard/aura
+// valhalla HLS (PROVE live roster 2026-09-22), the rest Original. Citadel
+// leads: proven English workhorse, deterministic order.
 const SUB_PROVIDERS = [
   { id: 'citadel', lang: 'en' },
   { id: 'apex', lang: 'en' },
+  { id: 'vanguard', lang: 'original' },
+  { id: 'aura', lang: 'original' },
+  { id: 'apogee', lang: 'original' },
+  { id: 'rigel', lang: 'original' },
   { id: 'hindicast', lang: 'hi' },
   { id: 'solstice', lang: 'en' },
   { id: 'quasar', lang: 'fr' },
@@ -35,6 +40,10 @@ const captionSchema = z.object({
 const sourceEntrySchema = z.object({
   url: z.string().max(4096),
   quality: z.string().max(64).optional(),
+  // Upstream delivery hint (hls/mp4). Some subs (aura) serve extensionless
+  // proxied URLs (/content?v=...) that only classify via this hint —
+  // PROVE reads the same field, so a missing hint keeps URL classification.
+  format: z.string().max(16).optional(),
 })
 
 const responseSchema = z.object({
@@ -114,13 +123,18 @@ function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, str
   return { url: rawUrl, headers: {} }
 }
 
-export type RivestreamScope = { id?: string; subs?: string[] }
+export type RivestreamScope = { id?: string; subs?: string[]; kinds?: readonly ['movie' | 'series'] | undefined }
 
 export function createRivestreamProvider(http: ProviderHttp, now = Date.now, scope: RivestreamScope = {}) {
-  const { id = 'rivestream', subs } = scope
+  const { id = 'rivestream', subs, kinds } = scope
   const wanted = subs?.map((sub) => sub.toLowerCase())
   return Object.assign(adapter('rivestream', async (input, signal) => {
     const { ref } = input
+    // Movies + series only: an anime ref must never resolve by numeric-id
+    // coincidence (AniList ids are not TMDB ids). Scoped rows can narrow
+    // further (apogee is movies-only): reject before any upstream work.
+    if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
+    if (kinds && !(kinds as readonly string[]).includes(ref.kind)) throw new ProviderFailure('empty')
     const isTv = ref.kind === 'series'
     const qBase = isTv ? `id=${ref.id}&season=${ref.season}&episode=${ref.episode}` : `id=${ref.id}`
 
@@ -164,7 +178,7 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
         if (!entry || !entry.url || seen.has(entry.url)) continue
 
         const { url, headers } = unwrapProxy(entry.url)
-        const type = mediaType(url)
+        const type = mediaType(url, entry.format?.toLowerCase()) ?? mediaType(url)
         if (!type) continue
         seen.add(entry.url)
 

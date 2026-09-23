@@ -6,6 +6,7 @@ import { movieDetail, seriesDetail } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
 import { SessionProvider } from '../session/session'
+import { looksLikeAnime } from './catalog-ui'
 import { SeriesDetailScreen, TitleDetailScreen } from './detail-screens'
 
 vi.mock('next/navigation', () => ({
@@ -19,6 +20,22 @@ const firstSeason = {
 }
 
 afterEach(() => vi.unstubAllGlobals())
+
+describe('anime detection and cross-link', () => {
+  it('flags Animation with a Japanese origin only', () => {
+    expect(looksLikeAnime({ genreNames: ['Animation', 'Action'], countries: ['Japan'], languages: ['Japanese'] })).toBe(true)
+    expect(looksLikeAnime({ genreNames: ['Animation'], countries: ['JP'], languages: ['Japanese'] })).toBe(true)
+    expect(looksLikeAnime({ genreNames: ['Animation'], countries: ['United States of America'], languages: ['English'] })).toBe(false)
+    expect(looksLikeAnime({ genreNames: ['Drama'], countries: ['Japan'], languages: ['Japanese'] })).toBe(false)
+  })
+
+  it('shows no cross-link UI on detail screens (redirect happens in the page)', () => {
+    render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} />)
+    expect(screen.queryByRole('link', { name: /as anime$/ })).not.toBeInTheDocument()
+    render(<TitleDetailScreen detail={movieDetail} />)
+    expect(screen.queryByRole('link', { name: /as anime$/ })).not.toBeInTheDocument()
+  })
+})
 
 describe('series season selection', () => {
   it('keeps computed taste and numeric scores out of title details', () => {

@@ -220,6 +220,9 @@ export type AnimeStaff = z.infer<typeof animeStaffSchema>
 
 export const animeTitleDetailSchema = animeTitleSummarySchema.extend({
   malId: z.int().positive().nullable(),
+  /** Hero logo resolved from TMDB when the title matches confidently;
+   *  null renders the serif title. Never blocks detail on failure. */
+  logoUrl: z.url().nullable(),
   source: z.string().nullable(),
   countryOfOrigin: z.string().nullable(),
   trailer: z.object({
@@ -252,6 +255,10 @@ export const animeEpisodeSchema = z.object({
   airDate: z.iso.date().nullable(),
   duration: z.int().positive().nullable(),
 })
+/** Confident AniList match for a TMDB title. 404 carries no body match —
+ *  the caller keeps the honest TMDB page. */
+export const animeMatchSchema = z.object({ anilistId: z.int().positive() })
+export type AnimeMatch = z.infer<typeof animeMatchSchema>
 export type AnimeEpisode = z.infer<typeof animeEpisodeSchema>
 
 export const animeSeasonSchema_v2 = z.object({
@@ -640,6 +647,16 @@ export type TitleReviewsQuery = z.infer<typeof titleReviewsQuerySchema>
 export const memberRatingSchema = memberTitleRecordSchema.extend({ value: z.int().min(1).max(10) })
 export type MemberRating = z.infer<typeof memberRatingSchema>
 
+/** One member's complete state for a title: rating, like, and own review.
+//  Nulls mean "never set" — the batch answers 200 instead of forcing three
+//  404-able reads (browsers log every failed fetch to the console). */
+export const memberTitleStateSchema = z.object({
+  rating: memberRatingSchema.nullable(),
+  like: memberTitleRecordSchema.nullable(),
+  review: memberReviewSchema.nullable(),
+})
+export type MemberTitleState = z.infer<typeof memberTitleStateSchema>
+
 export const setRatingRequestSchema = catalogRefSchema.extend({ value: z.int().min(1).max(10) })
 export type SetRatingRequest = z.infer<typeof setRatingRequestSchema>
 
@@ -668,6 +685,15 @@ export const playbackTrackSchema = z.object({
   id: z.string().min(1).max(128), label: z.string().min(1).max(128),
   language: z.string().max(32), url: z.string().max(4096).refine((value) => /^https:\/\//.test(value)),
   format: z.enum(['vtt', 'srt', 'ass']),
+  /** Member-facing track attributes, detected from upstream filenames and
+   *  labels: foreign-parts-only, hearing-impaired, signs/songs adjuncts,
+   *  machine translations, and the engine's top pick per wanted language. */
+  forced: z.boolean().optional(),
+  sdh: z.boolean().optional(),
+  signs: z.boolean().optional(),
+  songs: z.boolean().optional(),
+  machineTranslated: z.boolean().optional(),
+  recommended: z.boolean().optional(),
 })
 export const skipSegmentSchema = z.object({
   kind: z.enum(['intro', 'outro', 'recap']),
@@ -729,6 +755,18 @@ export type SubtitleTrack = z.infer<typeof subtitleTrackSchema>
 /** Aggregated caption tracks for one title/episode, independent of the
  *  selected streaming provider. */
 export const subtitlesResponseSchema = z.object({ subtitles: z.array(subtitleTrackSchema).max(32) })
+/** Per-member subtitle sync correction for one title/episode. offsetMs
+ *  shifts every cue server-side (`?offsetMs=`); trackId remembers the
+ *  chosen track. One row per member/content; crowdsourced correction reads
+ *  this table later without ever rewriting shared files. */
+export const subtitlePreferenceSchema = z.object({
+  ref: playbackRefSchema,
+  trackId: z.string().min(1).max(128).nullable().default(null),
+  offsetMs: z.int().min(-120000).max(120000).default(0),
+})
+export type SubtitlePreference = z.infer<typeof subtitlePreferenceSchema>
+export const subtitlePreferenceResponseSchema = z.object({ preference: subtitlePreferenceSchema })
+export type SubtitlePreferenceResponse = z.infer<typeof subtitlePreferenceResponseSchema>
 export type SubtitlesResponse = z.infer<typeof subtitlesResponseSchema>
 export type PlaybackRef = z.infer<typeof playbackRefSchema>
 export type PlaybackSource = z.infer<typeof playbackSourceSchema>

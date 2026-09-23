@@ -12,6 +12,18 @@ export type SubtitleQuery = {
   episode?: number | undefined
   /** AniList id for anime-only providers (Jimaku). */
   anilistId?: number | undefined
+  /** Canonical anime episode number (absolute numbering per the domain
+   *  glossary). Mirrors `episode` today; split-cours and specials keep
+   *  their own canonical numbers here while provider quirks stay behind
+   *  each adapter. */
+  absoluteEpisode?: number | undefined
+  /** Richer episode fingerprint. Populated when the caller holds episode
+   *  detail (air date, duration, title); providers match on what they can
+   *  and ignore the rest. The anime catalog grows these fields — providers
+   *  must never require them. */
+  episodeTitle?: string | undefined
+  airDate?: string | undefined
+  durationMs?: number | undefined
   /** Preferred language codes, in order (default ['en']). */
   langs?: string[] | undefined
 }

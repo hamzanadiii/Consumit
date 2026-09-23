@@ -7,6 +7,7 @@ import type { Identity } from '../identity/identity.ts'
 import type { IdentityRepository } from '../identity/repository.ts'
 import { sessionCookieName } from '../identity/session.ts'
 import type { Playback } from '../playback/playback.ts'
+import type { ProbeStatus } from '../playback/probe.ts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { ProviderRegistration } from '@consumit/provider-sdk'
 import type { ProviderConfigStore } from './provider-config.ts'
@@ -29,9 +30,9 @@ function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, f
 
 export function registerAdminRoutes(
   app: FastifyInstance,
-  deps: { env: ApiEnv; identity: Identity; domains?: DomainWhitelistStore | undefined; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; playback?: Playback | undefined; playbackStore?: PlaybackStore | undefined; providerConfig?: ProviderConfigStore | undefined },
+  deps: { env: ApiEnv; identity: Identity; domains?: DomainWhitelistStore | undefined; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; playback?: Playback | undefined; playbackStore?: PlaybackStore | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => ProbeStatus) | undefined },
 ) {
-  const { env, identity, domains, repository, providers = [], playback, playbackStore, providerConfig } = deps
+  const { env, identity, domains, repository, providers = [], playback, playbackStore, providerConfig, probeStatus } = deps
   const cookieName = sessionCookieName(env)
 
   function guardMutation(request: FastifyRequest) {
@@ -107,14 +108,15 @@ export function registerAdminRoutes(
   app.get('/v1/admin/providers/health', async (request, reply) => {
     await requireAdmin(request)
     void reply.header('cache-control', 'private, no-store')
+    // Synthetic probe truth, not resolver internals: the last scheduled
+    // probe per provider (null when no cycle has finished yet).
+    const probed = probeStatus?.() ?? {}
     const kinds = ['movie', 'series', 'anime'] as const
-    const result: Record<string, Array<{ id: string; enabled: boolean; failures: number; openUntil: number; latency: number; success: number; outcomes: number }>> = {}
+    const result: Record<string, Array<{ id: string; enabled: boolean; probe: ProbeStatus[string] | null }>> = {}
     for (const kind of kinds) {
-      const stateMap = new Map<string, { id: string; enabled: boolean; failures: number; openUntil: number; latency: number; success: number; outcomes: number }>()
-      for (const p of providers) {
-        stateMap.set(p.adapter.id, { id: p.adapter.id, enabled: p.enabled, failures: 0, openUntil: 0, latency: 0, success: 0, outcomes: 0 })
-      }
-      result[kind] = [...stateMap.values()]
+      result[kind] = providers
+        .filter((p) => p.mediaKinds.includes(kind))
+        .map((p) => ({ id: p.adapter.id, enabled: p.enabled, probe: probed[p.adapter.id] ?? null }))
     }
     return result
   })

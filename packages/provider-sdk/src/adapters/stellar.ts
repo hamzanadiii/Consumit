@@ -192,6 +192,4 @@ export function createStellarProvider(http: ProviderHttp, now = Date.now, option
   })
 }
 
-export function createAphroditeProvider(http: ProviderHttp, now = Date.now) {
-  return createStellarProvider(http, now, { id: 'aphrodite' })
-}
+

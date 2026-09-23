@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation'
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
 
 import { CatalogUnavailableScreen } from '../../../catalog/catalog-ui'
-import { sanitizePinnedProvider, WatchScreen } from '../../watch-screen'
+import { sanitizePinnedProvider } from '../../watch-screen'
+import { SeriesWatchScreen } from '../series-watch-screen'
 
 type SeriesWatchPageProps = {
   params: Promise<{ tmdbId: string }>
@@ -30,7 +31,6 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   try { titleResponse = await getCatalogTitle('series', id) } catch (error) { if (error instanceof CatalogApiError && error.status === 404) notFound(); return <CatalogUnavailableScreen error={error} /> }
   if (titleResponse.item.kind !== 'series') notFound()
   const season = await getCatalogSeason(id, seasonNumber).catch(() => null)
-  const episode = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber)
   const next = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber + 1)
   const nextSeason = titleResponse.item.seasons.find((item) => item.number === seasonNumber + 1 && item.episodeCount > 0)
   const nextHref = next ? `/watch/series/${id}?season=${seasonNumber}&episode=${next.episodeNumber}` : nextSeason ? `/watch/series/${id}?season=${nextSeason.number}&episode=1` : undefined
@@ -38,5 +38,17 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   const prevSeason = episodeNumber === 1 ? titleResponse.item.seasons.find((item) => item.number === seasonNumber - 1 && item.episodeCount > 0) : undefined
   const prevHref = prev ? `/watch/series/${id}?season=${seasonNumber}&episode=${prev.episodeNumber}` : prevSeason ? `/watch/series/${id}?season=${prevSeason.number}&episode=${prevSeason.episodeCount}` : undefined
   const pinnedProvider = sanitizePinnedProvider(query.provider)
-  return <WatchScreen interactive nextHref={nextHref} prevHref={prevHref} {...(episode ? { episode } : {})} title={titleResponse.item} {...(pinnedProvider ? { pinnedProvider } : {})} />
+  return (
+    <SeriesWatchScreen
+      detail={titleResponse.item}
+      episodeNumber={episodeNumber}
+      episodes={season?.item.episodes ?? []}
+      nextHref={nextHref}
+      prevHref={prevHref}
+      seasonNumber={seasonNumber}
+      seasons={titleResponse.item.seasons}
+      tmdbId={id}
+      {...(pinnedProvider ? { pinnedProvider } : {})}
+    />
+  )
 }

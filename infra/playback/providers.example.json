@@ -160,6 +160,169 @@
     "requestsPerMinute": 30
   },
   {
+    "id": "riveapex",
+    "adapter": "riveapex",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "remoteconsultinggroup.site",
+      "scalablecontentengine.site",
+      "scalableimpactgroup.site",
+      "onlinevisibilitysystem.site"
+    ],
+    "mediaHostPatterns": [
+      "^[a-z]+\\.site$"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "riveapex",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "rivevanguard",
+    "adapter": "rivevanguard",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "ok.solarpanelcleaning.cc"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "rivevanguard",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "riveaura",
+    "adapter": "riveaura",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "asm.solarpanelcleaning.cc"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "riveaura",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "riveapogee",
+    "adapter": "riveapogee",
+    "enabled": false,
+    "mediaKinds": ["movie"],
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "img.rousav.tech"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "riveapogee",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "rivecitadel",
+    "adapter": "rivecitadel",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "img1.flulp.com"
+    ],
+    "mediaHostPatterns": [
+      "^img1\\.[a-z0-9-]+\\.com$"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "rivecitadel",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "riverigel",
+    "adapter": "riverigel",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "*.entertainmentfilmu.workers.dev"
+    ],
+    "resolutionHosts": [
+      "scrapper.rivestream.app"
+    ],
+    "upstreamGroup": "riverigel",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "catflix",
+    "adapter": "catflix",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "pwcloud.animanga.fun",
+      "*.animanga.fun",
+      "*.sunrisefieldinnovation.store"
+    ],
+    "resolutionHosts": [
+      "new.vidnest.fun"
+    ],
+    "upstreamGroup": "catflix",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
+    "id": "poseidon",
+    "adapter": "poseidon",
+    "enabled": false,
+    "attemptMs": 10000,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "remoteconsultinggroup.site",
+      "scalablecontentengine.site",
+      "scalableimpactgroup.site",
+      "onlinevisibilitysystem.site"
+    ],
+    "mediaHostPatterns": [
+      "^[a-z]+\\.site$"
+    ],
+    "resolutionHosts": [
+      "hahaevilcraft.site"
+    ],
+    "upstreamGroup": "poseidon",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60
+  },
+  {
     "id": "vidapi",
     "adapter": "vidapi",
     "enabled": false,

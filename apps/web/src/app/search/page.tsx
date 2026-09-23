@@ -7,6 +7,7 @@ import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
 
 import { getAnimeTrending, searchAnime } from '@/lib/anime-api'
 import { getCatalogDiscovery, searchCatalog } from '@/lib/catalog-api'
+import { dedupeTwinSeries } from '@/lib/search-dedupe'
 
 export const metadata: Metadata = {
   title: 'Search & Explore · Consumit',
@@ -41,6 +42,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   } catch (error) {
     return <CatalogUnavailableScreen error={error} />
   }
+  // One work, one page: TMDB series twins of anime results drop out here
+  // (the anime page owns playback). Movies and year-less records never match.
+  const deduped = { ...page, items: dedupeTwinSeries(page.items, animeItems) }
 
-  return <SearchScreen animeResults={animeItems} initialQuery={initialQuery} page={page} queryTooShort={queryTooShort} />
+  return <SearchScreen animeResults={animeItems} initialQuery={initialQuery} page={deduped} queryTooShort={queryTooShort} />
 }

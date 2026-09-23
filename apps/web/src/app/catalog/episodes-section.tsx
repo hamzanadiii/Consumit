@@ -48,10 +48,10 @@ function EpisodeCard({ detail, episode }: {
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
         <p className="text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">Episode {episode.episodeNumber}</p>
-        <h3 className="font-display text-lg leading-snug text-[var(--fs-ink)]">{episode.title}</h3>
-        {meta ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{meta}</p> : null}
-        {episode.overview ? <p className="mt-1 text-xs leading-5 text-[var(--fs-secondary)] line-clamp-2">{episode.overview}</p> : null}
-        <div className="mt-3">
+        <h3 className="truncate font-display text-lg leading-snug text-[var(--fs-ink)]" title={episode.title}>{episode.title}</h3>
+        {meta ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{meta}</p> : <p className="text-xs tabular-nums text-transparent" aria-hidden="true">–</p>}
+        {episode.overview ? <p className="mt-1 min-h-10 text-xs leading-5 text-[var(--fs-secondary)] line-clamp-2">{episode.overview}</p> : <p className="mt-1 min-h-10" aria-hidden="true" />}
+        <div className="mt-auto pt-3">
           <Link
             className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={href}

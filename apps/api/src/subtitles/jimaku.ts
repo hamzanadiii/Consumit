@@ -33,7 +33,9 @@ export function createJimakuProvider(http: SubtitleHttp, apiKey?: string | undef
       const entries: unknown[] = Array.isArray(root) ? root : (Array.isArray((root as { entries?: unknown }).entries) ? (root as { entries?: unknown }).entries : (root as { data?: unknown }).data) as unknown[]
       const list = Array.isArray(entries) ? entries : []
       const out: RawSubtitle[] = []
-      const episode = Number(query.episode ?? 1)
+      // Canonical absolute episode first, plain episode as fallback; entry
+      // bundles are disambiguated by number, single-file entries pass.
+      const episode = Number(query.absoluteEpisode ?? query.episode ?? 1)
       for (const entry of list.slice(0, 10) as Record<string, unknown>[]) {
         const files = Array.isArray(entry.files) ? (entry.files as Record<string, unknown>[]) : []
         for (const file of files) {

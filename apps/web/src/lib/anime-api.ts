@@ -4,6 +4,7 @@ import {
   animeAiringScheduleSchema,
   animeBatchSchema,
   animeFranchiseSchema,
+  animeMatchSchema,
   animePageSchema,
   animeSearchResultSchema,
   animeTitleDetailSchema,
@@ -101,4 +102,18 @@ export function searchAnime(query: string, page = 1) {
 
 export function getAnimeBatch(ids: number[]) {
   return request(`/v1/anime/batch?ids=${ids.join(',')}`, animeBatchSchema)
+}
+
+/** Confident AniList match for a TMDB title, or null when nothing matches.
+ *  Misses (including 404s) are normal — the caller keeps its honest page. */
+export async function getAnimeMatch(title: string, originalTitle: string | null, year: number | null): Promise<number | null> {
+  const params = new URLSearchParams({ title: title.trim().slice(0, 200) })
+  if (originalTitle?.trim()) params.set('originalTitle', originalTitle.trim().slice(0, 200))
+  if (year !== null) params.set('year', String(year))
+  try {
+    const { anilistId } = await request(`/v1/anime/match?${params}`, animeMatchSchema)
+    return anilistId
+  } catch {
+    return null
+  }
 }

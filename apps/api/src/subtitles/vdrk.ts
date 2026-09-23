@@ -12,6 +12,28 @@ import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types
 const API = 'https://sub.vdrk.site/v1'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
+/** Normalize one VDRK [{file, label}] entry. Labels carry language names
+ *  with HI suffixes and numeric dupes (Czech2..5). Returns null when the
+ *  entry is unusable. Shared by the v1 and v2 endpoints (different label
+ *  and file sets, same shape). */
+export function parseVdrkEntry(entry: unknown, provider: string): RawSubtitle | null {
+  const record = entry as Record<string, unknown>
+  const file = String(record.file || '')
+  const label = String(record.label || '')
+  if (!/^https?:\/\//.test(file) || !label) return null
+  const hi = /\bhi\d*$/i.test(label) || /\shi$/i.test(label)
+  const name = label.replace(/\s*hi\d*$/i, '').replace(/\s*hi$/i, '').replace(/\d+$/, '').trim()
+  if (!name) return null
+  return {
+    url: file,
+    lang: normLang(name),
+    label: hi ? `${name} [HI]` : name,
+    format: /\.srt/i.test(file) ? 'srt' : 'vtt',
+    hi,
+    provider,
+  }
+}
+
 export function createVdrkProvider(http: SubtitleHttp): SubtitleSearchProvider {
   return {
     id: 'vdrk',
@@ -35,21 +57,8 @@ export function createVdrkProvider(http: SubtitleHttp): SubtitleSearchProvider {
       if (!Array.isArray(parsed)) return []
       const out: RawSubtitle[] = []
       for (const entry of parsed) {
-        const record = entry as Record<string, unknown>
-        const file = String(record.file || '')
-        const label = String(record.label || '')
-        if (!/^https?:\/\//.test(file) || !label) continue
-        const hi = /\bhi\d*$/i.test(label) || /\shi$/i.test(label)
-        const name = label.replace(/\s*hi\d*$/i, '').replace(/\s*hi$/i, '').replace(/\d+$/, '').trim()
-        if (!name) continue
-        out.push({
-          url: file,
-          lang: normLang(name),
-          label: hi ? `${name} [HI]` : name,
-          format: 'vtt',
-          hi,
-          provider: 'vdrk',
-        })
+        const track = parseVdrkEntry(entry, 'vdrk')
+        if (track) out.push(track)
         if (out.length >= 40) break
       }
       return out

@@ -46,3 +46,37 @@ export function normLang(name: string): string {
   if (/^[a-z]{2,3}$/.test(n)) return n
   return 'en'
 }
+
+// Order matters: kana precedes CJK (Japanese mixes kanji + kana while
+// Chinese never uses kana, so any kana occurrence decides Japanese).
+const SCRIPT_TO_LANG: [RegExp, string][] = [
+  [/[\u0600-\u06FF]/, 'ar'],
+  [/[\u0400-\u04FF]/, 'ru'],
+  [/[\u3040-\u30FF]/, 'ja'],
+  [/[\uAC00-\uD7AF]/, 'ko'],
+  [/[\u4E00-\u9FFF]/, 'zh'],
+  [/[\u0900-\u097F]/, 'hi'],
+  [/[\u0E00-\u0E7F]/, 'th'],
+  [/[\u0370-\u03FF]/, 'el'],
+  [/[\u0590-\u05FF]/, 'he'],
+]
+
+/** Detect a language code from native-script text. Returns null when the
+ *  text is Latin-only (no script signal). Used when a track label is not a
+ *  parseable language name — never default blindly to English. */
+export function detectScriptLang(text: string): string | null {
+  for (const [pattern, code] of SCRIPT_TO_LANG) {
+    if (pattern.test(text)) return code
+  }
+  return null
+}
+
+/** Normalize a track label to a code, falling back to script detection when
+ *  the label is not a known language name (e.g. native-script labels like
+ *  "اَلْعَرَبِيَّةُ - FlowCast"). Strips a trailing " - Provider" suffix. */
+export function normTrackLang(label: string): string {
+  const clean = label.replace(/\s*-\s*[A-Za-z]+\s*$/, '').trim()
+  const code = normLang(clean)
+  if (code !== 'en' || /english/i.test(clean)) return code
+  return detectScriptLang(clean) ?? 'en'
+}

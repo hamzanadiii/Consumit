@@ -58,7 +58,7 @@ describe('playback session API', () => {
     expect(failed.json().source.providerId).toBe('backup')
     expect(failed.json().source.subtitles).toMatchObject([{ id: 'en', url: 'https://media.example/subs/en.vtt', format: 'vtt' }])
   })
-  it('returns direct subtitles for every answering provider', async () => {
+  it('lists the fixed fleet without resolving providers', async () => {
     const store = createMemoryPlaybackStore()
     const frTrack = { id: 'fr', label: 'French', language: 'fr', url: 'https://media.example/subs/fr.vtt', format: 'vtt' as const }
     const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const }))
@@ -66,13 +66,16 @@ describe('playback session API', () => {
     apps.push(app)
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
     expect(listed.statusCode).toBe(200)
-    const byId = Object.fromEntries(listed.json().providers.map((entry: { id: string }) => [entry.id, entry])) as Record<string, { subtitles: { id: string; url: string; format: string }[] }>
-    expect(byId.primary!.subtitles).toMatchObject([{ id: 'en', format: 'vtt' }])
-    expect(byId.primary!.subtitles[0]!.url).toBe(track.url)
-    expect(byId.backup!.subtitles).toMatchObject([{ id: 'fr', format: 'vtt' }])
+    const byId = Object.fromEntries(listed.json().providers.map((entry: { id: string }) => [entry.id, entry])) as Record<string, { available: boolean; subtitles: unknown[]; health: string }>
+    // No upstream work: the fleet lists with breaker health only. Captions
+    // arrive with the played source plus the aggregated engine tracks.
+    expect(byId.primary!.available).toBe(true)
+    expect(byId.backup!.available).toBe(true)
+    expect(byId.primary!.subtitles).toEqual([])
+    expect(byId.primary!.health).toBe('ok')
     await store.close()
   })
-  it('lists the whole fleet with availability, answering or not', async () => {
+  it('lists the whole fleet without resolving, answering or not', async () => {
     const store = createMemoryPlaybackStore()
     const providers: ProviderRegistration[] = [
       { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const },
@@ -83,8 +86,10 @@ describe('playback session API', () => {
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
     expect(listed.statusCode).toBe(200)
     const byId = Object.fromEntries(listed.json().providers.map((entry: { id: string }) => [entry.id, entry])) as Record<string, { available: boolean; detail?: string }>
+    // Even the ghost (nothing for this title) lists: tapping it attempts a
+    // fresh resolve and auto-advances on failure.
     expect(byId.primary!.available).toBe(true)
-    expect(byId.ghost!.available).toBe(false)
+    expect(byId.ghost!.available).toBe(true)
     expect(byId.ghost!.detail).toBeUndefined()
     await store.close()
   })

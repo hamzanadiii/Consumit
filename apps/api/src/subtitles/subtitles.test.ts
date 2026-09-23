@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createMemoryPlaybackStore } from '../playback/state.ts'
-import { entryMatchesLang, resolveSubtitles } from './engine.ts'
+import { detectTrackFlags, entryMatchesLang, resolveSubtitles } from './engine.ts'
+import { createStoreFileStore } from './storage.ts'
 import { cleanQueryLangs, createSubtitleService } from './subtitles.ts'
 import type { RawSubtitle, SubtitleSearchProvider } from './types.ts'
 
@@ -21,7 +22,7 @@ describe('resolveSubtitles', () => {
     const tracks = await resolveSubtitles(
       { type: 'movie' },
       [provider('b', [direct('b', 'fr', 'https://cdn.example/fr.vtt')]), provider('a', [direct('a', 'en', 'https://cdn.example/en.vtt')])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
     )
@@ -33,7 +34,7 @@ describe('resolveSubtitles', () => {
   it('caps two tracks per language and sixteen total', async () => {
     const store = createMemoryPlaybackStore()
     const raws = Array.from({ length: 20 }, (_, i) => direct('a', 'en', `https://cdn.example/en-${i}.vtt`))
-    const tracks = await resolveSubtitles({ type: 'movie' }, [provider('a', raws)], store, 'https://api.example', signal)
+    const tracks = await resolveSubtitles({ type: 'movie' }, [provider('a', raws)], createStoreFileStore(store), 'https://api.example', signal)
     expect(tracks).toHaveLength(2)
   })
 
@@ -43,7 +44,7 @@ describe('resolveSubtitles', () => {
     const tracks = await resolveSubtitles(
       { type: 'movie' },
       [provider('nxshasubs', [{ url: 'https://subs.example/a.srt', lang: 'en', label: 'rel', format: 'srt', provider: 'nxshasubs' }])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
       fetchFile as never,
@@ -53,7 +54,7 @@ describe('resolveSubtitles', () => {
     expect(tracks[0]?.url).toMatch(/^https:\/\/api\.example\/v1\/subtitles\/file\/[0-9a-f]{16}$/)
     expect(tracks[0]?.format).toBe('vtt')
     const key = tracks[0]!.url.split('/').pop()!
-    const stored = await store.get(`subvtt:${key}`)
+    const stored = await createStoreFileStore(store).getVtt(key)
     expect(stored).toContain('WEBVTT')
   })
 
@@ -83,7 +84,7 @@ describe('resolveSubtitles', () => {
     const tracks = await resolveSubtitles(
       { type: 'movie' },
       [provider('yify', [{ url: 'https://subs.example/a.zip', lang: 'en', label: 'rel', format: 'zip', provider: 'yify', needsExtract: true }])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
       fetchFile as never,
@@ -99,7 +100,7 @@ describe('resolveSubtitles', () => {
     const first = await resolveSubtitles(
       { type: 'movie' },
       [provider('yify', [raw])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
       fetchFile as never,
@@ -109,11 +110,11 @@ describe('resolveSubtitles', () => {
     fetchFile.mockClear()
     const { createHash } = await import('node:crypto')
     const key = createHash('sha1').update('yify|https://subs.example/cached.zip|en').digest('hex').slice(0, 16)
-    await store.set(`subvtt:${key}`, JSON.stringify({ vtt: 'WEBVTT\n\n00:00.000 --> 00:04.000\nHi\n' }), 3600)
+    await createStoreFileStore(store).putVtt(key, 'WEBVTT\n\n00:00.000 --> 00:04.000\nHi\n', { content: 'tmdb/movie/0/1/1/en', ttlSeconds: 3600 })
     const second = await resolveSubtitles(
       { type: 'movie' },
       [provider('yify', [raw])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
       fetchFile as never,
@@ -132,7 +133,7 @@ describe('resolveSubtitles', () => {
         { url: 'https://cdn.example/a.ass', lang: 'en', label: 'ass', format: 'ass', provider: 'n' },
         { url: 'http://cdn.example/b.vtt', lang: 'en', label: 'http', format: 'vtt', provider: 'n' },
       ])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
     )
@@ -146,7 +147,7 @@ describe('preferred languages', () => {
     const tracks = await resolveSubtitles(
       { type: 'movie', langs: ['ar', 'fr'] },
       [provider('a', [direct('a', 'en', 'https://cdn.example/en.vtt'), direct('a', 'ar', 'https://cdn.example/ar.vtt'), direct('a', 'fr', 'https://cdn.example/fr.vtt')])],
-      store,
+      createStoreFileStore(store),
       'https://api.example',
       signal,
     )
@@ -176,6 +177,60 @@ describe('preferred languages', () => {
     })
     await service.search({ kind: 'movie', id: 1 }, signal, ['ar', 'fr'])
     expect(seen).toEqual([['ar', 'fr']])
+  })
+})
+
+describe('detectTrackFlags', () => {
+  it('detects forced, SDH, signs, songs, and machine translation', () => {
+    expect(detectTrackFlags('https://cdn.example/movie.forced.srt Common')).toMatchObject({ forced: true, sdh: false })
+    expect(detectTrackFlags('https://cdn.example/movie.sdh.srt Common')).toMatchObject({ forced: false, sdh: true })
+    expect(detectTrackFlags('https://cdn.example/[Signs] ep01.ass Signs')).toMatchObject({ signs: true, songs: false })
+    expect(detectTrackFlags('https://cdn.example/op-karaoke.ass Karaoke')).toMatchObject({ songs: true })
+    expect(detectTrackFlags('https://cdn.example/en.srt machine-translated')).toMatchObject({ machineTranslated: true })
+    expect(detectTrackFlags('https://cdn.example/en.srt English')).toMatchObject({ forced: false, sdh: false, signs: false, songs: false, machineTranslated: false })
+  })
+})
+
+describe('scoring v2', () => {
+  it('orders full tracks before forced and machine variants and marks recommended', async () => {
+    const store = createMemoryPlaybackStore()
+    const tracks = await resolveSubtitles(
+      { type: 'movie', langs: ['en'] },
+      [provider('a', [
+        direct('a', 'en', 'https://cdn.example/en.machine-translated.vtt'),
+        direct('a', 'en', 'https://cdn.example/en.forced.vtt'),
+        direct('a', 'en', 'https://cdn.example/en.vtt'),
+      ])],
+      createStoreFileStore(store),
+      'https://api.example',
+      signal,
+    )
+    // Direct tracks keep raw labels; flags come from URL matching. The
+    // per-language cap drops the machine variant entirely.
+    expect(tracks.map((track) => track.url)).toEqual([
+      'https://cdn.example/en.vtt',
+      'https://cdn.example/en.forced.vtt',
+    ])
+    expect(tracks[0]).toMatchObject({ recommended: true })
+    expect(tracks[0]?.label).toContain('Recommended')
+    expect(tracks[1]).toMatchObject({ forced: true })
+    expect(tracks[1]?.recommended).toBeUndefined()
+  })
+
+  it('prefers non-HI full tracks for the recommended pick', async () => {
+    const store = createMemoryPlaybackStore()
+    const tracks = await resolveSubtitles(
+      { type: 'movie', langs: ['en'] },
+      [provider('a', [
+        { url: 'https://cdn.example/hi.vtt', lang: 'en', label: 'English HI', format: 'vtt', provider: 'a', hi: true },
+        direct('a', 'en', 'https://cdn.example/en.vtt'),
+      ])],
+      createStoreFileStore(store),
+      'https://api.example',
+      signal,
+    )
+    expect(tracks[0]?.url).toBe('https://cdn.example/en.vtt')
+    expect(tracks[0]).toMatchObject({ recommended: true })
   })
 })
 
@@ -216,5 +271,34 @@ describe('createSubtitleService', () => {
     })
     await service.search({ kind: 'anime', id: 21, episode: 1001 }, signal)
     expect(seen).toEqual(['One Piece'])
+  })
+
+  it('reads the durable catalog before live discovery and writes through after', async () => {
+    const store = createMemoryPlaybackStore()
+    let searches = 0
+    const live = provider('yify', [direct('yify', 'en', 'https://cdn.example/live.vtt')])
+    const rows: { language: string; label: string; format: 'vtt'; provider: string; storageKey: string; originalExt: null; hi: boolean; rating: number | null; releaseTag: null }[] = []
+    const saved: unknown[] = []
+    const service = createSubtitleService({
+      providers: [{ ...live, search: async (...args) => { searches += 1; return live.search(...args) } }],
+      animeTitle: async () => ({ title: 'Never' }),
+      store,
+      origin: 'https://api.example',
+      catalog: {
+        find: async () => rows,
+        save: async (_ref, tracks) => { saved.push(tracks) },
+      },
+    })
+    // Empty catalog: live discovery runs and writes through (direct-only
+    // tracks carry no first-party files, so nothing is saved).
+    expect(await service.search({ kind: 'movie', id: 1 }, signal)).toHaveLength(1)
+    expect(searches).toBe(1)
+    expect(saved).toHaveLength(1)
+    // Seeded catalog: upstream is skipped entirely.
+    rows.push({ language: 'en', label: 'English (vdrk)', format: 'vtt', provider: 'vdrk', storageKey: 'abcdef0123456789', originalExt: null, hi: false, rating: null, releaseTag: null })
+    const cached = await service.search({ kind: 'movie', id: 2 }, signal)
+    expect(searches).toBe(1)
+    expect(cached).toHaveLength(1)
+    expect(cached[0]).toMatchObject({ provider: 'vdrk', url: 'https://api.example/v1/subtitles/file/abcdef0123456789' })
   })
 })

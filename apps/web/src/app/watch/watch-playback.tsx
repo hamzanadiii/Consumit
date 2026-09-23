@@ -8,7 +8,7 @@ import { titleHref, type PlaybackProvider, type PlaybackRef, type PlaybackSessio
 import { Button, ConsumitPlayer, Toggle, buttonVariants, SUBTITLE_LANGUAGES_EVENT, readStoredSubtitleLanguages } from '@consumit/ui'
 import { useSession } from '../session/session'
 import { listPlaybackProviders, playbackCapabilities, playbackRequest, switchPlaybackProvider } from '@/lib/playback-browser'
-import { fetchAggregatedSubtitles } from '@/lib/subtitles-browser'
+import { fetchAggregatedSubtitles, fetchSubtitlePreference, saveSubtitlePreference } from '@/lib/subtitles-browser'
 import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, readPlaybackProgress, writePlaybackProgress, type ProgressCheckpoint } from '@/lib/playback-progress'
 import { createPlaybackEvents } from '@/lib/playback-events'
 
@@ -343,6 +343,57 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     )
     return () => { active = false }
   }, [session, subtitleLangs])
+  // Per-member subtitle sync correction: signed-in members reload their
+  // stored offset per title and every nudge persists (debounced) — guests
+  // keep the player's device-local behavior only. The screen remounts per
+  // title, so no cross-title leakage is possible.
+  const [syncedDelay, setSyncedDelay] = useState<number | null>(null)
+  const saveDelayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const pendingDelay = useRef<{ memberId: string; ref: PlaybackRef; offsetMs: number } | null>(null)
+  useEffect(() => {
+    setSyncedDelay(null)
+    if (!memberId || !session) return
+    let active = true
+    const ref = session.ref
+    void fetchSubtitlePreference(
+      { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
+      AbortSignal.timeout(10_000),
+    ).then(
+      (preference) => { if (active) setSyncedDelay(preference?.offsetMs ?? 0) },
+      () => {},
+    )
+    return () => { active = false }
+  }, [session, memberId])
+  const persistDelay = useCallback((offsetMs: number) => {
+    setSyncedDelay(offsetMs)
+    if (!memberId || !session) return
+    pendingDelay.current = { memberId, ref: session.ref, offsetMs }
+    clearTimeout(saveDelayTimer.current)
+    saveDelayTimer.current = setTimeout(() => {
+      const pending = pendingDelay.current
+      pendingDelay.current = null
+      if (!pending) return
+      const ref = pending.ref
+      void saveSubtitlePreference(
+        { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
+        { offsetMs: pending.offsetMs },
+        AbortSignal.timeout(10_000),
+      ).catch(() => {})
+    }, 1200)
+  }, [memberId, session])
+  useEffect(() => () => {
+    // Flush a trailing nudge on unmount so the last correction survives.
+    clearTimeout(saveDelayTimer.current)
+    const pending = pendingDelay.current
+    pendingDelay.current = null
+    if (!pending) return
+    const ref = pending.ref
+    void saveSubtitlePreference(
+      { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
+      { offsetMs: pending.offsetMs },
+      AbortSignal.timeout(10_000),
+    ).catch(() => {})
+  }, [])
   // Every answering provider's caption tracks join the menu: dedupe by file
   // URL (the same "English" label from five providers is five different
   // files), then disambiguate repeated labels with the supplying provider so
@@ -412,6 +463,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
           topMeta={[episodeMeta, qualityMeta].filter(Boolean).join(' · ') || undefined}
           pauseFacts={pauseFacts} pauseOverview={pauseOverview} pauseLogoUrl={title.logoUrl ?? undefined}
           onBack={() => router.push(titleHref(title))}
+          {...(memberId ? { subtitleDelayMs: syncedDelay ?? undefined, onSubtitleDelayMsChange: persistDelay } : {})}
           serverOptions={servers.map((server) => ({ value: server.id, label: server.label, detail: server.detail, region: server.regions?.[0], health: server.health, available: server.available, ...(server.family ? { family: server.family } : {}), ...(server.mirror ? { mirror: server.mirror } : {}) }))}
           selectedServer={session?.source.providerId}
           onServerChange={(providerId) => void switchServer(providerId)}
@@ -455,11 +507,6 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       {(prevHref || nextHref) && (
         <>
           <nav aria-label="Episode" className={`flex items-center gap-1 overflow-x-auto border-t border-white/10 bg-black px-3 py-2 sm:gap-2 sm:px-4 ${lightsOff ? 'opacity-30 transition-opacity hover:opacity-100 focus-within:opacity-100' : ''}`}>
-            {prevHref ? (
-              <Link className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold text-copy outline-none hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={prevHref}>
-                <ChevronLeft aria-hidden="true" className="size-4" /> Prev
-              </Link>
-            ) : <span className="w-2 shrink-0" />}
             <div className="flex shrink-0 items-center gap-1.5">
               <Toggle checked={autoplay} label="Autoplay next episode" onCheckedChange={(value) => persistPref('consumit.player.autoplay', value, setAutoplay)} />
               <span className="text-xs font-bold text-copy">Autoplay</span>
@@ -490,6 +537,11 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
               <Moon aria-hidden="true" className="size-4" /> Lights Off
             </button>
             <span className="min-w-2 flex-1" />
+            {prevHref ? (
+              <Link className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold text-copy outline-none hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={prevHref}>
+                <ChevronLeft aria-hidden="true" className="size-4" /> Prev
+              </Link>
+            ) : null}
             {nextHref ? (
               <Link className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold text-copy outline-none hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={nextHref}>
                 Next <ChevronRight aria-hidden="true" className="size-4" />

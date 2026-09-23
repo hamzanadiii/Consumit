@@ -6,7 +6,9 @@ import { ArtworkFrame, CastCard, SectionHeading, Tabs } from '@consumit/ui'
 import { CalendarClock, ChevronLeft, ChevronRight, Play, Star } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+
+import { useEpisodeArt } from '../use-episode-art'
 
 import { FilScreenShell, AnimeTitleRail } from '@/app/shared'
 
@@ -39,6 +41,31 @@ function formatAirDate(iso: string): string {
   // locale during SSR and the browser locale on hydration, which splits the
   // tree. This stays identical on both sides.
   return new Date(iso).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'numeric', day: 'numeric', year: 'numeric' })
+}
+
+/** Hero title: TMDB logo art when the title matched confidently, serif
+ *  display type otherwise. Exported for tests. */
+export function AnimeHeroTitle({ logoUrl, title }: { logoUrl: string | null; title: string }) {
+  if (logoUrl) {
+    return (
+      <div>
+        <Image
+          alt={title}
+          className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28"
+          height={240}
+          priority
+          src={logoUrl}
+          width={640}
+        />
+        <h1 className="sr-only">{title}</h1>
+      </div>
+    )
+  }
+  return (
+    <h1 className="font-display text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">
+      {title}
+    </h1>
+  )
 }
 
 function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
@@ -82,9 +109,7 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
 
       <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
         <div className="flex max-w-2xl flex-col justify-center gap-3">
-          <h1 className="font-display text-[clamp(2.5rem,5vw,4.5rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">
-            {detail.titles.preferred}
-          </h1>
+          <AnimeHeroTitle logoUrl={detail.logoUrl} title={detail.titles.preferred} />
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             {score ? (
@@ -138,19 +163,21 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
   )
 }
 
-function AnimeEpisodeCard({ anilistId, duration, episode, upcoming }: {
+function AnimeEpisodeCard({ anilistId, duration, episode, stillUrl, title, upcoming }: {
   anilistId: number
   duration: string | null
   episode: number
+  stillUrl?: string | null | undefined
+  title?: string | null | undefined
   upcoming: boolean
 }) {
   return (
     <article className="group flex min-w-0 flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none" data-filscreen-episode-card>
       <ArtworkFrame
-        alt={`Episode ${episode} still`}
+        alt={title ? `${title} still` : `Episode ${episode} still`}
         className="rounded-none border-0"
         ratio="landscape"
-        src={undefined}
+        src={stillUrl ?? undefined}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
         <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
@@ -161,6 +188,7 @@ function AnimeEpisodeCard({ anilistId, duration, episode, upcoming }: {
             </span>
           ) : null}
         </p>
+        {title ? <p className="truncate text-sm font-bold text-[var(--fs-ink)]" title={title}>{title}</p> : null}
         {duration ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{duration}</p> : null}
         <div className="mt-3">
           {upcoming ? (
@@ -183,12 +211,55 @@ function AnimeEpisodeCard({ anilistId, duration, episode, upcoming }: {
   )
 }
 
+/** AniList streaming episodes keyed by canonical number, same rule as the
+ *  watch rail: titles arrive as "Episode N - Name" with artwork where the
+ *  licensor supplied it. Exported for tests. */
+export function indexStreamingMeta(detail: AnimeTitleDetail): Map<number, { title: string; thumbnail: string | null }> {
+  const indexed = new Map<number, { title: string; thumbnail: string | null }>()
+  for (const entry of detail.streamingEpisodes ?? []) {
+    const match = /^episode\s+(\d+)/i.exec(entry.title.trim())
+    if (!match) continue
+    const number = Number(match[1])
+    if (!Number.isInteger(number) || number <= 0 || indexed.has(number)) continue
+    indexed.set(number, { title: entry.title, thumbnail: entry.thumbnail })
+  }
+  return indexed
+}
+
+/** Episode still/title with the honest fallback chain: AniList streaming
+ *  art first (already in hand), canonical episode art (TMDB primary)
+ *  when the licensor supplied nothing, placeholder otherwise. Fetched
+ *  per card only for episodes the streaming index misses, so covered
+ *  episodes cost zero extra requests. */
+function AnimeEpisodeWithArt({ anilistId, duration, episode, stream, upcoming }: {
+  anilistId: number
+  duration: string | null
+  episode: number
+  stream: { title: string; thumbnail: string | null } | undefined
+  upcoming: boolean
+}) {
+  const art = useEpisodeArt(anilistId, episode, { covered: !!stream?.thumbnail, upcoming })
+  const name = stream?.title?.replace(/^episode\s+\d+\s*[-–:]\s*/i, '').trim()
+    || art?.title || null
+  return (
+    <AnimeEpisodeCard
+      anilistId={anilistId}
+      duration={duration}
+      episode={episode}
+      stillUrl={stream?.thumbnail ?? art?.thumbnail ?? null}
+      title={name}
+      upcoming={upcoming}
+    />
+  )
+}
+
 function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
   const [page, setPage] = useState(1)
+  const streaming = useMemo(() => indexStreamingMeta(detail), [detail])
   // AniList omits the count for some long-runners; the airing position still
-  // tells us how many episodes have aired. Per-episode titles and stills are
-  // not mapped (AniList streaming thumbnails carry no reliable episode
-  // numbers), so cards stay honest: number, duration, airing state.
+  // tells us how many episodes have aired. Streaming entries carry titles
+  // and stills where the licensor supplied them; unmapped episodes keep
+  // the honest number-only card.
   const airedBefore = detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : null
   const total = detail.episodes ?? (airedBefore !== null && airedBefore > 0 ? airedBefore : 0)
   const upcomingFrom = detail.nextAiringEpisode?.episode ?? null
@@ -215,16 +286,23 @@ function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
       {episodes.length ? (
         <>
           <ul aria-label={`Episodes, page ${safePage} of ${totalPages}`} className="mt-8 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visible.map((episode) => (
-              <li className="min-w-0" key={episode}>
-                <AnimeEpisodeCard
-                  anilistId={detail.anilistId}
-                  duration={duration}
-                  episode={episode}
-                  upcoming={upcomingFrom !== null && episode >= upcomingFrom}
-                />
-              </li>
-            ))}
+            {visible.map((episode) => {
+              // Streaming titles arrive as "Episode 130 - Scent of Danger";
+              // the eyebrow already carries the number, so cards show the
+              // name part only. Episodes without a mapped entry fall back
+              // to Kitsu art, then the honest number-only card.
+              return (
+                <li className="min-w-0" key={episode}>
+                  <AnimeEpisodeWithArt
+                    anilistId={detail.anilistId}
+                    duration={duration}
+                    episode={episode}
+                    stream={streaming.get(episode)}
+                    upcoming={upcomingFrom !== null && episode >= upcomingFrom}
+                  />
+                </li>
+              )
+            })}
           </ul>
           {totalPages > 1 ? (
             <nav aria-label="Episode pages" className="mt-8 flex flex-wrap items-center gap-3">

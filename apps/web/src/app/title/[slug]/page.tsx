@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import { TitleDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
+import { getAnimeMatch } from '@/lib/anime-api'
 import { CatalogApiError, getCatalogTitle } from '@/lib/catalog-api'
+import { looksLikeAnime } from '../../catalog/catalog-ui'
 import { serializeJsonLd } from '@/lib/json-ld'
 
 type TitleDetailPageProps = {
@@ -39,6 +41,12 @@ export default async function TitleDetailPage({ params }: TitleDetailPageProps) 
   }
   if (response.item.kind !== 'movie') notFound()
   const item = response.item
+  // Japanese animation belongs to the anime domain: a confident match
+  // redirects straight there instead of stranding the member here.
+  if (looksLikeAnime(item)) {
+    const animeMatch = await getAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
+    if (animeMatch) redirect(`/anime/${animeMatch}`)
+  }
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Movie',

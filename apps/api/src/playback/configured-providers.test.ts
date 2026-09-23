@@ -65,6 +65,16 @@ describe('configured real provider integration', () => {
       { tmdbToken: 'token' },
     )).toThrow('must match its adapter')
   })
+  it('compiles flux host patterns and rejects invalid regex', () => {
+    const [registration] = configuredProviders(
+      [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], mediaHostPatterns: ['^srv[0-9]+\\.[a-z]+\\.site$'], upstreamGroup: 'vixsrc' }],
+    )
+    expect(registration!.mediaHostPatterns).toHaveLength(1)
+    expect(registration!.mediaHostPatterns![0]).toBeInstanceOf(RegExp)
+    expect(() => configuredProviders(
+      [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], mediaHostPatterns: ['([invalid'], upstreamGroup: 'vixsrc' }],
+    )).toThrow('Invalid media host pattern')
+  })
   it('wires VAPlayer through trusted TMDB identity and caps the pilot at three active providers', async () => {
     const transport = vi.fn<MediaTransport>(async (url) => ({
       status: 200, url, headers: new Headers(), body: Readable.from([url.includes('themoviedb')
@@ -85,6 +95,11 @@ describe('configured real provider integration', () => {
     expect(configuredProviders(active)).toHaveLength(4)
     const [pinned] = configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrc', priority: 100 }])
     expect(pinned!.adapter.id).toBe('vixsrc')
+    const [patient] = configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrc', attemptMs: 8000 }])
+    expect(patient!.attemptMs).toBe(8000)
+    expect(pinned).not.toHaveProperty('attemptMs')
+    expect(() => configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrc', attemptMs: 500 }])).toThrow()
+    expect(() => configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrc', mediaHostPatterns: ['([invalid'] }])).toThrow('Invalid media host pattern')
     expect(configuredProviders([{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrc' }])[0]).not.toHaveProperty('priority')
   })
 })

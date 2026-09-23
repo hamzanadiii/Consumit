@@ -33,14 +33,21 @@ const SERVERS = [
   { name: 'Delta', path: 'allmovies' },
 ]
 
-export function createVidnestProvider(http: ProviderHttp, now = Date.now) {
-  return adapter('vidnest', async (input, signal) => {
+export type VidnestScope = { id?: string; servers?: string[] }
+
+export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope: VidnestScope = {}) {
+  const { id = 'vidnest', servers } = scope
+  const wanted = servers?.map((server) => server.toLowerCase())
+  return Object.assign(adapter('vidnest', async (input, signal) => {
     const { ref } = input
+    // Movies + series only: an anime ref must never resolve by numeric-id
+    // coincidence (AniList ids are not TMDB ids).
+    if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
     const isTv = ref.kind === 'series'
     const pathSuffix = isTv ? `tv/${ref.id}/${ref.season}/${ref.episode}` : `movie/${ref.id}`
 
     const results = await Promise.all(
-      SERVERS.map(async (server) => {
+      SERVERS.filter((server) => !wanted || wanted.includes(server.name.toLowerCase())).map(async (server) => {
         const url = `${origin}/${server.path}/${pathSuffix}`
         try {
           const res = await document(http, url, signal, { referer: `${origin}/`, accept: 'application/json' })
@@ -116,5 +123,5 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now) {
 
     if (!sources.length) throw new ProviderFailure('empty')
     return sources
-  })
+  }), { id })
 }

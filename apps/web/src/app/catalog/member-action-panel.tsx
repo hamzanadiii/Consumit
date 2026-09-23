@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 
 import {
   getCachedMemberLibrary,
-  getMemberLike,
+  getMemberTitleState,
   IdentityApiError,
   replaceCachedMemberLibrary,
   setMemberLiked,
@@ -120,9 +120,9 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
         setSaved(library.saved.some((entry) => entry.kind === kind && entry.id === id))
       })
       .catch(() => {})
-    void getMemberLike({ id, kind })
-      .then((like) => {
-        if (!cancelled) setLiked(like !== null)
+    void getMemberTitleState({ id, kind })
+      .then((state) => {
+        if (!cancelled) setLiked(state.like !== null)
       })
       .catch((cause) => {
         if (!cancelled && (!(cause instanceof IdentityApiError) || cause.status !== 404)) {

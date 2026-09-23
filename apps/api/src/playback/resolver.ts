@@ -154,16 +154,22 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     // the configured file order. No learned re-ranking, no hedging, no
     // upstream-group dedupe window — the player tries the first provider,
     // then the next, so the server list stays fixed.
-    const candidates = providers.filter((p) => p.enabled && p.approvedRegions.includes(options.region) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
+    // Kind routing is load-bearing: without it a movie provider answers an
+    // anime ref by numeric-id coincidence (AniList 793 played as TMDB 793).
+    // Menu listing and probes already filter this way; the waterfall must too
+    // — including manual switches, where a mismatch fails honest instead of
+    // playing the wrong title.
+    const candidates = providers.filter((p) => p.enabled && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
       .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
     if (!candidates.length) return null
     const controller = new AbortController()
-    const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), options.deadlineMs ?? 8000)
+    const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), options.deadlineMs ?? 12000)
     const signal = AbortSignal.any([parent, controller.signal])
     // One hung provider must not hold the whole request: bound each
     // sequential attempt so a stalled first provider falls through to the
-    // next instead of burning the full deadline.
-    const perAttemptMs = Math.min(5000, options.deadlineMs ?? 8000)
+    // next instead of burning the full deadline. Slow-but-good providers
+    // carry their own budget, still capped by the total deadline.
+    const deadlineMs = options.deadlineMs ?? 12000
     try {
       for (const candidate of candidates) {
         if (signal.aborted) return null
@@ -172,7 +178,8 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         signal.addEventListener('abort', onAbort, { once: true })
         const attemptSignal = AbortSignal.any([signal, perAttempt.signal])
         let timer: ReturnType<typeof setTimeout> | undefined
-        const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, perAttemptMs) })
+        const budget = Math.min(candidate.attemptMs ?? 5000, deadlineMs)
+        const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, budget) })
         try {
           const value = await Promise.race([attempt(candidate, input, attemptSignal), timeout])
           if (value) return { ...value, subtitles: dedupeSubtitleTracks(value.subtitles) }
@@ -204,7 +211,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       if (!work) {
         if (pending.size >= 100) return null
         const controller = new AbortController()
-        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(options.deadlineMs ?? 8000)])
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(options.deadlineMs ?? 12000)])
         const sharedKey = `access:${createHash('sha256').update(key).digest('hex')}`
         const discover = async () => {
           if (!fresh && options.store) {

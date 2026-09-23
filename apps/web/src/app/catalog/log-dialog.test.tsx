@@ -20,6 +20,9 @@ function dialogFetch() {
   return vi.fn().mockImplementation((input: string | URL | Request, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+    if (url.includes('/v1/me/titles/')) {
+      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null }), { status: 200 }))
+    }
     if (url.includes('/v1/ratings/') || url.includes('/v1/likes/')) {
       return Promise.resolve(new Response('Not found', { status: 404 }))
     }

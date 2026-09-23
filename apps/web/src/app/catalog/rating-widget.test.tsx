@@ -17,14 +17,14 @@ const mocks = vi.hoisted(() => {
   return {
     IdentityApiError,
     clearMemberRating: vi.fn(),
-    getMemberRating: vi.fn(),
+    getMemberTitleState: vi.fn(),
     setMemberRating: vi.fn(),
   }
 })
 
 vi.mock('@/lib/identity-browser', () => ({
   clearMemberRating: mocks.clearMemberRating,
-  getMemberRating: mocks.getMemberRating,
+  getMemberTitleState: mocks.getMemberTitleState,
   IdentityApiError: mocks.IdentityApiError,
   setMemberRating: mocks.setMemberRating,
 }))
@@ -46,7 +46,7 @@ const storedRating = { id: 693134, kind: 'movie', origin: 'native', sourceKey: n
 describe('rating widget', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getMemberRating.mockResolvedValue(storedRating)
+    mocks.getMemberTitleState.mockResolvedValue({ rating: storedRating, like: null, review: null })
     mocks.setMemberRating.mockImplementation(async (_title: unknown, value: number) => ({ ...storedRating, value }))
   })
 
@@ -75,7 +75,7 @@ describe('rating widget', () => {
 
   it('treats a missing rating as unrated instead of an error', async () => {
     const user = userEvent.setup()
-    mocks.getMemberRating.mockRejectedValue(new mocks.IdentityApiError('No rating for this title.', { status: 404 }))
+    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     render(<SessionProvider initialMember={member} initialStatus="authenticated"><RatingWidget id={693134} kind="movie" title="Dune: Part Two" /></SessionProvider>)
 
     expect(await screen.findByRole('radiogroup', { name: 'Rate Dune: Part Two out of 10' })).toBeInTheDocument()
@@ -86,8 +86,8 @@ describe('rating widget', () => {
     await waitFor(() => expect(mocks.setMemberRating).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 6))
   })
 
-  it('surfaces load failures that are not a missing rating', async () => {
-    mocks.getMemberRating.mockRejectedValue(new mocks.IdentityApiError('The account service returned an invalid response.', { status: 503 }))
+  it('surfaces load failures of the title state', async () => {
+    mocks.getMemberTitleState.mockRejectedValue(new mocks.IdentityApiError('The account service returned an invalid response.', { status: 503 }))
     render(<SessionProvider initialMember={member} initialStatus="authenticated"><RatingWidget id={693134} kind="movie" title="Dune: Part Two" /></SessionProvider>)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')

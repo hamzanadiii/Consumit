@@ -43,7 +43,9 @@ services:
       context: .
       target: api-migrate
     environment:
-      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      # External managed Postgres (Neon): set DATABASE_URL in .env or the
+      # shell. Falls back to the local container for plain local runs.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,14 +62,17 @@ services:
         required: false
     environment:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
-      DATABASE_SSL_MODE: disable
-      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
       NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
       PORT: 3001
       TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
       TMDB_REGION: ${TMDB_REGION:-US}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       VALKEY_URL: valkey://valkey:6379/0
+      SUBTITLES_DIR: /var/lib/consumit/subtitles
+    volumes:
+      - consumit-subtitles:/var/lib/consumit/subtitles
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -92,8 +97,8 @@ services:
       - path: ./apps/api/.env
         required: false
     environment:
-      DATABASE_SSL_MODE: disable
-      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
       NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
       TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
       TMDB_REGION: ${TMDB_REGION:-US}
@@ -147,6 +152,24 @@ services:
       - "${CONSUMIT_PORT:-8080}:80"
     restart: unless-stopped
 
+  # Nightly Postgres backup (Neon). Dumps $DATABASE_URL at 03:00 UTC,
+  # keeps 7 daily dumps in the consumit-backups volume, and snapshots the
+  # provider-overrides file alongside. See infra/docker/backup.sh for the
+  # manual run + restore drill. Local postgres stays as the drill target
+  # and the offline fallback; Valkey intentionally has no backup (total
+  # loss only logs members out — see ARCHITECTURE.md).
+  backup:
+    # pg_dump must be >= the server version (Neon runs PG18).
+    image: postgres:18-alpine
+    command: ["sh", "-c", "echo '0 3 * * * sh /backup.sh >> /var/log/backup.log 2>&1' | crontab - && exec crond -f"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
+    volumes:
+      - ./infra/docker/backup.sh:/backup.sh:ro
+      - consumit-backups:/backups
+      - ./infra/playback:/config-overrides:ro
+    restart: unless-stopped
+
   postgres-test:
     image: postgres:17-alpine
     profiles: ["test"]
@@ -181,3 +204,5 @@ services:
 volumes:
   consumit-postgres:
   consumit-valkey:
+  consumit-backups:
+  consumit-subtitles:
