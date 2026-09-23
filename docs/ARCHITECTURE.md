@@ -111,7 +111,7 @@ Anime is a first-class bounded domain that plugs into the same playback, library
 
 ### AniList adapter
 
-The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
 
 ### Episode identity engine
 

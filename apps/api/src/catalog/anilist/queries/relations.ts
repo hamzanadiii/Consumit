@@ -9,6 +9,7 @@ export const relationsQuery = `query ($id: Int) {
           ... on Media {
             id
             idMal
+            isAdult
             title { romaji english native }
             format
             status

@@ -18,6 +18,8 @@ type AnilistMedia = {
   averageScore: number | null
   popularity: number
   description: string
+  /** Selected on every media set; absent means unknown, never adult. */
+  isAdult?: boolean | null
   nextAiringEpisode: { episode: number; airingAt: number } | null
   source?: string | null
   countryOfOrigin?: string | null
@@ -48,8 +50,14 @@ const RELATION_MAP: Record<string, AnimeRelationType> = {
   SPIN_OFF: 'SPIN_OFF', OTHER: 'OTHER', SOURCE: 'SOURCE', COMPILATION: 'COMPILATION', CONTAINS: 'CONTAINS',
 }
 
-export function mapTitle(raw: AnilistMedia): AnimeTitle {
-  return {
+/** Adult exclusion guard. Only an explicit upstream flag excludes; a
+ *  missing flag means unknown, never adult, so schema drift cannot empty
+ *  the catalog. */
+export function isAdultMedia(raw: Pick<AnilistMedia, 'isAdult'>): boolean {
+  return raw.isAdult === true
+}
+
+export function mapTitle(raw: AnilistMedia): AnimeTitle {  return {
     preferred: raw.title.english || raw.title.romaji || raw.title.native || 'Unknown',
     english: raw.title.english,
     romaji: raw.title.romaji,

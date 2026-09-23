@@ -1,8 +1,9 @@
 export const searchQuery = `query ($search: String, $page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
-    media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+    media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false) {
       id
       idMal
+      isAdult
       title { romaji english native }
       format
       status

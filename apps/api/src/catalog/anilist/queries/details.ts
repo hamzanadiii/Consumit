@@ -2,6 +2,7 @@ export const detailsQuery = `query ($id: Int) {
   Media(id: $id, type: ANIME) {
     id
     idMal
+    isAdult
     title { romaji english native }
     format
     status
@@ -38,6 +39,7 @@ export const detailsQuery = `query ($id: Int) {
           ... on Media {
             id
             idMal
+            isAdult
             title { romaji english native }
             format
             status

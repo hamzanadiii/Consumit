@@ -16,6 +16,7 @@ import { seasonalQuery } from './queries/seasonal.ts'
 import { relationsQuery } from './queries/relations.ts'
 import { airingScheduleQuery } from './queries/airing.ts'
 import {
+  isAdultMedia,
   mapTitleSummary,
   mapTitleDetail,
   mapFranchiseRelation,
@@ -80,7 +81,9 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
         `search:${query}:${page}`,
         'search',
       )
-      const items = data.Page.media.map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
+      const items = data.Page.media
+        .filter((raw) => !isAdultMedia(raw as { isAdult?: boolean | null }))
+        .map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
       return {
         items,
         page,
@@ -97,6 +100,7 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
         'details',
       )
       if (!data.Media) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
+      if (isAdultMedia(data.Media as { isAdult?: boolean | null })) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
       return mapTitleDetail(data.Media as Parameters<typeof mapTitleDetail>[0])
     },
 
@@ -107,7 +111,9 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
         `trending:${page}`,
         'trending',
       )
-      const items = data.Page.media.map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
+      const items = data.Page.media
+        .filter((raw) => !isAdultMedia(raw as { isAdult?: boolean | null }))
+        .map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
       return {
         items,
         page,
@@ -123,7 +129,9 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
         `seasonal:${season}:${year}:${page}`,
         'seasonal',
       )
-      const items = data.Page.media.map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
+      const items = data.Page.media
+        .filter((raw) => !isAdultMedia(raw as { isAdult?: boolean | null }))
+        .map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
       return {
         items,
         page,
@@ -140,8 +148,10 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
         'relations',
       )
       if (!data.Media) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
-      const media = data.Media as { id: number; title: { romaji: string | null; english: string | null }; relations: { edges: Array<{ relationType: string; node: Record<string, unknown> }> } | null }
+      const media = data.Media as { id: number; title: { romaji: string | null; english: string | null }; isAdult?: boolean | null; relations: { edges: Array<{ relationType: string; node: Record<string, unknown> }> } | null }
+      if (isAdultMedia(media)) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
       const relations = media.relations?.edges
+        .filter((edge) => !isAdultMedia(edge.node as { isAdult?: boolean | null }))
         .map((edge) => mapFranchiseRelation({ relationType: edge.relationType, node: edge.node as Parameters<typeof mapFranchiseRelation>[0]['node'] }))
         .filter((r): r is NonNullable<typeof r> => r !== null) ?? []
       return {

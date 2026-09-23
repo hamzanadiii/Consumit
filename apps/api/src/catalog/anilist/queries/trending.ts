@@ -1,8 +1,9 @@
 export const trendingQuery = `query ($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
-    media(sort: TRENDING_DESC, type: ANIME, status: RELEASING) {
+    media(sort: TRENDING_DESC, type: ANIME, status: RELEASING, isAdult: false) {
       id
       idMal
+      isAdult
       title { romaji english native }
       format
       status

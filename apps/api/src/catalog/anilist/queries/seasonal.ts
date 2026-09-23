@@ -1,8 +1,9 @@
 export const seasonalQuery = `query ($season: MediaSeason, $seasonYear: Int, $page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
-    media(season: $season, seasonYear: $seasonYear, type: ANIME, sort: POPULARITY_DESC) {
+    media(season: $season, seasonYear: $seasonYear, type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
       id
       idMal
+      isAdult
       title { romaji english native }
       format
       status
