@@ -175,7 +175,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
               className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-6 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
               href={watchHref(detail)}
             >
-              <Play aria-hidden="true" className="size-4 fill-current" />
+              <Play aria-hidden="true" className="size-4" />
               Watch
             </Link>
           </div>
