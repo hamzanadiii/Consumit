@@ -1,6 +1,9 @@
 import {
+  animeEpisodeSchema,
+  animeSearchResultSchema,
   apiErrorResponseSchema,
   animePageSchema,
+  type AnimeEpisode,
   type AnimeSeason,
 } from '@consumit/contracts'
 
@@ -58,4 +61,31 @@ export async function browserAnimeTrending(page: number, signal?: AbortSignal) {
   const parsed = animePageSchema.safeParse(await request(`/v1/anime/trending?page=${page}`, signal))
   if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned an invalid response.')
   return parsed.data
+}
+
+/** AniList title search for the command palette and other browser surfaces.
+ *  TMDB never serves anime, so this stays a separate best-effort call. */
+export async function browserSearchAnime(query: string, page = 1, signal?: AbortSignal) {
+  const params = new URLSearchParams({ q: query.trim().slice(0, 100), page: String(page) })
+  const parsed = animeSearchResultSchema.safeParse(await request(`/v1/anime/search?${params}`, signal))
+  if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned an invalid response.')
+  return parsed.data
+}
+
+/** Canonical episode metadata (Kitsu title/synopsis/still) for one anime
+ *  episode. Null on any miss — callers fall back to streaming thumbnails,
+ *  then the honest placeholder. */
+export async function browserAnimeEpisode(anilistId: number, episode: number, signal?: AbortSignal): Promise<AnimeEpisode | null> {
+  let response: Response
+  try {
+    response = await fetch(`/v1/anime/${anilistId}/episodes/${episode}`, {
+      headers: { accept: 'application/json' },
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000),
+    })
+  } catch {
+    return null
+  }
+  if (!response.ok) return null
+  const parsed = animeEpisodeSchema.safeParse(await response.json().catch(() => null))
+  return parsed.success ? parsed.data : null
 }

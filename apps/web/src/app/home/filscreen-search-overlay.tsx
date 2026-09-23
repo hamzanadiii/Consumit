@@ -1,15 +1,18 @@
 'use client'
 
-import { titleHref, type CatalogTitleSummary } from '@consumit/contracts'
+import { titleHref, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
 import { ArrowRight, CornerDownLeft, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
+import { browserSearchAnime } from '@/lib/anime-browser'
 import { browserSearchCatalog } from '@/lib/catalog-browser'
 
 const SEARCH_DEBOUNCE_MS = 200
 const MAX_OVERLAY_RESULTS = 7
+const MAX_CATALOG_RESULTS = 7
+const MAX_ANIME_RESULTS = 5
 
 const OVERLAY_ANIMATION = [
   '@keyframes fs-search-backdrop-in{from{opacity:0}to{opacity:1}}',
@@ -23,12 +26,80 @@ const OVERLAY_ANIMATION = [
 
 type SearchStatus = 'idle' | 'loading' | 'error'
 
+type OverlayEntry = {
+  href: string
+  key: string
+  meta: string
+  posterUrl?: string | undefined
+  ratingLabel?: string | undefined
+  title: string
+}
+
+function catalogEntry(item: CatalogTitleSummary): OverlayEntry {
+  return {
+    href: titleHref(item),
+    key: `${item.kind}:${item.id}`,
+    meta: [item.year ? String(item.year) : null, item.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · '),
+    posterUrl: item.posterUrl ?? undefined,
+    ratingLabel: typeof item.tmdbRating === 'number' ? `★ ${item.tmdbRating.toFixed(1)}` : undefined,
+    title: item.title,
+  }
+}
+
+function animeEntry(anime: AnimeTitleSummary): OverlayEntry {
+  const score = anime.averageScore === null ? undefined : (anime.averageScore / 10).toFixed(1)
+  return {
+    href: `/anime/${anime.anilistId}`,
+    key: `anime:${anime.anilistId}`,
+    meta: [anime.seasonYear ? String(anime.seasonYear) : null, 'Anime', anime.genres.slice(0, 2).join(' · ') || null].filter(Boolean).join(' · '),
+    posterUrl: anime.coverImage.url ?? undefined,
+    ratingLabel: score ? `★ ${score}` : undefined,
+    title: anime.titles.preferred,
+  }
+}
+
+function mergeOverlayResults(query: string, catalog: readonly CatalogTitleSummary[], anime: readonly AnimeTitleSummary[]): OverlayEntry[] {
+  // One ranked list, not catalog-first: every match scores against the query
+  // (exact, prefix, word-prefix, substring, then the rest) and the best
+  // title wins regardless of domain. Anime scores across all its titles so
+  // a romaji query like "boku no hero" still matches. Ties keep fetch order.
+  const scored: { entry: OverlayEntry; score: number }[] = [
+    ...catalog.slice(0, MAX_CATALOG_RESULTS).map((item) => ({
+      entry: catalogEntry(item),
+      score: matchScore(query, [item.title]),
+    })),
+    ...anime.slice(0, MAX_ANIME_RESULTS).map((item) => ({
+      entry: animeEntry(item),
+      score: matchScore(query, [item.titles.preferred, item.titles.english, item.titles.romaji]),
+    })),
+  ]
+  return scored
+    .sort((a, b) => a.score - b.score)
+    .slice(0, MAX_OVERLAY_RESULTS)
+    .map((scoredEntry) => scoredEntry.entry)
+}
+
+function matchScore(query: string, titles: readonly (string | null)[]): number {
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return 4
+  let best = 4
+  for (const raw of titles) {
+    if (!raw) continue
+    const title = raw.toLowerCase()
+    if (title === normalizedQuery) return 0
+    if (title.startsWith(normalizedQuery)) best = Math.min(best, 1)
+    else if (title.split(/[^a-z0-9]+/).some((word) => word.startsWith(normalizedQuery))) best = Math.min(best, 2)
+    else if (title.includes(normalizedQuery)) best = Math.min(best, 3)
+  }
+  return best
+}
+
 export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void; open: boolean }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const requestIdRef = useRef(0)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<readonly CatalogTitleSummary[]>([])
+  const [results, setResults] = useState<readonly OverlayEntry[]>([])
   const [status, setStatus] = useState<SearchStatus>('idle')
   const [activeIndex, setActiveIndex] = useState(-1)
   const [retryNonce, setRetryNonce] = useState(0)
@@ -63,18 +134,23 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
     const requestId = ++requestIdRef.current
     const timer = window.setTimeout(() => {
       setStatus('loading')
-      void browserSearchCatalog(normalized, 'all')
-        .then((response) => {
-          if (requestIdRef.current !== requestId) return
-          const items = response.items.slice(0, MAX_OVERLAY_RESULTS)
-          setResults(items)
-          setStatus('idle')
-          setActiveIndex(items.length > 0 ? 0 : -1)
-        })
-        .catch(() => {
-          if (requestIdRef.current !== requestId) return
+      // Movies/series (TMDB) and anime (AniList) are separate domains.
+      // Either outage must not take down the other: each resolves to null
+      // on failure and only a total miss surfaces the error state.
+      void Promise.all([
+        browserSearchCatalog(normalized, 'all').catch(() => null),
+        browserSearchAnime(normalized).catch(() => null),
+      ]).then(([catalog, anime]) => {
+        if (requestIdRef.current !== requestId) return
+        if (!catalog && !anime) {
           setStatus('error')
-        })
+          return
+        }
+        const items = mergeOverlayResults(normalized, catalog?.items ?? [], anime?.items ?? [])
+        setResults(items)
+        setStatus('idle')
+        setActiveIndex(items.length > 0 ? 0 : -1)
+      })
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [normalized, open, retryNonce])
@@ -99,7 +175,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (activeResult) {
-      goTo(titleHref(activeResult))
+      goTo(activeResult.href)
       return
     }
     if (normalized.length >= 2) {
@@ -127,7 +203,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
           <div className="flex items-center gap-3 border-b border-[var(--fs-line)] px-4 sm:px-5">
             <Search aria-hidden="true" className="size-5 shrink-0 text-[var(--fs-accent)]" />
             <label className="sr-only" htmlFor="filscreen-command-search">
-              Search movies and series
+              Search movies, series, and anime
             </label>
             <input
               aria-activedescendant={activeResult ? `fs-search-option-${activeIndex}` : undefined}
@@ -151,7 +227,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                   onClose()
                 }
               }}
-              placeholder="Search movies, series…"
+              placeholder="Search movies, series, anime…"
               ref={inputRef}
               role="combobox"
               spellCheck={false}
@@ -182,10 +258,11 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
           {!showResults ? (
             <div className="px-4 py-5 sm:px-5">
               <p className="text-xs font-bold tracking-[0.12em] text-[var(--fs-muted)] uppercase">Jump to</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {([
                   ['Trending movies', '/movies'],
                   ['Trending series', '/series'],
+                  ['Trending anime', '/anime'],
                   ['New for you', '/'],
                 ] as const).map(([label, href]) => (
                   <Link
@@ -234,7 +311,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                       selected ? 'bg-[var(--fs-accent-soft)] shadow-[inset_0_0_0_1px_var(--fs-accent)]' : 'hover:bg-[var(--fs-hover)]'
                     }`}
                     id={`fs-search-option-${index}`}
-                    key={`${item.kind}:${item.id}`}
+                    key={item.key}
                     onMouseEnter={() => setActiveIndex(index)}
                     role="option"
                   >
@@ -248,18 +325,18 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                     </span>
                     <Link
                       className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-                      href={titleHref(item)}
+                      href={item.href}
                       onClick={onClose}
                       tabIndex={-1}
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-[var(--fs-ink)]">{item.title}</span>
                         <span className="mt-0.5 block truncate text-xs text-[var(--fs-muted)]">
-                          {[item.year ? String(item.year) : null, item.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · ')}
-                          {typeof item.tmdbRating === 'number' ? (
+                          {item.meta}
+                          {item.ratingLabel ? (
                             <>
                               {' · '}
-                              <span className="text-[var(--fs-star)]">★ {item.tmdbRating.toFixed(1)}</span>
+                              <span className="text-[var(--fs-star)]">{item.ratingLabel}</span>
                             </>
                           ) : null}
                         </span>
