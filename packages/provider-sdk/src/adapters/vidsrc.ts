@@ -50,7 +50,7 @@ async function wasmModule(w: unknown, wasmUrl?: unknown, wasmB64?: unknown): Pro
     } else {
       return null
     }
-    const mod = await WebAssembly.compile(bytes)
+    const mod = await WebAssembly.compile(Uint8Array.from(bytes))
     if (wasmCache.size > 8) wasmCache.delete(wasmCache.keys().next().value!)
     wasmCache.set(key, { mod, ts: Date.now() })
     return mod

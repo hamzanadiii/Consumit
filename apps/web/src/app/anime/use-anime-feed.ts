@@ -3,7 +3,7 @@
 import type { AnimePage } from '@consumit/contracts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { browserAnimeSeasonal, type BrowserAnimeError } from '@/lib/anime-browser'
+import { browserAnimeSeasonal } from '@/lib/anime-browser'
 
 export type AnimeFeedQuery = {
   season: 'WINTER' | 'SPRING' | 'SUMMER' | 'FALL'

@@ -26,9 +26,8 @@ const envSchema = z.object({
   TMDB_REGION: z.string().trim().length(2).default('US'),
   TRUSTED_PROXIES: z.string().optional(),
   VALKEY_URL: z.string().trim().min(1).optional(),
-  WORKER_URL: z.string().url().optional(),
-  EMBED_HMAC_SECRET: z.string().min(16).optional(),
-  EMBED_ALLOWED_DOMAINS: z.string().optional(),
+  WORKER_URL: z.url().refine((url) => new URL(url).protocol === 'https:', 'Worker URL must use HTTPS.').optional(),
+  EMBED_HMAC_SECRET: z.string().min(32).optional(),
 })
 
 export type ApiEnv = {
@@ -65,7 +64,6 @@ export type ApiEnv = {
   valkeyUrl: string | undefined
   workerUrl: string | undefined
   embedHmacSecret: string | undefined
-  embedAllowedDomains: string | undefined
 }
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): ApiEnv {
@@ -131,6 +129,5 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     valkeyUrl: value.VALKEY_URL,
     workerUrl: value.WORKER_URL,
     embedHmacSecret: value.EMBED_HMAC_SECRET,
-    embedAllowedDomains: value.EMBED_ALLOWED_DOMAINS,
   }
 }

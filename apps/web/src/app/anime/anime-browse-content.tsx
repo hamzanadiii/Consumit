@@ -118,9 +118,9 @@ function AnimeGrid({ items, loading, error, hasMore, loadMore, sentinelRef, onRe
         </div>
       ) : null}
       <div className="flex min-h-40 flex-col items-center justify-center gap-4 py-10" ref={sentinelRef}>
-        {error ? <p className="max-w-md text-center text-sm text-[var(--fs-ink)]" role="alert">We couldn't load {items.length > 0 ? 'more' : 'these'} titles. Please try again.</p> : null}
+        {error ? <p className="max-w-md text-center text-sm text-[var(--fs-ink)]" role="alert">We couldn&apos;t load {items.length > 0 ? 'more' : 'these'} titles. Please try again.</p> : null}
         {hasMore ? <Button loading={loading} onClick={() => void loadMore()} variant="secondary">{loading ? 'Loading titles…' : error ? 'Try again' : 'Load more'}</Button> : null}
-        {!hasMore && items.length > 0 ? <p className="text-sm text-[var(--fs-muted)]">You're all caught up. Try another genre or format.</p> : null}
+        {!hasMore && items.length > 0 ? <p className="text-sm text-[var(--fs-muted)]">You&apos;re all caught up. Try another genre or format.</p> : null}
       </div>
     </section>
   )

@@ -181,8 +181,8 @@ describe('real member data read model', () => {
   })
 
   it('follows members once and counts both sides honestly', async () => {
-    await db.prisma.member.create({ data: { email: 'followed@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'followed_star' } } } })
-    const follower = await db.prisma.member.create({ data: { email: 'follower@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'eager_follower' } } } })
+    await db.prisma.member.create({ data: { email: 'followed@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'followed_star', visibility: 'public' } } } })
+    const follower = await db.prisma.member.create({ data: { email: 'follower@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'eager_follower', visibility: 'public' } } } })
 
     expect(await memberData.isFollowing(follower.id, 'followed_star')).toBe(false)
     expect(await memberData.setFollow(follower.id, 'followed_star', true)).toEqual({ followers: 1, following: true })

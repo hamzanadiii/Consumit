@@ -1,8 +1,10 @@
 name = "consumit-proxy"
 main = "index.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-09-22"
 
-[vars]
-# ALLOWED_DOMAINS = "example.com,*.example.com"
-# These are set as secrets in production:
-# HMAC_SECRET, ALLOWED_DOMAINS
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 240, period = 60 }
+
+# HMAC_SECRET must be configured as a Worker secret before deployment.

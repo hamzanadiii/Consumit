@@ -86,7 +86,6 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
 }) {
   const router = useRouter()
   const audioHref = (nextAudio: 'sub' | 'dub') => `/watch/anime/${detail.anilistId}?episode=${episode}&audio=${nextAudio}`
-  const episodeHref = (number: number) => `/watch/anime/${detail.anilistId}?episode=${number}&audio=${audio}`
   const airedBefore = detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : null
   const knownTotal = detail.episodes ?? (airedBefore !== null && airedBefore > 0 ? airedBefore : 0)
   const total = Math.min(10_000, Math.max(knownTotal, episode))
@@ -105,7 +104,7 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
   }, [detail.anilistId])
   const railEpisodes = useMemo<RailEpisode[]>(
     () => episodes.map((number) => {
-      const upcoming = isUpcoming(number)
+      const upcoming = upcomingFrom !== null && number >= upcomingFrom
       const meta = streaming.get(number)
       const title = meta?.title?.replace(/^episode\s+\d+\s*[-–:]\s*/i, '').trim() || null
       return {
@@ -113,11 +112,11 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
         title,
         stillUrl: meta?.thumbnail ?? undefined,
         meta: duration,
-        ...(upcoming ? { upcoming: true } : { href: episodeHref(number) }),
+        ...(upcoming ? { upcoming: true } : { href: `/watch/anime/${detail.anilistId}?episode=${number}&audio=${audio}` }),
         ...(number === episode ? { current: true } : {}),
       }
     }),
-    [duration, episode, episodeHref, episodes, streaming],
+    [audio, detail.anilistId, duration, episode, episodes, streaming, upcomingFrom],
   )
 
   return (

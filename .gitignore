@@ -40,6 +40,7 @@ Thumbs.db
 /infra/playback/providers.local.json
 /infra/playback/providers.local.overrides.json
 worker/.wrangler/
+worker/.dev.vars
 **/.terraform/
 *.tfstate
 *.tfstate.*

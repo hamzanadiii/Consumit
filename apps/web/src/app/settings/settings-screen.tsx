@@ -35,7 +35,7 @@ type ToggleKey = 'autoplay' | 'releases' | 'spoilers' | 'subtitles'
  *  every player preference; the watch screen refetches live on change. */
 function SubtitleLanguagePicker() {
   const [langs, setLangs] = useState<string[]>([])
-  useEffect(() => { setLangs(readStoredSubtitleLanguages()) }, [])
+  useEffect(() => { queueMicrotask(() => setLangs(readStoredSubtitleLanguages())) }, [])
   function toggle(code: string) {
     setLangs(savePreferredSubtitleLanguages(
       langs.includes(code) ? langs.filter((entry) => entry !== code) : [...langs, code].slice(0, 3),

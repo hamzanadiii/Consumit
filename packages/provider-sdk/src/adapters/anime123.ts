@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, mediaType, parseSkipSegments, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 import type { AnimeTitleResolver } from './anixo.ts'
 

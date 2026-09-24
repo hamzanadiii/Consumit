@@ -61,11 +61,9 @@ import { createVdrkProvider } from './subtitles/vdrk.ts'
 import { createVdrkV2Provider } from './subtitles/vdrkv2.ts'
 import { createYifyProvider } from './subtitles/yify.ts'
 import { createTmdbMetadataResolver } from './playback/tmdb-metadata.ts'
-import { registerAdminRoutes, type DomainWhitelistStore } from './admin/routes.ts'
-import { createPostgresDomainWhitelistStore } from './admin/postgres-domains.ts'
+import { registerAdminRoutes } from './admin/routes.ts'
 import { createProviderConfigStore, type ProviderConfigStore } from './admin/provider-config.ts'
 import { applyProviderOverrides } from './playback/configured-providers.ts'
-import { applyOverridesInPlace } from './admin/provider-config.ts'
 
 type BuildAppOptions = {
   playback?: Playback
@@ -73,7 +71,6 @@ type BuildAppOptions = {
   animeCatalog?: AnimeCatalog
   animeEpisodeArt?: KitsuCatalog
   animeTmdbEpisodeArt?: TmdbEpisodeArtResolver
-  domains?: DomainWhitelistStore
   env?: ApiEnv
   identity?: Identity
   letterboxdImporter?: LetterboxdImporter
@@ -84,7 +81,7 @@ type BuildAppOptions = {
   subtitlePreferences?: SubtitlePreferences
 }
 
-export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, domains: overrideDomains, env = loadEnv(), identity, letterboxdImporter, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
+export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, env = loadEnv(), identity, letterboxdImporter, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
     // Matches requestTimeout: subtitle aggregation may legitimately work
@@ -146,7 +143,6 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     identityConfigured: resolvedIdentity !== unavailableIdentity,
   })
   registerIdentityRoutes(app, { env, identity: resolvedIdentity })
-  const resolvedDomains = overrideDomains ?? (db ? createPostgresDomainWhitelistStore(db.prisma) : undefined)
   const repository = overrideRepository ?? (identity === undefined && db ? createPostgresIdentityRepository(db.prisma) : undefined)
   registerLetterboxdImportRoutes(app, { env, identity: resolvedIdentity, importer: resolvedImporter })
   registerMemberDataRoutes(app, { env, identity: resolvedIdentity, memberData: resolvedMemberData })
@@ -164,7 +160,7 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   const providers = applyProviderOverrides(rawProviders, providerOverrides)
   const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, workerUrl: env.workerUrl, hmacSecret: env.embedHmacSecret })
   registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
-  registerEmbedRoutes(app, { playback: resolvedPlayback, workerUrl: env.workerUrl, hmacSecret: env.embedHmacSecret, allowedDomains: env.embedAllowedDomains, origin: env.appOrigin, dev: env.nodeEnv !== 'production' })
+  registerEmbedRoutes(app, { playback: resolvedPlayback, workerUrl: env.workerUrl, hmacSecret: env.embedHmacSecret, providers })
   // Synthetic probes run in-process on a stagger (off in tests and when the
   // interval is zero). Past one instance every host probes; the reads are
   // idempotent and the 30-minute cadence makes duplication negligible.
@@ -176,7 +172,7 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     : null
   probeScheduler?.start()
   app.addHook('onClose', async () => probeScheduler?.stop())
-  registerAdminRoutes(app, { env, identity: resolvedIdentity, domains: resolvedDomains, repository, providers, playback: resolvedPlayback, playbackStore, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined })
+  registerAdminRoutes(app, { env, identity: resolvedIdentity, repository, providers, playbackStore, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined })
   // Aggregated captions: five subtitle providers plus the streaming
   // adapters' own tracks downstream. Converted VTT files are cached in the
   // playback store (Valkey when configured, memory otherwise) and served

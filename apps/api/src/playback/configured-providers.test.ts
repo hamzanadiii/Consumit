@@ -5,7 +5,7 @@ import { createPlayback } from './playback.ts'
 import { createMemoryPlaybackStore } from './state.ts'
 import type { MediaTransport } from './transport.ts'
 
-const configuration = [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to', '*.vix-content.net'], upstreamGroup: 'vixsrc' }]
+const configuration = [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to', '*.vix-content.net'], upstreamGroup: 'vixsrc', proxy: false }]
 describe('configured real provider integration', () => {
   it('connects canonical resolution and renews direct access', async () => {
     let token = 0

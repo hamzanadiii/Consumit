@@ -72,10 +72,10 @@ describe('catalog contracts', () => {
     expect(registerRequestSchema.safeParse({ email: 'not-an-email', password: 'long-enough-password' }).success).toBe(false)
     expect(loginRequestSchema.safeParse({ email: 'hamza@example.com', password: 'short' }).success).toBe(false)
     expect(
-      safeMemberSchema.safeParse({ avatarStyle: 'halo', avatarUrl: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, email: 'hamza@example.com', emailVerified: true, id: 'member_1', username: 'hamza_8' }).success,
+      safeMemberSchema.safeParse({ avatarStyle: 'halo', avatarUrl: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, email: 'hamza@example.com', emailVerified: true, id: 'member_1', role: 'member', username: 'hamza_8' }).success,
     ).toBe(true)
     expect(
-      safeMemberSchema.safeParse({ avatarStyle: 'dicebear', avatarUrl: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, email: 'hamza@example.com', emailVerified: true, id: 'member_1', username: 'hamza_8' }).success,
+      safeMemberSchema.safeParse({ avatarStyle: 'dicebear', avatarUrl: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, email: 'hamza@example.com', emailVerified: true, id: 'member_1', role: 'member', username: 'hamza_8' }).success,
     ).toBe(false)
     expect(avatarUrlSchema.safeParse('https://api.dicebear.com/7.x/notionists/svg?seed=abc').success).toBe(true)
     expect(avatarUrlSchema.safeParse('data:image/svg+xml;base64,abc').success).toBe(false)

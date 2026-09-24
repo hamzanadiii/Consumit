@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, CheckCircle, Database, FlaskConical, Globe, Play, Server, Shield, Users, XCircle } from 'lucide-react'
+import { Activity, CheckCircle, Database, FlaskConical, Globe, Play, Server, Users, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 
@@ -8,9 +8,9 @@ import { Button, EmptyState, Input, Label, LoadingState, SectionHeading, Segment
 
 import { FilScreenShell } from '../home/filscreen-shell'
 import { useSession } from '../session/session'
-import { addDomain, checkHealth, getProviderConfig, listDomains, listMembers, listProviders, removeDomain, resetProviderConfig, setMemberRole, testProvider, updateProviderConfig, type AdminMember, type AdminProvider, type HealthResult, type ProviderOverridePatch, type ProviderTestResult } from '@/lib/admin-browser'
+import { checkHealth, getProviderConfig, listMembers, listProviders, resetProviderConfig, setMemberRole, testProvider, updateProviderConfig, type AdminMember, type AdminProvider, type HealthResult, type ProviderOverridePatch, type ProviderTestResult } from '@/lib/admin-browser'
 
-type Tab = 'overview' | 'providers' | 'lab' | 'domains' | 'members'
+type Tab = 'overview' | 'providers' | 'lab' | 'members'
 
 function Badge({ ok }: { ok: boolean }) {
   return ok
@@ -483,68 +483,6 @@ function LabTab() {
   )
 }
 
-// --- Domains Tab ---
-
-function DomainsTab() {
-  const [domains, setDomains] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [newDomain, setNewDomain] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const refresh = useCallback(() => { listDomains().then((d) => { setDomains(d.domains); setLoading(false) }).catch(() => setLoading(false)) }, [])
-  useEffect(() => { refresh() }, [refresh])
-
-  async function handleAdd(e: FormEvent) {
-    e.preventDefault()
-    if (!newDomain.trim()) return
-    setSaving(true)
-    try {
-      await addDomain(newDomain.trim())
-      setNewDomain('')
-      refresh()
-    } catch { /* ignore */ } finally { setSaving(false) }
-  }
-
-  async function handleRemove(domain: string) {
-    await removeDomain(domain)
-    refresh()
-  }
-
-  if (loading) return <p className="text-muted text-sm">Loading...</p>
-
-  return (
-    <div className="space-y-6">
-      <SectionHeading title="Allowed origins." description="Browsers that may embed playback." />
-      <Card>
-        <h3 className="text-sm font-bold text-ink">Add Allowed Domain</h3>
-        <form className="mt-3 flex items-end gap-3" onSubmit={handleAdd}>
-          <div className="flex-1">
-            <Label className="text-xs">Domain</Label>
-            <Input className="mt-1" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="example.com" />
-          </div>
-          <Button variant="accent" size="sm" type="submit" disabled={saving || !newDomain.trim()}>Add</Button>
-        </form>
-      </Card>
-
-      <Card>
-        <h3 className="text-sm font-bold text-ink">Allowed Domains ({domains.length})</h3>
-        {domains.length === 0 ? (
-          <p className="mt-3 text-xs text-muted">No domains configured.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {domains.map((d) => (
-              <li key={d} className="flex items-center justify-between rounded-control border border-border bg-field px-3 py-2">
-                <span className="font-mono text-sm text-ink">{d}</span>
-                <Button variant="danger" size="sm" onClick={() => handleRemove(d)}>Remove</Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  )
-}
-
 // --- Members Tab ---
 
 function MembersTab() {
@@ -626,7 +564,6 @@ const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'overview', label: 'Overview', icon: <Activity className="size-4" /> },
   { key: 'providers', label: 'Providers', icon: <Globe className="size-4" /> },
   { key: 'lab', label: 'Lab', icon: <FlaskConical className="size-4" /> },
-  { key: 'domains', label: 'Domains', icon: <Shield className="size-4" /> },
   { key: 'members', label: 'Members', icon: <Users className="size-4" /> },
 ]
 
@@ -662,7 +599,6 @@ export function AdminScreen() {
         {tab === 'overview' && <OverviewTab />}
         {tab === 'providers' && <ProvidersTab />}
         {tab === 'lab' && <LabTab />}
-        {tab === 'domains' && <DomainsTab />}
         {tab === 'members' && <MembersTab />}
       </main>
     </FilScreenShell>

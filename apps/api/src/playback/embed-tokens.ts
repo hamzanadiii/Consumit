@@ -1,33 +1,39 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac } from 'node:crypto'
+import type { ProviderRegistration } from '@consumit/provider-sdk'
 
-const EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+const EXPIRY_MS = 4 * 60 * 60 * 1000
 
-export function createEmbedToken(secret: string, url: string, domain: string): string {
-  const expires = Date.now() + EXPIRY_MS
-  const payload = `${url}|${domain}|${expires}`
-  const sig = createHmac('sha256', secret).update(payload).digest('hex')
-  return `${expires}.${sig}`
+export type ProxyGrant = {
+  v: 1
+  url: string
+  host: string
+  hosts: string[]
+  patterns: string[]
+  headers: { referer?: string; origin?: string }
+  expires: number
 }
 
-export function verifyEmbedToken(secret: string, url: string, domain: string, token: string): boolean {
-  const parts = token.split('.')
-  if (parts.length !== 2) return false
-  const [expiresStr, sig] = parts as [string, string]
-  const expires = Number(expiresStr)
-  if (Date.now() > expires) return false
-  const payload = `${url}|${domain}|${expires}`
-  const expected = createHmac('sha256', secret).update(payload).digest('hex')
-  if (sig.length !== expected.length) return false
-  return timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))
+function signature(secret: string, encoded: string): string {
+  return createHmac('sha256', secret).update(encoded).digest('hex')
 }
 
-export function isEmbedDomainAllowed(domain: string, allowedDomains: string): boolean {
-  if (!allowedDomains) return true
-  const domains = allowedDomains.split(',').map((d) => d.trim().toLowerCase())
-  return domains.some((pattern) => {
-    if (pattern.startsWith('*.')) {
-      return domain.endsWith(pattern.slice(1)) || domain === pattern.slice(2)
-    }
-    return domain === pattern
+/** URL, destinations, and provider headers are all covered by the signature. */
+export function createProxyGrant(secret: string, grant: Omit<ProxyGrant, 'v' | 'expires'>, expires = Date.now() + EXPIRY_MS): string {
+  const encoded = Buffer.from(JSON.stringify({ v: 1, ...grant, expires } satisfies ProxyGrant)).toString('base64url')
+  return `${encoded}.${signature(secret, encoded)}`
+}
+
+export function proxyUrl(workerUrl: string, secret: string, url: string, registration: ProviderRegistration, headers: Record<string, string> = {}): string {
+  const normalized = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]))
+  const grant = createProxyGrant(secret, {
+    url,
+    host: new URL(workerUrl).hostname,
+    hosts: [...registration.mediaHosts],
+    patterns: registration.mediaHostPatterns?.map((pattern) => pattern.source) ?? [],
+    headers: {
+      ...(normalized.referer ? { referer: normalized.referer } : {}),
+      ...(normalized.origin ? { origin: normalized.origin } : {}),
+    },
   })
+  return `${workerUrl.replace(/\/$/, '')}/proxy?token=${encodeURIComponent(grant)}`
 }

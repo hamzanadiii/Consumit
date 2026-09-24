@@ -32,20 +32,6 @@ async function request<T>(path: string, options: RequestInit, schema?: ZodType<T
   return body as T
 }
 
-// --- Domains ---
-
-export async function listDomains(): Promise<{ domains: string[] }> {
-  return request('/v1/admin/domains', { method: 'GET' })
-}
-
-export async function addDomain(domain: string): Promise<{ domain: string }> {
-  return request('/v1/admin/domains', { method: 'POST', body: JSON.stringify({ domain }) })
-}
-
-export async function removeDomain(domain: string): Promise<void> {
-  return request(`/v1/admin/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' })
-}
-
 // --- Providers ---
 
 export type AdminProvider = {

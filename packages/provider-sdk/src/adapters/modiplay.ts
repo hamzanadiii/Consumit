@@ -1,5 +1,5 @@
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
+import { accessDeadline, adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
 
 const siteOrigin = 'https://rozgarlelo.modiplay.xyz'
 const embedUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -12,7 +12,6 @@ const embedUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 // The relay URL is the playable source: raw vibuxer URLs are
 // hotlink-locked (403), so these always ride the Worker proxy, which
 // forwards the declared Referer through the manifest rewrite chain.
-const HOP_TIMEOUT_MS = 5000
 
 function unescapeHtml(value: string): string {
   return value.replace(/&amp;/g, '&').replace(/\\\//g, '/')

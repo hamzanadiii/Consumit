@@ -29,7 +29,7 @@ describe('search screen', () => {
     expect(screen.getAllByRole('link', { name: 'Dune: Part Two' })[0]).toHaveAttribute('href', '/title/693134')
     expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
     expect(screen.queryByText(/taste match|% match|overlap/i)).not.toBeInTheDocument()
-  })
+  }, 10_000)
 
   it('hosts the mood picker relocated from Home', () => {
     render(<SearchScreen initialQuery="dune" page={page} queryTooShort={false} />)

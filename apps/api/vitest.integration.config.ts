@@ -6,5 +6,5 @@ if (!process.env.VALKEY_URL) throw new Error('VALKEY_URL is required for API int
 if (!process.env.AUTH_CODE_PEPPER) throw new Error('AUTH_CODE_PEPPER is required for API integration tests.')
 
 export default defineConfig({
-  test: { include: ['src/**/*.integration.test.ts'], maxConcurrency: 1 },
+  test: { include: ['src/**/*.integration.test.ts'], fileParallelism: false, maxConcurrency: 1 },
 })

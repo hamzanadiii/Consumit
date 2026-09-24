@@ -11,6 +11,8 @@ export default defineConfig([
     '**/dist/**',
     '**/generated/**',
     '**/node_modules/**',
+    // Vendored minified signing code from the upstream player bundle.
+    'packages/provider-sdk/src/adapters/aphrodite-gate.ts',
     'design/**',
   ]),
   {
@@ -18,7 +20,7 @@ export default defineConfig([
     extends: [nextVitals, nextTypeScript],
   },
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}'],
+    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}', 'worker/**/*.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {

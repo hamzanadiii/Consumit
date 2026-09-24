@@ -111,7 +111,6 @@ export function createNineAnimeProvider(http: ProviderHttp, resolveTitle: AnimeT
     const sources: ProviderSource[] = []
     const subtitles: ProviderSource['subtitles'] = []
     const seen = new Set<string>()
-    let audioUsed: 'sub' | 'dub' = audios[0] ?? 'sub'
 
     // Primary: AniList-keyed VidNest routes, Flux then Akira.
     for (const audio of audios) {
@@ -119,7 +118,6 @@ export function createNineAnimeProvider(http: ProviderHttp, resolveTitle: AnimeT
       for (const route of ['aniwave_hls', 'anitaku'] as const) {
         try {
           const stream = await vidroute(route, String(ref.id), episode, audio, signal)
-          audioUsed = audio
           progressed = true
           if (!seen.has(stream.url)) {
             seen.add(stream.url)
@@ -174,7 +172,6 @@ export function createNineAnimeProvider(http: ProviderHttp, resolveTitle: AnimeT
                   for (const route of ['aniwave_hls', 'anitaku'] as const) {
                     try {
                       const stream = await vidroute(route, pageAni, episode, audio, signal)
-                      audioUsed = audio
                       if (!seen.has(stream.url)) {
                         seen.add(stream.url)
                         sources.push({

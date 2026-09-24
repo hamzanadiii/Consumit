@@ -108,7 +108,7 @@ export function applyOverridesInPlace(providers: readonly ProviderRegistration[]
       p.enabled = base.enabled
       p.proxy = base.proxy
       p.priority = base.priority
-      ;(p as { approvedRegions: string[] }).approvedRegions = [...base.regions]
+      p.approvedRegions = [...base.regions]
       p.requestsPerMinute = base.requestsPerMinute
       p.concurrency = base.concurrency
       continue
@@ -116,8 +116,8 @@ export function applyOverridesInPlace(providers: readonly ProviderRegistration[]
     p.enabled = patch.enabled ?? base.enabled
     p.proxy = patch.proxy ?? base.proxy
     p.priority = patch.priority ?? base.priority
-    if (patch.regions !== undefined) (p as { approvedRegions: string[] }).approvedRegions = patch.regions
-    else (p as { approvedRegions: string[] }).approvedRegions = [...base.regions]
+    if (patch.regions !== undefined) p.approvedRegions = patch.regions
+    else p.approvedRegions = [...base.regions]
     p.requestsPerMinute = patch.requestsPerMinute ?? base.requestsPerMinute
     p.concurrency = patch.concurrency ?? base.concurrency
   }

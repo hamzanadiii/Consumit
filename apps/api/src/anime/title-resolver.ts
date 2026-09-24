@@ -11,7 +11,7 @@ const CACHE_MAX = 1000
  *  Secrets stay server-side. */
 export function createAnimeTitleResolver(catalog: AnimeCatalog): AnimeTitleResolver {
   const meta = createAnimeMetaResolver(catalog)
-  return async (anilistId: number) => meta(anilistId).then(({ title }) => title)
+  return async (anilistId: number, signal: AbortSignal) => meta(anilistId, signal).then(({ title }) => title)
 }
 
 export type AnimeMetaResolver = (anilistId: number, signal: AbortSignal) => Promise<{ title: string; malId: number | null }>

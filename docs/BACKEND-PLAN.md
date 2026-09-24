@@ -1,3 +1,5 @@
+> Historical engineering plan. Current playback delivery and security decisions are in [ARCHITECTURE.md](./ARCHITECTURE.md); the audit and rollout status are in [QUALITY-AUDIT.md](./QUALITY-AUDIT.md).
+
 # Consumit Backend Engineering Plan
 
 > **Purpose:** Build the backend **touch by touch** without turning Consumit into an over-engineered mess.

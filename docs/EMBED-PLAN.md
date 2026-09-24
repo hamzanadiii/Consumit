@@ -1,3 +1,5 @@
+> Historical implementation proposal. Current behavior and security rules live in [PRODUCT.md](./PRODUCT.md), [ARCHITECTURE.md](./ARCHITECTURE.md), and [QUALITY-AUDIT.md](./QUALITY-AUDIT.md). The Referer/domain-whitelist and unsigned child-URL designs below are retired.
+
 # Embeddable Streaming API — Implementation Plan
 
 ## Vision

@@ -20,12 +20,13 @@ function formatRuntime(minutes: number | null | undefined): string | null {
  *  stills, titles, and runtimes ride the season payload the route already
  *  fetches — no extra requests. Unaired episodes (future air dates) render
  *  disabled; seasons switch through the route query. */
-export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, prevHref, pinnedProvider, seasonNumber, seasons, tmdbId }: {
+export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, prevHref, now, pinnedProvider, seasonNumber, seasons, tmdbId }: {
   detail: CatalogTitleDetail
   episodeNumber: number
   episodes: readonly CatalogEpisode[]
   nextHref?: string | undefined
   prevHref?: string | undefined
+  now: number
   pinnedProvider?: string | undefined
   seasonNumber: number
   seasons: readonly { number: number }[]
@@ -36,7 +37,7 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
     [...episodes]
       .sort((a, b) => a.episodeNumber - b.episodeNumber)
       .map((item) => {
-        const upcoming = !!item.airDate && Date.parse(item.airDate) > Date.now()
+        const upcoming = !!item.airDate && Date.parse(item.airDate) > now
         return {
           number: item.episodeNumber,
           title: item.title || `Episode ${item.episodeNumber}`,
@@ -46,7 +47,7 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
           ...(item.episodeNumber === episodeNumber ? { current: true } : {}),
         }
       })
-  ), [episodes, episodeNumber, seasonNumber, tmdbId])
+  ), [episodes, episodeNumber, now, seasonNumber, tmdbId])
   const seasonOptions = useMemo(() => [...seasons].map((season) => season.number).sort((a, b) => a - b), [seasons])
   const watchTitle = detail as WatchTitle
   const current = episodes.find((item) => item.episodeNumber === episodeNumber)

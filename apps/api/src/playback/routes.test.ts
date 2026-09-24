@@ -13,7 +13,7 @@ const apps: Awaited<ReturnType<typeof buildApp>>[] = []
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())) })
 async function setup() {
   const store = createMemoryPlaybackStore()
-  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const, ...(id === 'primary' ? { priority: 1 } : {}) }))
+  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const, ...(id === 'primary' ? { priority: 1 } : {}) }))
   const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
   apps.push(app)
   return app
@@ -61,7 +61,7 @@ describe('playback session API', () => {
   it('lists the fixed fleet without resolving providers', async () => {
     const store = createMemoryPlaybackStore()
     const frTrack = { id: 'fr', label: 'French', language: 'fr', url: 'https://media.example/subs/fr.vtt', format: 'vtt' as const }
-    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const }))
+    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const }))
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
     apps.push(app)
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
@@ -78,8 +78,8 @@ describe('playback session API', () => {
   it('lists the whole fleet without resolving, answering or not', async () => {
     const store = createMemoryPlaybackStore()
     const providers: ProviderRegistration[] = [
-      { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const },
-      { adapter: createStaticProvider('ghost', [{ ref: { kind: 'movie', id: 999 }, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'ghost', concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] as const },
+      { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const },
+      { adapter: createStaticProvider('ghost', [{ ref: { kind: 'movie', id: 999 }, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'ghost', concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const },
     ]
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
     apps.push(app)

@@ -6,7 +6,7 @@ This document organizes the target direction from the founding architecture brie
 
 ## System shape
 
-Consumit resolves playback, manages sessions, ranks providers, and stores member data. It avoids proxying media bytes.
+Consumit resolves playback, manages sessions, ranks providers, and stores member data. When a configured provider opts into proxy delivery, a Cloudflare Worker relays validated media; the API never relays video bytes.
 
 ```text
 Cloudflare edge
@@ -259,9 +259,9 @@ Progress is stored by member and title/episode, never by provider URL.
 
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
-The Consumit Player owns the playback controls and native media surface. A playback controller will load configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
+The Consumit Player owns the playback controls and native media surface. A playback controller will load configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Provider iframe adapters are excluded. A separate public Consumit embed route uses the same first-party player and resolver, accepts optional `lang` for preferred audio resolution, and posts `PLAYER_EVENT` messages (`play`, `pause`, `seeked`, `ended`, `timeupdate`) to the embedding parent frame.
 
-Delivery is strictly browser-direct. Validated HTTPS media travels from a configured provider CDN to the member's browser; Consumit never proxies, leases, rewrites, or transforms media bytes. Unknown, expired, header-locked, cookie-bearing, or DASH sources are unavailable.
+Delivery uses validated HTTPS sources. The browser connects to the provider directly unless that provider has `proxy: true` and `WORKER_URL` is configured; then the Cloudflare Worker relays manifests, segments, and selected captions using signed provider-scoped grants. The API never carries video bytes. Unknown, expired, off-allowlist, or cookie-bearing sources are unavailable.
 
 The single exception is first-party caption files: the subtitles module (`apps/api/src/subtitles/`) is a standalone subsystem decoupled from video providers — it aggregates subtitle archives from twelve search providers (YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, VDRK v2, RiveSubs keyless; SubDL, Jimaku, OpenSubtitles key-gated and self-skipping without credentials; Natsuki signed), extracts and converts them to WebVTT server-side, and serves them from `GET /v1/subtitles/file/:key` (per-member sync shifts via `?offsetMs=`, originals via `GET /v1/subtitles/original/:key`). Converted files live on VPS disk under content-keyed paths when `SUBTITLES_DIR` is set (Valkey/memory otherwise, 7-day TTL); durable track metadata lives in Postgres (`SubtitleTrack`), keyed canonically by title/episode — never by provider — so switching video sources never loses subtitles. The engine ranks wanted languages first with full human tracks before forced/adjunct/machine variants, marks the top pick Recommended, and carries forced/SDH/signs/songs/machine flags on the track contract. Media bytes, manifests, keys, and audio stay browser-direct; only caption text — small, schema-shaped, never executable — takes this path. Direct upstream WebVTT tracks still travel untouched alongside served files, and the aggregated menu never depends on the selected streaming provider. Members may pick up to three preferred subtitle languages (device-local, `langs` query); per-member sync corrections persist in Postgres (`UserSubtitlePreference`) and bind to the player's delay control.
 
@@ -408,7 +408,7 @@ These standards generalize the catalog module's established shape (`apps/api/src
 ### Deliberately different this time
 
 1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
-2. **Validated browser-direct media, without an escape hatch.** Provider output is hostile until validated. Anything requiring custom browser-forbidden headers, cookies, rewriting, transformation, or server-side media fetching is unavailable.
+2. **Validated media at both delivery paths.** Provider output is hostile until validated. Browser-direct sources require playable native URLs; proxy-enabled providers may use only signed, provider-scoped Worker grants. Cookie-bearing or off-allowlist sources are unavailable.
 3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
 5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
@@ -460,7 +460,7 @@ The provider SDK, injectable playback backend, dedicated playback Valkey, and he
 ## Architectural invariants
 
 1. Provider-specific behavior remains inside its adapter.
-2. Consumit does not proxy media by default.
+2. The API does not proxy media; configured providers may use the signed Worker proxy.
 3. Cache entries respect source expiry.
 4. Concurrent misses are coalesced.
 5. Every external request is bounded.

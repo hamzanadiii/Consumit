@@ -9,7 +9,6 @@ import { createStaticProvider } from '@consumit/provider-sdk'
 import { buildApp } from '../app.ts'
 import { loadEnv } from '../config/env.ts'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
-import { createMemoryDomainWhitelistStore } from './memory-domains.ts'
 import { registerAdminRoutes } from './routes.ts'
 
 async function loginAs(identity: ReturnType<typeof createFakeIdentity>, app: Awaited<ReturnType<typeof buildApp>>, email: string, role: 'admin' | 'member') {
@@ -28,77 +27,26 @@ describe('admin routes', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = []
   afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())))
 
-  it('rejects unauthenticated domain requests', async () => {
+  it('rejects unauthenticated admin requests', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
+    const app = await buildApp({ identity, env: loadEnv({ NODE_ENV: 'test' }) })
     apps.push(app)
-    const res = await app.inject({ method: 'GET', url: '/v1/admin/domains' })
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/providers' })
     expect(res.statusCode).toBe(401)
   })
 
   it('rejects non-admin users', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
+    const app = await buildApp({ identity })
     apps.push(app)
     const token = await loginAs(identity, app, 'member@example.com', 'member')
-    const res = await app.inject({ method: 'GET', url: '/v1/admin/domains', cookies: { consumit_session: token } })
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/providers', cookies: { consumit_session: token } })
     expect(res.statusCode).toBe(403)
-  })
-
-  it('allows admin to list, add, and remove domains', async () => {
-    const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
-    apps.push(app)
-    const token = await loginAs(identity, app, 'boss@example.com', 'admin')
-
-    const list0 = await app.inject({ method: 'GET', url: '/v1/admin/domains', cookies: { consumit_session: token } })
-    expect(list0.statusCode).toBe(200)
-    expect(list0.json()).toEqual({ domains: [] })
-
-    const addRes = await app.inject({
-      method: 'POST', url: '/v1/admin/domains',
-      payload: { domain: 'example.com' },
-      cookies: { consumit_session: token },
-      headers: { origin: 'http://localhost:3000' },
-    })
-    expect(addRes.statusCode).toBe(201)
-
-    const list1 = await app.inject({ method: 'GET', url: '/v1/admin/domains', cookies: { consumit_session: token } })
-    expect(list1.json()).toEqual({ domains: ['example.com'] })
-
-    const delRes = await app.inject({
-      method: 'DELETE', url: '/v1/admin/domains/example.com',
-      cookies: { consumit_session: token },
-      headers: { origin: 'http://localhost:3000' },
-    })
-    expect(delRes.statusCode).toBe(204)
-
-    const list2 = await app.inject({ method: 'GET', url: '/v1/admin/domains', cookies: { consumit_session: token } })
-    expect(list2.json()).toEqual({ domains: [] })
-  })
-
-  it('rejects invalid domain names', async () => {
-    const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
-    apps.push(app)
-    const token = await loginAs(identity, app, 'boss2@example.com', 'admin')
-    const res = await app.inject({
-      method: 'POST', url: '/v1/admin/domains',
-      payload: { domain: 'not valid!domain' },
-      cookies: { consumit_session: token },
-      headers: { origin: 'http://localhost:3000' },
-    })
-    expect(res.statusCode).toBe(400)
   })
 
   it('lists providers with config', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
+    const app = await buildApp({ identity })
     apps.push(app)
     const token = await loginAs(identity, app, 'admin-providers@example.com', 'admin')
     const res = await app.inject({ method: 'GET', url: '/v1/admin/providers', cookies: { consumit_session: token } })
@@ -109,8 +57,7 @@ describe('admin routes', () => {
 
   it('lists members with role', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains, repository: identity.repository })
+    const app = await buildApp({ identity, repository: identity.repository })
     apps.push(app)
     const adminToken = await loginAs(identity, app, 'admin-members@example.com', 'admin')
     await loginAs(identity, app, 'user-members@example.com', 'member')
@@ -125,8 +72,7 @@ describe('admin routes', () => {
 
   it('promotes and demotes members', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains, repository: identity.repository })
+    const app = await buildApp({ identity, repository: identity.repository })
     apps.push(app)
     const adminToken = await loginAs(identity, app, 'admin-role@example.com', 'admin')
     const userResult = await loginAs(identity, app, 'user-role@example.com', 'member')
@@ -155,7 +101,6 @@ describe('admin routes', () => {
 
   it('applies provider proxy toggle in memory when disk persist fails', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
     const dir = await mkdtemp(join(tmpdir(), 'consumit-providers-'))
     const configPath = join(dir, 'providers.json')
     await writeFile(configPath, JSON.stringify([
@@ -169,13 +114,21 @@ describe('admin routes', () => {
       removeOverride: async () => { throw new Error('EROFS: read-only file system') },
     }
     const env = loadEnv({ ...process.env, PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: configPath })
-    const app = await buildApp({ identity, domains, env, providerConfigStore: failingStore })
+    const app = await buildApp({ identity, env, providerConfigStore: failingStore })
     apps.push(app)
     const token = await loginAs(identity, app, 'admin-toggle@example.com', 'admin')
 
     const before = await app.inject({ method: 'GET', url: '/v1/admin/providers', cookies: { consumit_session: token } })
     expect(before.statusCode).toBe(200)
     expect(before.json().providers.find((p: { id: string }) => p.id === 'vixsrc').proxy).toBe(true)
+
+    const invalid = await app.inject({
+      method: 'PATCH', url: '/v1/admin/providers/vixsrc/config',
+      payload: { proxy: 'false' },
+      cookies: { consumit_session: token },
+      headers: { origin: 'http://localhost:3000' },
+    })
+    expect(invalid.statusCode).toBe(400)
 
     const patch = await app.inject({
       method: 'PATCH', url: '/v1/admin/providers/vixsrc/config',
@@ -215,8 +168,7 @@ describe('admin routes', () => {
 
   it('returns health status', async () => {
     const identity = createFakeIdentity()
-    const domains = createMemoryDomainWhitelistStore()
-    const app = await buildApp({ identity, domains })
+    const app = await buildApp({ identity, env: loadEnv({ NODE_ENV: 'test' }) })
     apps.push(app)
     const token = await loginAs(identity, app, 'admin-health@example.com', 'admin')
     const res = await app.inject({ method: 'GET', url: '/v1/admin/health', cookies: { consumit_session: token } })

@@ -81,7 +81,7 @@ export function keystream(seed: string, mediaId: number, len: number): Uint8Arra
   return out
 }
 
-export function decryptWecollegePayload(sealed: string, seed: string, mediaId: number): any {
+export function decryptWecollegePayload(sealed: string, seed: string, mediaId: number): unknown {
   const raw = Buffer.from(sealed, 'base64url')
   const ks = keystream(seed, mediaId, raw.length)
   const pt = Buffer.alloc(raw.length)

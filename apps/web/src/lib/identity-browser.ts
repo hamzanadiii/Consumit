@@ -26,7 +26,6 @@ import {
   type LoginRequest,
   type CatalogRef,
   type MemberLibrary,
-  type MemberTitleState,
   type RecoveryConfirmRequest,
   type RegisterRequest,
   type SafeMember,

@@ -38,12 +38,15 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const [storedAudio, setStoredAudio] = useState<string | null>(null)
   useEffect(() => {
     if (audioLanguageProp !== undefined) return
-    try {
-      const stored = window.localStorage.getItem('consumit.player.audio-language')
-      setStoredAudio(stored && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(stored) ? stored : 'en')
-    } catch {
-      setStoredAudio('en')
-    }
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      try {
+        const stored = window.localStorage.getItem('consumit.player.audio-language')
+        setStoredAudio(stored && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(stored) ? stored : 'en')
+      } catch { setStoredAudio('en') }
+    })
+    return () => { active = false }
   }, [audioLanguageProp])
   const audioLanguage = audioLanguageProp ?? storedAudio ?? 'en'
   // Episode-room preferences: device-local, read after mount so SSR and
@@ -55,13 +58,16 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const [lightsOff, setLightsOff] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   useEffect(() => {
-    try {
-      if (window.localStorage.getItem('consumit.player.autoplay') === '1') setAutoplay(true)
-      if (window.localStorage.getItem('consumit.player.auto-next') === '0') setAutoNext(false)
-      if (window.localStorage.getItem('consumit.player.auto-skip') === '0') setAutoSkip(false)
-    } catch {
-      /* Storage is optional. */
-    }
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      try {
+        if (window.localStorage.getItem('consumit.player.autoplay') === '1') setAutoplay(true)
+        if (window.localStorage.getItem('consumit.player.auto-next') === '0') setAutoNext(false)
+        if (window.localStorage.getItem('consumit.player.auto-skip') === '0') setAutoSkip(false)
+      } catch { /* Storage is optional. */ }
+    })
+    return () => { active = false }
   }, [])
   function persistPref(key: string, value: boolean, apply: (value: boolean) => void) {
     apply(value)
@@ -347,11 +353,11 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   // stored offset per title and every nudge persists (debounced) — guests
   // keep the player's device-local behavior only. The screen remounts per
   // title, so no cross-title leakage is possible.
-  const [syncedDelay, setSyncedDelay] = useState<number | null>(null)
+  const [delayState, setDelayState] = useState<{ sessionId: string; value: number } | null>(null)
+  const syncedDelay = delayState && session && delayState.sessionId === session.id ? delayState.value : null
   const saveDelayTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const pendingDelay = useRef<{ memberId: string; ref: PlaybackRef; offsetMs: number } | null>(null)
   useEffect(() => {
-    setSyncedDelay(null)
     if (!memberId || !session) return
     let active = true
     const ref = session.ref
@@ -359,13 +365,13 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
       AbortSignal.timeout(10_000),
     ).then(
-      (preference) => { if (active) setSyncedDelay(preference?.offsetMs ?? 0) },
+      (preference) => { if (active) setDelayState({ sessionId: session.id, value: preference?.offsetMs ?? 0 }) },
       () => {},
     )
     return () => { active = false }
   }, [session, memberId])
   const persistDelay = useCallback((offsetMs: number) => {
-    setSyncedDelay(offsetMs)
+    if (session) setDelayState({ sessionId: session.id, value: offsetMs })
     if (!memberId || !session) return
     pendingDelay.current = { memberId, ref: session.ref, offsetMs }
     clearTimeout(saveDelayTimer.current)

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, ProviderFailure, type ProviderHttp } from './http.ts'
+import { accessDeadline, adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
 
 const origin = 'https://mapple.rip'
 const headers = { referer: `${origin}/` }
@@ -12,7 +12,7 @@ export function createMappleProvider(http: ProviderHttp, now = Date.now) {
     const pageUrl = isTv ? `${origin}/watch/tv/${ref.id}` : `${origin}/watch/movie/${ref.id}`
 
     let jar = ''
-    const storeCookies = (resHeaders?: any) => {
+    const storeCookies = (resHeaders?: Headers) => {
       if (!resHeaders) return
       const getSetCookie = typeof resHeaders.getSetCookie === 'function' ? resHeaders.getSetCookie() : []
       const list = getSetCookie?.length ? getSetCookie : (typeof resHeaders.get === 'function' && resHeaders.get('set-cookie') ? [resHeaders.get('set-cookie')] : [])

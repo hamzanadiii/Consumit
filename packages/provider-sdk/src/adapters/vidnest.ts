@@ -8,7 +8,7 @@ const subOrigin = 'https://sub.vdrk.site'
 const CIPHER_ALPHABET = 'RB0fpH8ZEyVLkv7c2i6MAJ5u3IKFDxlS1NTsnGaqmXYdUrtzjwObCgQP94hoeW+/='
 const STANDARD_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
 
-export function decipherPayload(data: string): any {
+export function decipherPayload(data: string): unknown {
   const map: Record<string, string> = {}
   for (let i = 0; i < CIPHER_ALPHABET.length; i++) {
     const from = CIPHER_ALPHABET[i]
@@ -20,6 +20,15 @@ export function decipherPayload(data: string): any {
   const jsonStr = Buffer.from(standardB64, 'base64').toString('utf8')
   return JSON.parse(jsonStr)
 }
+
+const streamSchema = z.object({ url: z.string().max(4096), quality: z.string().max(32).optional(), language: z.string().max(32).optional() })
+const cipherSchema = z.object({
+  url: z.string().max(4096).optional(),
+  quality: z.string().max(32).optional(),
+  streams: z.array(streamSchema).max(32).optional(),
+  sources: z.array(streamSchema).max(32).optional(),
+})
+const subtitleSchema = z.object({ file: z.string().max(4096), label: z.string().max(64).optional() })
 
 const SERVERS = [
   { name: 'Catflix', path: 'yflix' },
@@ -53,8 +62,8 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope:
           const res = await document(http, url, signal, { referer: `${origin}/`, accept: 'application/json' })
           const json = JSON.parse(res.text)
           if (!json?.encrypted || !json?.data) return { server, data: null }
-          const decoded = decipherPayload(json.data)
-          return { server, data: decoded }
+          const decoded = cipherSchema.safeParse(decipherPayload(json.data))
+          return { server, data: decoded.success ? decoded.data : null }
         } catch {
           return { server, data: null }
         }
@@ -66,11 +75,14 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope:
     try {
       const subUrl = `${subOrigin}/v2/${pathSuffix}`
       const subRes = await document(http, subUrl, signal)
-      const subList = JSON.parse(subRes.text)
+      const subList = JSON.parse(subRes.text) as unknown
       if (Array.isArray(subList)) {
-        subtitles = subList
-          .filter((s: any) => s?.file)
-          .map((s: any, idx: number) => ({
+        subtitles = subList.slice(0, 32)
+          .flatMap((candidate) => {
+            const parsed = subtitleSchema.safeParse(candidate)
+            return parsed.success ? [parsed.data] : []
+          })
+          .map((s, idx) => ({
             id: `vidnest-sub-${idx}`,
             label: s.label || `Subtitle ${idx + 1}`,
             language: (s.label || 'und').toLowerCase().slice(0, 10),
@@ -87,7 +99,7 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope:
 
     for (const { server, data } of results) {
       if (!data) continue
-      const candidates: Array<{ url: string; quality?: string; language?: string }> = []
+      const candidates: Array<{ url: string; quality?: string | undefined; language?: string | undefined }> = []
       if (data.url) {
         candidates.push({ url: data.url, quality: data.quality })
       }

@@ -17,9 +17,9 @@ export type EpisodeArt = {
  *  unaired episodes, which can have no art yet. */
 export function useEpisodeArt(anilistId: number, episode: number, options: { covered?: boolean | undefined; upcoming?: boolean | undefined } = {}): EpisodeArt | null {
   const { covered = false, upcoming = false } = options
-  const [art, setArt] = useState<EpisodeArt | null>(null)
+  const [result, setResult] = useState<{ key: string; art: EpisodeArt } | null>(null)
+  const key = `${anilistId}:${episode}`
   useEffect(() => {
-    setArt(null)
     if (covered || upcoming) return
     let active = true
     let retry: ReturnType<typeof setTimeout> | undefined
@@ -28,7 +28,7 @@ export function useEpisodeArt(anilistId: number, episode: number, options: { cov
         (detail) => {
           if (!active) return
           if (detail) {
-            setArt({ title: detail.title, thumbnail: detail.thumbnail, synopsis: detail.description })
+            setResult({ key, art: { title: detail.title, thumbnail: detail.thumbnail, synopsis: detail.description } })
           } else if (attempt === 0) {
             // One delayed retry: API restarts and cold rate-limit bursts
             // fail the first wave and placeholders would otherwise stick
@@ -46,6 +46,6 @@ export function useEpisodeArt(anilistId: number, episode: number, options: { cov
       active = false
       clearTimeout(retry)
     }
-  }, [anilistId, episode, covered, upcoming])
-  return art
+  }, [anilistId, episode, covered, upcoming, key])
+  return !covered && !upcoming && result?.key === key ? result.art : null
 }

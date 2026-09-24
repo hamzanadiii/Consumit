@@ -13,7 +13,6 @@ const siteOrigin = 'https://epeng.animeapps.top'
 // groups answer. Gate note: playlists serve bare (no Referer gate) but
 // without CORS headers, so they ride the Worker proxy; segments stream
 // direct (CORS-open) once the manifest is rewritten through it.
-const HOP_TIMEOUT_MS = 4000
 
 const groupsSchema = z.array(z.object({
   server_name: z.string().max(64).optional(),

@@ -24,7 +24,7 @@ function unwrapUrl(u: string): string {
       const parsed = new URL(u)
       const target = parsed.searchParams.get('url')
       if (target) return decodeURIComponent(target)
-    } catch {}
+    } catch { return u }
   }
   return u
 }

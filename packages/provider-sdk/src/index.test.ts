@@ -3,7 +3,7 @@ import { createStaticProvider, sourceIdentity, validatedSources, type ProviderRe
 
 const ref = { kind: 'movie' as const, id: 1 }
 const source: ProviderSource = { key: 'main', url: 'https://media.example/test.m3u8?token=1', type: 'hls', language: 'original', expiresAt: new Date(Date.now() + 3600000).toISOString(), headers: {}, subtitles: [] }
-const registration: ProviderRegistration = { adapter: createStaticProvider('owned', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'owned', concurrency: 2, requestsPerMinute: 30 }
+const registration: ProviderRegistration = { adapter: createStaticProvider('owned', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'owned', concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'], proxy: false }
 describe('provider contract', () => {
   it('resolves exact episodes without guessing another season or episode', async () => {
     const episode = { kind: 'series' as const, id: 9, season: 2, episode: 3 }

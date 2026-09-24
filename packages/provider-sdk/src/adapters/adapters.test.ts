@@ -1179,10 +1179,10 @@ describe('anime providers', () => {
     expect(await createAnixoProvider(client, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
   })
   it('resolves Kyren streams from the JSON API and falls back across servers', async () => {
-    const hit = (server: string) => ({ text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/kyren.m3u8', quality: '1080p' }], subtitles: [{ url: 'https://cdn.example/kyren.vtt', label: 'English' }] }) })
+    const hit = () => ({ text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/kyren.m3u8', quality: '1080p' }], subtitles: [{ url: 'https://cdn.example/kyren.vtt', label: 'English' }] }) })
     const client = vi.fn<ProviderHttp>(async (url) => {
       if (url.includes('server=viper') || url.includes('server=jett') || url.includes('server=gekko')) return { status: 200, text: JSON.stringify({ ok: false }), url }
-      if (url.includes('server=kayo')) return { status: 200, text: hit('kayo').text, url }
+      if (url.includes('server=kayo')) return { status: 200, text: hit().text, url }
       return { status: 404, text: '', url }
     })
     const result = await createKyrenProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)

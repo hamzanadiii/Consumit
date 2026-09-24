@@ -87,5 +87,11 @@ resource "cloudflare_ruleset" "rate_limits" {
       expression  = "starts_with(http.request.uri.path, \"/v1/playback/\")"
       ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.playback_requests_per_minute, mitigation_timeout = 60 }
     },
+    {
+      action      = "block"
+      description = "Public embed resolution abuse"
+      expression  = "starts_with(http.request.uri.path, \"/v1/embed/\")"
+      ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.playback_requests_per_minute, mitigation_timeout = 60 }
+    },
   ]
 }

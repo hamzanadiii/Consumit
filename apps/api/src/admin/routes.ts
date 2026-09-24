@@ -6,18 +6,11 @@ import { ApiError } from '../http/errors.ts'
 import type { Identity } from '../identity/identity.ts'
 import type { IdentityRepository } from '../identity/repository.ts'
 import { sessionCookieName } from '../identity/session.ts'
-import type { Playback } from '../playback/playback.ts'
 import type { ProbeStatus } from '../playback/probe.ts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { ProviderRegistration } from '@consumit/provider-sdk'
 import type { ProviderConfigStore } from './provider-config.ts'
 import { applyOverridesInPlace, type ProviderOverridePatch } from './provider-config.ts'
-
-export type DomainWhitelistStore = {
-  list(): Promise<string[]>
-  add(domain: string): Promise<void>
-  remove(domain: string): Promise<void>
-}
 
 function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, fields: (keyof T)[]): T {
   const body = request.body as Record<string, unknown> | undefined
@@ -30,9 +23,9 @@ function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, f
 
 export function registerAdminRoutes(
   app: FastifyInstance,
-  deps: { env: ApiEnv; identity: Identity; domains?: DomainWhitelistStore | undefined; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; playback?: Playback | undefined; playbackStore?: PlaybackStore | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => ProbeStatus) | undefined },
+  deps: { env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; playbackStore?: PlaybackStore | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => ProbeStatus) | undefined },
 ) {
-  const { env, identity, domains, repository, providers = [], playback, playbackStore, providerConfig, probeStatus } = deps
+  const { env, identity, repository, providers = [], playbackStore, providerConfig, probeStatus } = deps
   const cookieName = sessionCookieName(env)
 
   function guardMutation(request: FastifyRequest) {
@@ -50,38 +43,6 @@ export function registerAdminRoutes(
     if (!member) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     if (member.role !== 'admin') throw new ApiError('FORBIDDEN', 'Admin access required.')
     return member
-  }
-
-  // --- Domain whitelist ---
-
-  if (domains) {
-    app.get('/v1/admin/domains', async (request, reply) => {
-      await requireAdmin(request)
-      void reply.header('cache-control', 'private, no-store')
-      const list = await domains.list()
-      return { domains: list }
-    })
-
-    app.post('/v1/admin/domains', async (request, reply) => {
-      guardMutation(request)
-      await requireAdmin(request)
-      const { domain } = parseBody<{ domain: string }>(request, ['domain'])
-      const normalized = domain.trim().toLowerCase()
-      if (!normalized || !/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(normalized)) {
-        throw new ApiError('BAD_REQUEST', 'Use a valid domain (e.g. example.com).')
-      }
-      await domains.add(normalized)
-      return reply.code(201).send({ domain: normalized })
-    })
-
-    app.delete('/v1/admin/domains/:domain', async (request, reply) => {
-      guardMutation(request)
-      await requireAdmin(request)
-      const { domain } = request.params as { domain?: string }
-      if (!domain) throw new ApiError('BAD_REQUEST', 'Domain parameter required.')
-      await domains.remove(domain.trim().toLowerCase())
-      return reply.code(204).send()
-    })
   }
 
   // --- Provider management ---
@@ -121,7 +82,7 @@ export function registerAdminRoutes(
     return result
   })
 
-  app.post('/v1/admin/providers/test', async (request, reply) => {
+  app.post('/v1/admin/providers/test', async (request) => {
     guardMutation(request)
     await requireAdmin(request)
     const body = parseBody<{ providerId: string; ref: { kind: 'movie' | 'series' | 'anime'; id: number; season?: number; episode?: number }; audioLanguage?: string }>(request, ['providerId', 'ref'])
@@ -153,18 +114,24 @@ export function registerAdminRoutes(
       return { overrides }
     })
 
-    app.patch('/v1/admin/providers/:id/config', async (request, reply) => {
+    app.patch('/v1/admin/providers/:id/config', async (request) => {
       guardMutation(request)
       await requireAdmin(request)
       const { id } = request.params as { id?: string }
       if (!id) throw new ApiError('BAD_REQUEST', 'Provider ID required.')
       const body = request.body as Record<string, unknown> ?? {}
       const patch: ProviderOverridePatch = {}
-      if ('enabled' in body) patch.enabled = Boolean(body.enabled)
-      if ('proxy' in body) patch.proxy = Boolean(body.proxy)
+      if ('enabled' in body) {
+        if (typeof body.enabled !== 'boolean') throw new ApiError('BAD_REQUEST', 'Enabled must be true or false.')
+        patch.enabled = body.enabled
+      }
+      if ('proxy' in body) {
+        if (typeof body.proxy !== 'boolean') throw new ApiError('BAD_REQUEST', 'Proxy must be true or false.')
+        patch.proxy = body.proxy
+      }
       if ('priority' in body) {
-        const p = Number(body.priority)
-        if (!Number.isFinite(p) || p < 0 || p > 100) throw new ApiError('BAD_REQUEST', 'Priority must be 0-100.')
+        const p = body.priority
+        if (typeof p !== 'number' || !Number.isInteger(p) || p < 0 || p > 100) throw new ApiError('BAD_REQUEST', 'Priority must be an integer from 0-100.')
         patch.priority = p
       }
       if ('regions' in body) {
@@ -175,13 +142,13 @@ export function registerAdminRoutes(
         patch.regions = r
       }
       if ('requestsPerMinute' in body) {
-        const rpm = Number(body.requestsPerMinute)
-        if (!Number.isFinite(rpm) || rpm < 1 || rpm > 120) throw new ApiError('BAD_REQUEST', 'RPM must be 1-120.')
+        const rpm = body.requestsPerMinute
+        if (typeof rpm !== 'number' || !Number.isInteger(rpm) || rpm < 1 || rpm > 120) throw new ApiError('BAD_REQUEST', 'RPM must be an integer from 1-120.')
         patch.requestsPerMinute = rpm
       }
       if ('concurrency' in body) {
-        const c = Number(body.concurrency)
-        if (!Number.isFinite(c) || c < 1 || c > 4) throw new ApiError('BAD_REQUEST', 'Concurrency must be 1-4.')
+        const c = body.concurrency
+        if (typeof c !== 'number' || !Number.isInteger(c) || c < 1 || c > 4) throw new ApiError('BAD_REQUEST', 'Concurrency must be an integer from 1-4.')
         patch.concurrency = c
       }
       if (Object.keys(patch).length === 0) throw new ApiError('BAD_REQUEST', 'Provide at least one field to update.')
@@ -238,7 +205,7 @@ export function registerAdminRoutes(
       }
     })
 
-    app.post('/v1/admin/members/:id/role', async (request, reply) => {
+    app.post('/v1/admin/members/:id/role', async (request) => {
       guardMutation(request)
       await requireAdmin(request)
       const { id } = request.params as { id?: string }
@@ -260,8 +227,8 @@ export function registerAdminRoutes(
     if (env.workerUrl) {
       try {
         const start = Date.now()
-        const res = await fetch(env.workerUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
-        result.worker = { status: res.ok || res.status === 400 ? 'ok' : 'error', url: env.workerUrl, latencyMs: Date.now() - start }
+        const res = await fetch(`${env.workerUrl.replace(/\/$/, '')}/health`, { method: 'HEAD', signal: AbortSignal.timeout(5000) })
+        result.worker = { status: res.ok ? 'ok' : 'error', url: env.workerUrl, latencyMs: Date.now() - start }
       } catch {
         result.worker = { status: 'error', url: env.workerUrl }
       }

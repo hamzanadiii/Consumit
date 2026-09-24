@@ -108,7 +108,7 @@ Exit criterion: one complete member job works through the interface and its fail
 
 ## Stage 6 — playback hardening
 
-Playback is strict browser-direct HTTPS. Every enabled provider in the configured set resolves directly; hostile-output validation still applies at the adapter seam. The API never serves, proxies, leases, rewrites, or transforms media, manifests, keys, audio, or subtitles. Member playback bytes always travel browser-to-provider. Stellar/Aphrodite adapters are ported as browser-direct integrations.
+Playback accepts only validated configured HTTPS media. A provider with `proxy: true` can use the signed Cloudflare Worker when `WORKER_URL` is configured; otherwise delivery stays browser-direct. The API does not relay video. The public embed route shares the resolver and first-party player, accepts optional `lang` for preferred audio resolution, never authorizes access by Referer, and the framed player emits `PLAYER_EVENT` postMessage events to the embedding page. The Worker signs HLS children, validates each destination, bounds transfers, and applies distributed rate limiting.
 
 Hardening scope:
 

@@ -1,6 +1,6 @@
 export interface Env {
   HMAC_SECRET: string
-  ALLOWED_DOMAINS: string
+  RATE_LIMITER: { limit(input: { key: string }): Promise<{ success: boolean }> }
 }
 
 const DEFAULT_UA =
@@ -12,58 +12,8 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': '*',
 }
 
-function resolveReferer(targetUrl: string, customReferer?: string | null): string {
-  const lower = targetUrl.toLowerCase()
-  const refLower = (customReferer || '').toLowerCase()
-
-  if (
-    lower.includes('remoteconsultinggroup.site') ||
-    lower.includes('onlinevisibilitysystem.site') ||
-    lower.includes('quietmidnightgardeningideas.site') ||
-    lower.includes('vaplayer.ru') ||
-    lower.includes('valhallastream') ||
-    lower.includes('nextgencloudfabric.com') ||
-    lower.includes('/pl/h4sia') ||
-    lower.includes('/content/') ||
-    refLower.includes('remoteconsultinggroup.site') ||
-    refLower.includes('onlinevisibilitysystem.site') ||
-    refLower.includes('quietmidnightgardeningideas.site')
-  ) {
-    return 'https://nextgencloudfabric.com/'
-  }
-
-  if (
-    lower.includes('ngcorp.dad') ||
-    lower.includes('vidrock') ||
-    lower.includes('tiktokcdn.com') ||
-    lower.includes('streamrk.site') ||
-    refLower.includes('vidrock') ||
-    refLower.includes('ngcorp.dad')
-  ) {
-    return 'https://vidrock.to/'
-  }
-
-  if (customReferer && customReferer.startsWith('http')) {
-    return customReferer
-  }
-  if (lower.includes('fsharetv.cc') || lower.includes('aoneroom.com')) {
-    return 'https://fsharetv.cc/'
-  }
-  if (lower.includes('icefy')) {
-    return 'https://streams.icefy.top/'
-  }
-  if (lower.includes('interkh.com') || lower.includes('insertunit')) {
-    return 'https://api.insertunit.ws/'
-  }
-  if (lower.includes('nhdapi.com')) {
-    return 'https://player.nhdapi.com/'
-  }
-  try {
-    const parsed = new URL(targetUrl)
-    return `${parsed.protocol}//${parsed.host}/`
-  } catch {
-    return 'https://google.com/'
-  }
+function resolveReferer(targetUrl: string): string {
+  return `${new URL(targetUrl).origin}/`
 }
 
 function assTimeToMs(time: string): number | null {
@@ -152,152 +102,158 @@ function toWebVtt(text: string): string | null {
   return out.length > 2 ? out.join('\n') : null
 }
 
-async function verifyHmac(secret: string, url: string, domain: string, token: string): Promise<boolean> {
-  try {
-    const [expiresStr, sig] = token.split('.')
-    const expires = Number(expiresStr)
-    if (Date.now() > expires) return false
-    const payload = `${url}|${domain}|${expires}`
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['verify'],
-    )
-    const expected = await crypto.subtle.verify(
-      'HMAC',
-      key,
-      Uint8Array.from(sig.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))),
-      new TextEncoder().encode(payload),
-    )
-    return expected
-  } catch {
-    return false
-  }
+type Grant = { v: 1; url: string; host: string; hosts: string[]; patterns: string[]; headers: { referer?: string; origin?: string }; expires: number }
+const MAX_GRANT_MS = 4 * 60 * 60 * 1000
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024
+const MAX_PLAYLIST_BYTES = 1 * 1024 * 1024
+const MAX_MEDIA_BYTES = 512 * 1024 * 1024
+
+function decodeBase64Url(encoded: string): Uint8Array {
+  const binary = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0))
 }
 
-function isDomainAllowed(origin: string, allowedDomains: string): boolean {
-  if (!allowedDomains) return true
-  try {
-    const hostname = new URL(origin).hostname
-    const domains = allowedDomains.split(',').map((d) => d.trim().toLowerCase())
-    return domains.some((pattern) => {
-      if (pattern.startsWith('*.')) {
-        return hostname.endsWith(pattern.slice(1)) || hostname === pattern.slice(2)
-      }
-      return hostname === pattern
-    })
-  } catch {
-    return false
-  }
+function encodeBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+async function hmacKey(secret: string): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
+}
 
-function checkRateLimit(ip: string, limit = 100, windowMs = 60_000): boolean {
-  const now = Date.now()
-  const entry = rateLimitMap.get(ip)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
-    return true
+async function signGrant(key: CryptoKey, grant: Grant): Promise<string> {
+  const encoded = encodeBase64Url(new TextEncoder().encode(JSON.stringify(grant)))
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(encoded))
+  return `${encoded}.${Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
+async function verifyGrant(key: CryptoKey, token: string, workerHost: string): Promise<Grant | null> {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 2 || token.length > 16_384) return null
+    const [encoded, signature] = parts as [string, string]
+    if (!/^[A-Za-z0-9_-]+$/.test(encoded) || !/^[a-f0-9]{64}$/.test(signature)) return null
+    const valid = await crypto.subtle.verify('HMAC', key, Uint8Array.from(signature.match(/.{2}/g)!, (hex) => Number.parseInt(hex, 16)), new TextEncoder().encode(encoded))
+    if (!valid) return null
+    const grant = JSON.parse(new TextDecoder().decode(decodeBase64Url(encoded))) as Grant
+    if (grant.v !== 1 || grant.host !== workerHost || !Number.isFinite(grant.expires) || grant.expires <= Date.now() || grant.expires > Date.now() + MAX_GRANT_MS) return null
+    if (!Array.isArray(grant.hosts) || grant.hosts.length > 100 || !grant.hosts.every((host) => typeof host === 'string' && host.length <= 255)) return null
+    if (!Array.isArray(grant.patterns) || grant.patterns.length > 10 || !grant.patterns.every((pattern) => typeof pattern === 'string' && pattern.length <= 100)) return null
+    if (!grant.headers || typeof grant.headers !== 'object' || !safeHeaderUrl(grant.headers.referer) || !safeHeaderUrl(grant.headers.origin)) return null
+    if (!allowedDestination(grant.url, grant)) return null
+    return grant
+  } catch { return null }
+}
+
+function safeHeaderUrl(value: unknown): boolean {
+  if (value === undefined) return true
+  if (typeof value !== 'string' || value.length > 4096 || /[\r\n]/.test(value)) return false
+  try { return new URL(value).protocol === 'https:' } catch { return false }
+}
+
+function allowedDestination(value: string, grant: Grant): boolean {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash || (url.port && url.port !== '443')) return false
+    const host = url.hostname.toLowerCase()
+    // IP literals and local names have no place in a configured media fleet.
+    if (!host.includes('.') || /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return false
+    return grant.hosts.some((allowed) => allowed.startsWith('*.')
+      ? host.endsWith(allowed.slice(1).toLowerCase())
+      : host === allowed.toLowerCase())
+      || grant.patterns.some((pattern) => { try { return new RegExp(pattern, 'i').test(host) } catch { return false } })
+  } catch { return false }
+}
+
+async function readBounded(response: Response, limit: number): Promise<string> {
+  const declared = Number(response.headers.get('content-length'))
+  if (declared > limit) throw new Error('Upstream document exceeds its limit.')
+  const reader = response.body?.getReader()
+  if (!reader) return ''
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > limit) throw new Error('Upstream document exceeds its limit.')
+      chunks.push(value)
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined)
+    throw error
+  } finally { reader.releaseLock() }
+  const joined = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { joined.set(chunk, offset); offset += chunk.byteLength }
+  return new TextDecoder().decode(joined)
+}
+
+function boundedStream(body: ReadableStream<Uint8Array> | null, limit: number): ReadableStream<Uint8Array> | null {
+  if (!body) return null
+  const reader = body.getReader()
+  let total = 0
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { value, done } = await reader.read()
+      if (done) { controller.close(); return }
+      total += value.byteLength
+      if (total > limit) { await reader.cancel(); controller.error(new Error('Media response exceeds its limit.')); return }
+      controller.enqueue(value)
+    },
+    cancel(reason) { return reader.cancel(reason) },
+  })
+}
+
+async function fetchAllowed(grant: Grant, headers: Headers, method: 'GET' | 'HEAD'): Promise<Response> {
+  let target = grant.url
+  for (let redirect = 0; redirect <= 3; redirect++) {
+    if (!allowedDestination(target, grant)) throw new Error('Blocked media destination.')
+    const response = await fetch(target, { method, headers, redirect: 'manual', signal: AbortSignal.timeout(15_000) })
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response
+    const location = response.headers.get('location')
+    await response.body?.cancel()
+    if (!location) throw new Error('Invalid media redirect.')
+    target = new URL(location, target).href
   }
-  entry.count++
-  return entry.count <= limit
+  throw new Error('Too many media redirects.')
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (!env.HMAC_SECRET || !env.RATE_LIMITER) return new Response('Proxy unavailable', { status: 503 })
+    if (new URL(request.url).pathname === '/health' && (request.method === 'HEAD' || request.method === 'GET')) {
+      return new Response(request.method === 'HEAD' ? null : 'ok', { status: 200, headers: { 'cache-control': 'no-store' } })
+    }
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS })
     }
+    if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS })
 
     const reqUrl = new URL(request.url)
-    const targetUrl = reqUrl.searchParams.get('url')
-    const customReferer = reqUrl.searchParams.get('referer')
-    const customOrigin = reqUrl.searchParams.get('origin')
-    const customHeadersRaw = reqUrl.searchParams.get('headers')
-    const segmentsDirect = reqUrl.searchParams.get('seg') === 'direct'
     const token = reqUrl.searchParams.get('token')
     const isHead = request.method === 'HEAD'
+    if (!token) return new Response('Signed proxy grant required', { status: 403, headers: CORS_HEADERS })
+    const key = await hmacKey(env.HMAC_SECRET)
+    const grant = await verifyGrant(key, token, reqUrl.hostname)
+    if (!grant) return new Response('Invalid or expired proxy grant', { status: 403, headers: CORS_HEADERS })
 
-    if (!targetUrl) {
-      return new Response('Missing "url" query parameter', { status: 400, headers: CORS_HEADERS })
-    }
-
-    // HMAC token validation — domain is always the Worker's own hostname so
-    // API (which does not know the embed origin) and Worker agree on the value.
-    if (env.HMAC_SECRET && token) {
-      const workerDomain = reqUrl.hostname
-      const valid = await verifyHmac(env.HMAC_SECRET, targetUrl, workerDomain, token)
-      if (!valid) {
-        return new Response('Invalid or expired token', { status: 403, headers: CORS_HEADERS })
-      }
-    }
-
-    // Domain whitelist — requires referer/origin; blocks headless requests
-    // when a whitelist is configured.
-    const referer = request.headers.get('referer') || request.headers.get('origin') || ''
-    if (env.ALLOWED_DOMAINS) {
-      if (!referer) {
-        return new Response('Embed access requires a valid referer.', { status: 403, headers: CORS_HEADERS })
-      }
-      if (!isDomainAllowed(referer, env.ALLOWED_DOMAINS)) {
-        return new Response('Domain not allowed', { status: 403, headers: CORS_HEADERS })
-      }
-    }
-
-    // Rate limiting
-    const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown'
-    if (!checkRateLimit(ip)) {
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown'
+    const rate = await env.RATE_LIMITER.limit({ key: ip })
+    if (!rate.success) {
       return new Response('Rate limit exceeded', { status: 429, headers: { ...CORS_HEADERS, 'Retry-After': '60' } })
     }
-
-    // Unwrap nested proxy URLs
-    let url = targetUrl
-    if (url.includes('valhallastream.dpdns.org/m3u8-proxy') && url.includes('url=')) {
-      try {
-        const nested = new URL(url)
-        const inner = nested.searchParams.get('url')
-        if (inner) url = inner
-      } catch { /* ignore */ }
-    }
-
-    let customHeaders: Record<string, string> = {}
-    if (customHeadersRaw) {
-      try {
-        const parsed = JSON.parse(customHeadersRaw)
-        if (typeof parsed === 'object' && parsed !== null) customHeaders = parsed
-      } catch { /* ignore */ }
-    }
-
-    const effectiveReferer = resolveReferer(url, customReferer)
-
-    const upstreamHeaders: Record<string, string> = {
-      'User-Agent': DEFAULT_UA,
-      'Accept': '*/*',
-      'Referer': effectiveReferer,
-      'Connection': 'close',
-      ...customHeaders,
-    }
-
-    if (customOrigin) {
-      upstreamHeaders['Origin'] = customOrigin
-    } else {
-      delete upstreamHeaders['Origin']
-    }
-
+    const url = grant.url
+    const upstreamHeaders = new Headers({ 'User-Agent': DEFAULT_UA, 'Accept': '*/*', 'Referer': grant.headers.referer || resolveReferer(url) })
+    if (grant.headers.origin) upstreamHeaders.set('Origin', grant.headers.origin)
     const rangeHeader = request.headers.get('range')
-    if (rangeHeader) {
-      upstreamHeaders['Range'] = rangeHeader
-    }
+    if (rangeHeader && /^bytes=\d*-\d*$/.test(rangeHeader)) upstreamHeaders.set('Range', rangeHeader)
 
     try {
-      const upstreamResponse = await fetch(url, {
-        method: isHead ? 'HEAD' : 'GET',
-        headers: upstreamHeaders,
-        redirect: 'follow',
-      })
+      const upstreamResponse = await fetchAllowed(grant, upstreamHeaders, isHead ? 'HEAD' : 'GET')
 
       if (!upstreamResponse.ok && upstreamResponse.status !== 206) {
         return new Response(
@@ -313,16 +269,16 @@ export default {
         rawContentType.includes('x-mpegURL')
 
       let sniffedPlaylist: string | null = null
-      if (!isM3u8 && !isHead && !rangeHeader) {
+      if (!isM3u8 && !isHead && !rangeHeader && /text|octet-stream|mpegurl/i.test(rawContentType)) {
         const lenHeader = upstreamResponse.headers.get('content-length')
         const len = lenHeader ? parseInt(lenHeader, 10) : NaN
         if (Number.isNaN(len) || len < 1024 * 1024) {
           try {
-            const peek = new Uint8Array(await upstreamResponse.clone().arrayBuffer())
-            const text = new TextDecoder().decode(peek.slice(0, 7)).replace(/^\uFEFF/, '')
+            const peek = await readBounded(upstreamResponse.clone(), 1_048_576)
+            const text = peek.slice(0, 7).replace(/^\uFEFF/, '')
             if (text.startsWith('#EXTM3U')) {
               isM3u8 = true
-              sniffedPlaylist = new TextDecoder().decode(peek)
+              sniffedPlaylist = peek
             }
           } catch { /* fall through */ }
         }
@@ -330,9 +286,9 @@ export default {
 
       const looksSubtitle =
         /\.(vtt|srt|ass|ssa)(\?|#|$)/i.test(url) ||
-        /subtitle|subrip|vtt|text\/plain|octet-stream/i.test(rawContentType)
+        /subtitle|subrip|vtt|text\/plain/i.test(rawContentType)
       if (looksSubtitle && !isM3u8 && !isHead) {
-        const text = await upstreamResponse.text()
+        const text = await readBounded(upstreamResponse, MAX_DOCUMENT_BYTES)
         const vtt = toWebVtt(text)
         if (vtt) {
           return new Response(vtt, {
@@ -355,29 +311,27 @@ export default {
       }
 
       if (isM3u8 && !isHead) {
-        const text = sniffedPlaylist ?? (await upstreamResponse.text())
+        const text = sniffedPlaylist ?? (await readBounded(upstreamResponse, MAX_PLAYLIST_BYTES))
+        if (text.length > MAX_PLAYLIST_BYTES) throw new Error('Playlist exceeds its limit.')
         const baseUrl = new URL('.', upstreamResponse.url || url).toString()
         const workerBase = reqUrl.origin
-
-        const rewrittenLines = text.split('\n').map((line) => {
+        const childUrl = async (uri: string) => {
+          const absolute = new URL(uri, baseUrl).href
+          if (!allowedDestination(absolute, grant)) throw new Error('Playlist refers to a blocked destination.')
+          const child = await signGrant(key, { ...grant, url: absolute })
+          return `${workerBase}/proxy?token=${encodeURIComponent(child)}`
+        }
+        const lines = text.split('\n')
+        if (lines.length > 10_000) throw new Error('Playlist has too many entries.')
+        const rewrittenLines = await Promise.all(lines.map(async (line) => {
           const trimmed = line.trim()
           if (!trimmed || trimmed.startsWith('#')) {
-            if (trimmed.includes('URI="')) {
-              return trimmed.replace(/URI="([^"]+)"/, (_, uri: string) => {
-                const fullUri = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString()
-                if (segmentsDirect) return `URI="${fullUri}"`
-                return `URI="${workerBase}/proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(resolveReferer(fullUri, customReferer))}${segmentsDirect ? '&seg=direct' : ''}"`
-              })
-            }
+            const uri = /URI="([^"]+)"/.exec(line)?.[1]
+            if (uri) return line.replace(`URI="${uri}"`, `URI="${await childUrl(uri)}"`)
             return line
           }
-
-          const fullSegmentUrl = trimmed.startsWith('http')
-            ? trimmed
-            : new URL(trimmed, baseUrl).toString()
-          if (segmentsDirect && !/\.m3u8(\?|#|$)/i.test(fullSegmentUrl)) return fullSegmentUrl
-          return `${workerBase}/proxy?url=${encodeURIComponent(fullSegmentUrl)}&referer=${encodeURIComponent(resolveReferer(fullSegmentUrl, customReferer))}${segmentsDirect ? '&seg=direct' : ''}`
-        })
+          return childUrl(trimmed)
+        }))
 
         return new Response(rewrittenLines.join('\n'), {
           status: 200,
@@ -434,14 +388,15 @@ export default {
       const contentRange = upstreamResponse.headers.get('content-range')
       if (contentRange) responseHeaders['Content-Range'] = contentRange
       const cl = upstreamResponse.headers.get('content-length')
+      if (cl && Number(cl) > MAX_MEDIA_BYTES) return new Response('Media response exceeds its limit.', { status: 502, headers: CORS_HEADERS })
       if (cl) responseHeaders['Content-Length'] = cl
 
-      return new Response(upstreamResponse.body, {
+      return new Response(boundedStream(upstreamResponse.body, MAX_MEDIA_BYTES), {
         status: upstreamResponse.status,
         headers: responseHeaders,
       })
-    } catch (err: any) {
-      return new Response(`Proxy error: ${err.message}`, {
+    } catch {
+      return new Response('Upstream media unavailable.', {
         status: 502,
         headers: CORS_HEADERS,
       })

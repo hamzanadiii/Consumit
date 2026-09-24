@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
+import { serverRenderTime } from '@/lib/server-time'
 
 import { CatalogUnavailableScreen } from '../../../catalog/catalog-ui'
 import { sanitizePinnedProvider } from '../../watch-screen'
@@ -44,6 +45,7 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
       episodeNumber={episodeNumber}
       episodes={season?.item.episodes ?? []}
       nextHref={nextHref}
+      now={serverRenderTime()}
       prevHref={prevHref}
       seasonNumber={seasonNumber}
       seasons={titleResponse.item.seasons}

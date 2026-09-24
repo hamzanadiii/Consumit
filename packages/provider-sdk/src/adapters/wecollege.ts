@@ -1,4 +1,5 @@
 import type { PlaybackRef } from '@consumit/contracts'
+import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, masterVariantHeights, mediaType, playlistAbsoluteHosts, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
 import { decryptWecollegePayload } from './wecollege-cipher.ts'
@@ -8,6 +9,10 @@ const mediaOrigin = 'https://movy.sx'
 const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 const ALL_CITIES = ['miami', 'seattle', 'portland', 'phoenix', 'paris', 'boise', 'atlanta', 'austin', 'tampa', 'berlin']
+const payloadSchema = z.object({
+  sources: z.array(z.object({ url: z.string().max(4096), quality: z.union([z.string(), z.number()]).optional() })).max(32).optional(),
+  subtitles: z.array(z.object({ url: z.string().max(4096), lang: z.string().max(64).optional(), label: z.string().max(64).optional() })).max(32).optional(),
+})
 
 export type WecollegeMetadata = { title: string; year: number; imdbId?: string | undefined }
 export type WecollegeMetadataResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<WecollegeMetadata>
@@ -70,17 +75,17 @@ export function createWecollegeProvider(
       try {
         const url = `${apiOrigin}/${city}/sources?${qParams.toString()}`
         const res = await document(http, url, scoped, headers)
-        let payload: any
+        let payload: z.infer<typeof payloadSchema>
         try {
-          payload = decryptWecollegePayload(res.text.trim(), seed, ref.id)
+          payload = payloadSchema.parse(decryptWecollegePayload(res.text.trim(), seed, ref.id))
         } catch {
           return { cityIndex, sources: [] as ProviderSource[] }
         }
 
-        const rawSources = Array.isArray(payload?.sources) ? payload.sources : []
+        const rawSources = payload.sources ?? []
         if (!rawSources.length) return { cityIndex, sources: [] as ProviderSource[] }
 
-        const subtitles = (Array.isArray(payload?.subtitles) ? payload.subtitles : []).map((sub: any, idx: number) => ({
+        const subtitles = (payload.subtitles ?? []).map((sub, idx) => ({
           id: `wecollege-sub-${idx}`,
           label: sub.lang || sub.label || `Subtitle ${idx + 1}`,
           language: (sub.lang || sub.label || 'und').toLowerCase().slice(0, 10),
@@ -93,9 +98,10 @@ export function createWecollegeProvider(
           const s = rawSources[idx]
           if (!s?.url || /workers\.dev/i.test(s.url)) continue
           const type = mediaType(s.url) || 'hls'
-          const qMatch = String(s.quality || '').match(/(\d{3,4})p?/i)
+          const quality = String(s.quality ?? '')
+          const qMatch = quality.match(/(\d{3,4})p?/i)
           const height = qMatch?.[1] ? Number.parseInt(qMatch[1], 10) : undefined
-          const qualityHint = height ? `${height}p` : s.quality || 'Auto'
+          const qualityHint = height ? `${height}p` : quality || 'Auto'
           sources.push({
             key: `${city}:${qualityHint.toLowerCase()}:${idx}`,
             url: s.url,

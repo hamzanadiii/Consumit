@@ -128,9 +128,8 @@ function RailRow({ currentLabel, item, loadArt }: {
   item: RailEpisode
   loadArt?: ((episode: number) => Promise<EpisodeArt | null>) | undefined
 }) {
-  const [art, setArt] = useState<EpisodeArt | null>(null)
+  const [result, setResult] = useState<{ episode: number; art: EpisodeArt } | null>(null)
   useEffect(() => {
-    setArt(null)
     if (item.stillUrl || item.upcoming || !loadArt) return
     let active = true
     let retry: ReturnType<typeof setTimeout> | undefined
@@ -139,7 +138,7 @@ function RailRow({ currentLabel, item, loadArt }: {
         (found) => {
           if (!active) return
           if (found && (found.thumbnail || found.title)) {
-            setArt(found)
+            setResult({ episode: item.number, art: found })
           } else if (attempt === 0) {
             retry = setTimeout(() => { if (active) load(1) }, 3_000)
           }
@@ -155,6 +154,7 @@ function RailRow({ currentLabel, item, loadArt }: {
       clearTimeout(retry)
     }
   }, [item.number, item.stillUrl, item.upcoming, loadArt])
+  const art = !item.stillUrl && !item.upcoming && result?.episode === item.number ? result.art : null
   const still = item.stillUrl ?? art?.thumbnail ?? undefined
   const title = item.title ?? art?.title ?? `Episode ${item.number}`
   const status = item.current ? currentLabel : item.upcoming ? 'Not aired yet' : null

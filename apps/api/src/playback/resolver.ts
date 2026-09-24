@@ -60,7 +60,7 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; proxyAvailable?: boolean }) {
   const now = options.now ?? Date.now
   const cache = new Map<string, Cached>()
   const pending = new Map<string, Pending>()
@@ -150,8 +150,8 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
 
   async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string) {
     await Promise.all(providers.map((provider) => hydrate(provider.adapter.id, input.ref.kind)))
-    // Static order: operator priority first (higher tries first), ties keep
-    // the configured file order. No learned re-ranking, no hedging, no
+    // Direct providers run before proxy providers. Priority still controls
+    // order within each delivery tier; manual selection targets its provider.
     // upstream-group dedupe window — the player tries the first provider,
     // then the next, so the server list stays fixed.
     // Kind routing is load-bearing: without it a movie provider answers an
@@ -159,8 +159,8 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     // Menu listing and probes already filter this way; the waterfall must too
     // — including manual switches, where a mismatch fails honest instead of
     // playing the wrong title.
-    const candidates = providers.filter((p) => p.enabled && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
-      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    const candidates = providers.filter((p) => p.enabled && (!p.proxy || options.proxyAvailable !== false) && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
+      .sort((a, b) => Number(a.proxy) - Number(b.proxy) || (b.priority ?? 0) - (a.priority ?? 0))
     if (!candidates.length) return null
     const controller = new AbortController()
     const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), options.deadlineMs ?? 12000)
@@ -219,7 +219,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
               const raw = await cancellable(options.store.get(sharedKey), signal)
               if (raw) {
                 const cached = JSON.parse(raw) as { provider: string; source: unknown }
-                const registration = providers.find((entry) => entry.adapter.id === cached.provider && entry.enabled && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup) && (!preferred || preferred === entry.adapter.id) && state(entry.adapter.id, input.ref.kind).failures === 0)
+                const registration = providers.find((entry) => entry.adapter.id === cached.provider && entry.enabled && (!entry.proxy || options.proxyAvailable !== false) && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup) && (!preferred || preferred === entry.adapter.id) && state(entry.adapter.id, input.ref.kind).failures === 0)
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
                   if (source && input.capabilities[source.type]) {
