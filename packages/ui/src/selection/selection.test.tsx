@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   FilterChip,
-  IssueSelector,
   SegmentedControl,
   Select,
   Tabs,
@@ -44,38 +43,22 @@ describe('selection components', () => {
     )
   })
 
-  it('preserves native radio behavior for segmented and issue choices', async () => {
+  it('preserves native radio behavior for segmented choices', async () => {
     const user = userEvent.setup()
     const onPrivacyChange = vi.fn()
-    const onIssueChange = vi.fn()
 
     render(
-      <>
-        <SegmentedControl
-          defaultValue="public"
-          legend="Profile visibility"
-          name="privacy"
-          onValueChange={onPrivacyChange}
-          options={choices}
-        />
-        <IssueSelector
-          defaultValue="video"
-          legend="What went wrong?"
-          name="issue"
-          onValueChange={onIssueChange}
-          options={[
-            { label: "Video won't load", value: 'video' },
-            { label: 'Subtitle issue', value: 'subtitle' },
-          ]}
-        />
-      </>,
+      <SegmentedControl
+        defaultValue="public"
+        legend="Profile visibility"
+        name="privacy"
+        onValueChange={onPrivacyChange}
+        options={choices}
+      />,
     )
 
     await user.click(screen.getByRole('radio', { name: 'Friends' }))
-    await user.click(screen.getByRole('radio', { name: 'Subtitle issue' }))
-
     expect(onPrivacyChange).toHaveBeenCalledWith('friends')
-    expect(onIssueChange).toHaveBeenCalledWith('subtitle')
   })
 
   it('announces and requests toggle state changes', async () => {

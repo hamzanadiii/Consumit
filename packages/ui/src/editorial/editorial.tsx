@@ -2,9 +2,7 @@
 
 import type { ComponentProps, ReactNode } from 'react'
 
-import { AvatarGroup, type AvatarGroupItem } from '../identity/identity'
 import { cn } from '../lib/cn'
-import { ArtworkFrame } from '../media/media'
 
 export type SectionHeadingProps = Omit<ComponentProps<'div'>, 'children'> & {
   action?: ReactNode | undefined
@@ -40,97 +38,6 @@ export function SectionHeading({
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
-  )
-}
-
-export type SocialProofProps = Omit<ComponentProps<'div'>, 'children'> & {
-  detail?: ReactNode | undefined
-  items: readonly AvatarGroupItem[]
-  label: string
-  text: ReactNode
-}
-
-export function SocialProof({
-  className,
-  detail,
-  items,
-  label,
-  text,
-  ...props
-}: SocialProofProps) {
-  return (
-    <div
-      className={cn('flex min-w-0 items-center gap-3', className)}
-      data-consumit-social-proof
-      {...props}
-    >
-      <AvatarGroup items={items} label={label} max={3} />
-      <div className="min-w-0">
-        <div className="text-xs font-bold text-copy">{text}</div>
-        {detail ? <div className="mt-0.5 text-[0.6875rem] text-muted">{detail}</div> : null}
-      </div>
-    </div>
-  )
-}
-
-export type EditorialFeatureProps = Omit<ComponentProps<'article'>, 'children'> & {
-  action?: ReactNode | undefined
-  alt: string
-  context: string
-  metadata?: ReactNode | undefined
-  secondaryAction?: ReactNode | undefined
-  socialProof?: ReactNode | undefined
-  src?: string | undefined
-  synopsis: ReactNode
-  title: string
-}
-
-export function EditorialFeature({
-  action,
-  alt,
-  className,
-  context,
-  metadata,
-  secondaryAction,
-  socialProof,
-  src,
-  synopsis,
-  title,
-  ...props
-}: EditorialFeatureProps) {
-  return (
-    <article
-      className={cn(
-        'grid overflow-hidden rounded-card border border-border bg-surface lg:grid-cols-[1.08fr_0.92fr]',
-        className,
-      )}
-      data-consumit-editorial-feature
-      {...props}
-    >
-      <ArtworkFrame
-        alt={alt}
-        className="aspect-auto h-full min-h-64 rounded-none border-0 lg:min-h-80"
-        ratio="wide"
-        src={src}
-      />
-      <div className="flex min-w-0 flex-col justify-center p-6 sm:p-8 lg:p-10">
-        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-orange">
-          {context}
-        </p>
-        <h3 className="mt-4 font-display text-3xl leading-[1.05] tracking-[-0.025em] text-ink sm:text-4xl">
-          {title}
-        </h3>
-        {metadata ? <div className="mt-3 text-xs text-muted">{metadata}</div> : null}
-        <div className="mt-5 max-w-[54ch] text-sm leading-6 text-copy">{synopsis}</div>
-        {action || secondaryAction ? (
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {action}
-            {secondaryAction}
-          </div>
-        ) : null}
-        {socialProof ? <div className="mt-6">{socialProof}</div> : null}
-      </div>
-    </article>
   )
 }
 

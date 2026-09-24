@@ -3,7 +3,6 @@ import type { CatalogTitleSummary } from '@consumit/contracts'
 import { redirect } from 'next/navigation'
 
 import { LibraryScreen } from './library-screen'
-import { SessionUnavailableScreen } from '../session/protected-page'
 
 import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'

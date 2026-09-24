@@ -1,8 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { Check, Minus, Plus } from 'lucide-react'
+import { Check } from 'lucide-react'
 
-import { Button } from '../button/button'
-import { Avatar } from '../identity/identity'
 import { cn } from '../lib/cn'
 import { ArtworkFrame } from '../media/media'
 import { ProgressRail } from '../signals/signals'
@@ -54,56 +52,6 @@ export function OnboardingHeader({
   )
 }
 
-export type ImportOptionProps = Omit<ComponentProps<'article'>, 'children' | 'title'> & {
-  action?: ReactNode | undefined
-  benefits?: readonly string[] | undefined
-  description: string
-  icon?: 'minus' | 'plus' | undefined
-  selected?: boolean | undefined
-  title: string
-}
-
-export function ImportOption({
-  action,
-  benefits = [],
-  className,
-  description,
-  icon = 'plus',
-  selected = false,
-  title,
-  ...props
-}: ImportOptionProps) {
-  return (
-    <article
-      className={cn('rounded-card border bg-surface p-5 sm:p-6', selected ? 'border-orange' : 'border-border', className)}
-      data-consumit-import-option
-      data-selected={selected || undefined}
-      {...props}
-    >
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-        <span aria-hidden="true" className={cn('grid size-12 shrink-0 place-items-center rounded-control', selected ? 'bg-orange text-canvas' : 'border border-control-outline bg-surface-raised text-lilac')}>
-          {icon === 'plus' ? <Plus className="size-6" /> : <Minus className="size-6" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-base font-bold text-ink">{title}</h3>
-          <p className="mt-2 text-xs leading-5 text-muted">{description}</p>
-        </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
-      </div>
-      {benefits.length > 0 ? (
-        <ul className="mt-5 grid gap-2 border-t border-border pt-5 sm:grid-cols-2">
-          {benefits.map((benefit) => (
-            <li className="flex items-center gap-2 text-xs text-copy" key={benefit}>
-              <span aria-hidden="true" className="size-2 rounded-full bg-lime" />
-              {benefit}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </article>
-  )
-}
-
 export type SelectableTitleProps = Omit<ComponentProps<'input'>, 'children' | 'type'> & {
   artworkSrc?: string | undefined
   meta: ReactNode
@@ -148,60 +96,5 @@ export function SelectableTitle({
         <span className="mt-1 block text-xs text-muted">{meta}</span>
       </span>
     </label>
-  )
-}
-
-export type MemberSuggestionProps = Omit<ComponentProps<'article'>, 'children'> & {
-  action?: ReactNode | undefined
-  avatarSrc?: string | undefined
-  detail?: string | undefined
-  films?: string | undefined
-  following?: boolean | undefined
-  username: string
-  name: string
-  onFollowingChange?: ((following: boolean) => void) | undefined
-  overlap?: number | undefined
-}
-
-export function MemberSuggestion({
-  action,
-  avatarSrc,
-  className,
-  detail,
-  films,
-  following = false,
-  username,
-  name,
-  onFollowingChange,
-  overlap,
-  ...props
-}: MemberSuggestionProps) {
-  const safeOverlap = overlap === undefined
-    ? undefined
-    : Math.min(Math.max(Math.round(overlap), 0), 100)
-
-  return (
-    <article className={cn('flex min-w-0 flex-col gap-4 rounded-card border border-border bg-surface p-4 sm:flex-row sm:items-center', className)} data-consumit-member-suggestion {...props}>
-      <Avatar name={name} size="lg" src={avatarSrc} />
-      <div className="min-w-0 flex-1">
-        <h3 className="text-base font-bold text-ink">{name}</h3>
-        <p className="mt-1 text-xs text-muted">{username}{films ? ` · ${films}` : ''}</p>
-        <div className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          {safeOverlap === undefined ? null : <p className="text-xs font-bold uppercase tracking-[0.08em] text-lilac">{safeOverlap}% overlap</p>}
-          {detail ? <p className="text-xs leading-5 text-muted">{detail}</p> : null}
-        </div>
-      </div>
-      <div className="shrink-0">
-        {action ?? (
-          <Button
-            aria-pressed={following}
-            onClick={() => onFollowingChange?.(!following)}
-            variant={following ? 'secondary' : 'primary'}
-          >
-            {following ? 'Following' : 'Follow'}
-          </Button>
-        )}
-      </div>
-    </article>
   )
 }

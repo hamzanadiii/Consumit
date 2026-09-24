@@ -2,38 +2,19 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  EditorialFeature,
-  MoodSelector,
-  SectionHeading,
-  SocialProof,
-} from './editorial'
+import { MoodSelector, SectionHeading } from './editorial'
 
 describe('editorial components', () => {
-  it('keeps section and feature hierarchy semantic', () => {
+  it('keeps section hierarchy semantic', () => {
     render(
-      <>
-        <SectionHeading
-          description="What people you trust are loving tonight."
-          title="From your circle"
-        />
-        <EditorialFeature
-          alt="A Place Between Signals artwork"
-          context="A Consumit editorial pick"
-          synopsis="A linguist receives one message from a future that never happened."
-          title="A Place Between Signals"
-        />
-      </>,
+      <SectionHeading
+        description="What people you trust are loving tonight."
+        title="From your circle"
+      />,
     )
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'From your circle' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('heading', {
-        level: 3,
-        name: 'A Place Between Signals',
-      }),
     ).toBeInTheDocument()
   })
 
@@ -59,18 +40,5 @@ describe('editorial components', () => {
     expect(selectedMood).not.toHaveClass('hover:text-ink')
     await user.click(screen.getByRole('button', { name: 'Easy comfort' }))
     expect(onValueChange).toHaveBeenCalledWith('comfort')
-  })
-
-  it('summarizes social proof through a named avatar group', () => {
-    render(
-      <SocialProof
-        items={[{ name: 'Yasmine' }, { name: 'Omar' }]}
-        label="Yasmine and Omar"
-        text="2 friends loved it"
-      />,
-    )
-
-    expect(screen.getByRole('img', { name: 'Yasmine and Omar' })).toBeInTheDocument()
-    expect(screen.getByText('2 friends loved it')).toBeInTheDocument()
   })
 })

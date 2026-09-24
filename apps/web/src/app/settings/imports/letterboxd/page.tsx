@@ -2,8 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
 import { LetterboxdImportFlow } from '../../../imports/letterboxd-import-flow'
-import { ScreenShell } from '../../../screens/screen-shell'
-import { SessionUnavailableScreen } from '../../../session/protected-page'
+import { FilScreenShell } from '../../../home/filscreen-shell'
 
 import { getServerSession } from '@/lib/identity-server'
 
@@ -14,8 +13,8 @@ export default async function LetterboxdImportPage() {
   if (session.status === 'anonymous') redirect('/sign-in?next=%2Fsettings%2Fimports%2Fletterboxd')
   if (session.status === 'unavailable') redirect('/sign-in?next=%2Fsettings%2Fimports%2Fletterboxd')
   return (
-    <ScreenShell activeHref="/settings">
-      <main className="mx-auto min-h-screen w-full max-w-5xl px-5 py-14 sm:px-8 lg:py-20">
+    <FilScreenShell pageHeading={undefined}>
+      <main className="mx-auto min-h-screen w-full max-w-5xl py-8">
         <section className="relative overflow-hidden rounded-card border border-border bg-[linear-gradient(160deg,#1a1418_0%,#2a1520_40%,#141419_100%)] px-6 py-10 sm:p-10 lg:p-14">
           <div className="relative">
             <header>
@@ -29,6 +28,6 @@ export default async function LetterboxdImportPage() {
           </div>
         </section>
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }

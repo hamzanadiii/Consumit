@@ -93,14 +93,14 @@ export type FilScreenShellProps = {
   children: ReactNode
   activeKindTab?: 'new' | 'series' | 'movies' | 'anime' | undefined
   currentPathname?: string | undefined
-  pageHeading?: string | undefined
+  pageHeading?: string | null | undefined
 }
 
 export function FilScreenShell({
   children,
   activeKindTab,
   currentPathname,
-  pageHeading = 'Consumit home',
+  pageHeading,
 }: FilScreenShellProps) {
   const router = getNextRouter()
   const hookPathname = getNextPathname()

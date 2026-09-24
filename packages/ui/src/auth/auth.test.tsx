@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { AuthField, AuthShell, TrustNote } from './auth'
+import { AuthField, AuthShell } from './auth'
 
 describe('authentication components', () => {
   it('renders the auth shell landmark and heading', () => {
@@ -32,13 +32,5 @@ describe('authentication components', () => {
     expect(screen.getByLabelText('Email')).toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByLabelText('Email')).toHaveAccessibleDescription('Enter a valid email')
     expect(screen.getByRole('button', { name: 'Clear email' })).toBeInTheDocument()
-  })
-
-  it('names trust content', () => {
-    render(
-      <TrustNote title="You stay in control">Imports can be deleted.</TrustNote>,
-    )
-
-    expect(screen.getByRole('heading', { name: 'You stay in control' })).toBeInTheDocument()
   })
 })

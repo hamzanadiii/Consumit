@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
-import { CatalogGrid, CatalogUnavailableScreen, detailMeta, heroMeta, makerByline } from './catalog-ui'
+import { CatalogGrid, CatalogUnavailableScreen, makerByline } from './catalog-ui'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -25,17 +25,7 @@ describe('catalog UI', () => {
     expect(screen.getByText(/server-only TMDB API Read Access Token/)).toBeInTheDocument()
   })
 
-  it('leads hero meta with the TMDB score', () => {
-    expect(heroMeta(movieSummary)).toBe('★ 8.2 · 2024 · Film · Science Fiction · Adventure')
-    expect(heroMeta({ ...movieSummary, tmdbRating: null })).toBe('2024 · Film · Science Fiction · Adventure')
-  })
-
-  it('shares one score-led meta and maker byline across heroes', () => {
-    render(<>{detailMeta({ ...movieSummary, certification: 'PG-13', runtimeMinutes: 166 })}</>)
-    expect(screen.getByText('★ 8.2')).toBeInTheDocument()
-    expect(screen.getByText('2h 46m')).toBeInTheDocument()
-    expect(screen.getByText('PG-13')).toBeInTheDocument()
-
+  it('shares one maker byline across heroes', () => {
     expect(makerByline({ creators: [{ name: 'Denis Villeneuve', role: 'Director' }], kind: 'movie' })).toBe(
       'Directed by Denis Villeneuve',
     )

@@ -8,7 +8,6 @@ import { getServerSession } from '@/lib/identity-server'
 import { getMemberLibrary, getMemberList } from '@/lib/member-server'
 
 import { ListsScreen, type ListsScreenList } from './lists-screen'
-import { SessionUnavailableScreen } from '../session/protected-page'
 
 export const metadata: Metadata = {
   description: 'Your curated lists of films and series.',

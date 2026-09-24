@@ -17,7 +17,7 @@ import {
   CONTRACT_HTML,
   type FilScreenTheme,
 } from './filscreen-shell'
-import { TitleRail } from './title-rail'
+import { TitleRail } from '../shared/title-rail'
 
 export {
   FilScreenShell,

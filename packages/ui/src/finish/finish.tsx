@@ -1,53 +1,7 @@
-import type { ComponentProps, ElementType, ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { AlertTriangle, Clapperboard, LoaderCircle } from 'lucide-react'
 
 import { cn } from '../lib/cn'
-
-export type FooterLink = {
-  href: string
-  label: string
-}
-
-export type FooterProps = Omit<ComponentProps<'footer'>, 'children'> & {
-  brandHref?: string | undefined
-  brandSrc?: string | undefined
-  copyright?: string | undefined
-  links?: readonly FooterLink[] | undefined
-  linkComponent?: ElementType | undefined
-}
-
-export function Footer({
-  brandHref = '/',
-  brandSrc = '/assets/consumit-mark.svg',
-  className,
-  copyright,
-  links = [],
-  linkComponent: LinkComponent = 'a',
-  ...props
-}: FooterProps) {
-  return (
-    <footer className={cn('border-t border-border bg-nav px-5 py-8 sm:px-8', className)} data-consumit-footer {...props}>
-      <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-6 sm:flex-row sm:items-center">
-        <LinkComponent className="inline-flex min-h-11 items-center gap-3 self-start rounded-control text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange" href={brandHref}>
-          <img alt="" className="size-7" src={brandSrc} />
-          <span className="text-sm font-bold tracking-[0.18em]">CONSUMIT</span>
-        </LinkComponent>
-        {links.length > 0 ? (
-          <nav aria-label="Footer" className="sm:ml-auto">
-            <ul className="flex flex-wrap gap-x-5 gap-y-2">
-              {links.map((link) => (
-                <li key={link.href}>
-                  <LinkComponent className="inline-flex min-h-11 items-center text-xs text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={link.href}>{link.label}</LinkComponent>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : null}
-        {copyright ? <p className="text-xs text-muted">{copyright}</p> : null}
-      </div>
-    </footer>
-  )
-}
 
 type StateBaseProps<T extends 'div' | 'section'> = Omit<ComponentProps<T>, 'children' | 'title'> & {
   action?: ReactNode | undefined

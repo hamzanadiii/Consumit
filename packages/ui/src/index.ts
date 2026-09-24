@@ -1,80 +1,44 @@
 export { Button, buttonVariants, type ButtonProps } from './button/button'
 export { cn } from './lib/cn'
 export {
-  CarouselRow,
-  type CarouselRowProps,
-} from './cards/carousel-row'
-export {
-  ContentCard,
-  ContentRating,
-  ContinueCard,
   CuratedListCard,
-  TrendingCard,
   WatchCard,
-  type ContentCardProps,
-  type ContentCardState,
-  type ContinueCardProps,
   type CuratedListCardProps,
-  type TrendingCardProps,
   type WatchCardProps,
 } from './cards/content-cards'
 export {
-  EditorialFeature,
   MoodSelector,
   SectionHeading,
-  SocialProof,
-  type EditorialFeatureProps,
   type MoodOption,
   type MoodSelectorProps,
   type SectionHeadingProps,
-  type SocialProofProps,
 } from './editorial/editorial'
 export { Input, type InputProps } from './input/input'
 export { Label, type LabelProps } from './label/label'
 export {
   Avatar,
-  AvatarGroup,
-  MemberByline,
   ServiceMark,
   avatarTreatmentClasses,
-  type AvatarGroupItem,
-  type AvatarGroupProps,
   type AvatarProps,
   type AvatarSize,
   type AvatarTreatment,
-  type MemberBylineProps,
   type PresenceState,
   type ServiceMarkProps,
 } from './identity/identity'
 export {
   ArtworkFrame,
-  LandscapeStill,
   MissingArtwork,
-  PosterCard,
-  PosterMatchBadge,
   type ArtworkFrameProps,
   type ArtworkRatio,
-  type LandscapeStillProps,
   type MissingArtworkProps,
-  type PosterCardProps,
 } from './media/media'
 export {
-  GlobalNavigation,
-  ProfileMenu,
-  defaultNavigationItems,
-  type GlobalNavigationProps,
-  type NavigationItem,
-  type ProfileMenuProps,
-} from './navigation/global-navigation'
-export {
   FilterChip,
-  IssueSelector,
   SegmentedControl,
   Select,
   Tabs,
   Toggle,
   type FilterChipProps,
-  type IssueSelectorProps,
   type SegmentedControlProps,
   type SelectionOption,
   type SelectProps,
@@ -87,74 +51,41 @@ export {
   ProgressRail,
   RatingDisplay,
   StatusDot,
-  TasteMatch,
   type BadgeProps,
   type ProgressRailProps,
   type RatingDisplayProps,
   type SignalTone,
   type StatusDotProps,
-  type TasteMatchProps,
 } from './signals/signals'
 export { RatingInput, type RatingInputProps } from './signals/rating-input'
 export {
-  ActivityItem,
-  CommentCard,
-  FriendRow,
-  TrustedReaction,
-  type ActivityItemProps,
-  type CommentCardProps,
-  type FriendRowProps,
-  type TrustedReactionProps,
-} from './social/social'
-export {
   AuthField,
   AuthShell,
-  TrustNote,
   type AuthFieldProps,
   type AuthShellProps,
-  type TrustNoteProps,
 } from './auth/auth'
 export {
   EmptyState,
   ErrorState,
-  Footer,
   LoadingState,
   type EmptyStateProps,
   type ErrorStateProps,
-  type FooterLink,
-  type FooterProps,
   type LoadingStateProps,
 } from './finish/finish'
 export {
-  CuratorPanel,
-  LibraryToolbar,
   OrderedTitleRow,
   SavedTitleCard,
-  type Curator,
-  type CuratorPanelProps,
-  type LibraryToolbarProps,
   type OrderedTitleRowProps,
   type SavedTitleCardProps,
 } from './library/library'
 export {
-  ImportOption,
-  MemberSuggestion,
   OnboardingHeader,
   SelectableTitle,
-  type ImportOptionProps,
-  type MemberSuggestionProps,
   type OnboardingHeaderProps,
   type SelectableTitleProps,
 } from './onboarding/onboarding'
 export {
-  PlaybackReport,
-  PlaybackTrustNote,
-  SourceSelector,
   WatchHeader,
-  type PlaybackReportProps,
-  type PlaybackSource,
-  type PlaybackTrustNoteProps,
-  type SourceSelectorProps,
   type WatchHeaderProps,
 } from './playback/playback'
 export {
@@ -194,30 +125,13 @@ export {
   type DirectMediaType,
 } from './playback/media-source'
 export {
-  CompatibilityPanel,
   DiaryRow,
-  ProfileMasthead,
-  ProfileReviewCard,
-  RatingRhythm,
-  TasteSignature,
-  type CompatibilityPanelProps,
   type DiaryRowProps,
-  type ProfileMastheadProps,
-  type ProfileReviewCardProps,
-  type ProfileStat,
-  type RatingRhythmProps,
-  type TasteSignatureProps,
-  type TasteWorld,
 } from './profile/profile'
 export {
-  Dropzone,
-  HealthSummary,
   PreferenceRow,
   SettingsRail,
   SettingsSection,
-  type DropzoneProps,
-  type HealthEntry,
-  type HealthSummaryProps,
   type PreferenceRowProps,
   type SettingsRailItem,
   type SettingsRailProps,
@@ -225,19 +139,8 @@ export {
 } from './settings/settings'
 export {
   CastCard,
-  EpisodeRow,
-  MemberPulse,
   SeasonSelector,
-  TitleMasthead,
   type CastCardProps,
-  type EpisodeRowProps,
-  type MemberPulseProps,
   type SeasonOption,
   type SeasonSelectorProps,
-  type TitleMastheadProps,
 } from './title/title'
-export {
-  HeroSpotlight,
-  type HeroSpotlightItem,
-  type HeroSpotlightProps,
-} from './title/hero-spotlight'

@@ -213,15 +213,16 @@ Buttons are compact, direct, and consequence-aware.
 
 ### Global Navigation
 
-Global navigation is the stable wayfinding shell for catalog and social surfaces, not a universal header for every product flow.
+Global navigation is now the FilScreen shell (`FilScreenShell`): a full-page sidebar plus utility-row wayfinding surface for catalog and social screens, not a universal header for every product flow.
 
-- **Desktop:** Use a 68px flat Navigation Black shell with the exact supplied mark, Home / Movies / Series / Friends, a universal outlined search field, and the supplied member portrait. The active route receives a thin signal-orange baseline.
-- **Search:** Submit a GET query named `q`. The destination, initial value, and placeholder may change through the component API, but the field remains a 38px outlined global search rather than a filled or pill-shaped control.
-- **Member presence:** The portrait is supplied by the caller; the component alone owns the optional Positive Lime presence dot and keeps its visible and announced online state synchronized.
-- **Mobile:** Below 1024px, keep the brand, guest Sign in action, and a 38px menu trigger in the 52px bar. The trigger opens a full-height, flat right-side dialog containing search, the primary routes, and the member profile; do not add standalone search or profile shortcuts to the bar.
-- **API:** `activeHref` owns current-route presentation, while `items` defaults to Home / Movies / Series / Friends. Brand, search, and profile destinations and content may be overridden without changing the shell anatomy; `sticky` changes positioning only.
-- **Interaction:** Routes use visible inset two-pixel orange focus rings. The dialog traps focus, closes on Escape, and returns focus to its trigger. Keep state changes brief and disable decorative transitions when reduced motion is requested.
+- **Desktop:** Sidebar holds the supplied Consumit mark, Home / Categories / Favorites / Lists / Circle / History, theme switch, Settings, and session-aware Sign in or Log out. Kind tabs (New, Series, Movies, Anime) sit in the utility row beside compact search, Circle entry, and the member avatar. Active destinations use orange selection treatment.
+- **Search:** Compact outlined trigger opens the FilScreen search overlay; Cmd/Ctrl+K and `/` are keyboard shortcuts.
+- **Member presence:** The portrait is supplied by the session; the shell alone owns presentation.
+- **Mobile:** The sidebar collapses to horizontal scroll rows below desktop; the utility row wraps controls rather than inventing a second navigation language.
+- **Interaction:** Focus uses the FilScreen focus ring. Theme and sidebar collapse persist on the device; the server render stays dark so the default never flashes.
 - **Scope:** Exclude this shell from Watch and from the reduced authentication, onboarding, and report headers.
+
+The retired flat 68px GlobalNavigation / SessionNavigation / ScreenShell stack and the standalone Footer component are deleted.
 
 ### Catalog Transparency
 
@@ -252,7 +253,7 @@ Labels and inputs form one quiet, native-first control contract while remaining 
 
 - Tabs own horizontal overflow so narrow layouts keep one readable row without widening the page.
 - Dropdowns use the shared Select listbox with a visible label, full arrow/Home/End/Enter/Escape keyboard support, and a hidden form input when they post inside a native form. The native select popup is never used: it renders OS chrome that cannot honor the palette, focus ring, or reduced-motion contract.
-- Chips, segmented controls, toggles, and issue selectors use the dedicated control outline; faint separators are never used as interactive boundaries.
+- Chips, segmented controls, and toggles use the dedicated control outline; faint separators are never used as interactive boundaries.
 - Native radio and checkbox semantics remain intact. Controls and links keep at least a 38px target in both dimensions; compact title and action labels sit inside the larger interactive area instead of growing visually.
 - Selected treatments remain legible in every pointer state: dark selections keep warm-ivory text, while ivory selections keep midnight text on hover.
 
@@ -277,7 +278,7 @@ Home at `/` is owned by the FilScreen world: a fullscreen edge-to-edge shell arr
 
 The sidebar holds Home, Categories, Favorites, Circle, History, Settings, and a session-aware Sign in or Log out under the supplied Consumit mark with the CONSUMIT wordmark, which steps aside for the toggle alone on the collapsed icon rail; it stays pinned while the page scrolls, persists its collapsed choice on the device, and collapses to horizontal scroll rows below desktop. Kind tabs (New, Series, Movies) link to their routes with `aria-current` on New. The Dune hero pairs the artwork logo or serif display title, an inline facts row (TMDB ★ rating, year, runtime or seasons, genres, content-rating badge), a serif tagline lede, byline, synopsis, and the ivory Watch action with a title-details heart inside a square-edged bounded frame. The hero rotates through up to five backdropped titles drawn from Trending now on a four-second cadence: backdrops crossfade without moving the reading position while the incoming copy arrives as one block, with a vertical selector rail inside the frame; rotation pauses on hover, focus, offscreen, hidden tabs, and reduced motion. Each slide dresses its title in gallery-picked TMDB banner art — titled key art first, community votes deciding inside each group — instead of repeating the default catalog backdrop. Trending now and Popular now resolve to portrait rail cards carrying poster art: the title plus year ★ rating reveal on hover inside a legibility gradient and an orange frame line lands on hover. A utility row holds compact universal search, the kind tabs, Circle entry, and the member avatar on one line. Device-local Continue watching (loading, empty, populated with resume destinations, and retry states) is a snap rail of landscape stills: the card nearest the center swells to full presence through one shared scroll clock, and hovering or keyboard-focusing a card reveals its title, resume, save, and details actions with progress and time. Honest-empty Circle activity follows Popular now in the same reading flow. A shell footer carries copyright, the TMDB wordmark link, and Catalog credits to About.
 
-**The Home Cadence Rule.** Keep the shipped order — tabs, hero, Continue watching, Trending now, Popular now, Circle activity — and let members control changes to their reading position.
+**The Home Cadence Rule.** Keep the shipped order — kind tabs, hero, Continue watching, trending rails, Circle activity — and let members control changes to their reading position.
 
 ### Movies and Series Browsing
 
@@ -288,15 +289,9 @@ The sidebar holds Home, Categories, Favorites, Circle, History, Settings, and a 
 
 **The Browse Composition Rule.** Movies and Series pair a compact editorial opening with a landscape rail and responsive poster grid; preserve the Consumit palette, typography, global navigation, and compact geometry throughout.
 
-### Trending Card
+### Trending Presentation
 
-This pattern remains an internal gallery component; it is not a current Home section.
-
-- **Signature:** Place the oversized serif rank vertically centered behind and to the left of the poster. Keep the numeral a quiet warm-ivory silhouette with the artwork rather than a competing badge.
-- **Evidence:** Keep the member score on the artwork and completion proof below the title; rank, rating, and completion remain separately understandable. Catalog rails add a one-line score meta (★ rating · year · kind) below trending titles.
-- **Responsive behavior:** Trending remains a horizontal discovery rail on narrow screens and resolves to the five-card desktop row at the established wide breakpoint.
-
-**The Rank Behind the Poster Rule.** A Trending Card’s oversized rank sits behind the poster at its vertical center; never float it above the artwork or reduce it to an ordinary corner badge.
+Trending is presented as portrait title rails on Home and catalog surfaces (title plus year ★ rating revealed on hover inside a legibility gradient with an orange frame line). There is no standalone Trending Card component; rails own their own ranking presentation.
 
 ### Editorial and Social
 
@@ -310,13 +305,15 @@ This pattern remains an internal gallery component; it is not a current Home sec
 
 ### Profile and Taste Surfaces
 
-The profile preserves Consumit's original masthead: a bounded backdrop, flat composition, Charter name, avatar, biography, and factual history counts. The masthead expands for long names or biographies; owner actions wrap rather than overlap content.
+The profile is a cinematic member page inside the FilScreen shell: a bounded banner hero with backdrop, avatar, Charter name, meta line, biography, stats, and Follow or owner actions; section tabs below; then a two-column body on desktop — main sections plus a right rail.
 
-Six ordered Favorites use equal size, opacity, and contrast. Desktop shows six columns; tablet and mobile show three. Every cover and caption leads to the title, with one keyboard stop and a visible focus outline. Controls inside a card remain independently usable.
+- **Banner hero:** Keep the backdrop, gradient scrim, avatar, display name, `@username · location · Joined year` meta, bio, and factual stats (watched, diary, reviews, lists, followers, following). Owner actions wrap rather than overlap content. No fabricated activity or Taste Match claims.
+- **Section tabs:** Native anchors for Overview, Favorites, Diary, Reviews, and Lists. The selected location follows the URL hash, including browser Back and Forward.
+- **Right rail (desktop):** A quiet rail holds Share (copy profile link), a Recent diary summary, and Recent lists cards. Below desktop the rail stacks after the main sections rather than compressing them.
+- **Favorites:** Six ordered covers with equal size, opacity, and contrast. Desktop shows six columns; tablet and mobile show three. Every cover and caption leads to the title, with one keyboard stop and a visible focus outline. Controls inside a card remain independently usable. Genre counts derive only from available Favorite metadata.
+- **Diary and reviews:** Diary rows keep date, artwork, rating, note, destination, and action distinct. Reviews keep the poster, title destination, date, and full text together. Missing catalog metadata preserves stored records and destinations. Empty and private states make no claims of activity that has not happened.
 
-Profile section links are native anchors. The selected location follows the URL hash, including browser Back and Forward. Favorites, diary, reviews, and lists retain their existing owner editors and stored data. Genre counts are derived only from available Favorite metadata.
-
-Diary and authored reviews share two columns on desktop and stack on mobile. Reviews keep the poster, title destination, date, and full text together. Missing catalog metadata preserves stored records and destinations. Empty and private states make no claims of activity that has not happened.
+**The Profile Truth Rule.** Profile rails and feeds show only stored member records; never pad the layout with fixture activity, reactions, or ratings.
 
 ### Title and Series Surfaces
 
@@ -384,8 +381,8 @@ Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster o
 - **Empty state:** Name the quiet condition, explain what will appear or change, and offer one relevant next action when recovery is possible.
 - **Loading state:** Announce the affected content through a status role, keep placeholders subordinate, and stop spinners and pulses when reduced motion is requested.
 - **Error state:** Name what failed, protect the member’s understanding of what remains safe, add useful diagnostic detail, and provide a direct recovery action.
-- **Footer:** End standard pages with the supplied Consumit mark and wordmark, support and legal destinations, and copyright; keep every link touch-safe and keyboard-visible.
-- **Catalog credit:** End every application page, including reduced Watch, with the quiet TMDB attribution band and its direct path to About catalog credits.
+- **Shell footer:** The FilScreen shell ends pages with copyright, TMDB and AniList attribution, Catalog credits, and About; keep every link touch-safe and keyboard-visible.
+- **Catalog credit:** Keep the quiet TMDB attribution reachable from the shell footer on every application page, including reduced Watch.
 
 **The Honest Recovery Rule.** Empty, loading, and error states name the affected content, its impact, and the next available recovery without implying data loss that did not occur.
 

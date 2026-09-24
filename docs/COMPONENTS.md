@@ -22,34 +22,35 @@ These patterns recur across the complete active screen set and should be preserv
 - **Assets:** reuse the supplied lockup, mark, cinematic backdrop, poster motifs, member avatar treatment, and neutral service identifiers. Do not recreate those assets with generic iconography.
 - **Depth:** interface surfaces are flat and separated by tone or border. Shadows belong to artwork separation, not routine controls or panels.
 
-WatchCard captions and catalog metadata stay visible below the poster; bookmark actions appear on hover and keyboard focus and remain visible on touch devices. Home composes its bounded featured masthead, Popular now, Top rated, editorial selection, genre browsing, and footer. Trending is not a current Home section; its reusable component remains available in the internal gallery.
+WatchCard captions and catalog metadata stay visible below the poster; bookmark actions appear on hover and keyboard focus and remain visible on touch devices. Home composes its FilScreen shell, featured hero, trending rails, Continue watching, and Circle activity.
 
 ## Application composition boundary
 
-Movies and Series browsing composes the shared `ArtworkFrame`, `Button`, and global shell in `apps/web/src/app/catalog/catalog-browse-content.tsx`. Its native filter selects, landscape rail, and poster grid remain application-specific. `use-catalog-feed.ts` owns query-scoped cancellation, deduplicated page appends, scroll loading, and retry state; `apps/web/src/lib/catalog-browser.ts` validates browser discovery responses. These catalog behaviors do not belong in shared media or selection primitives. The member flow lives in [PRODUCT.md](./PRODUCT.md#movies-and-series-browsing), and its visual composition lives in [DESIGN.md](../DESIGN.md#movies-and-series-browsing).
+Movies and Series browsing composes the shared `ArtworkFrame`, `Button`, and FilScreen shell in `apps/web/src/app/catalog/catalog-browse-content.tsx`. Its native filter selects, landscape rail, and poster grid remain application-specific. `use-catalog-feed.ts` owns query-scoped cancellation, deduplicated page appends, scroll loading, and retry state; `apps/web/src/lib/catalog-browser.ts` validates browser discovery responses. These catalog behaviors do not belong in shared media or selection primitives. The member flow lives in [PRODUCT.md](./PRODUCT.md#movies-and-series-browsing), and its visual composition lives in [DESIGN.md](../DESIGN.md#movies-and-series-browsing).
 
 ## Build order
 
 | Order | Family | Components | Status |
 |---:|---|---|---|
 | 1 | Action | Button, icon button, loading and disabled states | Complete |
-| 2 | Global shell | Global navigation, nav item, profile trigger, mobile navigation | Complete |
+| 2 | Global shell | FilScreen shell (sidebar, utility row, theme, search overlay) | Complete |
 | 3 | Form foundation | Label, input, search field, textarea, helper/error text, checkbox | In progress |
-| 4 | Selection | Tabs, dropdown select, filter chip, segmented control, toggle, issue selector | Complete |
-| 5 | Identity | Avatar, avatar group, member byline, service mark | Complete |
-| 6 | Signals | Badge, status dot, progress rail, Taste Match meter, rating display | Complete |
-| 7 | Media | Artwork frame, poster card, landscape still, empty/missing art | Complete |
-| 8 | Content cards | Content card, continue card, trending card, curated-list card | Complete |
-| 9 | Editorial | Section heading, editorial feature, mood selector, social proof | Complete |
-| 10 | Social | Activity item, trusted reaction, friend/follow row, comment card | Complete |
-| 11 | Profile | Profile masthead, compatibility panel, diary row, taste signature, rating rhythm, profile review card | Complete |
-| 12 | Title and series | Title masthead, member pulse, cast card, season selector, episode row | Complete |
-| 13 | Library and lists | Library toolbar, saved-title card, ordered-title row, curator panel | Complete |
-| 14 | Authentication | Auth shell, auth field, verification/recovery states, trust note | Complete |
-| 15 | Onboarding | Onboarding header, import option, selectable title, member suggestion | Complete |
-| 16 | Settings and support | Settings rail/section, preference row, health summary, dropzone | Complete |
-| 17 | Playback shell | Watch header, Consumit Player, source selector, report, trust note | Complete (UI shell) |
-| 18 | Global finish | Footer, empty/loading/error compositions, responsive refinements | Complete |
+| 4 | Selection | Tabs, dropdown select, filter chip, segmented control, toggle | Complete |
+| 5 | Identity | Avatar, service mark | Complete |
+| 6 | Signals | Badge, status dot, progress rail, rating display | Complete |
+| 7 | Media | Artwork frame, empty/missing art | Complete |
+| 8 | Content cards | Watch card, curated-list card | Complete |
+| 9 | Editorial | Section heading, mood selector | Complete |
+| 10 | Profile | Diary row | Complete |
+| 11 | Title and series | Cast card, season selector | Complete |
+| 12 | Library and lists | Saved-title card, ordered-title row | Complete |
+| 13 | Authentication | Auth shell, auth field, verification/recovery states | Complete |
+| 14 | Onboarding | Onboarding header, selectable title | Complete |
+| 15 | Settings and support | Settings rail/section, preference row | Complete |
+| 16 | Playback shell | Watch header, Consumit Player | Complete (UI shell) |
+| 17 | Global finish | Empty/loading/error compositions, responsive refinements | Complete |
+
+The pre-FilScreen global navigation, session navigation, page footer component, component gallery, social card family, and gallery-only specimens (Trending card, Profile masthead, Title masthead, Episode row, Taste Match, Dropzone, Trust note, Curator panel, Library toolbar, Import option, Member suggestion, Issue selector, Source selector) were deleted once FilScreen owned the shell.
 
 ## Component 01 — Button
 
@@ -68,22 +69,21 @@ Included states:
 
 The Button establishes shared control height, radius, icon rhythm, type weight, focus treatment, action hierarchy, and safe default form behavior.
 
-## Component 02 — Global navigation
+## Component 02 — FilScreen shell
 
-Source references: Home / Discover, Search, Movies, Series, Friends, Profile, Settings, and Help Center.
+Source references: Home / Discover, Search, Movies, Series, Anime, Profile, Settings, and About.
 
 Included behavior:
 
-- Original 68px desktop shell and 52px mobile brand, guest Sign in, and menu shell
-- Supplied Consumit mark, primary destinations, and orange active-route baseline
-- Native GET search form with an accessible search label
-- Supplied member portrait with component-owned visual and announced presence state
-- Signed-in member menu with identity header, profile/library/settings destination rows in that order, active-route selection, caller-owned sign out, and optional help/report rows
-- Dedicated mobile menu with trapped focus, Escape dismissal, and trigger focus restoration
-- Optional sticky positioning and caller-owned route/search/profile destinations
-- Reduced-motion handling for the mobile overlay and panel entrance
+- Full-page FilScreen shell with sidebar rail, utility row, kind tabs, search overlay, theme switch, and session-aware Sign in / Log out
+- Supplied Consumit mark and wordmark on the collapsed or expanded rail
+- Active-route presentation for sidebar destinations and kind tabs with `aria-current`
+- Device-persisted sidebar collapse and dark/light theme with SSR-safe first paint
+- Sign-out with retry-safe error language when the account service is unreachable
+- Optional sr-only `pageHeading` for pages that need a document h1
+- Catalog credit footer with TMDB / AniList attribution and About links
 
-The component intentionally does not cover the reduced authentication, onboarding, report, or Watch headers. Those surfaces own purpose-specific navigation, and Watch omits the global shell entirely.
+This shell replaces the retired GlobalNavigation / SessionNavigation / ScreenShell stack and is excluded from reduced authentication, onboarding, report, and Watch headers.
 
 ## Component 03 — Form foundation
 
@@ -110,21 +110,19 @@ Included behavior:
 - Route tabs with an orange active line and native link semantics
 - Themed dropdown Select: custom listbox popup (the native select popup is OS chrome and cannot be styled) with trigger, rotating chevron, selected check, full keyboard support, outside dismissal, disabled state, and hidden form-input posting
 - Compact pressed-state filter chips with optional semantic signal dots
-- Native-radio segmented controls and issue selectors with keyboard selection
+- Native-radio segmented controls with keyboard selection
 - Controlled switch semantics for on/off settings, including disabled state
 - Visible focus, touch-safe sizing, reduced motion, and horizontal tab overflow
 
 ## Component 05 — Identity
 
-Source references: Global Navigation, Friends Activity, Settings, Public Profile, and onboarding.
+Source references: FilScreen shell, Favorites shelf, Settings, Public Profile, and onboarding.
 
 Included behavior:
 
 - Supplied-image or initials-fallback avatars at four scales
 - Member-chosen generated portraits (Notionists addresses with random seeds, http(s) only) with initials-tile fallback; member-chosen geometric tile treatments (dusk, dawn, noir, halo) frame the fallback, defaulting to dusk
 - Online, away, and offline presence with explicit standalone labeling
-- Capped avatar groups with a readable overflow count and group summary
-- Member bylines with optional profile destination, context, presence, and action
 - Service marks with supplied assets, status, and fallback initials
 
 ## Component 06 — Signals
@@ -135,93 +133,63 @@ Included behavior:
 
 - Compact semantic badges and labeled status dots
 - Clamped, accessible progress rails in the reserved signal colors
-- Taste Match meter with score, human reason, and optional social detail
 - Fractional rating display with a spoken numeric value rather than color-only meaning
 
 ## Component 07 — Media
 
-Source references: Home, Search / Explore, Friends Activity, Public Profile, and title detail.
+Source references: Home, Search / Explore, Public Profile, and title detail.
 
 Included behavior:
 
 - Portrait, landscape, square, and wide artwork frames
-- Supplied poster assets with title, metadata, badge, and destination support
-- Landscape stills with a named continuation action and accessible progress
 - A code-native geometric missing-art state that preserves the cinematic composition
 - Lazy image loading and reduced-motion artwork response
 
 ## Component 08 — Content cards
 
-Source references: Home, Search / Explore, Library, Friends Activity, and Public Profile.
+Source references: Home, Search / Explore, Library, and Public Profile.
 
 Included behavior:
 
-- Default, saved, and watched poster cards with contextual badges and friend rings
-- Watch-forward cards with a centered play action and overlaid title, year, and rating
-- Continue cards with one explicit playback destination and remaining progress, in stacked rail or compact sidebar layouts
-- Ranked trending cards with member score and completion proof
+- Watch-forward cards with overlaid title, optional year/rating meta, and bookmark slot
 - Curated-list cards with supplied artwork collage, curator identity, and save count
 
 ## Component 09 — Editorial
 
-Source references: Home, Search / Explore, Friends Activity, and List Detail.
+Source references: Home, Search / Explore, and List Detail.
 
 Included behavior:
 
 - Editorial section headings with restrained description and optional action
-- Cinematic editorial features with context, synopsis, actions, and social proof
 - Controlled mood selection with semantic color dots and pressed state
-- Compact social proof combining a named member group with human evidence
 
-## Component 10 — Social
-
-Source references: Friends Activity, Title Detail, List Detail, Search / Explore, and onboarding.
-
-Included behavior:
-
-- Activity items combining member context, media, title, rating, commentary, and destination
-- Trusted reactions with member identity, numeric rating, quote, and engagement
-- Friend and follow rows with clamped overlap, relationship state, and caller-owned action
-- Comment cards for member and curator roles, including native disclosure for hidden spoilers
-
-## Component 11 — Profile
+## Component 10 — Profile
 
 Source references: Profile Owner and Public Profile.
 
 Included behavior:
 
-- Cinematic profile masthead with identity, optional presence, biography, member statistics, background artwork, and caller-owned actions
-- Clamped compatibility panel with a readable score, human reason, mutual-member proof, and optional detail
 - Responsive diary rows that keep date, artwork, rating, note, destination, and action distinct
-- Taste signature statement with semantically colored worlds and a supporting comparison detail
-- Rating rhythm histogram with a readable distribution label and decorative bars
-- Profile review cards that keep artwork, rating, review context, engagement, and excerpt distinct
 
-## Component 12 — Title and series
+## Component 11 — Title and series
 
 Source references: Title Detail and Series Detail.
 
 Included behavior:
 
-- Framed cinematic title masthead with optional portrait poster, metadata, synopsis, and action hierarchy. Slots for Taste Match or social proof require real backing behavior on live routes
-- Rotating hero spotlight with a bounded backdrop, optional portrait poster, 300ms crossfade, and visible Pause/Start control. Rotation pauses on hover, offscreen, in hidden tabs, and for reduced motion. Focus inside slide content or manual selection stops rotation until explicitly restarted. The default cadence is eight seconds. Selector targets are 44px and hidden slides are inert.
-- Member pulse with a single accessible rating label and decorative distribution histogram
 - Cast cards with supplied portrait support and a restrained geometric identity fallback
 - Shared dropdown season selection with caller-owned state
-- Episode rows for available, continuing, and upcoming states, including optional progress and action
 
-## Component 13 — Library and lists
+## Component 12 — Library and lists
 
 Source references: My Library and List Detail.
 
 Included behavior:
 
-- Native library search toolbar with caller-owned filters, sort, and view controls
 - Saved-title cards with explicit save state, optional progress, signal, badge, and destination
 - Ordered title rows with stable rank, artwork, metadata, curator quote, match evidence, and action
-- Curator panels with readable ownership, collaborator detail, list description, and tags
 
-## Component 14 — Authentication
+## Component 13 — Authentication
 
 Source references: Create Account and Sign In.
 
@@ -233,49 +201,41 @@ Included behavior:
 - Persistent auth fields with helper or error association and caller-owned native attributes
 - Optional trailing field actions for accessible password visibility controls
 - Email/password fields, verification, and recovery actions without OAuth/provider controls
-- Plain-language trust notes using semantic signals without relying on color alone
 
-## Component 15 — Onboarding
+## Component 14 — Onboarding
 
 Source references: Onboarding History, Favorites, and Circle.
 
 Included behavior:
 
 - Reduced onboarding header with clamped step progress and optional skip destination
-- Import and start-fresh options with benefits, state, and caller-owned actions
 - Native-checkbox selectable title cards with supplied artwork and visible keyboard state
-- Member suggestions use the canonical Username term. They remain gallery specimens until real social data exists; product screens render an honest empty state instead of fixture members.
 
-## Component 16 — Settings and support
+## Component 15 — Settings and support
 
-Source references: Settings, Help Center, and Report Issue.
+Source references: Settings.
 
 Included behavior:
 
 - Settings rail with member context and semantic current-page navigation
 - Settings sections and preference rows that accept the appropriate control rather than assuming every setting is a toggle
-- Health summaries with textual healthy, slow, and unavailable states
-- Native file dropzone for screenshots and short recordings with caller-owned file constraints
 
-## Component 17 — Playback shell
+## Component 16 — Playback shell
 
-Source references: Player Screen, playback architecture, and Report Issue.
+Source references: Player Screen and playback architecture.
 
 Included behavior:
 
 - Reduced watch header with explicit back and exit destinations
 - First-party Consumit Player with a semantic video surface, poster and unavailable fallbacks, and accessible playback controls
-- Native-radio source selection with health, availability detail, and caller-owned switching logic
-- Playback recovery destination and an explicit installation-safety warning
 - UI scope only: provider ranking, entitlement, health probing, source switching, streaming adapters, and playback business rules remain application logic
 
-## Component 18 — Global finish
+## Component 17 — Global finish
 
 Source references: all active screens.
 
 Included behavior:
 
-- Responsive global footer with brand destination, legal/help links, and caller-owned copyright
 - Empty composition with a direct activation path
 - Reduced-motion loading composition with a live status label
 - Alerting error composition that explains impact, recovery, and optional diagnostic detail
@@ -284,4 +244,4 @@ Included behavior:
 
 `apps/web/src/app/library/library-screen.tsx` composes shared artwork, saved-title cards, chips, segmented controls, lists, and diary rows into shelf, grid, and list views. The shelf view uses subtle ledges in existing surface tokens, with captions below the covers. Its local search and kind filter are application concerns; their combination and empty-result recovery are covered by the library screen tests.
 
-`apps/web/src/app/profile/public-profile-screen.tsx` composes the shared ProfileMasthead, six-Favorites exhibition, metadata-derived genre counts, diary, and written reviews. The original flat masthead grows with its content; Favorites have equal size and contrast, and native section links track the current URL hash. Owner editors remain the existing components. Profile and library visual rules live in DESIGN.md; their decorative shelf boards do not become generic card primitives.
+`apps/web/src/app/profile/public-profile-screen.tsx` composes the shared FilScreen shell, banner hero with avatar/name/bio/stats, section tabs, six-Favorites exhibition, metadata-derived genre counts, diary, written reviews, and lists. The masthead expands with its content; Favorites have equal size and contrast, and native section links track the current URL hash. Owner editors remain the existing components. Profile and library visual rules live in DESIGN.md; their decorative shelf boards do not become generic card primitives.

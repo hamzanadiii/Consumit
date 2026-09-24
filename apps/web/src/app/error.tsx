@@ -5,7 +5,7 @@ import { useEffect } from 'react'
 
 import { Button, ErrorState } from '@consumit/ui'
 
-import { ScreenShell } from './screens/screen-shell'
+import { FilScreenShell } from './home/filscreen-shell'
 
 export default function Error({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
@@ -13,14 +13,14 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
   }, [error])
 
   return (
-    <ScreenShell activeHref="">
-      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem] px-5 py-16 sm:px-8 lg:px-[50px]">
+    <FilScreenShell pageHeading={undefined}>
+      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem]">
         <ErrorState
           action={<Button onClick={reset}><RotateCcw aria-hidden="true" /> Try again</Button>}
           description="Consumit could not load this catalog view. Your library and watch history are safe."
           title="The catalog missed its cue"
         />
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }

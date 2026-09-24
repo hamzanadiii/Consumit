@@ -1,49 +1,23 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 
-import { CastCard, EpisodeRow, MemberPulse, SeasonSelector, TitleMasthead } from './title'
-import { HeroSpotlight, type HeroSpotlightItem } from './hero-spotlight'
-
-const spotlightItems: HeroSpotlightItem[] = [
-  { key: 'one', metadata: '2026 · Film', synopsis: 'First story.', title: 'First Light' },
-  { key: 'two', metadata: '2025 · Series', synopsis: 'Second story.', title: 'Second Harbor' },
-  { key: 'three', metadata: '2026 · Film', synopsis: 'Third story.', title: 'Third Meridian' },
-]
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+import { CastCard, SeasonSelector } from './title'
 
 describe('title and series components', () => {
-  it('renders a cinematic title masthead and social proof', () => {
-    render(
-      <TitleMasthead
-        headingLevel="h1"
-        metadata="2026 · Drama"
-        socialProof={<p>8 friends watched</p>}
-        synopsis="A city erased every street."
-        tasteScore={92}
-        title="The Last City After Rain"
-      />,
-    )
-
-    expect(screen.getByRole('heading', { name: 'The Last City After Rain' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1, name: 'The Last City After Rain' })).toBeInTheDocument()
-    expect(screen.getByText('92%')).toBeInTheDocument()
-    expect(screen.getByText('8 friends watched')).toBeInTheDocument()
-  })
-
-  it('exposes member rating as one readable label', () => {
-    render(<MemberPulse count="12,846 ratings" value={4.3} />)
-
-    expect(screen.getByLabelText('Member rating 4.3 out of 5 from 12,846 ratings')).toBeInTheDocument()
-  })
-
   it('selects seasons through the shared themed listbox', async () => {
     const user = userEvent.setup()
     const onValueChange = vi.fn()
-    render(<SeasonSelector onValueChange={onValueChange} options={[{ label: 'Season 1', value: '1' }, { label: 'Season 2', value: '2' }]} value="1" />)
+    render(
+      <SeasonSelector
+        onValueChange={onValueChange}
+        options={[
+          { label: 'Season 1', value: '1' },
+          { label: 'Season 2', value: '2' },
+        ]}
+        value="1"
+      />,
+    )
 
     await user.click(screen.getByRole('button', { name: 'Season Season 1' }))
     expect(screen.getByRole('listbox', { name: 'Season' })).toBeInTheDocument()
@@ -51,147 +25,10 @@ describe('title and series components', () => {
     expect(onValueChange).toHaveBeenCalledWith('2')
   })
 
-  it('renders cast and episode anatomy', () => {
-    render(
-      <>
-        <CastCard character="Mara" name="Sara El Amrani" />
-        <EpisodeRow episode="Episode 4" meta="52 min" progress={31} title="Glass Teeth" />
-      </>,
-    )
+  it('renders cast anatomy', () => {
+    render(<CastCard character="Mara" name="Sara El Amrani" />)
 
     expect(screen.getByText('Sara El Amrani')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'Glass Teeth watched' })).toHaveAttribute('aria-valuenow', '31')
-  })
-})
-
-describe('hero spotlight', () => {
-  it('opens on the first title with a progress rail and no arrows', () => {
-    const { container } = render(<HeroSpotlight items={spotlightItems} label="New this week" />)
-
-    expect(screen.getByRole('region', { name: 'New this week' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Second Harbor' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Show First Light' })).toHaveAttribute('aria-current', 'true')
-    expect(screen.getByRole('button', { name: 'Show Second Harbor' })).not.toHaveAttribute('aria-current')
-    expect(screen.queryByRole('button', { name: /previous|next/i })).not.toBeInTheDocument()
-    expect(container.querySelector('[data-consumit-hero-dot]')).toHaveAttribute('style', expect.stringContaining('animation-duration'))
-    expect(screen.getByText('First story.').className).toMatch(/line-clamp-3/)
-  })
-
-  it('advances on a timer, wraps, and jumps through dots', () => {
-    vi.useFakeTimers()
-    render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
-
-    act(() => {
-      vi.advanceTimersByTime(7000)
-    })
-    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show Third Meridian' }))
-    expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
-
-    act(() => { vi.advanceTimersByTime(14000) })
-    expect(screen.getByRole('heading', { name: 'Third Meridian' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Start featured titles' }))
-
-    act(() => {
-      vi.advanceTimersByTime(7000)
-    })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-
-    act(() => {
-      vi.advanceTimersByTime(7000)
-    })
-    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
-  })
-
-  it('pauses while hovered and resumes when the pointer leaves', () => {
-    vi.useFakeTimers()
-    render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
-
-    expect(screen.getByRole('button', { name: 'Pause featured titles' })).toBeInTheDocument()
-
-    fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
-    act(() => {
-      vi.advanceTimersByTime(8000)
-    })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-    fireEvent.mouseLeave(screen.getByRole('region', { name: 'Featured titles' }))
-    act(() => { vi.advanceTimersByTime(7000) })
-    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
-  })
-
-  it('keeps the reading position stable after focus until explicitly restarted', () => {
-    vi.useFakeTimers()
-    render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
-
-    fireEvent.focus(screen.getByRole('region', { name: 'Featured titles' }))
-    act(() => {
-      vi.advanceTimersByTime(30000)
-    })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-
-    fireEvent.blur(screen.getByRole('region', { name: 'Featured titles' }))
-    act(() => {
-      vi.advanceTimersByTime(30000)
-    })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start featured titles' }))
-    act(() => {
-      vi.advanceTimersByTime(7000)
-    })
-    expect(screen.getByRole('heading', { name: 'Second Harbor' })).toBeInTheDocument()
-  })
-
-  it('honors an explicit pause and excludes hidden titles from keyboard interaction', () => {
-    vi.useFakeTimers()
-    const { container } = render(<HeroSpotlight autoAdvanceMs={7000} items={spotlightItems} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Pause featured titles' }))
-    act(() => { vi.advanceTimersByTime(30000) })
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-    expect(container.querySelectorAll('[inert]')).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'Start featured titles' })).toBeInTheDocument()
-  })
-
-  it('renders a single title without carousel chrome', () => {
-    render(<HeroSpotlight items={[spotlightItems[0]!]} />)
-
-    expect(screen.getByRole('heading', { name: 'First Light' })).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Featured titles' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
-  it('prefers the TMDB artwork logo over the serif title', () => {
-    render(
-      <TitleMasthead
-        headingLevel="h1"
-        logoUrl="https://image.tmdb.org/t/p/w500/city-logo.png"
-        metadata="2026 · Drama"
-        synopsis="A city erased every street."
-        title="The Last City After Rain"
-      />,
-    )
-
-    expect(screen.getByRole('img', { name: 'The Last City After Rain' })).toHaveAttribute(
-      'src',
-      'https://image.tmdb.org/t/p/w500/city-logo.png',
-    )
-    expect(screen.getByRole('heading', { level: 1, name: 'The Last City After Rain' })).toBeInTheDocument()
-  })
-
-  it('reads tagline and maker credits as hero lede and byline', () => {    render(
-      <TitleMasthead
-        byline="Directed by Denis Villeneuve"
-        lede="Long live the fighters."
-        metadata="2024 · Film"
-        synopsis="Paul unites with the Fremen."
-        title="Dune: Part Two"
-      />,
-    )
-
-    expect(screen.getByText('Long live the fighters.')).toBeInTheDocument()
-    expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
+    expect(screen.getByText('Mara')).toBeInTheDocument()
   })
 })

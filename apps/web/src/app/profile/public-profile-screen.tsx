@@ -9,6 +9,7 @@ import { BannerEditor } from './banner-editor'
 import { FollowButton } from './follow-button'
 import { FavoritesShelf } from './favorites-shelf'
 import { EditBannerButton, ProfileEditProvider } from './profile-edit'
+import { ShareProfile } from './share-profile'
 import { FilScreenShell } from '../shared'
 
 import { memberAvatarSrc } from '@/lib/avatar'
@@ -21,6 +22,10 @@ function formatDiaryDate(isoDate: string) {
 
 function formatReviewDate(isoDate: string) {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatMonthKey(isoDate: string) {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 
 function EmptyState({ children }: { children: string }) {
@@ -40,6 +45,96 @@ function HeroStat({ label, value }: { label: string; value: number }) {
   )
 }
 
+/**
+ * Compact diary list for the profile right rail: recent watches only, no
+ * fabricated activity. Full diary with notes stays in the main column.
+ */
+function RailDiary({ entries, titleMap }: {
+  entries: MemberProfileData['diary']
+  titleMap: Map<string, CatalogTitleSummary>
+}) {
+  if (entries.length === 0) {
+    return (
+      <section aria-labelledby="rail-diary-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-diary>
+        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-diary-heading">Diary</h2>
+        <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">No diary entries yet. Log a watch to keep its date here.</p>
+      </section>
+    )
+  }
+
+  const recent = entries.slice(0, 6)
+
+  return (
+    <section aria-labelledby="rail-diary-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-diary>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-diary-heading">Diary</h2>
+        <a className="min-h-11 inline-flex items-center rounded text-xs font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#diary">
+          View all
+        </a>
+      </div>
+      <ol className="mt-3 space-y-0.5">
+        {recent.map((entry) => {
+          const title = titleMap.get(refKey(entry))
+          const label = title?.title ?? `Movie #${entry.id}`
+          return (
+            <li key={entry.entryId}>
+              <a
+                className="grid min-h-11 grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 rounded-lg px-1 outline-none transition-colors hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none"
+                href={titleHref(entry)}
+              >
+                <span className="text-center text-[10px] font-bold uppercase tracking-wide text-[var(--fs-muted)] tabular-nums">
+                  {formatDiaryDate(entry.watchedOn).split(' ')[0]}
+                  <span className="mt-0.5 block text-[9px] uppercase">{formatDiaryDate(entry.watchedOn).split(' ')[1] ?? ''}</span>
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-bold text-[var(--fs-ink)]">{label}</span>
+                  <span className="mt-0.5 block text-[10px] text-[var(--fs-muted)]">{entry.rewatch ? 'Rewatched' : 'Watched'}</span>
+                </span>
+              </a>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+function RailLists({ lists, name }: { lists: MemberProfileData['lists']; name: string }) {
+  if (lists.length === 0) {
+    return (
+      <section aria-labelledby="rail-lists-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-lists>
+        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-lists-heading">Recent lists</h2>
+        <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">No lists yet.</p>
+      </section>
+    )
+  }
+
+  const recent = lists.slice(0, 2)
+
+  return (
+    <section aria-labelledby="rail-lists-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-lists>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-lists-heading">Recent lists</h2>
+        <a className="min-h-11 inline-flex items-center rounded text-xs font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#lists">
+          View all
+        </a>
+      </div>
+      <div className="mt-3 grid gap-3">
+        {recent.map((list) => (
+          <CuratedListCard
+            artworkSources={[]}
+            curator={name}
+            href={`/lists/${list.slug}`}
+            key={list.id}
+            meta={`${list.itemCount} titles`}
+            title={list.name}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function ProfileScreen({ catalogUnavailable = false, data, owner = false, titles }: { catalogUnavailable?: boolean; data: MemberProfileData; owner?: boolean; titles: readonly CatalogTitleSummary[] }) {
   const titleMap = new Map(titles.map((title) => [refKey(title), title]))
   const name = data.profile.displayName ?? data.profile.username
@@ -52,6 +147,13 @@ export function ProfileScreen({ catalogUnavailable = false, data, owner = false,
   for (const title of favoriteTitles) for (const genre of title.genreNames) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1)
   const favoriteGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
   const meta = [`@${data.profile.username}`, data.profile.location ?? null, `Joined ${new Date(data.profile.createdAt).getUTCFullYear()}`].filter(Boolean).join(' · ')
+  const diaryByMonth = new Map<string, typeof data.diary>()
+  for (const entry of data.diary) {
+    const key = formatMonthKey(entry.watchedOn)
+    const bucket = diaryByMonth.get(key)
+    if (bucket) bucket.push(entry)
+    else diaryByMonth.set(key, [entry])
+  }
 
   return (
     <FilScreenShell pageHeading={undefined}>
@@ -156,133 +258,148 @@ export function ProfileScreen({ catalogUnavailable = false, data, owner = false,
               </p>
             ) : null}
 
-            {/* Letterboxd posters-only shelf in FilScreen language: bare frames
-                that lift with an orange edge on hover, title and year revealed
-                inside a legibility gradient. Owners see empty frames that open
-                the editor. */}
-            <section className="py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="favorites-heading">
-              <div id="favorites" className="scroll-mt-6">
-                <SectionHeading
-                  description={owner ? 'Your six defining favorites.' : `The stories that stay with ${name}.`}
-                  id="favorites-heading"
-                  title="Favorites"
-                />
-                {data.favorites.length === 0 && !owner ? (
-                  <div className="mt-8">
-                    <EmptyState>This member has not picked favorites yet.</EmptyState>
-                  </div>
-                ) : (
-                  <FavoritesShelf
-                    favorites={data.favorites}
-                    key={data.favorites.map(refKey).join('|')}
-                    owner={owner}
-                    titles={titles}
-                  />
-                )}
-              </div>
-
-              {favoriteGenres.length > 0 ? (
-                <div className="mt-8 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6" aria-labelledby="taste-portrait-heading">
-                  <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="taste-portrait-heading">In the favorites</h2>
-                  <p className="mt-1 text-xs text-[var(--fs-muted)]">Genres across {favoriteTitles.length} selected {favoriteTitles.length === 1 ? 'title' : 'titles'}.</p>
-                  <ul className="mt-4 flex flex-wrap gap-2">
-                    {favoriteGenres.map(([genre, count]) => (
-                      <li
-                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-4 text-xs font-bold text-[var(--fs-ink)]"
-                        key={genre}
-                      >
-                        {genre}
-                        <span className="font-normal text-[var(--fs-muted)] tabular-nums">{count} of {favoriteTitles.length}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </section>
-
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="diary" aria-labelledby="diary-heading">
-              <SectionHeading id="diary-heading" title="Recent diary" />
-              <div className="mt-6 max-w-5xl">
-                {data.diary.length === 0 ? (
-                  <EmptyState>No diary entries yet. Log a watch to keep its date here.</EmptyState>
-                ) : (
-                  data.diary.map((entry) => {
-                    const title = titleMap.get(refKey(entry))
-                    return (
-                      <DiaryRow
-                        artworkSrc={title?.posterUrl ?? undefined}
-                        date={formatDiaryDate(entry.watchedOn)}
-                        detail={entry.rewatch ? 'Rewatched' : 'Watched'}
-                        href={titleHref(entry)}
-                        key={entry.entryId}
-                        title={title?.title ?? `Movie #${entry.id}`}
-                      />
-                    )
-                  })
-                )}
-              </div>
-            </section>
-
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="reviews-heading">
-              <SectionHeading id="reviews-heading" title="Reviews" />
-              {data.reviews.length === 0 ? (
-                <div className="mt-8 max-w-5xl"><EmptyState>No reviews published yet.</EmptyState></div>
-              ) : (
-                <div className="mt-8 grid gap-4 xl:grid-cols-2">
-                  {data.reviews.map((review) => {
-                    const title = titleMap.get(refKey(review))
-                    const label = title?.title ?? `Movie #${review.id}`
-                    return (
-                      <article
-                        className="group grid min-w-0 grid-cols-[96px_minmax(0,1fr)] overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none sm:grid-cols-[128px_minmax(0,1fr)]"
-                        key={review.reviewId}
-                      >
-                        <ArtworkFrame
-                          alt={`${label} poster`}
-                          className="h-full rounded-none border-0"
-                          ratio="portrait"
-                          src={title?.posterUrl ?? undefined}
-                        />
-                        <div className="min-w-0 p-4 sm:p-5">
-                          <Link
-                            className="font-display text-xl leading-tight text-[var(--fs-ink)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:text-2xl"
-                            href={titleHref(review)}
-                          >
-                            {label}
-                          </Link>
-                          {review.reviewedOn ? (
-                            <p className="mt-1.5 text-xs text-[var(--fs-muted)]">Reviewed {formatReviewDate(review.reviewedOn)}</p>
-                          ) : null}
-                          <p className="mt-3 line-clamp-6 text-sm leading-6 whitespace-pre-wrap text-[var(--fs-secondary)]">
-                            {review.body}
-                          </p>
-                        </div>
-                      </article>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
-
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="lists" aria-labelledby="lists-heading">
-              <SectionHeading id="lists-heading" title={`${name}'s lists`} />
-              {data.lists.length === 0 ? (
-                <div className="mt-8"><EmptyState>No lists yet. Imported lists remain private until this member publishes them.</EmptyState></div>
-              ) : (
-                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {data.lists.map((list) => (
-                    <CuratedListCard
-                      artworkSources={[]}
-                      curator={name}
-                      href={`/lists/${list.slug}`}
-                      key={list.id}
-                      meta={`${list.itemCount} titles`}
-                      title={list.name}
+            {/* Main column + right rail (Share / Diary / Lists), matching the
+                reference profile composition without fabricating activity. */}
+            <div className="mt-6 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)] lg:items-start xl:gap-10">
+              <div className="min-w-0">
+                <section className="py-6 sm:py-8" id="overview" aria-labelledby="favorites-heading">
+                  <div id="favorites" className="scroll-mt-6">
+                    <SectionHeading
+                      description={owner ? 'Your six defining favorites.' : `The stories that stay with ${name}.`}
+                      id="favorites-heading"
+                      title="Favorites"
                     />
-                  ))}
-                </div>
-              )}
-            </section>
+                    {data.favorites.length === 0 && !owner ? (
+                      <div className="mt-8">
+                        <EmptyState>This member has not picked favorites yet.</EmptyState>
+                      </div>
+                    ) : (
+                      <FavoritesShelf
+                        favorites={data.favorites}
+                        key={data.favorites.map(refKey).join('|')}
+                        owner={owner}
+                        titles={titles}
+                      />
+                    )}
+                  </div>
+
+                  {favoriteGenres.length > 0 ? (
+                    <div className="mt-8 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6" aria-labelledby="taste-portrait-heading">
+                      <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="taste-portrait-heading">In the favorites</h2>
+                      <p className="mt-1 text-xs text-[var(--fs-muted)]">Genres across {favoriteTitles.length} selected {favoriteTitles.length === 1 ? 'title' : 'titles'}.</p>
+                      <ul className="mt-4 flex flex-wrap gap-2">
+                        {favoriteGenres.map(([genre, count]) => (
+                          <li
+                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-4 text-xs font-bold text-[var(--fs-ink)]"
+                            key={genre}
+                          >
+                            {genre}
+                            <span className="font-normal text-[var(--fs-muted)] tabular-nums">{count} of {favoriteTitles.length}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="diary" aria-labelledby="diary-heading">
+                  <SectionHeading id="diary-heading" title="Diary" />
+                  {data.diary.length === 0 ? (
+                    <div className="mt-6"><EmptyState>No diary entries yet. Log a watch to keep its date here.</EmptyState></div>
+                  ) : (
+                    <div className="mt-6 space-y-8">
+                      {[...diaryByMonth.entries()].map(([month, entries]) => (
+                        <div key={month}>
+                          <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--fs-muted)]">{month}</h3>
+                          <div className="max-w-5xl">
+                            {entries.map((entry) => {
+                              const title = titleMap.get(refKey(entry))
+                              return (
+                                <DiaryRow
+                                  artworkSrc={title?.posterUrl ?? undefined}
+                                  date={formatDiaryDate(entry.watchedOn)}
+                                  detail={entry.rewatch ? 'Rewatched' : 'Watched'}
+                                  href={titleHref(entry)}
+                                  key={entry.entryId}
+                                  title={title?.title ?? `Movie #${entry.id}`}
+                                />
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="reviews" aria-labelledby="reviews-heading">
+                  <SectionHeading id="reviews-heading" title="Reviews" />
+                  {data.reviews.length === 0 ? (
+                    <div className="mt-8 max-w-5xl"><EmptyState>No reviews published yet.</EmptyState></div>
+                  ) : (
+                    <div className="mt-8 grid gap-4 xl:grid-cols-2">
+                      {data.reviews.map((review) => {
+                        const title = titleMap.get(refKey(review))
+                        const label = title?.title ?? `Movie #${review.id}`
+                        return (
+                          <article
+                            className="group grid min-w-0 grid-cols-[96px_minmax(0,1fr)] overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none sm:grid-cols-[128px_minmax(0,1fr)]"
+                            key={review.reviewId}
+                          >
+                            <ArtworkFrame
+                              alt={`${label} poster`}
+                              className="h-full rounded-none border-0"
+                              ratio="portrait"
+                              src={title?.posterUrl ?? undefined}
+                            />
+                            <div className="min-w-0 p-4 sm:p-5">
+                              <Link
+                                className="font-display text-xl leading-tight text-[var(--fs-ink)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:text-2xl"
+                                href={titleHref(review)}
+                              >
+                                {label}
+                              </Link>
+                              {review.reviewedOn ? (
+                                <p className="mt-1.5 text-xs text-[var(--fs-muted)]">Reviewed {formatReviewDate(review.reviewedOn)}</p>
+                              ) : null}
+                              <p className="mt-3 line-clamp-6 text-sm leading-6 whitespace-pre-wrap text-[var(--fs-secondary)]">
+                                {review.body}
+                              </p>
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  )}
+                </section>
+
+                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="lists" aria-labelledby="lists-heading">
+                  <SectionHeading id="lists-heading" title={`${name}'s lists`} />
+                  {data.lists.length === 0 ? (
+                    <div className="mt-8"><EmptyState>No lists yet. Imported lists remain private until this member publishes them.</EmptyState></div>
+                  ) : (
+                    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {data.lists.map((list) => (
+                        <CuratedListCard
+                          artworkSources={[]}
+                          curator={name}
+                          href={`/lists/${list.slug}`}
+                          key={list.id}
+                          meta={`${list.itemCount} titles`}
+                          title={list.name}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <aside aria-label={`${name} profile summary`} className="flex flex-col gap-4 lg:sticky lg:top-6 lg:gap-5" data-consumit-profile-rail>
+                <ShareProfile username={data.profile.username} />
+                <RailDiary entries={data.diary} titleMap={titleMap} />
+                <RailLists lists={data.lists} name={name} />
+              </aside>
+            </div>
           </div>
         </main>
       </ProfileEditProvider>

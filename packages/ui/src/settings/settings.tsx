@@ -1,5 +1,4 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { Upload } from 'lucide-react'
 
 import { Avatar, type AvatarTreatment } from '../identity/identity'
 import { cn } from '../lib/cn'
@@ -111,72 +110,5 @@ export function PreferenceRow({
       </div>
       <div className="shrink-0">{control}</div>
     </div>
-  )
-}
-
-export type HealthEntry = {
-  detail?: string | undefined
-  label: string
-  status: 'healthy' | 'slow' | 'unavailable'
-}
-
-const healthClasses: Record<HealthEntry['status'], string> = {
-  healthy: 'bg-lime',
-  slow: 'bg-copy',
-  unavailable: 'bg-muted',
-}
-
-export type HealthSummaryProps = Omit<ComponentProps<'aside'>, 'children'> & {
-  entries: readonly HealthEntry[]
-  title?: string | undefined
-}
-
-export function HealthSummary({
-  className,
-  entries,
-  title = 'Source health',
-  ...props
-}: HealthSummaryProps) {
-  return (
-    <aside className={cn('rounded-card border border-border bg-surface p-5', className)} data-consumit-health-summary {...props}>
-      <h2 className="text-sm font-bold text-ink">{title}</h2>
-      <dl className="mt-4">
-        {entries.map((entry) => (
-          <div className="flex min-h-12 items-center gap-3 border-t border-border first:border-t-0" key={entry.label}>
-            <dt className="min-w-0 flex-1 text-xs text-copy">{entry.label}</dt>
-            <dd className="flex items-center gap-2 text-xs capitalize text-muted">
-              <span aria-hidden="true" className={cn('size-2 rounded-full', healthClasses[entry.status])} />
-              {entry.detail ?? entry.status}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </aside>
-  )
-}
-
-export type DropzoneProps = Omit<ComponentProps<'input'>, 'children' | 'title' | 'type'> & {
-  description?: string | undefined
-  title: string
-}
-
-export function Dropzone({
-  accept = 'image/png,image/jpeg,video/mp4',
-  className,
-  description,
-  title,
-  ...props
-}: DropzoneProps) {
-  return (
-    <label className={cn('relative flex min-h-32 cursor-pointer items-center gap-4 rounded-card border border-dashed border-control-outline bg-surface p-5 outline-none transition-colors hover:border-orange focus-within:border-orange focus-within:ring-2 focus-within:ring-orange focus-within:ring-offset-2 focus-within:ring-offset-canvas motion-reduce:transition-none', className)} data-consumit-dropzone>
-      <input accept={accept} className="sr-only" type="file" {...props} />
-      <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-control bg-surface-raised text-orange">
-        <Upload className="size-5" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-ink">{title}</span>
-        {description ? <span className="mt-2 block text-xs leading-5 text-muted">{description}</span> : null}
-      </span>
-    </label>
   )
 }

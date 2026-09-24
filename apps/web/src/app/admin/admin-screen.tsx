@@ -6,7 +6,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button, EmptyState, Input, Label, LoadingState, SectionHeading, SegmentedControl, Select, StatusDot } from '@consumit/ui'
 
-import { ScreenShell } from '../screens/screen-shell'
+import { FilScreenShell } from '../home/filscreen-shell'
 import { useSession } from '../session/session'
 import { addDomain, checkHealth, getProviderConfig, listDomains, listMembers, listProviders, removeDomain, resetProviderConfig, setMemberRole, testProvider, updateProviderConfig, type AdminMember, type AdminProvider, type HealthResult, type ProviderOverridePatch, type ProviderTestResult } from '@/lib/admin-browser'
 
@@ -634,8 +634,8 @@ export function AdminScreen() {
   const [tab, setTab] = useState<Tab>('overview')
 
   return (
-    <ScreenShell activeHref="/admin" withFooter={false}>
-      <main className="mx-auto max-w-6xl px-4 py-8">
+    <FilScreenShell pageHeading={undefined}>
+      <main className="mx-auto max-w-6xl">
         <div className="mb-6">
           <h1 className="font-display text-4xl tracking-[-0.02em] text-ink">Control room<span className="text-orange">.</span></h1>
           <p className="mt-2 max-w-[62ch] text-sm leading-6 text-muted">Probe providers, tune the fleet, and manage access.</p>
@@ -665,6 +665,6 @@ export function AdminScreen() {
         {tab === 'domains' && <DomainsTab />}
         {tab === 'members' && <MembersTab />}
       </main>
-    </ScreenShell>
+    </FilScreenShell>
   )
 }

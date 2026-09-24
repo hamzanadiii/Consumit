@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 
 import { AdminScreen } from './admin-screen'
-import { SessionUnavailableScreen } from '../session/protected-page'
 
 import { getServerSession } from '@/lib/identity-server'
 

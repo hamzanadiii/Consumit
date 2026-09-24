@@ -128,33 +128,3 @@ export function AuthField({
     </div>
   )
 }
-
-export type TrustNoteProps = Omit<ComponentProps<'aside'>, 'children' | 'title'> & {
-  children: ReactNode
-  title: string
-  tone?: 'lime' | 'lilac' | 'orange' | undefined
-}
-
-const trustToneClasses = {
-  lime: 'bg-lime',
-  lilac: 'bg-lilac',
-  orange: 'bg-orange',
-} as const
-
-export function TrustNote({
-  children,
-  className,
-  title,
-  tone = 'lilac',
-  ...props
-}: TrustNoteProps) {
-  return (
-    <aside className={cn('flex gap-4 rounded-card border border-border bg-surface p-4', className)} data-consumit-trust-note {...props}>
-      <span aria-hidden="true" className={cn('mt-1 size-2 shrink-0 rounded-full', trustToneClasses[tone])} />
-      <div>
-        <h2 className="text-sm font-bold text-ink">{title}</h2>
-        <div className="mt-2 text-xs leading-5 text-muted">{children}</div>
-      </div>
-    </aside>
-  )
-}

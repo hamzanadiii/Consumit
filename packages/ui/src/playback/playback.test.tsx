@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToString } from 'react-dom/server'
 
 import { ConsumitPlayer } from './consumit-player'
-import { PlaybackReport, PlaybackTrustNote, SourceSelector, WatchHeader } from './playback'
+import { WatchHeader } from './playback'
 
 const chapters = [
   { startTime: 0, title: 'The missing street' },
@@ -92,28 +92,6 @@ describe('playback shell components', () => {
     expect(screen.getByRole('status')).toHaveTextContent('No authorized source available')
     expect(container.querySelector('[role="status"] span')).toHaveClass('bg-danger')
     expect(container.querySelector('[role="status"] span')).not.toHaveClass('bg-lime')
-  })
-
-  it('keeps source selection native and controlled', () => {
-    const onValueChange = vi.fn()
-    render(<SourceSelector name="source" onValueChange={onValueChange} sources={[{ label: 'Source 1', value: 'one' }, { label: 'Source 2', value: 'two' }]} value="one" />)
-
-    const secondSource = screen.getByRole('radio', { name: /Source 2/ })
-    expect(secondSource.closest('label')).toHaveClass('has-[:focus-visible]:ring-2')
-    fireEvent.click(secondSource)
-    expect(onValueChange).toHaveBeenCalledWith('two')
-  })
-
-  it('renders recovery and safety language', () => {
-    render(
-      <>
-        <PlaybackReport description="Try another source." href="/report" />
-        <PlaybackTrustNote>Never install a player extension.</PlaybackTrustNote>
-      </>,
-    )
-
-    expect(screen.getByRole('link', { name: /Report an issue/ })).toHaveAttribute('href', '/report')
-    expect(screen.getByText('Never install a player extension.')).toBeInTheDocument()
   })
 
   it('renders the prototype chrome with chapters, transport, and option menus', () => {

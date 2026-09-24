@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from '@/lib/identity-server'
 
 import { FriendsScreen } from './friends-screen'
-import { SessionUnavailableScreen } from '../session/protected-page'
 
 export const metadata: Metadata = {
   description: 'Your Consumit social space.',
