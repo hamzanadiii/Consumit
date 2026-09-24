@@ -1551,7 +1551,10 @@ export function ConsumitPlayer({
           }}
           onPlaying={() => setIsBuffering(false)}
           onSeeking={() => setIsBuffering(true)}
-          onSeeked={() => setIsBuffering(false)}
+          onSeeked={(event) => {
+            setIsBuffering(false)
+            props.onSeeked?.(event)
+          }}
           onTimeUpdate={(event) => {
             setCurrentTime(event.currentTarget.currentTime)
             onTimeUpdate?.(event)

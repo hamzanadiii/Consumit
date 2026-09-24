@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react'
 
+/** Public iframe shell: one dark Cinema After Midnight surface, no member chrome.
+ *  Nested under the root layout — never render a second document. */
 export default function EmbedLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, padding: 0, background: '#000', overflow: 'hidden' }}>
-        {children}
-      </body>
-    </html>
+    <div
+      className="min-h-dvh overflow-hidden bg-[#09090b] text-[#f4f0e8]"
+      data-consumit-embed
+    >
+      {children}
+    </div>
   )
 }

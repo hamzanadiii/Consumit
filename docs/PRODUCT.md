@@ -90,9 +90,9 @@ Scrolling near the end appends another page without duplicate titles. A keyboard
 - Private or direct messaging between members is excluded; follows, profiles, reviews, lists, and circle activity carry the social experience.
 - Streaming-service choices are availability preferences, not connected billing accounts.
 - The active playback design is a dedicated, focused screen owned by the first-party Consumit Player.
-- Playback uses configured direct media sources with hostile-output validation; iframe and embed delivery are excluded.
+- Playback uses validated configured media sources in the first-party Consumit Player. A configured provider may use the signed Cloudflare media proxy; public third-party sites may embed a separate Consumit player route with `autoplay`, `startAt`, and `lang` query parameters; the framed player posts `PLAYER_EVENT` messages (`play`, `pause`, `seeked`, `ended`, `timeupdate`) to the parent. Provider iframe players remain excluded.
 - Guests can watch and resume locally. Members additionally sync progress. Playback defaults to adaptive quality, original audio, and English captions when available; explicit track preferences persist. Recovery retains position and playback intent. The provider backend is disabled until media is configured.
-- Every Watch action opens the dedicated first-party player route directly; the player is the screen, not an embedded panel inside a discovery surface.
+- Every Watch action opens the dedicated first-party player route. The separate public embed route does not replace that member experience.
 - Computed Taste Match, overlap, member scores, and public numeric rating presentation are hidden until their product logic is implemented. A member authors and sees only their own ratings on title detail. Written reviews, catalog metadata, and watch progress remain visible.
 - Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
 - Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Six ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.

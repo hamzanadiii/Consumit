@@ -1,65 +1,61 @@
+import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+
+import { EmbedEmptyState } from '../../../../embed-empty'
 import { EmbedPlayer } from '../../../../embed-player'
+import { fetchEmbedStreams, loadEmbedEpisodeContext } from '../../../../embed-data'
+import { parseEmbedQuery } from '../../../../embed-query'
 
-interface EmbedSource {
-  url: string
-  type: string
-  quality: string
-  provider: string
-  headers: Record<string, string>
+type EmbedTvPageProps = {
+  params: Promise<{ tmdbId: string; season: string; episode: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
-interface EmbedSub {
-  url: string
-  label: string
-  format: string
-}
-
-async function fetchStreams(apiBaseUrl: string, tmdbId: string, season: string, episode: string) {
-  const path = `/v1/embed/tv/${tmdbId}/${season}/${episode}`
-  try {
-    const res = await fetch(`${apiBaseUrl}${path}`, {
-      headers: { 'Accept': 'application/json' },
-      next: { revalidate: 60 },
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-export default async function EmbedTvPage({ params }: { params: Promise<{ tmdbId: string; season: string; episode: string }> }) {
+export async function generateMetadata({ params }: EmbedTvPageProps): Promise<Metadata> {
   const { tmdbId, season, episode } = await params
-  const apiBaseUrl = process.env.CONSUMIT_API_URL || 'http://127.0.0.1:3001'
-  const data = await fetchStreams(apiBaseUrl, tmdbId, season, episode)
-
-  if (!data?.success || !data.sources?.length) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', color: '#fff', fontFamily: 'system-ui' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No streams available</div>
-          <div style={{ fontSize: '0.8rem', color: '#888' }}>Try again later</div>
-        </div>
-      </div>
-    )
+  const id = Number(tmdbId)
+  const seasonNumber = Number(season)
+  const episodeNumber = Number(episode)
+  const noindex = { robots: { follow: false, index: false } } as const
+  if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(seasonNumber) || seasonNumber <= 0 || !Number.isInteger(episodeNumber) || episodeNumber <= 0) {
+    return { ...noindex, title: 'Embed · Consumit' }
   }
+  const context = await loadEmbedEpisodeContext(id, seasonNumber, episodeNumber)
+  return { ...noindex, title: `${context.title} · Consumit` }
+}
+
+export default async function EmbedTvPage({ params, searchParams }: EmbedTvPageProps) {
+  const { tmdbId, season, episode } = await params
+  const id = Number(tmdbId)
+  const seasonNumber = Number(season)
+  const episodeNumber = Number(episode)
+  if (
+    !Number.isInteger(id) || id <= 0
+    || !Number.isInteger(seasonNumber) || seasonNumber <= 0
+    || !Number.isInteger(episodeNumber) || episodeNumber <= 0
+  ) notFound()
+
+  const query = parseEmbedQuery(await searchParams)
+  const [streams, context] = await Promise.all([
+    fetchEmbedStreams(`/v1/embed/tv/${id}/${seasonNumber}/${episodeNumber}`, query.lang),
+    loadEmbedEpisodeContext(id, seasonNumber, episodeNumber),
+  ])
+
+  if (!streams.sources.length) return <EmbedEmptyState />
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000' }}>
+    <div className="flex min-h-dvh flex-col bg-[#09090b]">
       <EmbedPlayer
-        sources={data.sources.map((s: EmbedSource) => ({
-          url: s.url,
-          type: s.type as 'hls' | 'dash' | 'native',
-          quality: s.quality,
-          provider: s.provider,
-          headers: s.headers,
-        }))}
-        subtitles={data.subtitles?.map((s: EmbedSub) => ({
-          url: s.url,
-          label: s.label,
-          format: s.format as 'vtt' | 'srt',
-        })) || []}
-        autoPlay
+        autoPlay={query.autoPlay}
+        lang={query.lang}
+        overview={context.overview}
+        pauseFacts={context.pauseFacts}
+        posterSrc={context.posterSrc}
+        sources={streams.sources}
+        startAt={query.startAt}
+        subtitles={streams.subtitles}
+        title={context.title}
+        videoId={id}
       />
     </div>
   )
