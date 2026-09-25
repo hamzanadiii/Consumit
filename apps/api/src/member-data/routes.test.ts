@@ -61,7 +61,7 @@ describe('member data mutation routes', () => {
   }
 
   it('serves one member title state with 200 instead of three 404-able reads', async () => {
-    const { app, cookie, memberData } = await setup()
+    const { app, cookie, memberData, memberId } = await setup()
     const headers = { origin }
 
     const full = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/movie/693134' })
@@ -83,6 +83,8 @@ describe('member data mutation routes', () => {
     expect(empty.json()).toEqual({ rating: null, like: null, review: null })
 
     expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/novel/1' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/anime/1' })).statusCode).toBe(200)
+    expect(memberData.rating).toHaveBeenLastCalledWith(memberId, { id: 1, kind: 'anime' })
     expect((await app.inject({ headers, method: 'GET', url: '/v1/me/titles/movie/1' })).statusCode).toBe(401)
   })
 

@@ -243,6 +243,7 @@ export const animeTitleDetailSchema = animeTitleSummarySchema.extend({
     url: z.url(),
     color: z.string().max(16).nullable(),
   })),
+  recommendations: z.array(animeTitleSummarySchema),
 })
 export type AnimeTitleDetail = z.infer<typeof animeTitleDetailSchema>
 
@@ -889,6 +890,11 @@ export type MemberExport = z.infer<typeof memberExportSchema>
 export function titleHref(title: CatalogRef) {
   if (title.kind === 'anime') return `/anime/${title.id}`
   return title.kind === 'movie' ? `/title/${title.id}` : `/series/${title.id}`
+}
+/** Display label for a catalog kind: 'Movie' | 'Series' | 'Anime'. */
+export function kindLabel(kind: CatalogKind) {
+  if (kind === 'anime') return 'Anime'
+  return kind === 'series' ? 'Series' : 'Movie'
 }
 export function reviewsHref(title: CatalogRef) {
   return `${titleHref(title)}/reviews`

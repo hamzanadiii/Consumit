@@ -39,6 +39,7 @@ const detail: AnimeTitleDetail = {
   externalLinks: [],
   logoUrl: null,
   malId: null,
+  recommendations: [],
   source: null,
   staff: [],
   streamingEpisodes: [],

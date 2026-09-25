@@ -6,6 +6,7 @@ import {
   memberListDetailSchema,
   memberProfileDataSchema,
   titleReviewsPageSchema,
+  type CatalogKind,
   type MemberLibrary,
   type MemberListDetail,
   type MemberProfileData,
@@ -46,4 +47,4 @@ async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
 export const getPublicProfile = cache((username: string): Promise<MemberProfileData> => request(`/v1/profiles/${encodeURIComponent(username)}`, memberProfileDataSchema))
 export const getMemberLibrary = cache((): Promise<MemberLibrary> => request('/v1/me/library', memberLibrarySchema))
 export const getMemberList = cache((slug: string): Promise<MemberListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, memberListDetailSchema))
-export const getTitleReviews = cache((kind: 'movie' | 'series', id: number, page: number, sort: TitleReviewSort, audience: TitleReviewAudience = 'all'): Promise<TitleReviewsPage> => request(`/v1/reviews/${kind}/${id}?page=${page}&sort=${sort}&audience=${audience}`, titleReviewsPageSchema))
+export const getTitleReviews = cache((kind: CatalogKind, id: number, page: number, sort: TitleReviewSort, audience: TitleReviewAudience = 'all'): Promise<TitleReviewsPage> => request(`/v1/reviews/${kind}/${id}?page=${page}&sort=${sort}&audience=${audience}`, titleReviewsPageSchema))

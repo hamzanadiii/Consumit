@@ -28,6 +28,7 @@ type AnilistMedia = {
   staff?: { edges: Array<{ node: { id: number; name: { full: string }; image: { large: string | null } }; role: string | null }> } | null
   streamingEpisodes?: Array<{ title: string; thumbnail: string | null; site: string }> | null
   externalLinks?: Array<{ id: number; site: string; url: string; color: string | null }> | null
+  recommendations?: { nodes: Array<{ mediaRecommendation: AnilistMedia | null }> } | null
   tags?: Array<{ name: string; rank: number | null }> | null
   relations?: { edges: Array<{ relationType: string; node: AnilistMedia }> } | null
 }
@@ -152,6 +153,9 @@ export function mapTitleDetail(raw: AnilistMedia): AnimeTitleDetail {
       const url = toHttpUrl(link.url)
       return url ? [{ id: link.id, site: link.site, url, color: link.color ?? null }] : []
     }) ?? [],
+    recommendations: raw.recommendations?.nodes.flatMap((node) =>
+      node.mediaRecommendation && !isAdultMedia(node.mediaRecommendation) ? [mapTitleSummary(node.mediaRecommendation)] : []
+    ) ?? [],
   }
 }
 

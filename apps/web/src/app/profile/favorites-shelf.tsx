@@ -1,6 +1,6 @@
 'use client'
 
-import { titleHref, type CatalogRef, type CatalogTitleSummary } from '@consumit/contracts'
+import { kindLabel, titleHref, type CatalogRef, type CatalogTitleSummary } from '@consumit/contracts'
 import { Check, LoaderCircle, Plus, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
@@ -134,8 +134,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
       <ul className="mt-8 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
         {items.map((favorite) => {
           const title = titleMap.get(refKey(favorite))
-          const kindLabel = favorite.kind === 'movie' ? 'Movie' : 'Series'
-          const label = title?.title ?? `${kindLabel} #${favorite.id}`
+          const label = title?.title ?? `${kindLabel(favorite.kind)} #${favorite.id}`
           const key = refKey(favorite)
           const removing = removingKey === key
           return (
@@ -156,7 +155,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
                     <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
                       <span className="block truncate text-sm font-bold text-white">{label}</span>
                       <span className="mt-1 block text-xs text-white/80 tabular-nums">
-                        {[title?.year ? String(title.year) : null, kindLabel].filter(Boolean).join(' · ')}
+                        {[title?.year ? String(title.year) : null, kindLabel(favorite.kind)].filter(Boolean).join(' · ')}
                       </span>
                     </span>
                   </ArtworkFrame>
@@ -252,7 +251,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-[var(--fs-ink)]">{title.title}</span>
                         <span className="mt-0.5 block text-xs text-[var(--fs-muted)] tabular-nums">
-                          {[title.year ? String(title.year) : null, title.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · ')}
+                          {[title.year ? String(title.year) : null, kindLabel(title.kind)].filter(Boolean).join(' · ')}
                         </span>
                       </span>
                       {taken ? (

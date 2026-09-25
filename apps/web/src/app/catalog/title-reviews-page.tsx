@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 
 import { EmptyState, SectionHeading, Tabs } from '@consumit/ui'
 
+import { AnimeApiError, getAnimeTitle } from '@/lib/anime-api'
 import { CatalogApiError, getCatalogTitle } from '@/lib/catalog-api'
 import { getTitleReviews, MemberApiError } from '@/lib/member-server'
 
@@ -18,6 +19,12 @@ export type TitleReviewsPageProps = {
   kind: CatalogKind
   page: number
   sort: TitleReviewSort
+}
+
+function activeKindTab(kind: CatalogKind) {
+  if (kind === 'anime') return 'anime' as const
+  if (kind === 'series') return 'series' as const
+  return 'movies' as const
 }
 
 function pageHref(kind: CatalogKind, id: number, page: number, sort: TitleReviewSort, audience: TitleReviewAudience) {
@@ -34,12 +41,19 @@ function tabHref(kind: CatalogKind, id: number, sort: TitleReviewSort, audience:
  * interactive per row; authoring still lives on the title page.
  */
 export async function TitleReviewsPage({ audience, id, kind, page, sort }: TitleReviewsPageProps) {
-  let title
+  // Anime titles resolve from AniList; movies and series from TMDB. The
+  // archive itself is member data either way, keyed by (kind, id).
+  let title: { kind: CatalogKind; title: string }
   try {
-    const response = await getCatalogTitle(kind, id)
-    title = response.item
+    if (kind === 'anime') {
+      const detail = await getAnimeTitle(id)
+      title = { kind: detail.kind, title: detail.titles.preferred }
+    } else {
+      const response = await getCatalogTitle(kind, id)
+      title = { kind: response.item.kind, title: response.item.title }
+    }
   } catch (error) {
-    if (error instanceof CatalogApiError && error.status === 404) notFound()
+    if ((error instanceof CatalogApiError || error instanceof AnimeApiError) && error.status === 404) notFound()
     return <CatalogUnavailableScreen error={error} />
   }
   if (title.kind !== kind) notFound()
@@ -50,7 +64,7 @@ export async function TitleReviewsPage({ audience, id, kind, page, sort }: Title
   } catch (error) {
     if (error instanceof MemberApiError && error.status === 404) notFound()
     return (
-      <FilScreenShell activeKindTab={kind === 'series' ? 'series' : 'movies'} pageHeading={`${title.title} reviews`}>
+      <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={`${title.title} reviews`}>
         <main className="mx-auto w-full max-w-[90rem]">
           <div className="px-1 sm:px-3 lg:px-4">
             <div className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
@@ -70,7 +84,7 @@ export async function TitleReviewsPage({ audience, id, kind, page, sort }: Title
   if (reviews.totalResults > 0 && page > reviews.totalPages) notFound()
 
   return (
-    <FilScreenShell activeKindTab={kind === 'series' ? 'series' : 'movies'} pageHeading={`${title.title} reviews`}>
+    <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={`${title.title} reviews`}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-reviews>
         <div className="px-1 sm:px-3 lg:px-4">
           <Link

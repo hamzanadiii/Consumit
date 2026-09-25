@@ -97,7 +97,7 @@ Prefer deep modules with small interfaces that hide scheduling, validation, expi
 
 ## Canonical catalog
 
-TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. AniList is the canonical metadata source for anime titles, providing search, details, relations, characters, staff, airing schedules, and franchise graphs. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
+TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. AniList is the canonical metadata source for anime titles, providing search, details, recommendations, relations, characters, staff, airing schedules, and franchise graphs. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
 
 Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
 
@@ -109,9 +109,11 @@ The current in-process catalog cache uses request coalescing and stale-while-rev
 
 Anime is a first-class bounded domain that plugs into the same playback, library, social, and recommendation systems as movies and series.
 
+The title-kind namespace follows the identifier namespaces: the `CatalogKind` enum (`movie`, `series`, `anime`) is the single kind used by member data — saves, favorites, progress, ratings, reviews, and diary — where `movie`/`series` ids are TMDB ids and `anime` ids are AniList ids, so identical numeric ids in different kinds never collide. The versioned catalog API reflects the split inside its TMDB routes: `GET /v1/titles/batch` serves `anime:` references through the AniList adapter and merges them with TMDB results (upstream AniList output is schema-proven at the seam; an adapter outage surfaces as retryable `CATALOG_UNAVAILABLE`; TMDB metadata carries the response meta when any TMDB reference is present, otherwise the response reports `source: 'anilist'`), and `GET /v1/titles/search?kind=anime` is served the same way instead of being rejected. Title routes stay kind-scoped: `/anime/{id}` and `/anime/{id}/reviews`.
+
 ### AniList adapter
 
-The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, recommendations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
 
 ### Episode identity engine
 

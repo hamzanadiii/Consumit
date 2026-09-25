@@ -1,6 +1,6 @@
 'use client'
 
-import type { CatalogTitleSummary } from '@consumit/contracts'
+import { kindLabel, type CatalogTitleSummary } from '@consumit/contracts'
 import { Search, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
@@ -183,7 +183,7 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
                   ) : null}
                 </span>
                 <span className="mt-2 block truncate text-xs font-bold text-[var(--fs-ink)] group-hover:text-[var(--fs-accent)]">{title.title}</span>
-                <span className="mt-0.5 block text-[0.6875rem] text-[var(--fs-muted)] tabular-nums">{[title.year, title.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · ')}</span>
+                <span className="mt-0.5 block text-[0.6875rem] text-[var(--fs-muted)] tabular-nums">{[title.year, kindLabel(title.kind)].filter(Boolean).join(' · ')}</span>
               </button>
             )
           })}

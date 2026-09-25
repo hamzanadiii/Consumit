@@ -1,6 +1,6 @@
 'use client'
 
-import { titleHref, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
+import { kindLabel, titleHref, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
 import { ArrowRight, CornerDownLeft, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -39,7 +39,7 @@ function catalogEntry(item: CatalogTitleSummary): OverlayEntry {
   return {
     href: titleHref(item),
     key: `${item.kind}:${item.id}`,
-    meta: [item.year ? String(item.year) : null, item.kind === 'movie' ? 'Movie' : 'Series'].filter(Boolean).join(' · '),
+    meta: [item.year ? String(item.year) : null, kindLabel(item.kind)].filter(Boolean).join(' · '),
     posterUrl: item.posterUrl ?? undefined,
     ratingLabel: typeof item.tmdbRating === 'number' ? `★ ${item.tmdbRating.toFixed(1)}` : undefined,
     title: item.title,

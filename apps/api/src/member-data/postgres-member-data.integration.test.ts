@@ -200,6 +200,34 @@ describe('real member data read model', () => {
     expect(await memberData.isFollowing(follower.id, 'missing_member')).toBe(false)
   })
 
+  it('keeps anime ids in their own namespace beside colliding TMDB ids', async () => {
+    const member = await db.prisma.member.create({ data: { email: 'anime@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'anime_watcher', visibility: 'public' } } } })
+
+    const animeProgress = await memberData.setProgress(member.id, { durationSeconds: 1440, id: 21, kind: 'anime', positionSeconds: 300 })
+    expect(animeProgress).toMatchObject({ id: 21, kind: 'anime', positionSeconds: 300 })
+    const movieProgress = await memberData.setProgress(member.id, { durationSeconds: 7200, id: 21, kind: 'movie', positionSeconds: 60 })
+    expect(movieProgress).toMatchObject({ id: 21, kind: 'movie', positionSeconds: 60 })
+
+    expect(await memberData.progress(member.id, { id: 21, kind: 'anime' })).toMatchObject({ positionSeconds: 300 })
+    expect(await memberData.progress(member.id, { id: 21, kind: 'movie' })).toMatchObject({ positionSeconds: 60 })
+
+    const progressRows = await db.prisma.playbackProgress.findMany({ where: { memberId: member.id, tmdbId: 21 } })
+    expect(progressRows.map((row) => row.catalogKind).sort()).toEqual(['ANIME', 'MOVIE'])
+
+    expect(await memberData.setRating(member.id, { id: 21, kind: 'anime' }, 9)).toMatchObject({ id: 21, kind: 'anime', origin: 'native', value: 9 })
+    expect(await memberData.rating(member.id, { id: 21, kind: 'movie' })).toBeNull()
+    expect((await memberData.rating(member.id, { id: 21, kind: 'anime' }))?.value).toBe(9)
+
+    expect((await memberData.setWatched(member.id, { id: 21, kind: 'anime' }, true)).watched).toMatchObject([{ id: 21, kind: 'anime' }])
+    expect((await memberData.setSaved(member.id, { id: 21, kind: 'movie' }, true)).saved).toMatchObject([{ id: 21, kind: 'movie' }])
+    expect((await memberData.library(member.id)).watched).toMatchObject([{ id: 21, kind: 'anime' }])
+
+    await memberData.createReview(member.id, { body: 'An anime take.', id: 21, kind: 'anime', reviewedOn: '2026-09-09' })
+    expect(await memberData.titleReviews({ id: 21, kind: 'anime' }, 1, 'recent')).toMatchObject({ totalResults: 1 })
+    expect(await memberData.titleReviews({ id: 21, kind: 'movie' }, 1, 'recent')).toMatchObject({ totalResults: 0 })
+    expect(await db.prisma.review.count({ where: { memberId: member.id, tmdbId: 21, catalogKind: 'ANIME' } })).toBe(1)
+  })
+
   it('limits circle review listings to followed public profiles', async () => {
     const critic = await db.prisma.member.create({ data: { email: 'circle-critic@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'circle_critic', visibility: 'public' } } } })
     const stranger = await db.prisma.member.create({ data: { email: 'stranger2@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'total_stranger', visibility: 'public' } } } })

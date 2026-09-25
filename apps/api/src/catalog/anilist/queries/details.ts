@@ -32,6 +32,28 @@ export const detailsQuery = `query ($id: Int) {
     }
     streamingEpisodes { title thumbnail site }
     externalLinks { id site url color }
+    recommendations(perPage: 12) {
+      nodes {
+        mediaRecommendation {
+          id
+          isAdult
+          title { romaji english native }
+          format
+          status
+          season
+          seasonYear
+          episodes
+          duration
+          genres
+          coverImage { large color }
+          bannerImage
+          averageScore
+          popularity
+          description(asHtml: false)
+          nextAiringEpisode { episode airingAt }
+        }
+      }
+    }
     relations {
       edges {
         relationType

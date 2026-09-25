@@ -22,9 +22,18 @@ const mocks = vi.hoisted(() => {
       this.status = status
     }
   }
+  class AnimeApiError extends Error {
+    readonly status: number
+    constructor(message: string, status: number) {
+      super(message)
+      this.status = status
+    }
+  }
   return {
+    AnimeApiError,
     CatalogApiError,
     MemberApiError,
+    getAnimeTitle: vi.fn(),
     getCatalogTitle: vi.fn(),
     getTitleReviews: vi.fn(),
   }
@@ -33,6 +42,11 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/lib/catalog-api', () => ({
   CatalogApiError: mocks.CatalogApiError,
   getCatalogTitle: mocks.getCatalogTitle,
+}))
+
+vi.mock('@/lib/anime-api', () => ({
+  AnimeApiError: mocks.AnimeApiError,
+  getAnimeTitle: mocks.getAnimeTitle,
 }))
 
 vi.mock('@/lib/member-server', () => ({
@@ -128,6 +142,24 @@ describe('title reviews page', () => {
     expect(friends).toHaveAttribute('href', '/title/693134/reviews?sort=recent&audience=circle')
     expect(friends).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('heading', { name: 'No circle reviews yet' })).toBeInTheDocument()
+  })
+
+  it('resolves anime titles from AniList and serves the anime archive', async () => {
+    mocks.getAnimeTitle.mockResolvedValue({ anilistId: 21, coverImage: { url: null }, kind: 'anime', titles: { preferred: 'Frieren' } })
+    mocks.getTitleReviews.mockResolvedValue({ items: [reviewItem('anime-1', 'open_critic', 'A quiet masterpiece.')], page: 1, totalPages: 1, totalResults: 1 })
+    render(<SessionProvider>{await TitleReviewsPage({ audience: 'all', id: 21, kind: 'anime', page: 1, sort: 'recent' })}</SessionProvider>)
+
+    expect(mocks.getCatalogTitle).not.toHaveBeenCalled()
+    expect(mocks.getAnimeTitle).toHaveBeenCalledWith(21)
+    expect(mocks.getTitleReviews).toHaveBeenCalledWith('anime', 21, 1, 'recent', 'all')
+    expect(await screen.findByRole('heading', { level: 2, name: 'Frieren reviews' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to Frieren' })).toHaveAttribute('href', '/anime/21')
+    expect(screen.getByRole('link', { name: 'Popular' })).toHaveAttribute('href', '/anime/21/reviews?sort=popular&audience=all')
+  })
+
+  it('treats a missing anime title as not found', async () => {
+    mocks.getAnimeTitle.mockRejectedValue(new mocks.AnimeApiError('Not found.', 404))
+    await expect(TitleReviewsPage({ audience: 'all', id: 404, kind: 'anime', page: 1, sort: 'recent' })).rejects.toThrow('NEXT_NOT_FOUND')
   })
 })
 

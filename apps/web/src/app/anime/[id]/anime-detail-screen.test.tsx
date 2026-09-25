@@ -1,7 +1,66 @@
+import type { AnimeTitleDetail } from '@consumit/contracts'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { AnimeHeroTitle, indexStreamingMeta } from './anime-detail-screen'
+import { renderWithProviders } from '@/test/render'
+
+import { AnimeDetailScreen, AnimeHeroTitle, indexStreamingMeta } from './anime-detail-screen'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}))
+
+vi.mock('@/app/anime/use-episode-art', () => ({
+  useEpisodeArt: () => null,
+}))
+
+vi.mock('@/app/catalog/member-action-panel', () => ({
+  MemberActionPanel: (props: { id: number; kind: string; posterUrl?: string; title: string; year?: number | null }) => (
+    <div data-testid="member-action-panel" data-id={props.id} data-kind={props.kind}>
+      {props.title}
+    </div>
+  ),
+}))
+
+vi.mock('@/app/catalog/title-reviews', () => ({
+  TitleReviews: (props: { id: number; kind: string; title: string }) => (
+    <div data-testid="title-reviews" data-id={props.id} data-kind={props.kind}>
+      {props.title}
+    </div>
+  ),
+}))
+
+function animeFixture(overrides: Partial<AnimeTitleDetail> = {}): AnimeTitleDetail {
+  return {
+    anilistId: 21,
+    averageScore: 92,
+    bannerImage: null,
+    characters: [],
+    countryOfOrigin: 'JP',
+    coverImage: { color: '#6366f1', url: 'https://cdn.example/cover.jpg' },
+    description: 'The adventure is over, but life goes on for the hero who outlived it.',
+    episodeDuration: 24,
+    episodes: 2,
+    externalLinks: [],
+    format: 'TV',
+    genres: ['Adventure', 'Drama', 'Fantasy'],
+    kind: 'anime',
+    logoUrl: null,
+    malId: null,
+    nextAiringEpisode: null,
+    popularity: 1_000,
+    recommendations: [],
+    season: 'FALL',
+    seasonYear: 2023,
+    source: 'MANGA',
+    staff: [],
+    status: 'FINISHED',
+    streamingEpisodes: [],
+    titles: { english: 'Frieren: Beyond Journey\u2019s End', native: '\u9035\u306e\u3075\u308a\u3048\u3093', preferred: 'Frieren: Beyond Journey\u2019s End', romaji: 'Sousou no Frieren' },
+    trailer: null,
+    ...overrides,
+  }
+}
 
 function detail(episodes: Array<{ title: string; thumbnail: string | null; site: string }>) {
   return { streamingEpisodes: episodes } as Parameters<typeof indexStreamingMeta>[0]
@@ -40,5 +99,77 @@ describe('anime hero title', () => {
     render(<AnimeHeroTitle logoUrl={null} title="Cowboy Bebop" />)
     expect(screen.getByRole('heading', { name: 'Cowboy Bebop' })).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+})
+
+describe('anime detail screen member surfaces', () => {
+  it('shelves member actions in the hero with the anime namespace', () => {
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
+
+    const panel = screen.getByTestId('member-action-panel')
+    expect(panel).toHaveAttribute('data-kind', 'anime')
+    expect(panel).toHaveAttribute('data-id', '21')
+    expect(panel).toHaveTextContent('Frieren: Beyond Journey\u2019s End')
+    const masthead = document.querySelector('[data-consumit-anime-masthead]')
+    expect(masthead?.querySelector('a[href="/watch/anime/21?episode=1"]')).not.toBeNull()
+  })
+
+  it('shows the next-airing box above the member shelf when scheduled', () => {
+    const detail = animeFixture({ nextAiringEpisode: { airingAt: '2026-09-24T00:00:00.000Z', episode: 3 } })
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={detail} relations={null} />)
+
+    expect(screen.getByText('Next Episode: #3')).toBeInTheDocument()
+    expect(screen.getByText(/Airing 9\/24\/2026/)).toBeInTheDocument()
+  })
+
+  it('wires a Reviews tab and member reviews section for anime', () => {
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
+
+    const tabStrip = screen.getByRole('navigation', { name: 'Frieren: Beyond Journey\u2019s End sections' })
+    expect(tabStrip).toHaveTextContent('Episodes')
+    expect(tabStrip).toHaveTextContent('Overview')
+    expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute('href', '#reviews')
+
+    const reviews = document.getElementById('reviews')
+    expect(reviews).not.toBeNull()
+    expect(reviews?.contains(screen.getByRole('heading', { name: 'Member reviews' }))).toBe(true)
+
+    const reviewsModule = screen.getByTestId('title-reviews')
+    expect(reviewsModule).toHaveAttribute('data-kind', 'anime')
+    expect(reviewsModule).toHaveAttribute('data-id', '21')
+    expect(reviews?.contains(reviewsModule)).toBe(true)
+  })
+})
+
+describe('anime recommendations', () => {
+  it('replaces external links with an AniList recommendations rail', () => {
+    const recommended = animeFixture({
+      anilistId: 7,
+      titles: { english: 'Other Show', native: null, preferred: 'Other Show', romaji: 'Other Show' },
+    })
+    const detail = animeFixture({
+      externalLinks: [{ id: 1, site: 'Twitter', color: null, url: 'https://twitter.com/example' }],
+      recommendations: [animeFixture(), recommended, recommended],
+    })
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={detail} relations={null} />)
+
+    expect(screen.queryByRole('heading', { name: 'Links' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Twitter' })).not.toBeInTheDocument()
+
+    expect(screen.getByRole('link', { name: 'Recommendations' })).toHaveAttribute('href', '#recommendations')
+    const recommendations = document.getElementById('recommendations')
+    expect(recommendations).not.toBeNull()
+    expect(recommendations?.contains(screen.getByRole('heading', { name: 'Watch next' }))).toBe(true)
+    expect(screen.getByRole('link', { name: 'Other Show, 2023' })).toHaveAttribute('href', '/anime/7')
+    // The current title and duplicate entries drop out of the rail.
+    expect(screen.getAllByRole('link', { name: 'Other Show, 2023' })).toHaveLength(1)
+    expect(screen.queryByRole('link', { name: 'Frieren: Beyond Journey\u2019s End, 2023' })).not.toBeInTheDocument()
+  })
+
+  it('hides the recommendations tab and section when AniList returns none', () => {
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
+
+    expect(screen.queryByRole('link', { name: 'Recommendations' })).not.toBeInTheDocument()
+    expect(document.getElementById('recommendations')).toBeNull()
   })
 })

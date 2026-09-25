@@ -146,12 +146,12 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   const repository = overrideRepository ?? (identity === undefined && db ? createPostgresIdentityRepository(db.prisma) : undefined)
   registerLetterboxdImportRoutes(app, { env, identity: resolvedIdentity, importer: resolvedImporter })
   registerMemberDataRoutes(app, { env, identity: resolvedIdentity, memberData: resolvedMemberData })
-  registerCatalogRoutes(app, catalog)
   const resolvedAnimeCatalog = animeCatalog ?? createAnilistCatalog()
   const animeService = createAnimeService(resolvedAnimeCatalog, {
     episodeArt: animeEpisodeArt ?? createKitsuCatalog(),
     ...(animeTmdbEpisodeArt ? { tmdbEpisodeArt: animeTmdbEpisodeArt } : catalog !== unavailableCatalogAdapter ? { tmdbEpisodeArt: createTmdbEpisodeArt(catalog) } : {}),
   })
+  registerCatalogRoutes(app, { anime: animeService, catalog })
   registerAnimeRoutes(app, { anime: animeService })
   const playbackStore = env.playback?.enabled && env.playback.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore()
   const resolvedProviderConfig = providerConfigStore ?? (env.playback?.mediaConfig ? createProviderConfigStore(env.playback.mediaConfig.replace(/\.json$/, '.overrides.json')) : null)

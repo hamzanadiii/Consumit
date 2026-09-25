@@ -64,7 +64,7 @@ The design manifest defines 20 active desktop references:
 17. Onboarding — Circle
 18. Help Center
 19. Report Issue
-20. Title Reviews (member-review archive per title, reached from title detail)
+20. Title Reviews (member-review archive per title, reached from title detail for movies, series, and anime)
 
 Other screen files may be present in the package. A file becomes active only when added to the manifest; the archived custom-player concept remains historical.
 
@@ -120,8 +120,8 @@ Account settings and provider preferences already have an active desktop referen
 
 ## Personal spaces
 
-The Library presents a member's saved titles on subtle display shelves in the existing visual system, with optional grid and compact list views. Search and movie/series filters operate together on saved records; Clear filters restores the shelf. Missing catalog metadata never removes a stored title or its destination. Lists and diary retain their existing ownership and privacy rules.
+The Library presents a member's saved titles on subtle display shelves in the existing visual system, with optional grid and compact list views. Search and movie/series/anime filters operate together on saved records; Clear filters restores the shelf. Missing catalog metadata never removes a stored title or its destination. Lists and diary retain their existing ownership and privacy rules.
 
 The Profile is the central expression of a member's taste: a cinematic identity cover, six ordered Favorites, recurring genres derived from those Favorites, diary entries, authored reviews, and lists. Owner editing controls keep their real backing behavior. Unsupported social controls are omitted.
 
-[Letterboxd's diary, Favorites, watchlist, and list concepts](https://letterboxd.com/about/faq/) inform these personal jobs. Consumit's visual system remains its own. Anime is now a first-class bounded domain with AniList as its metadata source, integrated into the same playback, library, social, and recommendation systems as movies and series.
+[Letterboxd's diary, Favorites, watchlist, and list concepts](https://letterboxd.com/about/faq/) inform these personal jobs. Consumit's visual system remains its own. Anime is now a first-class bounded domain with AniList as its metadata source, integrated into the same playback, library, social, and recommendation systems as movies and series. Member records key anime by AniList id under the shared title kind, anime titles carry their own detail, recommendations, and reviews surfaces, and unresolved anime references keep their stored destination the same way missing TMDB metadata does.

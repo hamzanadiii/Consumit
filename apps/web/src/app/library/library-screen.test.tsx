@@ -36,5 +36,18 @@ describe('personal library shelves', () => {
     expect(screen.getByText('Your library is safe. Title details are temporarily unavailable.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: `Movie #${movieSummary.id}` })).toHaveAttribute('href', `/title/${movieSummary.id}`)
   })
+  it('labels and filters anime records in their own namespace', async () => {
+    const user = userEvent.setup()
+    const animeLibrary: MemberLibrary = { ...library, saved: [...library.saved, { id: 21, kind: 'anime', origin: 'native', sourceKey: null }] }
+    render(<LibraryScreen catalogUnavailable library={animeLibrary} titles={[]} />)
+
+    expect(screen.getByRole('link', { name: 'Anime #21' })).toHaveAttribute('href', '/anime/21')
+
+    const shelf = within(screen.getByRole('region', { name: /^On your shelves/ }))
+    await user.click(screen.getByRole('button', { name: 'Anime' }))
+    expect(shelf.getByRole('link', { name: 'Anime #21' })).toBeInTheDocument()
+    expect(shelf.queryByRole('link', { name: `Movie #${movieSummary.id}` })).not.toBeInTheDocument()
+    expect(shelf.queryByRole('link', { name: `Series #${seriesSummary.id}` })).not.toBeInTheDocument()
+  })
 })
 

@@ -28,8 +28,21 @@ import { avatarStyleSchema } from '@consumit/contracts'
 import { PrismaClient } from '../../generated/prisma/client.js'
 import type { MemberData } from './member-data.ts'
 
-function kind(value: 'MOVIE' | 'SERIES'): CatalogKind {
-  return value === 'SERIES' ? 'series' : 'movie'
+/** Stored CatalogKind rows. ANIME keeps AniList ids in their own namespace:
+ *  an anime id and a TMDB movie id routinely share the same number, and the
+ *  unique member-data keys must never collide across them. */
+type StoredKind = 'MOVIE' | 'SERIES' | 'ANIME'
+
+function kind(value: StoredKind): CatalogKind {
+  if (value === 'SERIES') return 'series'
+  if (value === 'ANIME') return 'anime'
+  return 'movie'
+}
+
+function storedKind(value: CatalogKind): StoredKind {
+  if (value === 'series') return 'SERIES'
+  if (value === 'anime') return 'ANIME'
+  return 'MOVIE'
 }
 
 function origin(value: 'NATIVE' | 'LETTERBOXD'): RecordOrigin {
@@ -50,7 +63,7 @@ const TITLE_REVIEWS_PAGE_SIZE = 10
 
 function progressKey(memberId: string, ref: ProgressRef) {
   return {
-    catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE',
+    catalogKind: storedKind(ref.kind),
     episode: ref.episode ?? 0,
     memberId,
     season: ref.season ?? 0,
@@ -60,13 +73,13 @@ function progressKey(memberId: string, ref: ProgressRef) {
 
 function ratingKey(memberId: string, ref: CatalogRef) {
   return {
-    catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE',
+    catalogKind: storedKind(ref.kind),
     memberId,
     tmdbId: ref.id,
   } as const
 }
 
-function ratingView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number; value: number }): MemberRating {
+function ratingView(row: { catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number; value: number }): MemberRating {
   return {
     id: row.tmdbId,
     kind: kind(row.catalogKind),
@@ -78,13 +91,13 @@ function ratingView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | '
 
 function likeKey(memberId: string, ref: CatalogRef) {
   return {
-    catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE',
+    catalogKind: storedKind(ref.kind),
     memberId,
     tmdbId: ref.id,
   } as const
 }
 
-function likeView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number }): MemberTitleRecord {
+function likeView(row: { catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD'; sourceKey: string | null; tmdbId: number }): MemberTitleRecord {
   return {
     id: row.tmdbId,
     kind: kind(row.catalogKind),
@@ -93,7 +106,7 @@ function likeView(row: { catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LE
   }
 }
 
-function reviewView(row: { body: string; catalogKind: 'MOVIE' | 'SERIES'; origin: 'NATIVE' | 'LETTERBOXD'; reviewedOn: Date | null; sourceKey: string | null; tags: string[]; tmdbId: number; id: string }): MemberReview {
+function reviewView(row: { body: string; catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD'; reviewedOn: Date | null; sourceKey: string | null; tags: string[]; tmdbId: number; id: string }): MemberReview {
   return {
     body: row.body,
     id: row.tmdbId,
@@ -106,7 +119,7 @@ function reviewView(row: { body: string; catalogKind: 'MOVIE' | 'SERIES'; origin
   }
 }
 
-function progressView(row: { catalogKind: 'MOVIE' | 'SERIES'; completed: boolean; durationSeconds: number | null; episode: number; positionSeconds: number; season: number; tmdbId: number; updatedAt: Date }): PlaybackProgress {
+function progressView(row: { catalogKind: StoredKind; completed: boolean; durationSeconds: number | null; episode: number; positionSeconds: number; season: number; tmdbId: number; updatedAt: Date }): PlaybackProgress {
   return {
     completed: row.completed,
     durationSeconds: row.durationSeconds,
@@ -214,7 +227,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
     async setFavorites(memberId, favorites) {
       await prisma.$transaction(async (tx) => {
         await tx.favorite.deleteMany({ where: { memberId } })
-        if (favorites.length) await tx.favorite.createMany({ data: favorites.map((favorite, index) => ({ catalogKind: favorite.kind === 'series' ? 'SERIES' : 'MOVIE', memberId, origin: 'NATIVE', position: index + 1, tmdbId: favorite.id })) })
+        if (favorites.length) await tx.favorite.createMany({ data: favorites.map((favorite, index) => ({ catalogKind: storedKind(favorite.kind), memberId, origin: 'NATIVE', position: index + 1, tmdbId: favorite.id })) })
       })
       return library(memberId)
     },
@@ -275,12 +288,12 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
     async review(memberId: string, ref: CatalogRef): Promise<MemberReview | null> {
       const row = await prisma.review.findFirst({
         orderBy: { createdAt: 'desc' },
-        where: { catalogKind: ref.kind === 'series' ? 'SERIES' : 'MOVIE', memberId, tmdbId: ref.id },
+        where: { catalogKind: storedKind(ref.kind), memberId, tmdbId: ref.id },
       })
       return row ? reviewView(row) : null
     },
     async titleReviews(ref: CatalogRef, page: number, sort: TitleReviewSort, viewerMemberId?: string, audience: TitleReviewAudience = 'all'): Promise<TitleReviewsPage> {
-      const catalogKind = ref.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const catalogKind = storedKind(ref.kind)
       // Circle-only listings need a signed-in viewer; guests always see an
       // empty circle. Private profiles stay excluded even from followers.
       if (audience === 'circle' && !viewerMemberId) {
@@ -335,7 +348,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       }
     },
     async setSaved(memberId, title, saved) {
-      const catalogKind = title.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const catalogKind = storedKind(title.kind)
       const key = { catalogKind, memberId, tmdbId: title.id } as const
       if (saved) {
         await prisma.savedTitle.upsert({
@@ -349,7 +362,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       return library(memberId)
     },
     async setWatched(memberId, title, watched) {
-      const catalogKind = title.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const catalogKind = storedKind(title.kind)
       const key = { catalogKind, memberId, tmdbId: title.id } as const
       if (watched) {
         await prisma.watchedTitle.upsert({
@@ -384,7 +397,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       return result.count === 1
     },
     async createDiaryEntry(memberId: string, input: CreateDiaryEntryRequest): Promise<DiaryEntry> {
-      const catalogKind = input.kind === 'series' ? 'SERIES' : 'MOVIE'
+      const catalogKind = storedKind(input.kind)
       const key = { catalogKind, memberId, tmdbId: input.id } as const
       const watchedOn = new Date(`${input.watchedOn}T00:00:00.000Z`)
       const row = await prisma.$transaction(async (tx) => {
@@ -422,7 +435,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       const row = await prisma.review.create({
         data: {
           body: input.body,
-          catalogKind: input.kind === 'series' ? 'SERIES' : 'MOVIE',
+          catalogKind: storedKind(input.kind),
           importBatchId: null,
           memberId,
           origin: 'NATIVE',

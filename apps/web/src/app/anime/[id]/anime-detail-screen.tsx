@@ -10,6 +10,9 @@ import { useMemo, useState } from 'react'
 
 import { useEpisodeArt } from '../use-episode-art'
 
+import { MemberActionPanel } from '../../catalog/member-action-panel'
+import { TitleReviews } from '../../catalog/title-reviews'
+
 import { FilScreenShell, AnimeTitleRail } from '@/app/shared'
 
 const ANIME_EPISODES_PER_PAGE = 8
@@ -146,7 +149,9 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
           </div>
         </div>
 
-        <div className="w-full max-w-2xl lg:max-w-none">
+        {/* Next-airing box above the Member Action Shelf, same shelf the
+            movie and series heroes carry. */}
+        <div className="flex w-full max-w-2xl flex-col gap-4 lg:max-w-none">
           {detail.nextAiringEpisode ? (
             <div className="rounded-xl border border-[var(--fs-accent)]/30 bg-[var(--fs-accent)]/5 px-4 py-3">
               <p className="text-xs font-bold text-[var(--fs-accent)]">
@@ -157,6 +162,13 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
               </p>
             </div>
           ) : null}
+          <MemberActionPanel
+            id={detail.anilistId}
+            kind="anime"
+            posterUrl={detail.coverImage.url ?? undefined}
+            title={detail.titles.preferred}
+            year={detail.seasonYear}
+          />
         </div>
       </div>
     </header>
@@ -458,13 +470,23 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
   detail: AnimeTitleDetail
   relations: AnimeFranchise | null
 }) {
+  const recommendations = useMemo(() => {
+    const seen = new Set<number>()
+    return detail.recommendations.filter((item) => {
+      if (item.anilistId === detail.anilistId || seen.has(item.anilistId)) return false
+      seen.add(item.anilistId)
+      return true
+    })
+  }, [detail])
   const tabs = [
     { href: '#episodes', label: 'Episodes', value: 'episodes' },
     { href: '#overview', label: 'Overview', value: 'overview' },
+    { href: '#reviews', label: 'Reviews', value: 'reviews' },
     { href: '#cast', label: 'Characters', value: 'cast' },
     ...(detail.staff.length ? [{ href: '#staff', label: 'Staff', value: 'staff' }] : []),
     ...(airing && airing.episodes.length ? [{ href: '#airing', label: 'Airing', value: 'airing' }] : []),
     ...(relations?.relations.length ? [{ href: '#related', label: 'Related', value: 'related' }] : []),
+    ...(recommendations.length ? [{ href: '#recommendations', label: 'Recommendations', value: 'recommendations' }] : []),
   ]
   return (
     <FilScreenShell activeKindTab="anime" pageHeading={undefined}>
@@ -492,6 +514,16 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
             <SectionHeading id="anime-cast-heading" title="Characters & voice actors" />
             <AnimeCastRail characters={detail.characters} />
           </section>
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="anime-reviews-heading">
+            <SectionHeading id="anime-reviews-heading" title="Member reviews" />
+            <TitleReviews
+              id={detail.anilistId}
+              kind="anime"
+              posterUrl={detail.coverImage.url}
+              title={detail.titles.preferred}
+              year={detail.seasonYear}
+            />
+          </section>
           {detail.staff.length ? (
             <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="staff" aria-labelledby="anime-staff-heading">
               <SectionHeading id="anime-staff-heading" title="Staff" />
@@ -515,22 +547,14 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
               />
             </section>
           ) : null}
-          {detail.externalLinks.length > 0 ? (
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="anime-links-heading">
-              <SectionHeading id="anime-links-heading" title="Links" />
-              <div className="mt-4 flex flex-wrap gap-2">
-                {detail.externalLinks.map((link) => (
-                  <a
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fs-line)] bg-[var(--fs-surface)] px-3 py-1.5 text-xs font-bold text-[var(--fs-ink)] transition-colors hover:border-[var(--fs-accent)]"
-                    href={link.url}
-                    key={link.id}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {link.site}
-                  </a>
-                ))}
-              </div>
+          {recommendations.length ? (
+            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="recommendations" aria-labelledby="anime-recommendations-heading">
+              <AnimeTitleRail
+                description="Real titles recommended by AniList"
+                id="anime-detail-recommendations"
+                items={recommendations.slice(0, 15)}
+                title="Watch next"
+              />
             </section>
           ) : null}
         </div>

@@ -89,6 +89,7 @@ model UsernameAlias {
 enum CatalogKind {
   MOVIE
   SERIES
+  ANIME
 }
 
 enum DataOrigin {

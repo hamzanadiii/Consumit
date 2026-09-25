@@ -45,6 +45,23 @@ describe('AniList mapper', () => {
     expect(detail.trailer?.thumbnail).toBeNull()
     expect(detail.streamingEpisodes[0]?.thumbnail).toBe('https://cdn.example.test/episode.jpg')
     expect(detail.externalLinks).toEqual([{ id: 1, site: 'Official', url: 'https://example.test/', color: null }])
+    expect(detail.recommendations).toEqual([])
+  })
+
+  it('maps AniList recommendations and drops adult or missing media', () => {
+    const detail = mapTitleDetail({
+      ...media,
+      recommendations: {
+      nodes: [
+        { mediaRecommendation: { ...media, id: 7, title: { romaji: 'Other', english: null, native: null } } },
+        { mediaRecommendation: { ...media, id: 8, isAdult: true } },
+        { mediaRecommendation: null },
+      ],
+      },
+    })
+
+    expect(detail.recommendations.map((item) => item.anilistId)).toEqual([7])
+    expect(detail.recommendations[0]?.titles.preferred).toBe('Other')
   })
 
   it('converts AniList Unix timestamps to the public ISO contract', () => {

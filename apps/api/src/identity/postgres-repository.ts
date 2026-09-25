@@ -11,7 +11,7 @@ function isUniqueFailure(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error as { code?: string }).code === 'P2002'
 }
 
-const catalogKind = (value: 'MOVIE' | 'SERIES') => value === 'SERIES' ? 'series' as const : 'movie' as const
+const catalogKind = (value: 'MOVIE' | 'SERIES' | 'ANIME') => value === 'SERIES' ? 'series' as const : value === 'ANIME' ? 'anime' as const : 'movie' as const
 const dataOrigin = (value: 'NATIVE' | 'LETTERBOXD') => value === 'LETTERBOXD' ? 'letterboxd' as const : 'native' as const
 const calendarDay = (value: Date) => value.toISOString().slice(0, 10)
 

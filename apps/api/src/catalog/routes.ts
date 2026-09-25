@@ -1,13 +1,22 @@
 import {
+  animeBatchSchema,
+  animeSearchResultSchema,
   catalogFeedSchema,
   catalogKindSchema,
   catalogPageSchema,
   catalogRefSchema,
+  type AnimeSearchResult,
+  type CatalogBatch,
   type CatalogPage,
+  type CatalogRef,
+  type CatalogResponseMeta,
+  type CatalogTitleSummary,
 } from '@consumit/contracts'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { z } from 'zod'
 
+import { animeToCatalogSummary } from './anime-to-catalog.ts'
+import type { AnimeService } from '../anime/anime-service.ts'
 import type { Catalog } from './catalog.ts'
 import { CatalogError } from './errors.ts'
 import { ApiError } from '../http/errors.ts'
@@ -63,7 +72,8 @@ function cacheHeaders(reply: FastifyReply, stale: boolean) {
   reply.header('x-catalog-stale', stale ? '1' : '0')
 }
 
-export function registerCatalogRoutes(app: FastifyInstance, catalog: Catalog) {
+export function registerCatalogRoutes(app: FastifyInstance, deps: { anime: AnimeService; catalog: Catalog }) {
+  const { anime, catalog } = deps
   app.get('/v1/titles/discover', async (request, reply) => {
     const parsed = discoverQuerySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a valid kind, feed, and page between 1 and 500.')
@@ -90,6 +100,32 @@ export function registerCatalogRoutes(app: FastifyInstance, catalog: Catalog) {
     const parsed = searchQuerySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery('Search queries must contain 2 to 100 characters.')
 
+    // Anime search is an AniList query behind the same composition seam as
+    // batch: upstream output is proven against the anime contract, then
+    // mapped into catalog summaries the pickers already render.
+    if (parsed.data.kind === 'anime') {
+      let result: AnimeSearchResult
+      try {
+        result = await anime.search(parsed.data.q, parsed.data.page)
+      } catch (error) {
+        return sendCatalogError(error)
+      }
+      const proven = animeSearchResultSchema.safeParse(result)
+      if (!proven.success) {
+        request.log.error({ err: proven.error }, 'anime adapter broke the search contract')
+        throw new ApiError('INTERNAL', 'Internal server error.')
+      }
+      const response: CatalogPage = {
+        items: proven.data.items.map(animeToCatalogSummary),
+        meta: { fetchedAt: new Date().toISOString(), language: 'en-US', region: 'US', source: 'anilist', stale: false },
+        page: proven.data.page,
+        totalPages: proven.data.totalPages,
+        totalResults: proven.data.totalResults,
+      }
+      cacheHeaders(reply, response.meta.stale)
+      return response
+    }
+
     try {
       const result = await catalog.search({
         kind: parsed.data.kind,
@@ -115,17 +151,53 @@ export function registerCatalogRoutes(app: FastifyInstance, catalog: Catalog) {
       return catalogRefSchema.safeParse({ id: Number(id), kind })
     })
     if (refs.some((reference) => !reference.success)) {
-      return invalidQuery('References must use movie:123 or series:123.')
+      return invalidQuery('References must use movie:123, series:123, or anime:123.')
     }
 
     const parsedRefs = refs.flatMap((reference) => reference.success ? [reference.data] : [])
-    try {
-      const result = await catalog.batch(parsedRefs)
-      cacheHeaders(reply, result.meta.stale)
-      return result
-    } catch (error) {
-      return sendCatalogError(error)
+    const tmdbRefs = parsedRefs.filter((reference) => reference.kind !== 'anime')
+    const animeIds = parsedRefs.filter((reference) => reference.kind === 'anime').map((reference) => reference.id)
+
+    let tmdbBatch: CatalogBatch | undefined
+    if (tmdbRefs.length) {
+      try {
+        tmdbBatch = await catalog.batch(tmdbRefs)
+      } catch (error) {
+        return sendCatalogError(error)
+      }
     }
+
+    let animeItems: CatalogTitleSummary[] = []
+    let animeMissing: CatalogRef[] = []
+    if (animeIds.length) {
+      let batch: Awaited<ReturnType<AnimeService['batch']>>
+      try {
+        batch = await anime.batch(animeIds)
+      } catch (error) {
+        return sendCatalogError(error)
+      }
+      // Adapter output is untrusted: prove the anime batch contract before
+      // mapping it into catalog summaries. A breach is a server bug, so it
+      // becomes a safe 500 — never a leak, never a misleading 503.
+      const proven = animeBatchSchema.safeParse(batch)
+      if (!proven.success) {
+        request.log.error({ err: proven.error }, 'anime adapter broke the batch contract')
+        throw new ApiError('INTERNAL', 'Internal server error.')
+      }
+      animeItems = proven.data.items.map(animeToCatalogSummary)
+      animeMissing = proven.data.missing.map((id) => ({ id, kind: 'anime' }))
+    }
+
+    const meta: CatalogResponseMeta = tmdbBatch
+      ? tmdbBatch.meta
+      : { fetchedAt: new Date().toISOString(), language: 'en-US', region: 'US', source: 'anilist', stale: false }
+    const result: CatalogBatch = {
+      items: [...(tmdbBatch?.items ?? []), ...animeItems],
+      meta,
+      missing: [...(tmdbBatch?.missing ?? []), ...animeMissing],
+    }
+    cacheHeaders(reply, result.meta.stale)
+    return result
   })
 
   app.get('/v1/titles/series/:id/seasons/:season', async (request, reply) => {
