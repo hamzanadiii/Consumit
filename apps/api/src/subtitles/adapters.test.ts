@@ -5,6 +5,8 @@ import { decodeNxshaPayload, encodeNxshaPayload } from '@consumit/provider-sdk'
 
 import { createCastleSubsProvider } from './castlesubs.ts'
 import type { SubtitleHttp } from './http.ts'
+import { anizipEpisode } from './anizip.ts'
+import { createAnimeToshoProvider } from './animetosho.ts'
 import { createJimakuProvider } from './jimaku.ts'
 import { normTrackLang } from './lang.ts'
 import { createNatsukiProvider, releaseTagRating } from './natsuki.ts'
@@ -96,9 +98,10 @@ describe('subsource', () => {
   ])
   const provider = createSubSourceProvider(http)
 
-  it('supports movies and TV with title and year', () => {
+  it('supports movies and TV with title and year, anime by title alone', () => {
     expect(provider.supports({ type: 'movie', title: 'Example', year: 2024 })).toBe(true)
-    expect(provider.supports({ type: 'anime', title: 'Example', year: 2024 })).toBe(false)
+    expect(provider.supports({ type: 'anime', title: 'Example' })).toBe(true)
+    expect(provider.supports({ type: 'anime' })).toBe(false)
     expect(provider.supports({ type: 'movie', title: 'Example' })).toBe(false)
   })
 
@@ -107,6 +110,12 @@ describe('subsource', () => {
     expect(found).toHaveLength(2)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'subsource' })
     expect(found[0]?.url).toContain('api.subsource.net')
+  })
+
+  it('answers anime queries on the TV slug path', async () => {
+    const found = await provider.search({ type: 'anime', title: 'Example', episode: 2 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'subsource' })
   })
 })
 
@@ -139,9 +148,10 @@ describe('castlesubs', () => {
   }
   const provider = createCastleSubsProvider(http)
 
-  it('supports movies and TV by title', () => {
+  it('supports movies, TV, and anime by title', () => {
     expect(provider.supports({ type: 'movie', title: 'Example' })).toBe(true)
-    expect(provider.supports({ type: 'anime', title: 'Example' })).toBe(false)
+    expect(provider.supports({ type: 'anime', title: 'Example' })).toBe(true)
+    expect(provider.supports({ type: 'anime' })).toBe(false)
   })
 
   it('harvests direct subtitle files through season resolution', async () => {
@@ -149,6 +159,12 @@ describe('castlesubs', () => {
     expect(found).toHaveLength(2)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
     expect(found[0]?.url).toBe('https://cdn.castle.example/sub123.vtt')
+  })
+
+  it('answers anime queries on the TV path', async () => {
+    const found = await provider.search({ type: 'anime', title: 'Example', episode: 2 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
   })
 
   it('trusts the file name over a mislabeled upstream language', async () => {
@@ -169,7 +185,8 @@ describe('vdrk', () => {
   it('supports TMDB-keyed movies and TV', () => {
     expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
     expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime', tmdbId: 37854, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Naruto' })).toBe(false)
     expect(provider.supports({ type: 'movie' })).toBe(false)
   })
 
@@ -179,6 +196,17 @@ describe('vdrk', () => {
     expect(found[0]).toMatchObject({ lang: 'en', label: 'English', format: 'vtt', provider: 'vdrk' })
     expect(found[1]).toMatchObject({ lang: 'cs', label: 'Czech' })
     expect(found[2]).toMatchObject({ lang: 'fr', label: 'French [HI]', hi: true })
+  })
+
+  it('maps parenthesized VDRK labels to the base language', async () => {
+    const regional = createVdrkProvider(stubHttp([{ match: '/v1/movie/551', text: JSON.stringify([
+      { file: 'https://cache.vdrk.site/d.vtt', label: 'Spanish (LA)' },
+      { file: 'https://cache.vdrk.site/e.vtt', label: 'Portuguese (BR)' },
+    ]) }]))
+    const found = await regional.search({ type: 'movie', tmdbId: 551 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'es' })
+    expect(found[1]).toMatchObject({ lang: 'pt' })
   })
 })
 
@@ -197,8 +225,10 @@ describe('subdl', () => {
 
   it('declines without an API key', () => {
     expect(createSubDlProvider(http).supports({ type: 'movie', tmdbId: 1 })).toBe(false)
+    expect(createSubDlProvider(http).supports({ type: 'anime', tmdbId: 1 })).toBe(false)
     expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', anilistId: 21 })).toBe(false)
   })
 
   it('unpacks per-file subtitles and filters the episode', async () => {
@@ -207,6 +237,12 @@ describe('subdl', () => {
     expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'subdl' })
     expect(found[0]?.url).toBe('https://dl.subdl.com/subtitle/1/en.srt')
     expect(found[1]).toMatchObject({ lang: 'fr' })
+  })
+
+  it('answers bridged anime queries as TV', async () => {
+    const found = await provider.search({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'subdl' })
   })
 })
 
@@ -253,6 +289,7 @@ describe('opensubtitles', () => {
   it('declines without credentials', () => {
     expect(createOpenSubtitlesProvider(http).supports({ type: 'movie', tmdbId: 1 })).toBe(false)
     expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 })).toBe(true)
     expect(provider.supports({ type: 'anime', anilistId: 1 })).toBe(false)
   })
 
@@ -261,6 +298,12 @@ describe('opensubtitles', () => {
     expect(found).toHaveLength(2)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'opensubtitles' })
     expect(found[1]).toMatchObject({ lang: 'fr', hi: true })
+  })
+
+  it('answers bridged anime queries as TV', async () => {
+    const found = await provider.search({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'opensubtitles' })
   })
 })
 
@@ -276,7 +319,8 @@ describe('nxshasubs', () => {
 
   it('supports TMDB-keyed movies and TV', () => {
     expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime', tmdbId: 37854, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Naruto' })).toBe(false)
     expect(provider.supports({ type: 'movie' })).toBe(false)
   })
 
@@ -302,8 +346,9 @@ describe('vdrkv2', () => {
 
   it('supports TMDB-keyed movies and TV', () => {
     expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
-    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 2, episode: 3 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
+    expect(provider.supports({ type: 'anime', tmdbId: 37854, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Naruto' })).toBe(false)
     expect(provider.supports({ type: 'movie' })).toBe(false)
   })
 
@@ -331,7 +376,7 @@ describe('rivesubs', () => {
   it('supports TMDB-keyed movies and TV', () => {
     expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
     expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime', tmdbId: 37854, season: 1, episode: 1 })).toBe(true)
     expect(provider.supports({ type: 'movie' })).toBe(false)
   })
 
@@ -342,6 +387,25 @@ describe('rivesubs', () => {
     expect(found[1]).toMatchObject({ lang: 'en' })
     expect(found[2]).toMatchObject({ lang: 'fr', format: 'vtt' })
   })
+  it('deduplicates signed copies of one file while retaining distinct files and correct native languages', async () => {
+    const signed = (signature: string) => `https://cdn.example/ar.srt?Policy=fixture&Signature=${signature}&Key-Pair-Id=fixture`
+    const captions = [
+      { file: signed('one'), label: 'اَلْعَرَبِيَّةُ - FlowCast' },
+      { file: signed('two'), label: 'اَلْعَرَبِيَّةُ - Citadel' },
+      { file: 'https://cdn.example/ar-alternate.srt', label: 'اَلْعَرَبِيَّةُ - Apex' },
+      { file: 'https://cdn.example/ur.srt', label: 'اُردُو - FlowCast' },
+      { file: 'https://cdn.example/fr.srt', label: 'Français - FlowCast' },
+      { file: 'https://cdn.example/bn.srt', label: 'বাংলা - FlowCast' },
+    ]
+    const selected = createRiveSubsProvider(stubHttp([{ match: 'provider=', text: JSON.stringify({ data: { captions } }) }]))
+    const found = await selected.search({ type: 'movie', tmdbId: 550 }, new AbortController().signal)
+    expect(found).toHaveLength(5)
+    expect(found.filter((track) => track.lang === 'ar')).toHaveLength(2)
+    expect(found.find((track) => track.label === 'اُردُو')?.lang).toBe('ur')
+    expect(found.find((track) => track.label === 'Français')?.lang).toBe('fr')
+    expect(found.find((track) => track.label === 'বাংলা')?.lang).toBe('bn')
+    expect(found[0]?.url).toBe(signed('one'))
+  })
 })
 
 describe('natsuki', () => {
@@ -349,12 +413,12 @@ describe('natsuki', () => {
     { sid: 1, language: 'English', langCode: 'en', url: 'https://files.example/en.srt', fileName: 'Fight.Club.1080p.BluRay.srt' },
     { sid: 2, language: 'Arabic', langCode: 'ar', url: 'https://files.example/ar.srt', fileName: 'cam.srt' },
     { sid: 3, language: 'French', langCode: 'fr', url: '', fileName: 'fr.srt' },
-  ] }) }]))
+  ] }) }]), async () => ({ 'X-S-Sid': 'fixture', 'X-S-Ts': '1', 'X-S-Nonce': 'fixture', 'X-S-Sig': 'fixture' }))
 
   it('supports TMDB-keyed movies and TV', () => {
     expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
     expect(provider.supports({ type: 'tv', tmdbId: 550, season: 1, episode: 2 })).toBe(true)
-    expect(provider.supports({ type: 'anime', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime', tmdbId: 37854, season: 1, episode: 1 })).toBe(true)
     expect(provider.supports({ type: 'movie' })).toBe(false)
   })
 
@@ -380,5 +444,68 @@ describe('normTrackLang', () => {
     expect(normTrackLang('English - Citadel')).toBe('en')
     expect(normTrackLang('French')).toBe('fr')
     expect(normTrackLang('日本語字幕こんにちは')).toBe('ja')
+  })
+})
+
+describe('anizip', () => {
+  const payload = {
+    mappings: { anilist_id: 21, mal_id: 21, themoviedb_id: 37854, imdb_id: 'tt0388629' },
+    episodes: {
+      '1': { anidbEid: 440, seasonNumber: 1, episodeNumber: 1 },
+      '21': { anidbEid: 460, seasonNumber: 1, episodeNumber: 21 },
+    },
+  }
+
+  it('extracts tmdb, anidb, and tvdb season/episode for a canonical episode', () => {
+    expect(anizipEpisode(payload, 1)).toEqual({ tmdbId: 37854, imdbId: 'tt0388629', anidbEid: 440, season: 1, episode: 1 })
+    expect(anizipEpisode(payload, 21)).toMatchObject({ anidbEid: 460, season: 1, episode: 21 })
+  })
+
+  it('falls back to season 1 plus the canonical number without an entry', () => {
+    expect(anizipEpisode({ mappings: { themoviedb_id: 1 }, episodes: {} }, 7)).toEqual({ tmdbId: 1, season: 1, episode: 7 })
+  })
+
+  it('returns null when nothing maps', () => {
+    expect(anizipEpisode({ mappings: {}, episodes: {} }, 1)).toBeNull()
+    expect(anizipEpisode(null, 1)).toBeNull()
+  })
+})
+
+describe('animetosho', () => {
+  const provider = createAnimeToshoProvider(stubHttp([
+    { match: 'mappings?anilist_id=21', text: JSON.stringify({
+      mappings: { anilist_id: 21, themoviedb_id: 37854 },
+      episodes: { '1': { anidbEid: 440, seasonNumber: 1, episodeNumber: 1 } },
+    }) },
+    { match: 'feed/json?eid=440', text: JSON.stringify([
+      { id: 111, status: 'complete', timestamp: 200, title: '[Group] Show - 01 [1080p]' },
+      { id: 110, status: 'skipped', timestamp: 300, title: '[Group] Show - 01 [480p]' },
+    ]) },
+    { match: 'show=torrent&id=111', text: JSON.stringify({ attachments: [
+      { id: 1, type: 'subtitle', size: 10, url: 'https://storage.animetosho.net/releases/111/subtitles/track3.eng.ass.xz', info: { format: 'ASS', language: 'English', language_code: 'eng', default: true } },
+      { id: 2, type: 'subtitle', size: 9, url: 'https://storage.animetosho.net/releases/111/subtitles/track2.spa.ass', info: { format: 'ASS', language: 'Latin American', language_code: 'spa' } },
+      { id: 3, type: 'other', size: 1, url: 'https://storage.animetosho.net/releases/111/subtitles/attachments.7z', info: { format: 'ARCHIVE' } },
+    ] }) },
+  ]))
+
+  it('supports anime by AniList id only', () => {
+    expect(provider.supports({ type: 'anime', anilistId: 21 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Show' })).toBe(false)
+    expect(provider.supports({ type: 'tv', tmdbId: 1 })).toBe(false)
+  })
+
+  it('resolves the episode through ani.zip and lists plain files first', async () => {
+    const found = await provider.search({ type: 'anime', anilistId: 21, episode: 1, langs: ['en', 'es'] }, new AbortController().signal)
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'es', format: 'ass', provider: 'animetosho' })
+    expect(found[0]?.url).toContain('track2.spa.ass')
+    expect(found[1]).toMatchObject({ lang: 'en', format: 'ass', rating: 2 })
+  })
+
+  it('returns nothing when the episode has no AniDB mapping', async () => {
+    const unmapped = createAnimeToshoProvider(stubHttp([
+      { match: 'mappings?anilist_id=9', text: JSON.stringify({ mappings: {}, episodes: {} }) },
+    ]))
+    await expect(unmapped.search({ type: 'anime', anilistId: 9, episode: 1 }, new AbortController().signal)).resolves.toEqual([])
   })
 })

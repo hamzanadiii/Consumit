@@ -135,6 +135,20 @@ describe('decodeSubtitleText', () => {
     expect(decoded).not.toContain('\uFFFD')
   })
 
+  it('decodes sparse Windows-1252 French without tofu', () => {
+    // One legacy û (0xFB) in otherwise plain ASCII: the old lenient
+    // threshold kept it as U+FFFD ("S�rement"). No valid multi-byte UTF-8
+    // run exists, so the clean Windows-1252 decode must win.
+    const srt = Buffer.concat([
+      Buffer.from('1\n00:00:01,000 --> 00:00:04,000\nS', 'utf8'),
+      Buffer.from([0xfb]),
+      Buffer.from('rement quelque chose de surprenant.\n', 'utf8'),
+    ])
+    const decoded = decodeSubtitleText(srt)
+    expect(decoded).toContain('Sûrement')
+    expect(decoded).not.toContain('\uFFFD')
+  })
+
   it('keeps valid UTF-8 runs when only stray bytes are present', () => {
     const buf = Buffer.concat([Buffer.from('héllo ', 'utf8'), Buffer.from([0x92]), Buffer.from(' world', 'utf8')])
     const decoded = decodeSubtitleText(buf)
@@ -150,5 +164,15 @@ describe('language tables', () => {
     expect(normLang('fr')).toBe('fr')
     expect(normLang('Klingon')).toBe('en')
     expect(langLabel('en')).toBe('English')
+  })
+
+  it('maps parenthesized and regional variants to the base language', () => {
+    // VDRK ships "Spanish (LA)"; the old fallback mislabeled it as English,
+    // grouping the track under the wrong menu language.
+    expect(normLang('Spanish (LA)')).toBe('es')
+    expect(normLang('Portuguese (BR)')).toBe('pt')
+    expect(normLang('English (US)')).toBe('en')
+    expect(normLang('es-419')).toBe('es')
+    expect(normLang('pt_BR')).toBe('pt')
   })
 })

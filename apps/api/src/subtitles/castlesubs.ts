@@ -7,7 +7,9 @@ import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types
 // stream provider, but only the getVideo2 subtitle arrays are kept (videos
 // ignored). Keyless, no quotas: security-key -> search -> details (+season)
 // -> getVideo2 per audio track (720p carries the same subtitles as the
-// permission-gated 1080p) -> direct subtitle file URLs. Movies + TV.
+// permission-gated 1080p) -> direct subtitle file URLs. Movies + TV +
+// anime (title-keyed; anime rides the TV path with the mapped season and
+// the absolute episode, falling back to season 1 when the bridge misses).
 
 const CASTLE_BASE = 'https://api.hlowb.com'
 const PKG = 'com.external.castle'
@@ -79,11 +81,11 @@ export function createCastleSubsProvider(http: SubtitleHttp): SubtitleSearchProv
     id: 'castlesubs',
     name: 'CastleSubs',
     supports(query: SubtitleQuery) {
-      return (query.type === 'movie' || query.type === 'tv') && !!query.title
+      return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.title
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
       const title = query.title!.trim()
-      const isTv = query.type === 'tv'
+      const isTv = query.type !== 'movie'
       const season = Number(query.season ?? 1)
       const episode = Number(query.episode ?? 1)
 
@@ -148,7 +150,7 @@ export function createCastleSubsProvider(http: SubtitleHttp): SubtitleSearchProv
       if (!episodeId) throw new Error('Castle episode missing.')
 
       const tracks = asRows(epEntry.tracks).filter((track) => track.existIndividualVideo !== false)
-      const langTracks = (tracks.length ? tracks : [{ languageId: '', languageName: '', abbreviate: '' }]).slice(0, 4)
+      const langTracks = tracks.length ? tracks : [{ languageId: '', languageName: '', abbreviate: '' }]
 
       const out: RawSubtitle[] = []
       const seen = new Set<string>()

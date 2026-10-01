@@ -17,6 +17,35 @@ const ARABIC_SCRIPT = /[\u0590-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE
 const MIN_ARABIC_CHARS = 8
 const MIN_ARABIC_RATIO = 0.15
 
+const LATIN_ACCENT = /[àâäéèêëîïôöùûüÿçñæœß]/i
+const LEGACY_PUNCT = /[’‘“”–—]/
+
+/** True when the bytes contain at least one well-formed multi-byte UTF-8
+ *  sequence. A legacy single-byte file (Windows-1252/1256) has none: every
+ *  high byte stands alone. Mixed content (valid UTF-8 runs plus stray
+ *  bytes) does, and must keep its valid runs instead of a wholesale
+ *  single-byte re-decode (which would turn "héllo" into "hÃ©llo"). */
+function hasValidMultibyteRun(bytes: Buffer): boolean {
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i]!
+    if (b < 0x80) continue
+    if (b >= 0xc2 && b <= 0xdf && i + 1 < bytes.length) {
+      const c1 = bytes[i + 1]!
+      if (c1 >= 0x80 && c1 <= 0xbf) return true
+    } else if (b >= 0xe0 && b <= 0xef && i + 2 < bytes.length) {
+      const c1 = bytes[i + 1]!
+      const c2 = bytes[i + 2]!
+      if (c1 >= 0x80 && c1 <= 0xbf && c2 >= 0x80 && c2 <= 0xbf) return true
+    } else if (b >= 0xf0 && b <= 0xf4 && i + 3 < bytes.length) {
+      const c1 = bytes[i + 1]!
+      const c2 = bytes[i + 2]!
+      const c3 = bytes[i + 3]!
+      if (c1 >= 0x80 && c1 <= 0xbf && c2 >= 0x80 && c2 <= 0xbf && c3 >= 0x80 && c3 <= 0xbf) return true
+    }
+  }
+  return false
+}
+
 /**
  * Decode raw subtitle bytes to text. UTF-8 stays the default; Arabic
  * releases in the wild are overwhelmingly Windows-1256, which strict UTF-8
@@ -36,6 +65,15 @@ export function decodeSubtitleText(buf: Buffer): string {
   const as1256 = WINDOWS_1256.decode(bytes)
   const arabic = as1256.match(ARABIC_SCRIPT)?.length ?? 0
   if (arabic >= MIN_ARABIC_CHARS && arabic / Math.max(1, as1256.length) >= MIN_ARABIC_RATIO) return as1256
+  // Sparse legacy files (one "Sûrement" in mostly ASCII) fail strict
+  // UTF-8 with a single bad byte. The lenient threshold below would keep
+  // that byte as tofu, so check first: with no valid multi-byte run the
+  // file is single-byte legacy, and a clean Windows-1252 decode with real
+  // accents wins over any replacement character.
+  if (!hasValidMultibyteRun(bytes)) {
+    const as1252 = WINDOWS_1252.decode(bytes)
+    if (!as1252.includes('\uFFFD') && (LATIN_ACCENT.test(as1252) || LEGACY_PUNCT.test(as1252))) return as1252
+  }
   const lenient = UTF8_LENIENT.decode(bytes)
   const bad = (lenient.match(/\uFFFD/g) ?? []).length
   if (bad <= Math.max(3, lenient.length * 0.01)) return lenient

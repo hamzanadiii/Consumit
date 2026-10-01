@@ -2,8 +2,10 @@ import type { SubtitleHttp } from './http.ts'
 import { normLang } from './lang.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
 
-// SubDL (api.subdl.com) — TMDB/IMDb-keyed movies + TV, unpack=1 returns
-// per-file raw SRT URLs (no zip handling). Key-gated: without
+// SubDL (api.subdl.com) — TMDB/IMDb-keyed movies + TV + anime, unpack=1
+// returns per-file raw SRT URLs (no zip handling). Anime rides the TV path:
+// the ani.zip bridge maps the canonical episode to a TMDB TV id + season,
+// so the upstream query is indistinguishable from TV. Key-gated: without
 // SUBDL_API_KEY the provider declines and the engine covers the title
 // through the others. Anonymous downloads are rate-limited upstream
 // (300/day/IP); language preference narrows the request server-side.
@@ -16,20 +18,24 @@ export function createSubDlProvider(http: SubtitleHttp, apiKey?: string | undefi
     id: 'subdl',
     name: 'SubDL',
     supports(query: SubtitleQuery) {
-      return !!apiKey && (query.type === 'movie' || query.type === 'tv') && !!(query.tmdbId || query.imdbId)
+      if (!apiKey) return false
+      if (query.type === 'anime') return !!query.tmdbId
+      return (query.type === 'movie' || query.type === 'tv') && !!(query.tmdbId || query.imdbId)
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
+      // Anime queries carry the bridged TMDB TV identity; ask upstream as TV.
+      const kind = query.type === 'anime' ? 'tv' : query.type
       const params = new URLSearchParams({
         api_key: apiKey!,
-        type: query.type,
-        languages: (query.langs?.length ? query.langs : ['en']).join(',').toUpperCase(),
+        type: kind,
         unpack: '1',
         hi: '1',
         subs_per_page: '30',
       })
+      if (query.langs?.length) params.set('languages', query.langs.join(',').toUpperCase())
       if (query.tmdbId) params.set('tmdb_id', String(query.tmdbId))
       else if (query.imdbId) params.set('imdb_id', query.imdbId)
-      if (query.type === 'tv') {
+      if (kind === 'tv') {
         if (query.season) params.set('season_number', String(query.season))
         if (query.episode) params.set('episode_number', String(query.episode))
       } else if (query.year) {
@@ -49,14 +55,13 @@ export function createSubDlProvider(http: SubtitleHttp, apiKey?: string | undefi
         const files = Array.isArray(entry.unpack_files) ? (entry.unpack_files as Record<string, unknown>[]) : []
         if (files.length) {
           for (const file of files) {
-            if (query.type === 'tv' && query.episode && Number(file.episode) !== Number(query.episode)) continue
-            if (query.type === 'tv' && query.season && Number(file.season) !== Number(query.season)) continue
+            if (kind === 'tv' && query.episode && Number(file.episode) !== Number(query.episode)) continue
+            if (kind === 'tv' && query.season && Number(file.season) !== Number(query.season)) continue
             push(out, String(file.url || ''), String(file.language || 'EN'), String(file.name || entry.release_name || ''), !!file.hi, String(file.release_name || ''))
           }
         } else if (entry.url) {
           push(out, String(entry.url), String(entry.language || 'EN'), String(entry.name || entry.release_name || ''), !!entry.hi, String(entry.release_name || ''))
         }
-        if (out.length >= 40) break
       }
       return out
     },
