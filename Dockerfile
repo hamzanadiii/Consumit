@@ -32,6 +32,9 @@ FROM oven/bun:1.4.0-alpine AS api
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3001
+# xz binary: the subtitles engine shells to `xz -dc` for XZ-compressed
+# singles (AnimeTosho .ass.xz); without it those candidates are skipped.
+RUN apk add --no-cache xz xz-libs
 COPY --from=api-build --chown=bun:bun /app/apps/api/dist/index.js ./index.js
 COPY --from=api-build --chown=bun:bun /app/apps/api/dist/import-worker.js ./worker.js
 USER bun

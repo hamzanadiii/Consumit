@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
+import { createPostgresCatalogCacheStore } from './catalog/postgres-cache-store.ts'
+import { StaleCache } from './catalog/stale-cache.ts'
 import { createTmdbCatalog } from './catalog/tmdb-catalog.ts'
 import { loadEnv } from './config/env.ts'
 import { createDbClient } from './db/client.ts'
@@ -13,8 +15,9 @@ const db = createDbClient(env.databaseUrl, {
   ...(env.databaseSslCa ? { sslCa: env.databaseSslCa } : {}),
   sslMode: env.databaseSslMode,
 })
+const catalogCache = new StaleCache(Date.now, createPostgresCatalogCacheStore(db.prisma))
 const importer = createLetterboxdImporter({
-  catalog: createTmdbCatalog({ language: env.tmdbLanguage, region: env.tmdbRegion, token: env.tmdbToken }),
+  catalog: createTmdbCatalog({ cache: catalogCache, language: env.tmdbLanguage, region: env.tmdbRegion, token: env.tmdbToken }),
   repository: createPostgresLetterboxdImportRepository(db.prisma),
 })
 const workerId = `letterboxd-${randomUUID()}`

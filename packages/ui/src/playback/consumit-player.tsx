@@ -6,12 +6,14 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ComponentProps,
   type ReactNode,
 } from 'react'
 import {
   ArrowLeft,
   Captions,
+  Cast,
   Check,
   ChevronRight,
   Gauge,
@@ -22,6 +24,8 @@ import {
   Minus,
   Moon,
   Music,
+  Search,
+  Upload,
   PictureInPicture2,
   Plus,
   RotateCcw,
@@ -45,6 +49,8 @@ import {
   type DirectMediaSource,
 } from './media-source'
 import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
+import { createPlaybackControllerNext } from './playback-controller-next'
+import type { EngineDeliveryFailure } from './media-engine'
 import {
   clampSubtitleDelayMs,
   computeSyncDelayMs,
@@ -52,6 +58,7 @@ import {
   fetchVttCues,
   formatSubtitleDelayMs,
   nativeLanguageName,
+  parseVttCues,
   PREFERRED_LANGUAGE_CODES,
   readStoredSubtitleDelayMs,
   readStoredSubtitleLanguages,
@@ -91,6 +98,14 @@ export type PlayerOption = {
   language?: string | undefined
 }
 
+export type PlayerSubtitleCandidate = { id: string; label: string; language: string; provider: string; release?: string; hi?: boolean; forced?: boolean; sdh?: boolean; machineTranslated?: boolean; preparedUrl?: string }
+export type PlayerSubtitleDiscovery = {
+  languages: readonly { code: string; count: number }[]
+  providers: readonly { id: string; name: string; state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; reason?: 'credentials_required' | 'unsupported' }[]
+  loading: boolean
+  error: string | null
+}
+
 export type ConsumitPlayerProps = Omit<
   ComponentProps<'video'>,
   'className' | 'controls' | 'poster' | 'title'
@@ -122,6 +137,12 @@ export type ConsumitPlayerProps = Omit<
   subtitleOptions?: readonly PlayerOption[] | undefined
   selectedSubtitle?: string | undefined
   onSubtitleChange?: ((value: string) => void) | undefined
+  /** Called when captions are opened, so external search can stay lazy. */
+  onSubtitleRequest?: (() => void) | undefined
+  subtitleDiscovery?: PlayerSubtitleDiscovery | undefined
+  onSubtitlePage?: ((language: string, cursor: number) => Promise<{ tracks: PlayerSubtitleCandidate[]; total: number; nextCursor: number | null }>) | undefined
+  onSubtitleSearch?: ((query: string, cursor: number) => Promise<{ tracks: PlayerSubtitleCandidate[]; total: number; nextCursor: number | null }>) | undefined
+  onSubtitleCandidateSelect?: ((candidate: PlayerSubtitleCandidate) => Promise<{ id: string; label: string; language: string; url: string }>) | undefined
   /** Caption tracks arriving after first frame (e.g. other providers'
    *  subtitles from the server list). They join the menu live via the
    *  controller without reloading media. */
@@ -166,9 +187,15 @@ export type ConsumitPlayerProps = Omit<
   selectedServer?: string | undefined
   onServerChange?: ((value: string) => void) | undefined
   onRetry?: (() => void) | undefined
+  /** Chromecast output. The button renders only when a Cast runtime and a
+   *  configured receiver exist; the caller owns session, progress, and
+   *  telemetry while casting. */
+  castAvailable?: boolean | undefined
+  castConnected?: boolean | undefined
+  onCastClick?: (() => void) | undefined
   resumeAt?: number | undefined
   resumePlaying?: boolean | undefined
-  onSourceError?: ((reason: 'network' | 'media' | 'gone') => void) | undefined
+  onSourceError?: ((reason: 'network' | 'media' | 'gone' | 'expired', deliveryFailure?: EngineDeliveryFailure) => void) | undefined
   onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
 }
 
@@ -353,7 +380,13 @@ function settingsRowClass(selected: boolean) {
  * anchored in the bottom-right above the player controls on desktop.
  */
 const RAIL_PANEL_CLASS =
-  'absolute inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-[#0b0b0e] p-1 sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card sm:border sm:border-white/15 sm:p-2'
+  'fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-[#0b0b0e] p-1 sm:absolute sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card sm:border sm:border-white/15 sm:p-2'
+
+/** Set on the canary web deployment; Watch and embeds always use the same core. */
+const useNextPlaybackCore = process.env.NEXT_PUBLIC_PLAYBACK_CORE === 'next'
+const subscribeHydration = () => () => undefined
+const clientHydrationSnapshot = () => true
+const serverHydrationSnapshot = () => false
 
 /**
  * FilScreen-flavored option chip for quality and speed: a real bordered chip
@@ -443,6 +476,9 @@ export function ConsumitPlayer({
   backHref,
   brightness: controlledBrightness,
   caption,
+  castAvailable = false,
+  castConnected = false,
+  onCastClick,
   chapters,
   children,
   className,
@@ -477,6 +513,11 @@ export function ConsumitPlayer({
   selectedServer,
   onServerChange,
   onSubtitleChange,
+  onSubtitleRequest,
+  subtitleDiscovery,
+  onSubtitlePage,
+  onSubtitleSearch,
+  onSubtitleCandidateSelect,
   onTimeUpdate,
   onVolumeChange,
   pauseFacts,
@@ -513,9 +554,14 @@ export function ConsumitPlayer({
     () => dedupePlayerOptions(suppliedSubtitleOptions ?? (source ? [...(engineState?.subtitles ?? []), { value: 'off', label: 'Off' }] : DEFAULT_SUBTITLES)),
     [suppliedSubtitleOptions, source, engineState?.subtitles],
   )
+  const [preparedCandidateUrls, setPreparedCandidateUrls] = useState<readonly string[]>([])
+  const [preparedCandidateIds, setPreparedCandidateIds] = useState<readonly string[]>([])
+  const preparedPlayableCount = new Set((extraSubtitles ?? []).filter((track) => preparedCandidateUrls.includes(track.url)).map((track) => track.url)).size
   /* PROVE-embed style track count (Off excluded) for the menu header
    *  and the toolbar badge. */
-  const subtitleTrackCount = subtitleOptions.filter((option) => option.value !== 'off').length
+  const subtitleTrackCount = subtitleDiscovery
+    ? subtitleDiscovery.languages.reduce((total, language) => total + language.count, 0) + subtitleOptions.filter((option) => option.value !== 'off').length - preparedPlayableCount
+    : subtitleOptions.filter((option) => option.value !== 'off').length
   const dedupedServerOptions = useMemo(
     () => (serverOptions ? dedupePlayerOptions(serverOptions) : undefined),
     [serverOptions],
@@ -564,12 +610,17 @@ export function ConsumitPlayer({
   const videoRef = useRef<HTMLVideoElement>(null)
   const hideTimer = useRef<number | undefined>(undefined)
   const controllerRef = useRef<ReturnType<typeof createPlaybackController> | null>(null)
+  const controllerPhaseRef = useRef<ControllerSnapshot['phase']>('loading')
+  const attachedMediaRef = useRef<{ controller: ReturnType<typeof createPlaybackController>; src: string; type: DirectMediaSource['type'] } | null>(null)
   const playbackCallbacks = useRef({ onSourceError, onPlaybackEvent, resumeAt, resumePlaying })
   useEffect(() => { playbackCallbacks.current = { onSourceError, onPlaybackEvent, resumeAt, resumePlaying } }, [onSourceError, onPlaybackEvent, resumeAt, resumePlaying])
   const menuRef = useRef<HTMLDivElement>(null)
+  // Hydration reads the server snapshot; normal client-only mounts can use
+  // their source immediately. This keeps disabled attributes deterministic.
+  const mounted = useSyncExternalStore(subscribeHydration, clientHydrationSnapshot, serverHydrationSnapshot)
 
   const mediaSrc = source?.src ?? (typeof src === 'string' ? src : undefined)
-  const hasSource = Boolean(mediaSrc || children)
+  const hasSource = mounted && Boolean(mediaSrc || children)
   const showTopBar = backHref != null || onBack != null || topMeta != null
 
   const [currentTime, setCurrentTime] = useState(0)
@@ -584,6 +635,22 @@ export function ConsumitPlayer({
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [activeMenu, setActiveMenu] = useState<PlayerMenuId | null>(null)
+  const [subtitleSearch, setSubtitleSearch] = useState('')
+  const [subtitleSearchResults, setSubtitleSearchResults] = useState<PlayerSubtitleCandidate[]>([])
+  const [nextSearchCursor, setNextSearchCursor] = useState<number | null>(null)
+  const [searchingSubtitles, setSearchingSubtitles] = useState(false)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const searchGenerationRef = useRef(0)
+  useEffect(() => () => clearTimeout(searchTimerRef.current), [])
+  const [openSubtitleLanguage, setOpenSubtitleLanguage] = useState<string | null>(null)
+  const [discoveredTracks, setDiscoveredTracks] = useState<Record<string, PlayerSubtitleCandidate[]>>({})
+  const [nextSubtitleCursor, setNextSubtitleCursor] = useState<Record<string, number | null>>({})
+  const [subtitleMenuError, setSubtitleMenuError] = useState<string | null>(null)
+  const [preparingSubtitle, setPreparingSubtitle] = useState<string | null>(null)
+  const [uploadedSubtitle, setUploadedSubtitle] = useState<{ id: string; label: string; language: string; url: string } | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const uploadedUrlRef = useRef<string | null>(null)
+  useEffect(() => () => { if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current) }, [])
   const [controlsVisible, setControlsVisible] = useState(true)
   /* Visual sync panel (old-player HUD): click the cue line the moment it is
    * spoken to solve the offset, plus ±50ms fine tuning. */
@@ -664,10 +731,30 @@ export function ConsumitPlayer({
   const captionFont = controlledCaptionFont ?? internalCaptionFont
   const subtitleDelayMs = controlledSubtitleDelayMs ?? internalSubtitleDelayMs
   const subtitleLanguages = controlledSubtitleLanguages ?? internalSubtitleLanguages
+  const subtitleLanguageRows = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const language of subtitleDiscovery?.languages ?? []) counts.set(language.code, language.count)
+    for (const option of subtitleOptions) {
+      if (option.value === 'off') continue
+      const code = option.language ?? 'und'
+      counts.set(code, (counts.get(code) ?? 0) + 1)
+    }
+    for (const track of extraSubtitles ?? []) {
+      if (preparedCandidateUrls.includes(track.url)) counts.set(track.language, Math.max(0, (counts.get(track.language) ?? 0) - 1))
+    }
+    return [...counts].map(([code, count]) => ({ code, count }))
+      .sort((a, b) => {
+        const aRank = subtitleLanguages.indexOf(a.code)
+        const bRank = subtitleLanguages.indexOf(b.code)
+        return (aRank === -1 ? 100 : aRank) - (bRank === -1 ? 100 : bRank) || nativeLanguageName(a.code, a.code).localeCompare(nativeLanguageName(b.code, b.code))
+      })
+  }, [subtitleDiscovery?.languages, subtitleOptions, subtitleLanguages, extraSubtitles, preparedCandidateUrls])
   const captionsOn = selectedSubtitle !== 'off'
   /* Overlay cue text and its script: Arabic cues render untracked so letter
    *  joining survives Chromium's letter-spacing handling. */
-  const overlayCueText = caption ?? (activeCue || undefined)
+  // External files use the styled overlay; HLS/DASH/native tracks keep the
+  // browser renderer. Showing both paths produced duplicate visible captions.
+  const overlayCueText = caption ?? (selectedSubtitle.startsWith('external:') ? activeCue || undefined : undefined)
   const overlayCueUntracked = overlayCueText != null && hasCursiveRtlScript(overlayCueText)
 
   /* The old player reset the sync offset on episode change. Titles carry
@@ -764,7 +851,17 @@ export function ConsumitPlayer({
   const progressRatio = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0
   const bufferedRatio = duration > 0 ? Math.min(1, Math.max(0, bufferedEnd / duration)) : 0
 
-  const pipSupported = typeof window !== 'undefined' && typeof document !== 'undefined' && (document.pictureInPictureEnabled === true || 'webkitSetPresentationMode' in HTMLVideoElement.prototype)
+  /* PiP capability is browser-only. Reading it during render made the PiP
+   * button's disabled attribute differ from SSR (server: unsupported →
+   * disabled; client: supported → enabled) and split hydration. Detect after
+   * mount so the first client paint matches the server HTML. */
+  const [pipSupported, setPipSupported] = useState(false)
+  useEffect(() => {
+    setPipSupported(
+      typeof document !== 'undefined'
+      && (document.pictureInPictureEnabled === true || 'webkitSetPresentationMode' in HTMLVideoElement.prototype),
+    )
+  }, [])
 
   const scheduleHide = useCallback(() => {
     if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
@@ -795,16 +892,17 @@ export function ConsumitPlayer({
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    const controller = createPlaybackController(video, {
+    const controller = (useNextPlaybackCore ? createPlaybackControllerNext : createPlaybackController)(video, {
       change(snapshot) {
+        controllerPhaseRef.current = snapshot.phase
         setEngineState(snapshot)
         setIsBuffering(snapshot.phase === 'loading' || snapshot.phase === 'buffering' || snapshot.phase === 'switching')
         setHasError(snapshot.phase === 'failed')
         if (snapshot.needsGesture) { setIsPlaying(false); setControlsVisible(true) }
       },
-      fatal(reason) {
-        setErrorMessage(reason === 'gone' ? 'This source is no longer available.' : 'This source could not keep playing.')
-        playbackCallbacks.current.onSourceError?.(reason)
+      fatal(reason, deliveryFailure) {
+        setErrorMessage(reason === 'gone' ? 'This source is no longer available.' : reason === 'expired' ? 'Refreshing this source.' : 'This source could not keep playing.')
+        playbackCallbacks.current.onSourceError?.(reason, deliveryFailure)
       },
       event(event) { playbackCallbacks.current.onPlaybackEvent?.(event) },
     })
@@ -813,7 +911,15 @@ export function ConsumitPlayer({
   }, [])
 
   useEffect(() => {
-    if (source) void controllerRef.current?.load(source, playbackCallbacks.current.resumeAt, playbackCallbacks.current.resumePlaying)
+    const controller = controllerRef.current
+    if (!source || !controller) return
+    const attached = attachedMediaRef.current
+    // Lease renewals and caption updates can return a new source object for
+    // the same playable media. Keep its engine and buffered frames intact;
+    // a failed engine still needs a real reload when the caller retries.
+    if (attached?.controller === controller && attached.src === source.src && attached.type === source.type && controllerPhaseRef.current !== 'failed') return
+    attachedMediaRef.current = { controller, src: source.src, type: source.type }
+    void controller.load(source, playbackCallbacks.current.resumeAt, playbackCallbacks.current.resumePlaying)
   }, [source])
 
   /* One merged track list — the active source's tracks plus every
@@ -826,8 +932,16 @@ export function ConsumitPlayer({
       language: track.language,
       url: track.url,
     }))
-    return [...fromSource, ...(extraSubtitles ?? [])]
-  }, [source, extraSubtitles])
+    return [...fromSource, ...(extraSubtitles ?? []), ...(uploadedSubtitle ? [uploadedSubtitle] : [])]
+  }, [source, extraSubtitles, uploadedSubtitle])
+
+  /* A discovered row can duplicate a track the menu already offers: candidates
+   * prepared this session (matched by id) and candidates whose prepared file is
+   * already among the active tracks (matched by URL). Both render as a single
+   * checked option row instead of appearing again in the search results. */
+  const isRepresentedCandidate = (candidate: PlayerSubtitleCandidate) =>
+    preparedCandidateIds.includes(candidate.id) ||
+    (candidate.preparedUrl != null && allExternalSubtitles.some((track) => track.url === candidate.preparedUrl))
 
   useEffect(() => {
     controllerRef.current?.externalSubtitles(allExternalSubtitles)
@@ -852,6 +966,7 @@ export function ConsumitPlayer({
     if (!video) return
     try {
       video.playbackRate = selectedRate
+      controllerRef.current?.setPlaybackRate(selectedRate)
     } catch {
       /* rate is a preference, never a crash */
     }
@@ -872,12 +987,14 @@ export function ConsumitPlayer({
     if (!video || source) return
     try {
       for (const track of Array.from(video.textTracks)) {
-        if (track.kind === 'subtitles' || track.kind === 'captions') track.mode = captionsOn ? 'showing' : 'hidden'
+        if (track.kind === 'subtitles' || track.kind === 'captions') {
+          track.mode = captionsOn && (track.id === selectedSubtitle || track.language === selectedSubtitle || (selectedSubtitle === 'english' && track.language === 'en')) ? 'showing' : 'disabled'
+        }
       }
     } catch {
       /* subtitle tracks are enhancement-only */
     }
-  }, [captionsOn, children, source])
+  }, [captionsOn, children, selectedSubtitle, source])
 
   useEffect(() => {
     const video = videoRef.current
@@ -949,7 +1066,27 @@ export function ConsumitPlayer({
     video.addEventListener('seeking', updateCues)
     video.addEventListener('seeked', updateCues)
 
+    // Frame-accurate sampling: timeupdate fires ~4×/s, so cue transitions
+    // quantize up to ~250ms late and read as subtitles lagging the picture.
+    // Sample every frame while playing; the event listeners above still cover
+    // pause, seek, and background tabs where rAF is throttled to a stop.
+    let frame = 0
+    const sampleFrame = () => {
+      updateCues()
+      frame = requestAnimationFrame(sampleFrame)
+    }
+    const startSampling = () => { if (frame === 0) frame = requestAnimationFrame(sampleFrame) }
+    const stopSampling = () => { if (frame !== 0) cancelAnimationFrame(frame); frame = 0 }
+    video.addEventListener('playing', startSampling)
+    video.addEventListener('pause', stopSampling)
+    video.addEventListener('ended', stopSampling)
+    if (!video.paused) startSampling()
+
     return () => {
+      stopSampling()
+      video.removeEventListener('playing', startSampling)
+      video.removeEventListener('pause', stopSampling)
+      video.removeEventListener('ended', stopSampling)
       textTracks?.removeEventListener?.('addtrack', attachTrackListeners)
       textTracks?.removeEventListener?.('change', updateCues)
       video.removeEventListener('timeupdate', updateCues)
@@ -1164,6 +1301,7 @@ export function ConsumitPlayer({
 
   function toggleMenu(menu: PlayerMenuId) {
     pokeControls()
+    if (menu === 'subtitles' && activeMenu !== 'subtitles') onSubtitleRequest?.()
     setActiveMenu((current) => (current === menu ? null : menu))
   }
 
@@ -1180,6 +1318,80 @@ export function ConsumitPlayer({
     storeValue('consumit.player.subtitles', value)
     onSubtitleChange?.(value)
     setActiveMenu(null)
+  }
+
+  async function loadSubtitleLanguage(language: string, cursor = 0) {
+    if (!onSubtitlePage) return
+    setSubtitleMenuError(null)
+    try {
+      const page = await onSubtitlePage(language, cursor)
+      setDiscoveredTracks((current) => {
+        const merged = cursor === 0 ? page.tracks : [...(current[language] ?? []), ...page.tracks]
+        const seen = new Set<string>()
+        return { ...current, [language]: merged.filter((track) => { if (seen.has(track.id)) return false; seen.add(track.id); return true }) }
+      })
+      setNextSubtitleCursor((current) => ({ ...current, [language]: page.nextCursor }))
+    } catch { setSubtitleMenuError('Tracks could not be loaded. Try this language again.') }
+  }
+
+  async function runSubtitleSearch(query: string, cursor = 0) {
+    if (!onSubtitleSearch || !query.trim()) return
+    const generation = ++searchGenerationRef.current
+    setSearchingSubtitles(true)
+    try {
+      const page = await onSubtitleSearch(query.trim(), cursor)
+      if (generation !== searchGenerationRef.current) return
+      setSubtitleSearchResults((current) => cursor === 0 ? page.tracks : [...current, ...page.tracks])
+      setNextSearchCursor(page.nextCursor)
+      setSubtitleMenuError(null)
+    } catch { if (generation === searchGenerationRef.current) setSubtitleMenuError('Subtitle search failed. Try again.') }
+    finally { if (generation === searchGenerationRef.current) setSearchingSubtitles(false) }
+  }
+
+  function changeSubtitleSearch(query: string) {
+    setSubtitleSearch(query)
+    clearTimeout(searchTimerRef.current)
+    ++searchGenerationRef.current
+    if (!query.trim()) { setSubtitleSearchResults([]); setNextSearchCursor(null); setSearchingSubtitles(false); return }
+    setSearchingSubtitles(true)
+    searchTimerRef.current = setTimeout(() => { void runSubtitleSearch(query) }, 200)
+  }
+
+  async function selectDiscoveredSubtitle(candidate: PlayerSubtitleCandidate) {
+    if (!onSubtitleCandidateSelect || preparingSubtitle) return
+    setPreparingSubtitle(candidate.id)
+    setSubtitleMenuError(null)
+    try {
+      const track = await onSubtitleCandidateSelect(candidate)
+      setPreparedCandidateIds((current) => (current.includes(candidate.id) ? current : [...current, candidate.id]))
+      setPreparedCandidateUrls((current) => current.includes(track.url) ? current : [...current, track.url])
+      controllerRef.current?.externalSubtitles([...allExternalSubtitles, track])
+      chooseSubtitle(`external:consumit-external-${track.id}`)
+    } catch { setSubtitleMenuError('This subtitle could not be prepared. Choose another track.') }
+    finally { setPreparingSubtitle(null) }
+  }
+
+  async function uploadSubtitle(file: File | undefined) {
+    if (!file) return
+    setSubtitleMenuError(null)
+    if (file.size > 2 * 1024 * 1024 || !/\.(srt|vtt)$/i.test(file.name)) {
+      setSubtitleMenuError('Choose an SRT or VTT file up to 2 MB.')
+      return
+    }
+    try {
+      const source = (await file.text()).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+      const vtt = /\.srt$/i.test(file.name)
+        ? `WEBVTT\n\n${source.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')}`
+        : source
+      if (!vtt.startsWith('WEBVTT') || parseVttCues(vtt).length === 0) throw new Error('invalid')
+      const url = URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }))
+      const track = { id: `upload-${Date.now()}`, label: file.name.slice(0, 100), language: 'und', url }
+      if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current)
+      uploadedUrlRef.current = url
+      setUploadedSubtitle(track)
+      controllerRef.current?.externalSubtitles([...allExternalSubtitles.filter((entry) => entry.id !== uploadedSubtitle?.id), track])
+      chooseSubtitle(`external:consumit-external-${track.id}`)
+    } catch { setSubtitleMenuError('This file has no usable subtitle cues.') }
   }
 
   function toggleSubtitlesSwitch() {
@@ -1203,6 +1415,7 @@ export function ConsumitPlayer({
   }
 
   function chooseRate(value: number) {
+    controllerRef.current?.setPlaybackRate(value)
     if (!controlledRate) setInternalRate(value)
     storeValue('consumit.player.rate', String(value))
     onRateChange?.(value)
@@ -1465,6 +1678,7 @@ export function ConsumitPlayer({
         className,
       )}
       data-consumit-player
+      data-player-core={useNextPlaybackCore ? 'next' : 'legacy'}
       data-controls-visible={chromeVisible ? 'true' : 'false'}
       data-fullscreen={isFullscreen ? 'true' : 'false'}
       ref={shellRef}
@@ -1500,14 +1714,23 @@ export function ConsumitPlayer({
         onMouseMove={pokeControls}
         onPointerDown={pokeControls}
         onTouchStart={pokeControls}
-        onMouseLeave={() => {
-          if (isPlaying && activeMenu == null) {
+        onFocusCapture={() => {
+          setControlsVisible(true)
+          if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+          hideTimer.current = undefined
+        }}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) scheduleHide()
+        }}
+        onMouseLeave={(event) => {
+          if (isPlaying && activeMenu == null && !event.currentTarget.contains(document.activeElement)) {
             setControlsVisible(false)
             if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
             hideTimer.current = undefined
           }
         }}
         role="region"
+        data-player-stage
         tabIndex={0}
       >
         {!posterSrc && !hasSource ? (
@@ -1576,6 +1799,7 @@ export function ConsumitPlayer({
 
         {showTopBar ? (
           <div
+            data-player-header
             className={cn(
               'pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/90 via-black/50 to-transparent px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-16 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
               isFullscreen && 'px-6 pt-[max(1.75rem,env(safe-area-inset-top))] sm:px-10',
@@ -1602,8 +1826,14 @@ export function ConsumitPlayer({
                 </a>
               ) : null}
             </div>
-            <div className="min-w-0 flex-1 text-center">
-              <p className="truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md">{title}</p>
+            <div className="min-w-0 flex-1 text-center" data-player-title>
+              {!isPlaying && hasSource && !hasError && pauseLogoUrl ? (
+                <>
+                  <img alt="" aria-hidden="true" className="mx-auto max-h-6 w-auto max-w-full object-contain [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:hidden" src={pauseLogoUrl} />
+                  <span className="sr-only sm:hidden">{title}</span>
+                </>
+              ) : null}
+              <p className={cn('truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md', !isPlaying && hasSource && !hasError && pauseLogoUrl && 'hidden sm:block')}>{title}</p>
               {topMeta ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta}</p> : null}
             </div>
             <div aria-hidden="true" className="w-11 shrink-0" />
@@ -1625,6 +1855,7 @@ export function ConsumitPlayer({
           <div
             className={cn(
               'pointer-events-none absolute inset-0 flex items-center justify-start pb-16',
+              showTopBar && pauseLogoUrl && 'hidden sm:flex',
               isFullscreen ? 'px-6 sm:px-10' : 'px-6 sm:px-6',
             )}
             data-consumit-player-pause
@@ -1675,7 +1906,7 @@ export function ConsumitPlayer({
                 ) : null}
                 <a
                   className="inline-flex min-h-11 items-center rounded-control px-4 text-sm font-bold text-copy outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  href="/settings#support"
+                  href="/report-issue?category=playback"
                 >
                   Report an issue
                 </a>
@@ -1743,6 +1974,7 @@ export function ConsumitPlayer({
         ) : null}
 
         <div
+          data-player-controls
           className={cn(
             'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-4 pt-16 pb-4 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
             isFullscreen && 'px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10',
@@ -1934,6 +2166,17 @@ export function ConsumitPlayer({
               >
                 <Settings aria-hidden="true" className="size-5" strokeWidth={1.75} />
               </PlayerIconButton>
+              {castAvailable ? (
+                <PlayerIconButton
+                  active={castConnected}
+                  disabled={!hasSource}
+                  label={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
+                  onClick={() => onCastClick?.()}
+                  title={castConnected ? 'Casting — select to disconnect' : 'Cast to TV'}
+                >
+                  <Cast aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                </PlayerIconButton>
+              ) : null}
               <span className="contents">
                 <PlayerIconButton
                   active={isPip}
@@ -1959,7 +2202,7 @@ export function ConsumitPlayer({
           <div className="contents" ref={menuRef}>
             <div
               aria-label="Settings options"
-              className={cn(RAIL_PANEL_CLASS, 'w-80 sm:w-[340px]')}
+              className={cn(RAIL_PANEL_CLASS, 'sm:w-[340px]')}
               id="consumit-player-menu-settings"
               role="menu"
             >
@@ -2306,7 +2549,7 @@ export function ConsumitPlayer({
           <div className="contents" ref={menuRef}>
             <div
               aria-label="Subtitle sync"
-              className={cn(RAIL_PANEL_CLASS, 'w-80 sm:w-[340px]')}
+              className={cn(RAIL_PANEL_CLASS, 'sm:w-[340px]')}
               id="consumit-player-menu-sync"
               role="menu"
             >
@@ -2437,27 +2680,55 @@ export function ConsumitPlayer({
                 </button>
               </div>
               <div className="space-y-1 p-3">
-                {subtitleOptions.map((option) => {
-                  const selected = selectedSubtitle === option.value
-                  const isOff = option.value === 'off'
-                  const nativeName = isOff ? option.label : nativeLanguageName(option.language, option.label)
-                  const showDetail = !isOff
-                  return (
-                    <button
-                      aria-checked={selected}
-                      className={settingsRowClass(selected)}
-                      key={option.value}
-                      onClick={() => chooseSubtitle(option.value)}
-                      role="menuitemradio"
-                      type="button"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate leading-5 font-medium">{nativeName}</span>
-                        {showDetail ? <span className="block truncate text-xs leading-4 font-normal text-muted">{option.label}</span> : null}
-                      </span>
-                      {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                <button aria-checked={!captionsOn} className={settingsRowClass(!captionsOn)} onClick={() => chooseSubtitle('off')} role="menuitemradio" type="button">
+                  <span className="min-w-0 flex-1 text-left font-medium">Off</span>
+                  {!captionsOn ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                </button>
+                <input accept=".srt,.vtt,text/vtt,application/x-subrip" className="sr-only" onChange={(event) => { void uploadSubtitle(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
+                <button className={settingsRowClass(false)} onClick={() => uploadInputRef.current?.click()} type="button">
+                  <span className="min-w-0 flex-1 text-left font-medium">Upload subtitle file</span><Upload aria-hidden="true" className="size-4" />
+                </button>
+                <button className={settingsRowClass(false)} onClick={() => setActiveMenu('sync')} type="button">
+                  <span className="min-w-0 flex-1 text-left font-medium">Sync subtitle to audio</span><ChevronRight aria-hidden="true" className="size-4" />
+                </button>
+                <label className="flex items-center gap-2 rounded-control bg-white/[0.06] px-3 py-2 text-muted">
+                  <Search aria-hidden="true" className="size-4 shrink-0" />
+                  <input aria-label="Search subtitle languages and tracks" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" onChange={(event) => changeSubtitleSearch(event.target.value)} placeholder="Search" type="search" value={subtitleSearch} />
+                </label>
+                {subtitleDiscovery?.loading ? <p className="px-2 py-1 text-xs text-muted" role="status">Searching subtitle providers…</p> : null}
+                {subtitleDiscovery?.error ? <p className="px-2 py-1 text-xs text-orange" role="alert">{subtitleDiscovery.error}</p> : null}
+                {subtitleMenuError ? <p className="px-2 py-1 text-xs text-orange" role="alert">{subtitleMenuError}</p> : null}
+                {subtitleDiscovery?.providers.some((provider) => provider.state === 'failed' || provider.state === 'timeout') ? (
+                  <p className="px-2 py-1 text-xs text-muted">Some subtitle providers are unavailable. Available tracks are shown below.</p>
+                ) : null}
+                {subtitleDiscovery?.providers.some((provider) => provider.reason === 'credentials_required') ? (
+                  <p className="px-2 py-1 text-xs text-muted">Some subtitle providers need server credentials. Other results are available below.</p>
+                ) : null}
+                {subtitleSearch.trim() ? <div className="space-y-1">
+                  {searchingSubtitles ? <p className="px-2 text-xs text-muted" role="status">Searching tracks…</p> : null}
+                  {!searchingSubtitles && subtitleSearchResults.length === 0 ? <p className="px-2 text-xs text-muted">No tracks match this search.</p> : null}
+                  {subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{nativeLanguageName(track.language, track.language)} · {track.label}</span><span className="block truncate text-xs text-muted">{track.provider}{track.release ? ` · ${track.release}` : ''}</span></span></button>)}
+                  {nextSearchCursor != null ? <button className={settingsRowClass(false)} onClick={() => void runSubtitleSearch(subtitleSearch, nextSearchCursor)} type="button">Load more matches</button> : null}
+                </div> : null}
+                {!subtitleSearch.trim() && !subtitleDiscovery?.loading && subtitleLanguageRows.length === 0 ? <p className="px-2 py-2 text-sm text-muted">No subtitles found for this title yet.</p> : null}
+                {!subtitleSearch.trim() && subtitleLanguageRows.map(({ code, count }) => {
+                  const opened = openSubtitleLanguage === code
+                  const localOptions = subtitleOptions.filter((option) => option.value !== 'off' && (option.language ?? 'und') === code)
+                  return <div key={code}>
+                    <button aria-expanded={opened} className={settingsRowClass(false)} onClick={() => {
+                      setOpenSubtitleLanguage(opened ? null : code)
+                      if (!opened && onSubtitlePage) void loadSubtitleLanguage(code)
+                    }} type="button">
+                      <span className="min-w-0 flex-1 truncate text-left font-medium">{nativeLanguageName(code, code === 'und' ? 'Uploaded' : code.toUpperCase())}</span>
+                      <span className="tabular-nums text-muted">{count}</span><ChevronRight aria-hidden="true" className={cn('size-4 text-muted transition-transform', opened && 'rotate-90')} />
                     </button>
-                  )
+                    {opened ? <div aria-label={`${nativeLanguageName(code, code)} subtitle tracks`} className="space-y-1 pl-3">
+                      {localOptions.map((option) => <button aria-checked={selectedSubtitle === option.value} className={settingsRowClass(selectedSubtitle === option.value)} key={option.value} onClick={() => chooseSubtitle(option.value)} role="menuitemradio" type="button"><span className="min-w-0 flex-1 truncate text-left text-sm">{option.label}</span>{selectedSubtitle === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
+                      {(discoveredTracks[code] ?? []).filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle === track.id} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{track.label}</span><span className="block truncate text-xs text-muted">{track.provider}{track.release ? ` · ${track.release}` : ''}{track.hi ? ' · HI' : ''}{track.forced ? ' · Forced' : ''}{track.machineTranslated ? ' · Machine translated' : ''}</span></span>{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
+                      {nextSubtitleCursor[code] != null ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code, nextSubtitleCursor[code]!)} type="button">Load more tracks</button> : null}
+                      {nextSubtitleCursor[code] == null && (discoveredTracks[code]?.length ?? 0) < (subtitleDiscovery?.languages.find((language) => language.code === code)?.count ?? 0) ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code)} type="button">Show latest tracks</button> : null}
+                    </div> : null}
+                  </div>
                 })}
                 <div className="mt-2 space-y-3 border-t border-white/10 pt-3">
                   <div aria-label="Preferred subtitle languages" className="space-y-1.5 px-1" role="group">

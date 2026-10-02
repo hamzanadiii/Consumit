@@ -1,10 +1,12 @@
 import { Buffer } from 'node:buffer'
+import { createCipheriv } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { allowedMediaUrl, createVixsrcProvider, createNhdapiProvider, createVaPlayerProvider, createMappleProvider, createWecollegeProvider, createPersesProvider, createRivestreamProvider, createVidapiProvider, createScreenscapeProvider, createVidrockProvider, createVidnestProvider, createPoseidonProvider, createNetmirrorProvider, createVidstormProvider, createVidlinkProvider, createCinehdProvider, createNxshaProvider, createStellarProvider, createAphroditeProvider, createAnixoProvider, createKyrenProvider, createNagareProvider, createVidcoreProvider, createFilmuProvider, createAnime123Provider, createZokoProvider, createNineAnimeProvider, createAnibdProvider, createVidsrcProvider, createModiplayProvider, type ProviderHttp } from '../index.ts'
+import { allowedMediaUrl, createVixsrcProvider, createNhdapiProvider, createVaPlayerProvider, createMappleProvider, createWecollegeProvider, createPersesProvider, createRivestreamProvider, createVidapiProvider, createScreenscapeProvider, createVidrockProvider, createVidnestProvider, createPoseidonProvider, createNetmirrorProvider, createVidstormProvider, createVidlinkProvider, createCinehdProvider, createNxshaProvider, createStellarProvider, createAphroditeProvider, createAnixoProvider, createKyrenProvider, createNagareProvider, createVidcoreProvider, createFilmuProvider, createVidzenProvider, createStigstreamProvider, createCastletvProvider, createAnime123Provider, createZokoProvider, createAnimeParadiseProvider, createAnimeKaiProvider, createAnimeKitsuProvider, solvePow, createVidsrcProvider, type ProviderHttp } from '../index.ts'
 import { encodeNxshaPayload } from './nxsha.ts'
 import { decipherPayload } from './vidnest.ts'
 import { decryptWecollegePayload, keystream } from './wecollege-cipher.ts'
-import { accessDeadline } from './http.ts'
+import { accessDeadline, verifiedPlaybackSources } from './http.ts'
+import type { ProviderSource } from '../index.ts'
 
 const now = Date.UTC(2026, 8, 9)
 const input = { ref: { kind: 'movie' as const, id: 1 }, region: 'US', audioLanguage: 'en' }
@@ -1053,11 +1055,225 @@ describe('imported provider contracts', () => {
         if (calls === 1) return { status: 401, text: '', url }
         return { status: 200, text: JSON.stringify({ found: true, hls: 'https://cdn.example/retry.m3u8' }), url }
       }
+      if (url.includes('cdn.example/retry.m3u8')) {
+        return { status: 200, text: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1920x1080\nseg.m3u8', url }
+      }
       return { status: 404, text: '', url }
     })
     const result = await createAphroditeProvider(client, () => now, { sign }).resolve(input, new AbortController().signal)
     expect(sign.clear).toHaveBeenCalledTimes(1)
     expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://cdn.example/retry.m3u8' }] })
+  })
+  // Mirror of the adapter's vendored Helios client key.
+  async function encryptHelios(url: string): Promise<string> {
+    const subtle = globalThis.crypto.subtle
+    const key = await subtle.importKey(
+      'raw',
+      Uint8Array.from(Buffer.from('e4b8a1d6f2c9037b5a8e4d1c6f9b2085a7c3e9f6d1b4a8c2e5f7a0d3b6c9e2f5', 'hex')),
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt'],
+    )
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12))
+    const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(url)))
+    return `ns_${Buffer.concat([Buffer.from(iv), Buffer.from(ct)]).toString('hex')}`
+  }
+  it('falls back to Helios when the cdn backend has no direct stream', async () => {
+    const sign = { sign: vi.fn(async () => ({})), clear: vi.fn() }
+    const payload = await encryptHelios('https://peraspera.nbsycfzrpa4.workers.dev/helios.m3u8')
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/content/movie/1')) {
+        return { status: 200, text: JSON.stringify({ found: false }), url }
+      }
+      if (url.includes('/helios?')) {
+        return { status: 200, text: JSON.stringify({ sources: { Moscow: { url: payload } } }), url }
+      }
+      if (url.includes('peraspera.nbsycfzrpa4.workers.dev')) {
+        return { status: 200, text: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720\nseg.m3u8', url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createAphroditeProvider(client, () => now, { sign }).resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'aphrodite:auto:0', type: 'hls', url: 'https://peraspera.nbsycfzrpa4.workers.dev/helios.m3u8', qualityHint: '720p' },
+    ] })
+  })
+  it('treats a non-playlist cdn answer as a miss and uses Helios', async () => {
+    const sign = { sign: vi.fn(async () => ({})), clear: vi.fn() }
+    const payload = await encryptHelios('https://peraspera.nbsycfzrpa4.workers.dev/helios.m3u8')
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/content/movie/1')) {
+        return { status: 200, text: JSON.stringify({ found: true, hls: 'https://cdn.example/homepage' }), url }
+      }
+      if (url.endsWith('/homepage')) {
+        return { status: 200, text: '<html><body>atlantic.st</body></html>', url }
+      }
+      if (url.includes('/helios?')) {
+        return { status: 200, text: JSON.stringify({ sources: { Moscow: { url: payload } } }), url }
+      }
+      if (url.includes('peraspera.nbsycfzrpa4.workers.dev')) {
+        return { status: 200, text: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720\nseg.m3u8', url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createAphroditeProvider(client, () => now, { sign }).resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { url: 'https://peraspera.nbsycfzrpa4.workers.dev/helios.m3u8', qualityHint: '720p' },
+    ] })
+  })
+  it('resolves FilmU Ainary through the Ainary extractor only', async () => {
+    const identity = () => Promise.resolve({ imdbId: 'tt15239678' })
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/scrape/Ainary/')) {
+        return { status: 200, text: JSON.stringify({ sources: [
+          { url: 'https://cdn.example/a1080.m3u8', quality: '1080p' },
+          { url: 'https://cdn.example/a720.m3u8', quality: '720p' },
+          { url: 'https://cdn.example/a480.m3u8', quality: '480p' },
+        ] }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createFilmuProvider(client, identity, () => now, { id: 'filmuainary', extractors: ['Ainary'] })
+      .resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'filmuainary:ainary:0', type: 'hls', qualityHint: '1080p' },
+      { key: 'filmuainary:ainary:1', type: 'hls', qualityHint: '720p' },
+      { key: 'filmuainary:ainary:2', type: 'hls', qualityHint: '480p' },
+    ] })
+    const requested = client.mock.calls.map(([url]) => String(url))
+    expect(requested.some((url) => url.includes('/scrape/Videasy/'))).toBe(false)
+    expect(requested.some((url) => url.includes('/scrape/NoTorrent/'))).toBe(false)
+  })
+  it('resolves VidZen movies with relative URLs and pooled failover servers', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/api/sources?type=movie')) {
+        return { status: 200, text: JSON.stringify({
+          sources: [
+            { url: 'https://free.finepulfe.xyz/vid/playlist.m3u8', label: '1080p', server: 'sv-ps' },
+            { url: '/api/stream/abc/master.m3u8', label: 'Auto', server: 'sv-vn-l' },
+            { url: 'https://cdn.example/film.mp4', label: '720p HD', server: 'sv-pi' },
+            { url: 'https://free.finepulfe.xyz/vid/playlist.m3u8', label: '1080p', server: 'sv-ps' },
+          ],
+          sourcePool: { 'sv-ps': [{ url: 'https://free.finepulfe.xyz/vid/alt.m3u8', label: '480p' }] },
+          subtitles: [
+            { file: 'https://cdn.example/en.vtt', label: 'English' },
+            { url: 'https://cdn.example/es.srt', lang: 'Spanish' },
+          ],
+        }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createVidzenProvider(client, () => now).resolve(input, new AbortController().signal)
+    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/api/sources?type=movie&id=1')
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'vidzen:1080p:0', type: 'hls', url: 'https://free.finepulfe.xyz/vid/playlist.m3u8', qualityHint: '1080p', height: 1080, language: 'original' },
+      { key: 'vidzen:auto:1', type: 'hls', url: 'https://vidzen.fun/api/stream/abc/master.m3u8', qualityHint: 'Auto' },
+      { key: 'vidzen:720p:2', type: 'native', qualityHint: '720p', height: 720 },
+      { key: 'vidzen:480p:4', type: 'hls', qualityHint: '480p' },
+    ] })
+    expect(result.ok && result.sources).toHaveLength(4)
+    expect(result.ok && result.sources[0]?.subtitles).toMatchObject([
+      { id: 'vidzen-sub-0', format: 'vtt' },
+      { id: 'vidzen-sub-1', format: 'srt' },
+    ])
+  })
+  it('resolves VidZen episodes with season/episode params and answers empty on misses', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/api/sources?type=tv')) {
+        return { status: 200, text: JSON.stringify({ sources: [{ url: 'https://free.finepulfe.xyz/ep.m3u8', label: 'Auto' }] }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createVidzenProvider(client, () => now).resolve(episode, new AbortController().signal)
+    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/api/sources?type=tv&id=2&season=3&episode=4')
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'vidzen:auto:0' }] })
+    expect(await createVidzenProvider(http({ status: 404, text: '' }), () => now).resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+  })
+  it('resolves Stig Nebula through the secure channel with one server scope', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/secure/handshake')) {
+        // Real server-side ECDH half so the client derives a live session key.
+        const subtle = globalThis.crypto.subtle
+        const serverKeys = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+        const serverPub = new Uint8Array(await subtle.exportKey('raw', serverKeys.publicKey))
+        const salt = globalThis.crypto.getRandomValues(new Uint8Array(16))
+        const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
+        return { status: 200, text: JSON.stringify({ sessionId: 'test-session', serverPublicKey: b64(serverPub), salt: b64(salt), ttl: 600000 }), url }
+      }
+      if (url.includes('/movie/Nebula/1')) {
+        return { status: 200, text: JSON.stringify({ streams: [
+          { url: 'https://proxy.stigstream.ru/content?v=neb2160', type: 'hls', quality: '2160p' },
+          { url: 'https://proxy.yflix.ru/content?v=neb1080', type: 'hls', quality: '1080p' },
+        ], subtitles: [{ url: 'https://proxy.stigstream.ru/subs/en.vtt', lang: 'English' }] }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createStigstreamProvider(client, () => now, { id: 'stignebula', server: 'Nebula', audioLanguage: 'original' })
+      .resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'stignebula:2160p:0', type: 'hls', language: 'original', headers: { referer: 'https://stigstream.ru/' }, height: 2160 },
+      { key: 'stignebula:1080p:1', type: 'hls', language: 'original', height: 1080 },
+    ] })
+    expect(result.ok && result.sources[0]?.subtitles).toMatchObject([{ id: 'stignebula-sub-0', format: 'vtt' }])
+    expect(client.mock.calls.map(([url]) => String(url)).some((url) => url.includes('/movie/Orion/'))).toBe(false)
+  })
+  it('scopes Stig Orion to the Orion server with Turkish audio', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/secure/handshake')) {
+        const subtle = globalThis.crypto.subtle
+        const serverKeys = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+        const serverPub = new Uint8Array(await subtle.exportKey('raw', serverKeys.publicKey))
+        const salt = globalThis.crypto.getRandomValues(new Uint8Array(16))
+        const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
+        return { status: 200, text: JSON.stringify({ sessionId: 'orion-session', serverPublicKey: b64(serverPub), salt: b64(salt), ttl: 600000 }), url }
+      }
+      if (url.includes('/movie/Orion/1')) {
+        return { status: 200, text: JSON.stringify({ streams: [{ url: 'https://one.82b6b2a6748f1e.click/sbfEF', type: 'hls', quality: 'Auto' }] }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createStigstreamProvider(client, () => now, { id: 'stigorion', server: 'Orion', audioLanguage: 'tr' })
+      .resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'stigorion:auto:0', type: 'hls', language: 'tr', qualityHint: 'Auto' }] })
+    const noFetch = vi.fn<ProviderHttp>(async () => { throw new Error('must not fetch') })
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 793, episode: 1 } }
+    expect(await createStigstreamProvider(noFetch, () => now, { id: 'stigorion', server: 'Orion', audioLanguage: 'tr' })
+      .resolve(animeInput, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+    expect(noFetch).not.toHaveBeenCalled()
+  })
+  it('resolves CastleTV through search, details, and per-track video', async () => {
+    const secKey = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]).toString('base64')
+    const encrypt = (payload: unknown) => {
+      const combined = Buffer.concat([Buffer.from(secKey, 'base64'), Buffer.from('T!BgJB', 'utf8')])
+      const key = combined.length < 16 ? Buffer.concat([combined, Buffer.alloc(16 - combined.length, 0)]) : combined.subarray(0, 16)
+      const cipher = createCipheriv('aes-128-cbc', key, key)
+      return Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]).toString('base64')
+    }
+    const client = vi.fn<ProviderHttp>(async (url, _headers, _signal, init) => {
+      if (url.includes('/getSecurityKey')) {
+        return { status: 200, text: JSON.stringify({ code: 200, data: secKey }), url }
+      }
+      if (url.includes('/searchByKeyword')) {
+        return { status: 200, text: JSON.stringify({ data: encrypt({ rows: [{ id: 99, title: 'Test Movie' }] }) }), url }
+      }
+      if (url.includes('/v1.9.9/movie')) {
+        return { status: 200, text: JSON.stringify({ data: encrypt({ episodes: [{ id: 7, tracks: [{ languageId: '1', languageName: 'Original' }] }] }) }), url }
+      }
+      if (url.includes('/getVideo2')) {
+        const body = JSON.parse(String(init?.body ?? '{}'))
+        return { status: 200, text: JSON.stringify({ data: encrypt(body.resolution === '3'
+          ? { videoUrl: 'https://img1.bwcly.com/hls/99/master.m3u8', subtitles: [{ url: 'https://img1.bwcly.com/sub/en.vtt', abbreviate: 'EN' }] }
+          : { videos: [] }) }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const metadata = async () => ({ title: 'Test Movie', year: 2020 })
+    const result = await createCastletvProvider(client, metadata, () => now).resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'castletv:1080p:0', type: 'hls', qualityHint: '1080p', height: 1080, language: 'Original' },
+    ] })
+    expect(result.ok && result.sources).toHaveLength(1)
+    expect(result.ok && result.sources[0]?.subtitles).toMatchObject([{ id: 'castletv-sub-0', format: 'vtt' }])
   })
   it('drops non-https subtitle tracks instead of dropping the whole source', async () => {
     const client = vi.fn<ProviderHttp>(async (url) => {
@@ -1088,24 +1304,6 @@ describe('imported provider contracts', () => {
     expect(accessDeadline('https://cdn.example/x.m3u8', now)).toBe(new Date(now + 300_000).toISOString())
     expect(() => accessDeadline(`https://cdn.example/x.m3u8?expire=${Math.floor(now / 1000) - 60}`, now)).toThrow()
   })
-  it('resolves Modiplay movies through the relay manifest', async () => {
-    const client = vi.fn<ProviderHttp>(async (url) => {
-      if (url.includes('/embed/tmdb/movie')) {
-        return { status: 200, text: `<html><body><iframe src="/proxy.php?p=streamhg&c=abc"></iframe></body></html>`, url }
-      }
-      if (url.includes('proxy.php?p=streamhg')) {
-        return { status: 200, text: `<html><script>var src="/proxy.php?serve_m3u8=1&ref=e&url=https%3A%2F%2Fcdn.example%2Fmaster.m3u8&ebd=https%3A%2F%2Fcdn.example";</script><track src="https://cdn.example/en.vtt" label="English">`, url }
-      }
-      return { status: 404, text: '', url }
-    })
-    const result = await createModiplayProvider(client, () => now).resolve(input, new AbortController().signal)
-    expect(result).toMatchObject({ ok: true, sources: [{
-      key: 'modiplay:auto:0', type: 'hls', qualityHint: 'Auto',
-      url: 'https://rozgarlelo.modiplay.xyz/proxy.php?serve_m3u8=1&ref=e&url=https%3A%2F%2Fcdn.example%2Fmaster.m3u8&ebd=https%3A%2F%2Fcdn.example',
-      headers: { referer: 'https://rozgarlelo.modiplay.xyz/proxy.php?p=streamhg&c=abc' },
-      subtitles: [{ id: 'modiplay-sub-0', format: 'vtt' }],
-    }] })
-  })
   it('resolves VidSrc movies through the gate chain with stamped tokens', async () => {
     const client = vi.fn<ProviderHttp>(async (url) => {
       if (url.includes('/embed/movie')) return { status: 200, text: `<html><body><iframe data-api="/vs_src.php?t=1"></iframe></body></html>`, url }
@@ -1121,6 +1319,19 @@ describe('imported provider contracts', () => {
       { key: 'vidsrc:auto:0', type: 'hls', url: 'https://cdn.example/a.m3u8?token=tok123' },
       { key: 'vidsrc:auto:1', type: 'hls', url: 'https://cdn.example/b.m3u8?token=tok123' },
     ] })
+  })
+  it('rejects provider-supplied executable VidSrc decryptors', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/embed/movie')) return { status: 200, text: '<iframe data-api="/vs_src.php?t=1"></iframe>', url }
+      if (url.includes('/vs_src.php')) return { status: 200, text: JSON.stringify({ src: 'https://inner.example/land' }), url }
+      if (url.includes('inner.example/land')) return { status: 200, text: '<script>window.CFG={"playerUrl":"/player/1"};</script>', url }
+      if (url.includes('/player/1')) return { status: 200, text: '<script>window.CONFIG={"api":"https://data.example/api.php?x=1"};</script>', url }
+      if (url.includes('/api.php?x=1')) return { status: 200, text: JSON.stringify({ data: { stream_urls: 'encrypted' }, vs: { wasm_url: 'https://untrusted.example/decrypt.wasm' } }), url }
+      return { status: 404, text: '', url }
+    })
+    const result = await createVidsrcProvider(client, () => now).resolve(input, new AbortController().signal)
+    expect(result).toEqual({ ok: false, code: 'malformed', retryable: false })
+    expect(client.mock.calls.some(([url]) => url.includes('decrypt.wasm'))).toBe(false)
   })
   it('matches flux host patterns without weakening exact allowlists', async () => {
     const patterns = [new RegExp('^srv[0-9]+\\.[a-z]+\\.site$', 'i')]
@@ -1156,6 +1367,51 @@ const animeTitle = async () => 'ONE PIECE'
 const animeSub = { ref: { kind: 'anime' as const, id: 21, episode: 1 }, region: 'US', audioLanguage: 'ja' }
 const animeDub = { ...animeSub, audioLanguage: 'en' }
 
+function encryptedPlayback() {
+  const key = Buffer.alloc(32, 7)
+  const iv = Buffer.alloc(12, 3)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const plaintext = Buffer.from(JSON.stringify({
+    sources: [{ url: 'https://edge1-frankfurt-sprintcdn.owphbf24.com/hls2/01/1/master.m3u8?t=abc', label: '720p' }],
+    tracks: [{ file: 'https://edge1-frankfurt-sprintcdn.owphbf24.com/subs/en.vtt', label: 'English' }],
+    expires_at: '2030-01-01T00:00:00.000Z',
+  }))
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
+  return {
+    iv: iv.toString('base64url'),
+    payload: Buffer.concat([ciphertext, cipher.getAuthTag()]).toString('base64url'),
+    key_parts: [key.toString('base64url')],
+  }
+}
+
+const kaiServers = '<html><body>'
+  + '<ul class="server-list" data-media="sub"><li data-url="https://mfw09.org/e/kaisub01" data-server="MGCLD" data-media="sub"></li></ul>'
+  + '<ul class="server-list" data-media="dub"><li data-url="https://mfw09.org/e/kaidub01" data-server="MGCLD" data-media="dub"></li></ul>'
+  + '</body></html>'
+
+function kaiHttp(overrides: { search?: string; watch?: string; captcha?: string; playback?: string; playbackStatus?: number } = {}) {
+  return vi.fn<ProviderHttp>(async (url) => {
+    const respond = (text: string, status = 200) => ({ status, text, url })
+    if (url.includes('search_live.php')) return respond(overrides.search ?? JSON.stringify({ ok: true, results: [{ slug: 'one-piece-81553', title: 'One Piece' }] }))
+    if (url.includes('/watch/')) return respond(overrides.watch ?? kaiServers)
+    if (url.includes('/access/challenge')) return respond(JSON.stringify({ challenge_id: 'ch1', nonce: 'nonce-1' }))
+    if (url.includes('/access/attest')) return respond(JSON.stringify({ token: 'att-token', viewer_id: 'v1', device_id: 'd1' }))
+    if (url.includes('/captcha/verify')) return respond(JSON.stringify({ token: 'verify-token' }))
+    if (url.includes('/embed/captcha')) return respond(overrides.captcha ?? JSON.stringify({ pow_nonce: 'pow-nonce', pow_difficulty: 0, pow_token: 'pow-token' }))
+    if (url.includes('/embed/playback')) return respond(overrides.playback ?? JSON.stringify({ playback: encryptedPlayback() }), overrides.playbackStatus ?? 200)
+    return respond('', 404)
+  })
+}
+
+function paradiseHttp(overrides: { search?: string; episodes?: string; detail?: string } = {}) {
+  return vi.fn<ProviderHttp>(async (url) => {
+    if (url.includes('/search?q=')) return { status: 200, text: overrides.search ?? JSON.stringify({ success: true, data: [{ _id: 'show-1', title: 'One Piece' }] }), url }
+    if (url.includes('/anime/show-1/episode')) return { status: 200, text: overrides.episodes ?? JSON.stringify({ success: true, data: [{ uid: 'ep-uid-1', number: '1', origin: 'show-1' }] }), url }
+    if (url.includes('/ep/ep-uid-1')) return { status: 200, text: overrides.detail ?? JSON.stringify({ success: true, data: { episode: { streamLink: 'stream-token', subData: [{ src: 'https://stream.animeparadise.moe/captions?url=x', label: 'English', type: 'vtt' }], skipData: { intro: { start: 0, end: 90 }, outro: { start: 1300, end: 1380 } } } } }), url }
+    return { status: 404, text: '', url }
+  })
+}
+
 describe('anime providers', () => {
   it('resolves Anixo sub streams from the embed initial state with subtitles', async () => {
     const html = `<html><script>window.__INITIAL_STREAM__ = {"success":true,"streamUrl":"https://cdn.example/ep1.m3u8","fallbackStreams":["https://cdn.example/ep1-fb.m3u8"],"subtitles":[{"url":"https://cdn.example/en.vtt","label":"English"}]};(async()=>{})</script></html>`
@@ -1181,17 +1437,52 @@ describe('anime providers', () => {
   it('resolves Kyren streams from the JSON API and falls back across servers', async () => {
     const hit = () => ({ text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/kyren.m3u8', quality: '1080p' }], subtitles: [{ url: 'https://cdn.example/kyren.vtt', label: 'English' }] }) })
     const client = vi.fn<ProviderHttp>(async (url) => {
-      if (url.includes('server=viper') || url.includes('server=jett') || url.includes('server=gekko')) return { status: 200, text: JSON.stringify({ ok: false }), url }
-      if (url.includes('server=kayo')) return { status: 200, text: hit().text, url }
+      if (url.includes('server=neon')) return { status: 200, text: JSON.stringify({ ok: false }), url }
+      if (url.includes('server=jett')) return { status: 200, text: hit().text, url }
+      if (url.includes('cdn.example/kyren.m3u8')) return { status: 200, text: '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg0.ts', url }
+      if (url.includes('seg0.ts')) return { status: 200, text: 'x'.repeat(2000), url }
       return { status: 404, text: '', url }
     })
     const result = await createKyrenProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
     expect(client.mock.calls[0]?.[0]).toContain('/api/stream/21/1?lang=sub')
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'kyren:kayo:sub:1:0', type: 'hls', language: 'original' }] })
+    expect(client.mock.calls[0]?.[0]).toContain('server=neon')
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'kyren:jett:sub:1:0', type: 'hls', language: 'original' }] })
+  })
+  it('skips Kyren hits whose segments do not serve', async () => {
+    const master = (seg: string) => `#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\n${seg}`
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('server=neon')) return { status: 200, text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/dead.m3u8', quality: '1080p' }] }), url }
+      if (url.includes('server=jett')) return { status: 200, text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/live.m3u8', quality: '720p' }] }), url }
+      if (url.includes('cdn.example/dead.m3u8')) return { status: 200, text: master('dead-seg.ts'), url }
+      if (url.includes('cdn.example/live.m3u8')) return { status: 200, text: master('live-seg.ts'), url }
+      if (url.includes('dead-seg.ts')) return { status: 403, text: 'Upstream returned 403', url }
+      if (url.includes('live-seg.ts')) return { status: 200, text: 'x'.repeat(2000), url }
+      return { status: 404, text: '', url }
+    })
+    const result = await createKyrenProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
+    const requested = client.mock.calls.map(([url]) => String(url))
+    expect(requested.some((url) => url.includes('dead-seg.ts'))).toBe(true)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'kyren:jett:sub:1:0', type: 'hls', qualityHint: '720p' }] })
   })
   it('returns empty when Kyren has no sources and skips unplayable containers', async () => {
     const client = http({ text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/ep.mkv', quality: '1080p' }], subtitles: [] }) })
     expect(await createKyrenProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+  })
+  it('scopes Kyren alias rows to one server and answers empty for unknown scopes', async () => {
+    const master = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg0.ts'
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('server=jett')) return { status: 200, text: JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/jett.m3u8', quality: '720p' }] }), url }
+      if (url.includes('cdn.example/jett.m3u8')) return { status: 200, text: master, url }
+      if (url.includes('seg0.ts')) return { status: 200, text: 'x'.repeat(2000), url }
+      return { status: 404, text: '', url }
+    })
+    const result = await createKyrenProvider(client, animeTitle, () => now, { id: 'kyren-jett', servers: ['jett'] }).resolve(animeSub, new AbortController().signal)
+    const requested = client.mock.calls.map(([url]) => String(url))
+    expect(requested.some((url) => url.includes('server=jett'))).toBe(true)
+    expect(requested.some((url) => url.includes('server=viper') || url.includes('server=gekko') || url.includes('server=kayo') || url.includes('server=neon'))).toBe(false)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'kyren:jett:sub:1:0', type: 'hls' }] })
+    const unknown = await createKyrenProvider(client, animeTitle, () => now, { id: 'kyren-nope', servers: ['nope'] }).resolve(animeSub, new AbortController().signal)
+    expect(unknown).toMatchObject({ code: 'empty' })
   })
   it('resolves Nagare Stremio streams with dub-first ordering and caches repeats', async () => {
     const body = JSON.stringify({ streams: [
@@ -1235,28 +1526,6 @@ describe('anime providers', () => {
     const result = await createZokoProvider(client, meta, () => now).resolve(animeSub, new AbortController().signal)
     expect(result).toMatchObject({ ok: true, sources: [{ key: 'zoko:sub:1:0', type: 'hls', url: 'https://cdn.example/zoko.m3u8', language: 'original', subtitles: [{ id: 'zoko-sub-0', format: 'vtt' }], skipSegments: [{ kind: 'intro', start: 0, end: 85 }, { kind: 'outro', start: 1400, end: 1440 }] }] })
   })
-  it('resolves 9Anime streams through the VidNest routes with subtitles', async () => {
-    const client = vi.fn<ProviderHttp>(async (url) => {
-      if (url.includes('/aniwave_hls/21/1/sub')) {
-        return { status: 200, text: JSON.stringify({ data: { sources: [{ url: 'https://cdn.example/9.m3u8' }], subtitles: [{ url: 'https://cdn.example/9.vtt', label: 'English' }], intro: { start: 5, end: 90 } }, encrypted: true }), url }
-      }
-      return { status: 404, text: '', url }
-    })
-    const result = await createNineAnimeProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'nineanime:aniwave_hls:sub:0', type: 'hls', url: 'https://cdn.example/9.m3u8', subtitles: [{ id: 'nineanime-sub-0', format: 'vtt' }], skipSegments: [{ kind: 'intro', start: 5, end: 90 }] }] })
-  })
-  it('resolves AniBD streams through the AniList-keyed JSON API', async () => {
-    const client = vi.fn<ProviderHttp>(async (url) => {
-      if (url.includes('/api2.php?epid=21')) {
-        return { status: 200, text: JSON.stringify([{ server_name: 'Sub HD', server_data: [{ name: '1', link: 'ep1link' }] }]), url }
-      }
-      if (url.includes('/apilink.php?data=')) return { status: 200, text: JSON.stringify([{ link: 'https://cdn.example/player', server: 'HD' }]), url }
-      if (url.includes('cdn.example/player')) return { status: 200, text: `<html><script>videoUrl:"https://cdn.example/anibd.m3u8"</script></html>`, url }
-      return { status: 404, text: '', url }
-    })
-    const result = await createAnibdProvider(client, () => now).resolve(animeSub, new AbortController().signal)
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'anibd:hd:1:0', type: 'hls', url: 'https://cdn.example/anibd.m3u8', language: 'original' }] })
-  })
   it('sends the Nagare dub config prefix only for English audio', async () => {
     const subInput = { ...animeSub, ref: { ...animeSub.ref, id: 22 } }
     const dubInput = { ...animeDub, ref: { ...animeDub.ref, id: 22 } }
@@ -1266,5 +1535,229 @@ describe('anime providers', () => {
     const dubClient = http({ text: JSON.stringify({ streams: [] }) })
     await createNagareProvider(dubClient, () => now).resolve(dubInput, new AbortController().signal)
     expect(dubClient.mock.calls[0]?.[0]).toContain('/eyJwcmVmZXJEdWIiOnRydWV9/stream/anime/anilist:22:1.json')
+  })
+  it('resolves AnimeParadise from the JSON chain with captions and skip marks', async () => {
+    const client = paradiseHttp()
+    const result = await createAnimeParadiseProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
+    expect(client.mock.calls.map((call) => call[0])).toEqual([
+      'https://api.animeparadise.moe/search?q=ONE%20PIECE',
+      'https://api.animeparadise.moe/anime/show-1/episode',
+      'https://api.animeparadise.moe/ep/ep-uid-1?origin=show-1',
+    ])
+    expect(result).toMatchObject({
+      ok: true,
+      sources: [{
+        key: 'animeparadise:sub:1',
+        type: 'hls',
+        url: 'https://stream.animeparadise.moe/m3u8?url=stream-token',
+        language: 'original',
+        qualityHint: 'auto',
+        expiresAt: new Date(now + 300_000).toISOString(),
+        subtitles: [{ id: 'animeparadise-sub-0', label: 'English', language: 'English', format: 'vtt' }],
+        skipSegments: [{ kind: 'intro', start: 0, end: 90 }, { kind: 'outro', start: 1300, end: 1380 }],
+      }],
+    })
+  })
+  it('answers empty for AnimeParadise misses, serves only its sub track, and rejects non-anime refs', async () => {
+    const mismatch = paradiseHttp({ search: JSON.stringify({ success: true, data: [{ _id: 'show-9', title: 'Bleach' }] }) })
+    expect(await createAnimeParadiseProvider(mismatch, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(mismatch).toHaveBeenCalledTimes(1)
+    const wrongEpisode = paradiseHttp({ episodes: JSON.stringify({ success: true, data: [{ uid: 'ep-uid-9', number: '9', origin: 'show-1' }] }) })
+    expect(await createAnimeParadiseProvider(wrongEpisode, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(wrongEpisode).toHaveBeenCalledTimes(2)
+    const dubClient = paradiseHttp()
+    const dubResult = await createAnimeParadiseProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
+    expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animeparadise:sub:1', language: 'original' }] })
+    expect(dubClient).toHaveBeenCalledTimes(3)
+    const movieClient = paradiseHttp()
+    expect(await createAnimeParadiseProvider(movieClient, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(movieClient).not.toHaveBeenCalled()
+  })
+  it('resolves AnimeKai through attestation, native proof-of-work, and the decrypted edge config', async () => {
+    const client = kaiHttp()
+    const result = await createAnimeKaiProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
+    expect(client.mock.calls.map((call) => call[0])).toEqual([
+      'https://animekai.stream/api/search_live.php?q=ONE%20PIECE',
+      'https://animekai.stream/watch/one-piece-81553/ep-1',
+      'https://mfw09.org/api/videos/access/challenge',
+      'https://mfw09.org/api/videos/access/attest',
+      'https://mfw09.org/api/videos/kaisub01/embed/captcha',
+      'https://mfw09.org/api/videos/kaisub01/embed/captcha/verify',
+      'https://mfw09.org/api/videos/kaisub01/embed/playback',
+    ])
+    expect(result).toMatchObject({
+      ok: true,
+      sources: [{
+        key: 'animekai:sub:1',
+        type: 'hls',
+        url: 'https://edge1-frankfurt-sprintcdn.owphbf24.com/hls2/01/1/master.m3u8?t=abc',
+        language: 'original',
+        qualityHint: '720p',
+        expiresAt: '2029-12-31T23:59:00.000Z',
+        subtitles: [{ id: 'animekai-sub-0', label: 'English', language: 'English', format: 'vtt' }],
+      }],
+    })
+    const playbackCall = client.mock.calls[6]
+    expect(playbackCall?.[1]['x-captcha-token']).toBe('verify-token')
+    expect(playbackCall?.[3]?.method).toBe('POST')
+    expect(playbackCall?.[3]?.body).toContain('"fingerprint"')
+  })
+  it('prefers the dub server for English audio and falls back to sub when the dub server is absent', async () => {
+    const dubClient = kaiHttp()
+    const dubResult = await createAnimeKaiProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
+    expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animekai:dub:1', language: 'en' }] })
+    expect(dubClient.mock.calls[4]?.[0]).toContain('/kaidub01/embed/captcha')
+    const subOnly = kaiHttp({ watch: '<html><body><ul class="server-list" data-media="sub"><li data-url="https://mfw09.org/e/kaisub01" data-server="MGCLD" data-media="sub"></li></ul></body></html>' })
+    const fallbackResult = await createAnimeKaiProvider(subOnly, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
+    expect(fallbackResult).toMatchObject({ ok: true, sources: [{ key: 'animekai:sub:1', language: 'original' }] })
+  })
+  it('answers empty for AnimeKai search misses, unplayable servers, and stops non-anime refs early', async () => {
+    const mismatch = kaiHttp({ search: JSON.stringify({ ok: true, results: [{ slug: 'bleach-1', title: 'Bleach' }] }) })
+    expect(await createAnimeKaiProvider(mismatch, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(mismatch).toHaveBeenCalledTimes(1)
+    const noServers = kaiHttp({ watch: '<html><body>no servers</body></html>' })
+    expect(await createAnimeKaiProvider(noServers, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    const gated = kaiHttp({ watch: '<html><body><ul class="server-list" data-media="sub"><li data-url="https://playmogo.com/e/gated01" data-server="BYFMS" data-media="sub"></li></ul></body></html>' })
+    expect(await createAnimeKaiProvider(gated, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    const movieClient = kaiHttp()
+    expect(await createAnimeKaiProvider(movieClient, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(movieClient).not.toHaveBeenCalled()
+  })
+  it('keeps malformed AnimeKai playback payloads and failed decryption structured', async () => {
+    const missing = kaiHttp({ playback: JSON.stringify({ playback: {} }) })
+    expect(await createAnimeKaiProvider(missing, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'malformed' })
+    const garbage = kaiHttp({ playback: JSON.stringify({ playback: { iv: Buffer.alloc(12, 1).toString('base64url'), payload: Buffer.alloc(48, 9).toString('base64url'), key_parts: [Buffer.alloc(32, 5).toString('base64url')] } }) })
+    expect(await createAnimeKaiProvider(garbage, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'malformed' })
+  })
+  it('matches the upstream mfw09 proof-of-work solver', async () => {
+    expect(await solvePow('', 0, 1000)).toBe('0')
+    expect(await solvePow('consumit-fixture-nonce', 8, 30_000)).toBe('38')
+    expect(await solvePow('never-solves', 60, 1)).toBeNull()
+  })
+  const kitsuFile = Buffer.from('https://cdn.animekitsu.com/frieren-beyond-journeys-end-s2/ep01.mp4').toString('base64url')
+  function kitsuHttp(overrides: { search?: string; page?: string; watch?: string; slug?: string } = {}) {
+    const slug = overrides.slug ?? 'one-piece'
+    return vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/live-search?q=')) return { status: 200, text: overrides.search ?? JSON.stringify({ data: [{ id: 42, title: 'ONE PIECE', slug: 'one-piece' }] }), url }
+      if (url.includes(`/anime/${slug}`)) return { status: 200, text: overrides.page ?? `<html><script>const allEpisodes = [{"id":9,"episode_number":1,"video_url":"https://animekitsu.com/watch/${slug}/1"}];</script></html>`, url }
+      if (url.includes(`/watch/${slug}/1`)) return { status: 200, text: overrides.watch ?? `<html><script>const source="/stream.php?file=${kitsuFile}";</script></html>`, url }
+      return { status: 404, text: '', url }
+    })
+  }
+  it('resolves AnimeKitsu from search, inline episodes, and the decoded CDN mp4', async () => {
+    const client = kitsuHttp()
+    const result = await createAnimeKitsuProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
+    expect(client.mock.calls.map((call) => call[0])).toEqual([
+      'https://animekitsu.com/live-search?q=ONE%20PIECE',
+      'https://animekitsu.com/anime/one-piece',
+      'https://animekitsu.com/watch/one-piece/1',
+    ])
+    expect(result).toMatchObject({
+      ok: true,
+      sources: [{
+        key: 'animekitsu:sub:1',
+        type: 'native',
+        url: 'https://cdn.animekitsu.com/frieren-beyond-journeys-end-s2/ep01.mp4',
+        language: 'original',
+        qualityHint: 'auto',
+        headers: {},
+        expiresAt: new Date(now + 300_000).toISOString(),
+        subtitles: [],
+      }],
+    })
+  })
+  it('parses bracketed titles in the inline episode list and follows a relative video_url2', async () => {
+    const page = `<html><script>const allEpisodes = [{"id":9,"episode_number":1,"title":"[Rec] Road","video_url2":"/watch/one-piece/1"}];</script></html>`
+    const client = kitsuHttp({ page })
+    const result = await createAnimeKitsuProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
+    expect(client.mock.calls.map((call) => call[0])).toEqual([
+      'https://animekitsu.com/live-search?q=ONE%20PIECE',
+      'https://animekitsu.com/anime/one-piece',
+      'https://animekitsu.com/watch/one-piece/1',
+    ])
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'animekitsu:sub:1', type: 'native' }] })
+  })
+  it('searches AnimeKitsu with AniList title aliases when the preferred title misses its partial catalog', async () => {
+    const client = kitsuHttp({
+      slug: 'jujutsu-kaisen-season-3',
+      search: JSON.stringify({ data: [{ title: 'Jujutsu Kaisen Season 3', slug: 'jujutsu-kaisen-season-3' }] }),
+    })
+    const title = async () => 'JUJUTSU KAISEN Season 3: The Culling Game Part 1'
+    const variants = async () => ['Jujutsu Kaisen: Shimetsu Kaiyuu - Zenpen']
+    const ref = { ...animeSub, ref: { ...animeSub.ref, id: 172463 } }
+    const result = await createAnimeKitsuProvider(client, title, () => now, variants).resolve(ref, new AbortController().signal)
+    expect(client.mock.calls.slice(0, 2).map((call) => call[0])).toEqual([
+      'https://animekitsu.com/live-search?q=JUJUTSU%20KAISEN',
+      'https://animekitsu.com/live-search?q=Jujutsu%20Kaisen%3A%20Shimetsu%20Kaiyuu%20-%20Zenpen',
+    ])
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'animekitsu:sub:1', type: 'native' }] })
+  })
+  it('answers empty for AnimeKitsu misses, dub keeps the sub track, and non-anime refs stop early', async () => {
+    const mismatch = kitsuHttp({ search: JSON.stringify({ data: [{ title: 'Bleach', slug: 'bleach' }] }) })
+    expect(await createAnimeKitsuProvider(mismatch, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(mismatch).toHaveBeenCalledTimes(1)
+    const noEpisodes = kitsuHttp({ page: '<html><script>const allEpisodes = [];</script></html>' })
+    expect(await createAnimeKitsuProvider(noEpisodes, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(noEpisodes).toHaveBeenCalledTimes(2)
+    const wrongEpisode = kitsuHttp({ page: '<html><script>const allEpisodes = [{"id":9,"episode_number":9,"video_url":"https://animekitsu.com/watch/one-piece/9"}];</script></html>' })
+    expect(await createAnimeKitsuProvider(wrongEpisode, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(wrongEpisode).toHaveBeenCalledTimes(2)
+    const gatedWatch = kitsuHttp({ watch: '<html><script>const source="/stream.php?nope";</script></html>' })
+    expect(await createAnimeKitsuProvider(gatedWatch, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(gatedWatch).toHaveBeenCalledTimes(3)
+    const dubClient = kitsuHttp()
+    const dubResult = await createAnimeKitsuProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
+    expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animekitsu:sub:1', language: 'original' }] })
+    const movieClient = kitsuHttp()
+    expect(await createAnimeKitsuProvider(movieClient, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
+    expect(movieClient).not.toHaveBeenCalled()
+  })
+})
+
+describe('shared manifest verification seam', () => {
+  const candidate = (key: string, url: string, type: ProviderSource['type'] = 'hls'): ProviderSource => ({
+    key, url, type, language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [],
+  })
+  const serving = (texts: Record<string, string>) => vi.fn<ProviderHttp>(async (url) => {
+    const text = texts[url]
+    if (text === undefined) return { status: 404, text: '', url }
+    return { status: 200, text, url }
+  })
+  it('keeps strict-valid manifests, settles redirected URLs, and passes native through', async () => {
+    const client = serving({
+      'https://cdn.example/master.m3u8': '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8',
+      'https://cdn.example/media.m3u8': '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg.ts',
+    })
+    const verified = await verifiedPlaybackSources(client, [
+      candidate('master', 'https://cdn.example/master.m3u8'),
+      candidate('media', 'https://cdn.example/media.m3u8'),
+      candidate('progressive', 'https://cdn.example/clip.mp4', 'native'),
+    ], new AbortController().signal)
+    expect(verified.map((source) => source.key)).toEqual(['master', 'media', 'progressive'])
+  })
+  it('fails closed on error pages, empty playlists, and unsupported manifest features', async () => {
+    const client = serving({
+      'https://cdn.example/good.m3u8': '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8',
+      'https://cdn.example/html.m3u8': '<html><body>upstream error</body></html>',
+      'https://cdn.example/empty.m3u8': '#EXTM3U\n#EXT-X-VERSION:3\n',
+      'https://cdn.example/steered.m3u8': '#EXTM3U\n#EXT-X-CONTENT-STEERING:SERVER-URI="https://steer.example"',
+      'https://cdn.example/keyed.m3u8': '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=key.bin\n#EXTINF:6,\nseg.ts',
+    })
+    const verified = await verifiedPlaybackSources(client, [
+      candidate('good', 'https://cdn.example/good.m3u8'),
+      candidate('html', 'https://cdn.example/html.m3u8'),
+      candidate('empty', 'https://cdn.example/empty.m3u8'),
+      candidate('steered', 'https://cdn.example/steered.m3u8'),
+      candidate('keyed', 'https://cdn.example/keyed.m3u8'),
+    ], new AbortController().signal)
+    expect(verified.map((source) => source.key)).toEqual(['good'])
+  })
+  it('rejects VixSrc manifests that fail strict validation as malformed', async () => {
+    const steered = http(
+      { text: '{"src":"/player/title"}' },
+      { text: vixPage() },
+      { text: '#EXTM3U\n#EXT-X-CONTENT-STEERING:SERVER-URI="https://steer.example"' },
+    )
+    expect(await createVixsrcProvider(steered, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'malformed' })
   })
 })

@@ -17,6 +17,10 @@
 #
 # Back to production-like images:
 #   docker compose up --build
+# For fast local browsing against the already running stack, rebuild and
+# replace only the web service with its optimized production image:
+#   bun run docker:web:fast
+# Re-run that command after web edits; docker:dev restores live reload.
 #
 # Notes:
 # - Dependency or Dockerfile changes (package.json, bun.lock, Dockerfile,
@@ -171,12 +175,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./apps/web:/app/apps/web
       - /app/apps/web/node_modules
       - /app/apps/web/.next
-      - ./packages/ui:/app/packages/ui
       - /app/packages/ui/node_modules
-      - ./packages/contracts:/app/packages/contracts
       - /app/packages/contracts/node_modules
     develop:
       watch:

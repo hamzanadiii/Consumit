@@ -9,8 +9,11 @@ import {
   bannerUrlSchema,
   followStateSchema,
   followStatusSchema,
+  diaryRefSchema,
   loginRequestSchema,
   playbackProgressSchema,
+  playbackEventsSchema,
+  webVitalBatchSchema,
   progressWriteRequestSchema,
   letterboxdImportSchema,
   passwordChangeRequestSchema,
@@ -30,6 +33,7 @@ import {
   usernameAvailabilityResponseSchema,
   usernameSchema,
   titleHref,
+  diaryEntryHref,
   reviewsHref,
   watchHref,
 } from './index'
@@ -44,6 +48,9 @@ describe('catalog contracts', () => {
     expect(watchHref({ id: 1399, kind: 'series' }, { episode: 2, season: 3 })).toBe(
       '/watch/series/1399?season=3&episode=2',
     )
+    expect(diaryEntryHref({ episode: 2, id: 1399, kind: 'series', season: 3 })).toBe('/watch/series/1399?season=3&episode=2')
+    expect(diaryEntryHref({ episode: 4, id: 21, kind: 'anime' })).toBe('/watch/anime/21?episode=4')
+    expect(diaryEntryHref({ id: 550, kind: 'movie' })).toBe('/title/550')
   })
 
   it('rejects malformed artwork URLs', () => {
@@ -126,6 +133,14 @@ describe('catalog contracts', () => {
     expect(updateMemberListRequestSchema.safeParse({}).success).toBe(false)
   })
 
+  it('keeps exact episodic identity on diary entries while allowing title-level logs', () => {
+    expect(diaryRefSchema.parse({ episode: 3, id: 95396, kind: 'series', season: 1 })).toEqual({ episode: 3, id: 95396, kind: 'series', season: 1 })
+    expect(diaryRefSchema.parse({ episode: 12, id: 21, kind: 'anime' })).toEqual({ episode: 12, id: 21, kind: 'anime' })
+    expect(diaryRefSchema.parse({ id: 550, kind: 'movie' })).toEqual({ id: 550, kind: 'movie' })
+    expect(diaryRefSchema.safeParse({ episode: 3, id: 95396, kind: 'series' }).success).toBe(false)
+    expect(diaryRefSchema.safeParse({ id: 550, kind: 'movie', episode: 2 }).success).toBe(false)
+  })
+
   it('bounds member ratings to whole points between 1 and 10', () => {
     expect(setRatingRequestSchema.parse({ id: 693134, kind: 'movie', value: 9 })).toMatchObject({ value: 9 })
     expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 0 }).success).toBe(false)
@@ -155,10 +170,21 @@ describe('catalog contracts', () => {
   })
 
   it('bounds playback progress writes to sane ranges', () => {    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })
+    const attempt = '82ef6eaf-9248-4b77-820d-6d7bc025c823'
+    expect(progressWriteRequestSchema.safeParse({ completed: true, completionId: attempt, episode: 3, id: 95396, kind: 'series', positionSeconds: 1800, season: 1 }).success).toBe(true)
+    expect(progressWriteRequestSchema.safeParse({ completed: false, completionId: attempt, id: 693134, kind: 'movie', positionSeconds: 1800 }).success).toBe(false)
+    expect(progressWriteRequestSchema.safeParse({ completed: true, completionId: attempt, id: 95396, kind: 'series', positionSeconds: 1800 }).success).toBe(false)
     expect(progressWriteRequestSchema.parse({ completed: true, durationSeconds: 3600, episode: 3, id: 95396, kind: 'series', positionSeconds: 3599, season: 1 })).toMatchObject({ completed: true, season: 1 })
     expect(progressWriteRequestSchema.safeParse({ id: 693134, kind: 'movie', positionSeconds: -5 }).success).toBe(false)
     expect(progressWriteRequestSchema.safeParse({ durationSeconds: 0, id: 693134, kind: 'movie', positionSeconds: 10 }).success).toBe(false)
     expect(playbackProgressSchema.safeParse({ completed: false, durationSeconds: null, episode: 3, id: 95396, kind: 'series', positionSeconds: 120, season: 1, updatedAt: '2026-09-06T00:00:00.000Z' }).success).toBe(true)
+  })
+
+  it('accepts bounded browser families on playback telemetry while keeping old clients compatible', () => {
+    const event = { type: 'started', position: 0, elapsedMs: 1200 }
+    expect(playbackEventsSchema.parse({ events: [event] }).events[0]).not.toHaveProperty('browser')
+    expect(playbackEventsSchema.parse({ events: [{ ...event, browser: 'firefox' }] }).events[0]?.browser).toBe('firefox')
+    expect(playbackEventsSchema.safeParse({ events: [{ ...event, browser: 'Mozilla/5.0 full user agent' }] }).success).toBe(false)
   })
 
   it('requires request correlation on stable errors', () => {    expect(apiErrorResponseSchema.safeParse({ error: { code: 'BAD_REQUEST', message: 'Bad request.', requestId: 'request-1234', retryable: false } }).success).toBe(true)
@@ -185,5 +211,21 @@ describe('catalog contracts', () => {
     ] })
     expect(parsed.providers[0]?.subtitles).toMatchObject([{ id: 'en', format: 'vtt' }])
     expect(parsed.providers[1]?.subtitles).toEqual([])
+  })
+})
+
+describe('anonymous Web Vitals contract', () => {
+  it('accepts bounded route groups and measurements', () => {
+    expect(webVitalBatchSchema.parse({ events: [
+      { metric: 'LCP', page: 'title', value: 1800 },
+      { metric: 'CLS', page: 'home', value: 0.08 },
+    ] }).events).toHaveLength(2)
+  })
+
+  it('rejects identity, URL, unknown metrics, and unbounded values', () => {
+    expect(webVitalBatchSchema.safeParse({ events: [{ metric: 'LCP', page: 'title', value: 1, url: '/hamza' }] }).success).toBe(false)
+    expect(webVitalBatchSchema.safeParse({ events: [{ metric: 'LCP', page: 'title', value: 1, memberId: 'member_1' }] }).success).toBe(false)
+    expect(webVitalBatchSchema.safeParse({ events: [{ metric: 'FID', page: 'home', value: 1 }] }).success).toBe(false)
+    expect(webVitalBatchSchema.safeParse({ events: [{ metric: 'CLS', page: 'home', value: 11 }] }).success).toBe(false)
   })
 })

@@ -43,7 +43,6 @@ export function createYifyProvider(http: SubtitleHttp): SubtitleSearchProvider {
           needsExtract: true,
           headers: fileHeaders,
         })
-        if (out.length >= 60) break
       }
       return out
     },

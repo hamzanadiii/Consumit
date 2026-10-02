@@ -39,9 +39,15 @@ function readLocalProgress(ref: PlaybackRef, memberId?: string) {
   } catch { return 0 }
 }
 
-export async function writePlaybackProgress(ref: PlaybackRef, position: number, duration: number, completed: boolean, memberId?: string, keepalive = false) {
-  if (!Number.isFinite(position) || !Number.isFinite(duration) || duration < 1) return
-  const payload: ProgressWriteRequest = { ...ref, positionSeconds: Math.floor(Math.min(duration, 86400, Math.max(0, position))), durationSeconds: Math.floor(Math.min(86400, duration)), completed }
+export async function writePlaybackProgress(ref: PlaybackRef, position: number, duration: number, completed: boolean, memberId?: string, keepalive = false, completionId?: string) {
+  if (!Number.isFinite(position) || !Number.isFinite(duration) || (!completed && duration < 1)) return
+  const payload: ProgressWriteRequest = {
+    ...ref,
+    positionSeconds: Math.floor(Math.min(duration > 0 ? duration : 86400, 86400, Math.max(0, position))),
+    ...(duration >= 1 ? { durationSeconds: Math.floor(Math.min(86400, duration)) } : {}),
+    completed,
+    ...(completed && completionId ? { completionId } : {}),
+  }
   try { localStorage.setItem(progressKey(ref, memberId), JSON.stringify({ ...payload, updatedAt: new Date().toISOString() })) } catch { /* Storage denial must not interrupt playback. */ }
   if (!memberId) return
   const response = await fetch('/v1/progress', { method: 'PUT', body: JSON.stringify(payload), credentials: 'same-origin', headers: { 'content-type': 'application/json' }, keepalive, signal: AbortSignal.timeout(5000) })

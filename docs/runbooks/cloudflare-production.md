@@ -17,15 +17,10 @@ Never commit `.tfstate`, `.tfvars`, tunnel tokens, or provider credentials. Rota
 
 Only immutable Next.js assets and cookie-free public catalog GETs are eligible for edge caching. Identity, member, import, progress, playback, cookies, and every non-GET request bypass cache.
 
-## Media Worker rollout
+## Public embeds (deferred)
 
-The public embed endpoint and regular Watch route may both return Cloudflare media Worker URLs for a configured provider with `proxy: true`. Public embeds accept any site; Referer and the retired domain list grant no authority. Every Worker media request needs a signed provider-scoped grant. The Worker rate-limit binding is configured in `worker/wrangler.toml` and requires Wrangler 4.36 or newer.
+The public `/embed` player pages and `/v1/embed` API routes are not mounted. Do not advertise iframe playback, source JSON responses, or a `PLAYER_EVENT` contract. Revisit this section only after the product and release plan explicitly bring public embeds back into scope.
 
-1. Set the same 32-character-or-longer `HMAC_SECRET` on a **new Worker hostname** and `EMBED_HMAC_SECRET` on the API. Keep the old Worker available for existing sessions until their media URLs expire.
-2. Run `bun run --filter consumit-worker build` and deploy the new Worker. Check `GET /health`, missing-token 403, and a controlled playback fixture through the new hostname.
-3. Set `WORKER_URL` to that HTTPS hostname, redeploy the API, then verify regular Watch and public movie/series embeds, HLS child requests, and fallback. Watch the Worker 429 and 502 rates and API resolve failures.
-4. Roll back by restoring the previous API `WORKER_URL` and image while the old Worker remains live. Retire the old Worker after its issued URLs have expired. Rotating the HMAC secret requires the same overlap procedure.
-
-The old `?url=` proxy URLs and token format are intentionally incompatible with this Worker. Do not update an existing Worker hostname in place while old API instances are serving traffic.
+The opt-in playback Compose overlay provisions an OpenTelemetry collector and Prometheus with provider playback-failure alerts. Connect and verify an alert receiver before declaring notifications live. Media travels directly from the configured provider to the browser; Cloudflare fronts the app and API only.
 
 For rollback, revert the Terraform change, apply, purge affected catalog/static URLs, redeploy the prior application image, and repeat smoke checks. Never enable a broad “cache everything” rule.

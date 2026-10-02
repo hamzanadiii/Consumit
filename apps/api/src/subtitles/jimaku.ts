@@ -36,7 +36,7 @@ export function createJimakuProvider(http: SubtitleHttp, apiKey?: string | undef
       // Canonical absolute episode first, plain episode as fallback; entry
       // bundles are disambiguated by number, single-file entries pass.
       const episode = Number(query.absoluteEpisode ?? query.episode ?? 1)
-      for (const entry of list.slice(0, 10) as Record<string, unknown>[]) {
+      for (const entry of list as Record<string, unknown>[]) {
         const files = Array.isArray(entry.files) ? (entry.files as Record<string, unknown>[]) : []
         for (const file of files) {
           const url = String(file.url || file.link || '')
@@ -52,9 +52,7 @@ export function createJimakuProvider(http: SubtitleHttp, apiKey?: string | undef
             format: isAss ? 'ass' : /\.vtt(\?|#|$)/i.test(url) ? 'vtt' : 'srt',
             provider: 'jimaku',
           })
-          if (out.length >= 12) break
         }
-        if (out.length >= 12) break
       }
       return out
     },

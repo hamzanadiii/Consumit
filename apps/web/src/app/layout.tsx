@@ -4,10 +4,10 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 import { siteUrl } from '@/lib/site'
-import { getServerSession } from '@/lib/identity-server'
 
 import { SessionProvider } from './session/session'
 import { THEME_INIT_SCRIPT } from './home/filscreen-theme'
+import { WebVitals } from './web-vitals'
 
 const siteDescription = 'Watch immediately, remember what you love, and discover through people whose taste you trust.'
 
@@ -31,8 +31,7 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const session = await getServerSession()
+export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -41,7 +40,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
-        <SessionProvider initialMember={session.member} initialStatus={session.status}>
+        <SessionProvider initialStatus="loading">
+          <WebVitals />
           {children}
         </SessionProvider>
       </body>

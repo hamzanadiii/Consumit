@@ -10,8 +10,7 @@ export const metadata: Metadata = { title: 'Letterboxd Import · Consumit', robo
 
 export default async function LetterboxdImportPage() {
   const session = await getServerSession()
-  if (session.status === 'anonymous') redirect('/sign-in?next=%2Fsettings%2Fimports%2Fletterboxd')
-  if (session.status === 'unavailable') redirect('/sign-in?next=%2Fsettings%2Fimports%2Fletterboxd')
+  if (session.status !== 'authenticated' || !session.member) redirect('/sign-in?next=%2Fsettings%2Fimports%2Fletterboxd')
   return (
     <FilScreenShell pageHeading={undefined}>
       <main className="mx-auto min-h-screen w-full max-w-5xl py-8">
@@ -23,7 +22,7 @@ export default async function LetterboxdImportPage() {
               <p className="mt-5 max-w-[52ch] text-sm leading-7 text-muted">Your watches, ratings, and reviews become part of your Consumit library. Nothing changes until you review uncertain matches and confirm.</p>
             </header>
             <div className="mt-10">
-              <LetterboxdImportFlow />
+              <LetterboxdImportFlow completeHref={`/profile/${encodeURIComponent(session.member.username)}`} />
             </div>
           </div>
         </section>

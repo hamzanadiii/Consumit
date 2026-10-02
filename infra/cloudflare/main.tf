@@ -37,21 +37,21 @@ resource "cloudflare_ruleset" "cache" {
 
   rules = [
     {
-      action      = "set_cache_settings"
-      description = "Cache immutable Next.js assets"
-      expression  = "http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/_next/static/\")"
+      action            = "set_cache_settings"
+      description       = "Cache immutable Next.js assets"
+      expression        = "http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/_next/static/\")"
       action_parameters = { cache = true, edge_ttl = { mode = "override_origin", default = 31536000 }, browser_ttl = { mode = "override_origin", default = 31536000 } }
     },
     {
-      action      = "set_cache_settings"
-      description = "Cache public catalog reads without member cookies"
-      expression  = "http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/v1/titles/\") and not http.cookie contains \"consumit_session\""
+      action            = "set_cache_settings"
+      description       = "Cache public catalog reads without member cookies"
+      expression        = "http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/v1/titles/\") and not http.cookie contains \"consumit_session\""
       action_parameters = { cache = true, edge_ttl = { mode = "respect_origin" } }
     },
     {
-      action      = "set_cache_settings"
-      description = "Never cache private or mutable APIs"
-      expression  = "http.request.method ne \"GET\" or starts_with(http.request.uri.path, \"/v1/playback/\") or starts_with(http.request.uri.path, \"/v1/identity/\") or starts_with(http.request.uri.path, \"/v1/member/\") or starts_with(http.request.uri.path, \"/v1/progress/\") or starts_with(http.request.uri.path, \"/v1/imports/\")"
+      action            = "set_cache_settings"
+      description       = "Never cache private or mutable APIs"
+      expression        = "http.request.method ne \"GET\" or starts_with(http.request.uri.path, \"/v1/playback/\") or starts_with(http.request.uri.path, \"/v1/identity/\") or starts_with(http.request.uri.path, \"/v1/member/\") or starts_with(http.request.uri.path, \"/v1/progress/\") or starts_with(http.request.uri.path, \"/v1/imports/\")"
       action_parameters = { cache = false }
     },
   ]
@@ -83,14 +83,8 @@ resource "cloudflare_ruleset" "rate_limits" {
     },
     {
       action      = "block"
-      description = "Playback resolver abuse"
-      expression  = "starts_with(http.request.uri.path, \"/v1/playback/\")"
-      ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.playback_requests_per_minute, mitigation_timeout = 60 }
-    },
-    {
-      action      = "block"
-      description = "Public embed resolution abuse"
-      expression  = "starts_with(http.request.uri.path, \"/v1/embed/\")"
+      description = "Playback and public embed resolution abuse"
+      expression  = "starts_with(http.request.uri.path, \"/v1/playback/\") or starts_with(http.request.uri.path, \"/v1/embed/\")"
       ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.playback_requests_per_minute, mitigation_timeout = 60 }
     },
   ]

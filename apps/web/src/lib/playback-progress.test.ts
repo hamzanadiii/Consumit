@@ -34,6 +34,15 @@ describe('canonical playback progress', () => {
     await writePlaybackProgress({ ...ref, episode: 4 }, 1, Infinity, false)
     expect(localStorage.getItem(progressKey({ ...ref, episode: 4 }))).toBeNull()
   })
+  it('keeps a completion attempt in the member write even when media duration is unknown', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    const completionId = '82ef6eaf-9248-4b77-820d-6d7bc025c823'
+    await writePlaybackProgress(ref, 42, 0, true, 'member', true, completionId)
+    const request = fetch.mock.calls[0] as unknown as [string, RequestInit]
+    expect(request[1].keepalive).toBe(true)
+    expect(JSON.parse(String(request[1].body))).toMatchObject({ completed: true, completionId, episode: 3, positionSeconds: 42 })
+  })
   it('coalesces interval writes to meaningful changes within a 20-30 second cadence', () => {
     expect(PROGRESS_SYNC_INTERVAL_MS).toBeGreaterThanOrEqual(20000)
     expect(PROGRESS_SYNC_INTERVAL_MS).toBeLessThanOrEqual(30000)

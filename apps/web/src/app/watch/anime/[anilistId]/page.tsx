@@ -5,8 +5,10 @@ import { watchHref } from '@consumit/contracts'
 
 import { getAnimeTitle } from '@/lib/anime-api'
 import { AnimeApiError } from '@/lib/anime-api'
+import { getServerSession } from '@/lib/identity-server'
 import { CatalogUnavailableScreen } from '../../../catalog/catalog-ui'
 
+import { SessionProvider } from '../../../session/session'
 import { sanitizePinnedProvider } from '../../watch-screen'
 import { AnimeWatchScreen } from '../anime-watch-screen'
 
@@ -32,6 +34,7 @@ export async function generateMetadata({ params }: AnimeWatchPageProps): Promise
 export default async function AnimeWatchPage({ params, searchParams }: AnimeWatchPageProps) {
   const id = Number((await params).anilistId)
   const query = await searchParams
+  const sessionPromise = getServerSession()
   const episodeValue = Array.isArray(query.episode) ? query.episode[0] : query.episode
   const audioValue = Array.isArray(query.audio) ? query.audio[0] : query.audio
   const episodeNumber = Number(episodeValue ?? 1)
@@ -52,14 +55,17 @@ export default async function AnimeWatchPage({ params, searchParams }: AnimeWatc
   const prevHref = episodeNumber > 1 ? watchHref({ kind: 'anime', id }, { episode: episodeNumber - 1, season: 1 }) : undefined
 
   const pinnedProvider = sanitizePinnedProvider(query.provider)
+  const session = await sessionPromise
   return (
-    <AnimeWatchScreen
-      audio={audio}
-      detail={detail}
-      episode={episodeNumber}
-      nextHref={nextHref}
-      prevHref={prevHref}
-      {...(pinnedProvider ? { pinnedProvider } : {})}
-    />
+    <SessionProvider initialMember={session.member} initialStatus={session.status}>
+      <AnimeWatchScreen
+        audio={audio}
+        detail={detail}
+        episode={episodeNumber}
+        nextHref={nextHref}
+        prevHref={prevHref}
+        {...(pinnedProvider ? { pinnedProvider } : {})}
+      />
+    </SessionProvider>
   )
 }

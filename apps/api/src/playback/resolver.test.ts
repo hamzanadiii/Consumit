@@ -1,13 +1,74 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStaticProvider, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
+import { failureCause } from './playback.ts'
 import { createResolver } from './resolver.ts'
 import { createMemoryPlaybackStore } from './state.ts'
 
 const source: ProviderSource = { key: 'main', url: 'https://media.example/test.m3u8', type: 'hls', language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }
 const input = { ref: { kind: 'movie' as const, id: 1 }, capabilities: { hls: true, dash: false, native: true, nativeHls: true }, audioLanguage: 'en' }
-function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: true, mediaKinds: ['movie', 'series'] } }
+function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie', 'series'] } }
 afterEach(() => vi.useRealTimers())
 describe('bounded playback resolution', () => {
+  it('cools a provider after repeated playback failures even when resolution keeps succeeding', async () => {
+    let now = Date.now()
+    const direct = provider('direct')
+    const resolver = createResolver([direct], { region: 'US', now: () => now })
+    const signal = new AbortController().signal
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect((await resolver.resolve(input, signal, [], undefined, true))?.registration.adapter.id).toBe('direct')
+      resolver.recordFailure('direct', 'movie')
+    }
+    expect(resolver.status('movie').find((entry) => entry.id === 'direct')?.openUntil).toBeGreaterThan(now)
+    expect(await resolver.resolve(input, signal, [], undefined, true)).toBeNull()
+    now += 61_000
+    expect((await resolver.resolve(input, signal, [], undefined, true))?.registration.adapter.id).toBe('direct')
+  })
+  it('cools definitive failures five times longer than transient stalls', async () => {
+    let now = Date.now()
+    const transient = createResolver([provider('transient')], { region: 'US', now: () => now })
+    const definitive = createResolver([provider('definitive')], { region: 'US', now: () => now })
+    for (let attempt = 0; attempt < 3; attempt++) {
+      transient.recordFailure('transient', 'movie')
+      definitive.recordFailure('definitive', 'movie', 'definitive')
+    }
+    const transientOpen = transient.status('movie').find((entry) => entry.id === 'transient')!.openUntil
+    const definitiveOpen = definitive.status('movie').find((entry) => entry.id === 'definitive')!.openUntil
+    expect(transientOpen - now).toBe(60_000)
+    expect(definitiveOpen - now).toBe(300_000)
+    now += 61_000
+    // The transient cooler has recovered while the definitive one still demotes.
+    expect(transient.status('movie').find((entry) => entry.id === 'transient')!.openUntil).toBeLessThanOrEqual(now)
+    expect(definitive.status('movie').find((entry) => entry.id === 'definitive')!.openUntil).toBeGreaterThan(now)
+  })
+  it('treats gone-class and blocked-direct failures as definitive demotion signals', () => {
+    expect(failureCause({ reason: 'unsupported' })).toBe('definitive')
+    expect(failureCause({ reason: 'network', deliveryFailure: 'forbidden' })).toBe('definitive')
+    expect(failureCause({ reason: 'network' })).toBe('transient')
+    expect(failureCause({ reason: 'media' })).toBe('transient')
+    expect(failureCause({ reason: 'expired' })).toBe('transient')
+    expect(failureCause({ reason: 'network', deliveryFailure: 'segment' })).toBe('transient')
+  })
+  it('moves through several stalled providers within their attempt limits', async () => {
+    vi.useFakeTimers()
+    const directs = ['first', 'second', 'third'].map((id) => {
+      const direct = provider(id)
+      direct.adapter.resolve = vi.fn(() => new Promise<Awaited<ReturnType<typeof direct.adapter.resolve>>>(() => undefined))
+      return direct
+    })
+    const task = createResolver(directs, { region: 'US', deadlineMs: 12000 }).resolve(input, new AbortController().signal)
+    await vi.advanceTimersByTimeAsync(9_100)
+    expect(await task).toBeNull()
+    for (const direct of directs) expect(direct.adapter.resolve).toHaveBeenCalledOnce()
+  })
+  it('uses an admin disable change without reusing the prior winner', async () => {
+    const first = provider('first')
+    const second = provider('second')
+    const resolver = createResolver([first, second], { region: 'US' })
+    const signal = new AbortController().signal
+    expect((await resolver.resolve(input, signal))?.registration.adapter.id).toBe('first')
+    first.enabled = false
+    expect((await resolver.resolve(input, signal))?.registration.adapter.id).toBe('second')
+  })
   it('shares disposable access across resolvers but never reuses expired credentials', async () => {
     let now = Date.now()
     const store = createMemoryPlaybackStore(() => now)
@@ -51,6 +112,38 @@ describe('bounded playback resolution', () => {
     await vi.advanceTimersByTimeAsync(5000)
     expect((await task)?.registration.adapter.id).toBe('backup')
     expect(cancelled).toBe(true)
+  })
+  it('cools a repeatedly stalled provider after its own attempt timeout', async () => {
+    vi.useFakeTimers()
+    const direct = provider('direct')
+    direct.adapter.resolve = vi.fn(() => new Promise<Awaited<ReturnType<typeof direct.adapter.resolve>>>(() => undefined))
+    const resolver = createResolver([direct], { region: 'US' })
+    // A persistently hung source should not delay every new playback request.
+    for (let round = 0; round < 3; round++) {
+      const task = resolver.resolve(input, new AbortController().signal, [], undefined, true)
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(await task).toBeNull()
+    }
+    expect(resolver.status('movie').find((entry) => entry.id === 'direct')).toMatchObject({ failures: 3 })
+    expect(resolver.status('movie').find((entry) => entry.id === 'direct')!.openUntil).toBeGreaterThan(Date.now())
+    await expect(resolver.resolve(input, new AbortController().signal, [], undefined, true)).resolves.toBeNull()
+    vi.advanceTimersByTime(61_000)
+    // The circuit reopens to a healthy answer after cooling.
+    direct.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [source] }))
+    await expect(resolver.resolve(input, new AbortController().signal, [], undefined, true)).resolves.toMatchObject({ registration: { adapter: { id: 'direct' } } })
+  })
+  it('prefers requested dubbed audio over an original-language source', async () => {
+    const direct = provider('dubbed')
+    direct.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [source, { ...source, key: 'dub', language: 'en' }] }))
+    const resolved = await createResolver([direct], { region: 'US' }).resolve(input, new AbortController().signal)
+    expect(resolved?.source.key).toBe('dub')
+  })
+  it('does not reuse a cached source after its configured region is removed', async () => {
+    const direct = provider('regional')
+    const resolver = createResolver([direct], { region: 'US' })
+    expect(await resolver.resolve(input, new AbortController().signal)).not.toBeNull()
+    direct.approvedRegions = ['IT']
+    expect(await resolver.resolve(input, new AbortController().signal)).toBeNull()
   })
   it('honors a custom per-provider attempt budget within the deadline', async () => {
     vi.useFakeTimers()

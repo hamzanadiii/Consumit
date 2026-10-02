@@ -71,7 +71,7 @@ function ReviewRow({ item, liked, likesCount, likeBusy, onToggleLike }: {
               {name}
             </Link>
             {item.rating !== null ? (
-              <span className="inline-flex items-center gap-1 font-bold text-[#ff5d38] tabular-nums">
+              <span className="inline-flex items-center gap-1 font-bold text-orange tabular-nums">
                 <Star aria-hidden="true" className="size-3.5 fill-current" />
                 {item.rating}
                 <span className="sr-only">out of 10</span>
@@ -87,7 +87,7 @@ function ReviewRow({ item, liked, likesCount, likeBusy, onToggleLike }: {
               <button
                 aria-label={liked ? `Unlike this review by ${name}` : `Like this review by ${name}`}
                 aria-pressed={liked}
-                className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2 -ml-2 font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-60 ${liked ? 'text-[#ff5d38]' : 'hover:text-[var(--fs-ink)]'}`}
+                className={`inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-control px-2 -ml-2 font-bold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-60 ${liked ? 'text-orange' : 'hover:text-[var(--fs-ink)]'}`}
                 disabled={likeBusy}
                 onClick={onToggleLike}
                 type="button"

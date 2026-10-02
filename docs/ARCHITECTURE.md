@@ -6,7 +6,13 @@ This document organizes the target direction from the founding architecture brie
 
 ## System shape
 
-Consumit resolves playback, manages sessions, ranks providers, and stores member data. When a configured provider opts into proxy delivery, a Cloudflare Worker relays validated media; the API never relays video bytes.
+Consumit resolves playback, manages sessions, ranks providers, and stores member data. The browser fetches validated media directly from configured providers; the API never relays video bytes. See [ADR 0003](./adr/0003-browser-direct-media-only.md).
+
+Public third-party player embeds are deferred. The web `/embed` routes and API `/v1/embed` routes are not mounted; the active playback surface is the member Watch flow.
+
+Public movie, series, and anime title pages are isolated from member identity and use five-minute on-demand ISR over catalog-only data. The root layout does not read cookies; its client session provider restores `/v1/me` after hydration, and member controls/reviews continue to call authenticated, no-store endpoints. On title pages, the stable signed-out prompts render during session bootstrap; they expose no member data or write controls and are replaced by the member shelf after identity resolves. Watch, library, settings, profile, and other personalized routes keep their request-bound server session reads.
+
+The replacement media-element controller is selected per web deployment with `NEXT_PUBLIC_PLAYBACK_CORE=next` (default `legacy`), used by Watch. The player owns HLS/DASH/native engines and controls; the browser coordinator owns refresh, fallback, and manual source switching; the API owns provider eligibility and validated source selection. See [ADR 0001](./adr/0001-canary-player-core.md). Canary routing happens at the edge so one deployment consistently serves one core. Progress and member history stay keyed to the title or episode, never the source.
 
 ```text
 Cloudflare edge
@@ -103,7 +109,9 @@ Next.js page code talks only to the versioned Consumit catalog API. TMDB credent
 
 Catalog metadata and playback availability are independent. A real TMDB title can exist without a configured playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
 
-The current in-process catalog cache uses request coalescing and stale-while-revalidate. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; details and seasons are fresh for 6 hours and stale for 7 days; TMDB image configuration is fresh for 24 hours and stale for 7 days. A shared cache becomes necessary only when multiple API instances require consistent catalog reuse.
+Catalog cache reads use an in-process layer backed by Postgres so validated results survive API restarts and are shared across API instances. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; title details and stable configuration are refreshed every 6–24 hours and retain their last known good value until an upstream refresh succeeds. Anime airing data is fresh for 5 minutes and stale for 1 hour. Finite stale entries are pruned from Postgres; retained title details are not expired.
+
+The web server also revalidates public TMDB and AniList metadata GET responses through Next's Data Cache every 300 seconds. These requests carry only `Accept`, never a member cookie or authorization header; member and playback endpoints remain uncached. This avoids repeated API work without sharing member HTML. Full title-page/CDN caching remains separate because the root layout resolves the member session per request.
 
 ## Anime domain
 
@@ -113,11 +121,15 @@ The title-kind namespace follows the identifier namespaces: the `CatalogKind` en
 
 ### AniList adapter
 
-The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), aggressive caching (details 6hr fresh / 7d stale, airing 5min / 1hr), query normalization, and hostile-output validation. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, recommendations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), persistent stale-while-revalidate caching of validated catalog results, query normalization, and hostile-output validation. Title details and franchise relations keep their last known good value across outages; search, discovery, and airing data use shorter freshness windows. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, recommendations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
 
 ### Episode identity engine
 
+Anime hero-logo enrichment remains separate from episode mapping. Exact TMDB title/year matches are preferred. Missing series logos may resolve an exact parent name after removing season/arc suffixes, requiring one unambiguous TMDB series, Animation metadata, Japanese origin, and a debut no later than the selected title. Same-name adaptations additionally require an airing season within one year of the selected arc, and unresolved ties remain misses. A bounded, cycle-checked walk of at most four canonical AniList prequels can supply earlier artwork. Movies do not inherit a series logo. Parent-artwork matches have a separate cache key and never broaden episode-art identity matching. Franchise queries select complete summary fields on both root and related nodes; manga source nodes are excluded rather than routed as anime.
+
 The episode identity engine (`apps/api/src/anime/episodes/`) maps canonical anime episodes (as defined by AniList) to provider-specific episode numbers. This handles discrepancies in season numbering, split cours, absolute numbering, specials, OVA numbering, and dub numbering. Each mapping carries a confidence score and verification timestamp.
+
+Episode-card metadata first uses the existing ani.zip transport with an exact AniList ID and canonical episode key. Validated English/romanized titles, summaries, air dates, and HTTPS TVDB/TMDB stills are cached as one bounded title record with single-flight reads and persisted stale fallback. Different anime IDs, mismatched episode numbers, specials, unsafe artwork URLs, and malformed dates are rejected. Strict TMDB title/year and MAL-keyed Kitsu reads fill missing fields or recover from an unavailable mapping; a failed fallback cannot discard known metadata. This enrichment changes neither playback mapping nor member progress identity.
 
 ### Franchise graph
 
@@ -129,7 +141,7 @@ Provider-specific episode mappings are stored per anime title per provider per a
 
 ### Anime providers
 
-Three direct-media adapters serve anime episodes by canonical AniList number (`packages/provider-sdk/src/adapters/anixo.ts`, `kyren.ts`, `nagare.ts`): Anixo (embed pages, 3-server race), Kyren (JSON API, parallel race plus fallback servers), Nagare (Stremio-protocol addon, cached). Anixo and Kyren match by AniList id plus a server-owned canonical title (`apps/api/src/anime/title-resolver.ts`); Nagare is id-only. The watch route sends `audioLanguage: 'en'` for DUB and anything else for SUB; dub requests fall back to sub when a provider has no dub. The anime watch screen (`/watch/anime/[anilistId]`) exposes the same SUB/DUB choice as a toggle and reuses the shared Watch playback flow with season-less episode identity.
+The active anime provider roster is Kyren, AnimeParadise, AnimeKai, and AnimeKitsu. They resolve episodes by canonical AniList identity and a server-owned title resolver, with exact episode matching. AnimeKai uses the native mfw09 attestation implementation; upstream programs never execute server-side. AnimeKitsu offers direct native media without captions. The anime Watch route shares the first-party player and retains canonical episode identity and SUB/DUB preference.
 
 ### SUB/DUB as variants
 
@@ -176,7 +188,7 @@ Authenticate and rate-limit
   -> Check shared cache
   -> Return a known valid source when available
   -> Select provider candidates
-  -> Run hedged provider attempts
+  -> Run the bounded eligible-provider waterfall
   -> Validate results
   -> Rank valid candidates
   -> Cache discovery separately from expiring access
@@ -184,11 +196,13 @@ Authenticate and rate-limit
   -> Return the selected source and fallback capability
 ```
 
-### Hedged execution
+### Bounded resolution
 
-Do not race every provider on every miss. The initial scheduler starts the best candidate, hedges after 600ms, permits at most two simultaneous attempts and three independent candidate groups, and stops within eight seconds.
+The media transport coalesces concurrent DNS lookups, caches only validated public addresses for 60 seconds with a 128-host cap, and pins the selected address to each socket. Aborted callers stop waiting immediately; the OS lookup may finish independently. DNS waiting is bounded at three seconds and the provider attempt deadline still caps total work.
 
-Each adapter has a hard timeout, concurrency ceiling, requests-per-second limit, burst limit, and bounded queue. A slow or overloaded provider cannot hold the whole request open.
+The resolver tries eligible providers in configured order and stops at the first validated source. Each attempt is bounded by its provider-specific budget (3 seconds by default, up to 15 seconds when explicitly configured); the total resolution deadline defaults to 20 seconds. Per-provider concurrency and request limits still cap overlapping work across different members.
+
+Do not contact every provider on every click. A bounded hedge is a future option only if production-like measurements show the waterfall misses the startup budget and the additional upstream requests fit provider and cost limits. A slow or overloaded provider cannot hold the whole request open.
 
 ### Dynamic ranking
 
@@ -215,7 +229,7 @@ Each provider moves through:
 CLOSED -> OPEN -> HALF_OPEN -> CLOSED
 ```
 
-Repeated failures open the circuit and stop normal traffic. After a cooling period—60 seconds in the founding example—a small number of probes determines whether normal traffic resumes.
+Repeated failures open the circuit and stop normal traffic. After a cooling period—60 seconds for transient stalls, five minutes for definitive ones (gone-class sources, blocked direct paths)—a small number of probes determines whether normal traffic resumes.
 
 ## Caching and hot paths
 
@@ -261,11 +275,17 @@ Progress is stored by member and title/episode, never by provider URL.
 
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
-The Consumit Player owns the playback controls and native media surface. A playback controller will load configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Provider iframe adapters are excluded. A separate public Consumit embed route uses the same first-party player and resolver, accepts optional `lang` for preferred audio resolution, and posts `PLAYER_EVENT` messages (`play`, `pause`, `seeked`, `ended`, `timeupdate`) to the embedding parent frame.
+The Consumit Player owns the playback controls and native media surface. A playback controller loads configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Provider iframe adapters are excluded. Public third-party player embeds are deferred; the web `/embed` routes and API `/v1/embed` routes are not mounted. First-party member playback continues through Watch.
 
-Delivery uses validated HTTPS sources. The browser connects to the provider directly unless that provider has `proxy: true` and `WORKER_URL` is configured; then the Cloudflare Worker relays manifests, segments, and selected captions using signed provider-scoped grants. The API never carries video bytes. Unknown, expired, off-allowlist, or cookie-bearing sources are unavailable.
+Renewal metadata, captions, and signed URLs can change while the attached stream remains healthy. Watch retains the attached local source independently of the session's latest lease: a renewed URL from the same provider, media type, and delivery path waits for recovery instead of clearing buffered frames. If the attached stream fails, Watch uses that latest unexpired URL once at the retained position and play state, then resumes normal recovery if it also fails. A failure during an in-flight renewal attaches its result immediately. Provider, media-type, and delivery-path changes, explicit switches, and cast renewals still attach the replacement immediately. The player also avoids rebuilding its engine for unchanged URLs and types.
 
-The single exception is first-party caption files: the subtitles module (`apps/api/src/subtitles/`) is a standalone subsystem decoupled from video providers — it aggregates subtitle archives from twelve search providers (YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, VDRK v2, RiveSubs keyless; SubDL, Jimaku, OpenSubtitles key-gated and self-skipping without credentials; Natsuki signed), extracts and converts them to WebVTT server-side, and serves them from `GET /v1/subtitles/file/:key` (per-member sync shifts via `?offsetMs=`, originals via `GET /v1/subtitles/original/:key`). Converted files live on VPS disk under content-keyed paths when `SUBTITLES_DIR` is set (Valkey/memory otherwise, 7-day TTL); durable track metadata lives in Postgres (`SubtitleTrack`), keyed canonically by title/episode — never by provider — so switching video sources never loses subtitles. The engine ranks wanted languages first with full human tracks before forced/adjunct/machine variants, marks the top pick Recommended, and carries forced/SDH/signs/songs/machine flags on the track contract. Media bytes, manifests, keys, and audio stay browser-direct; only caption text — small, schema-shaped, never executable — takes this path. Direct upstream WebVTT tracks still travel untouched alongside served files, and the aggregated menu never depends on the selected streaming provider. Members may pick up to three preferred subtitle languages (device-local, `langs` query); per-member sync corrections persist in Postgres (`UserSubtitlePreference`) and bind to the player's delay control.
+Delivery uses validated browser-direct HTTPS media. Admin saves an exact provider attempt order per title kind; disabled, deleted, incompatible, or cooling providers are skipped. Refresh renews the selected provider; fallback advances to another eligible direct provider while retaining position, captions, and playback intent. Header-blocked media skips pointless same-provider renewal in the browser coordinator. Recognizable relay-wrapped URLs, credentials, expired access, unsupported byte transforms, and off-allowlist hosts are rejected. Consumit has no media Worker or signed relay grants.
+
+Provider operations use a durable Postgres override row per configured adapter, a single revision row polled by each API replica, and an actor/time/before/after audit record in the same transaction as each edit. A database lock serializes the one-time import from the legacy override file. Every configured adapter is registered, including disabled rows, so Admin can enable or disable it without a restart. Deleting a provider writes an audited tombstone: new resolves, order lists, health probes, and tests exclude it; the configured adapter and member progress remain. Restoration keeps the provider disabled until an admin enables it. Region overrides must stay within the base configuration. The admin-only provider endpoint returns live configured, enabled, and deleted counts. Timestamped synthetic probe results and bounded retest claims live in shared playback Valkey; they establish resolution health only. A cycle probes up to four configured regions per provider and title kind; unprobed regions remain unknown. Viewer playback events and provider selection counters export through OpenTelemetry to the opt-in collector and Prometheus, where the admin-only operations endpoints read fixed, bounded aggregates by region. The resolver circuit is shared across regions for each provider and title kind. No media URLs or member tokens enter these metrics. Prometheus rule state appears in admin; an alert receiver remains a deployment requirement for external notifications.
+
+The single exception is first-party caption files: the subtitles module (`apps/api/src/subtitles/`) is a standalone subsystem decoupled from video providers. Its discovery stream emits a cached language snapshot, then independent status and count updates from the thirteen configured providers; a paged language endpoint returns opaque candidate IDs. Raw provider URLs stay in the API store. Preparing a selected candidate validates, downloads, converts, and serves first-party WebVTT from `GET /v1/subtitles/file/:key` (per-member sync shifts via `?offsetMs=`, originals via `GET /v1/subtitles/original/:key`). Cached catalog entries are checked against file storage before display. Converted files live on VPS disk under content-keyed paths when `SUBTITLES_DIR` is set (Valkey/memory otherwise, 7-day TTL); durable track metadata lives in Postgres (`SubtitleTrack`), keyed by title/episode. Preferred languages rank tracks without suppressing other available languages. The Watch subtitle menu groups languages with counts and pages, and local SRT/VTT uploads live only in the current browser viewing session. Admin subtitle diagnostics expose configuration requirements and bounded provider outcomes without URLs or member data. Per-member sync corrections persist in Postgres (`UserSubtitlePreference`).
+
+Subtitle discovery merges provider candidates with saved files using the engine's shared file key. A subtitle adapter may supply a stable file identity for rotating download signatures; the fetch still uses its validated signed URL, and provider-specific normalization stays in that adapter. RiveSubs strips only recognized CloudFront authorization fields, retains content selectors, and deduplicates matching files across its sub-providers. Selection reuses the already-attached track ID for a prepared file. Distinct files and releases remain separate choices, and old discovery snapshots are replaced without removing durable subtitle files.
 
 ## Data ownership
 
@@ -273,8 +293,10 @@ The single exception is first-party caption files: the subtitles module (`apps/a
 
 - Members, credentials, and profiles
 - Follows/circle relationships
-- Ratings, reviews, favorites, lists, and list collaboration
+- Ratings, reviews, favorites, owned lists, and saved public-list references
+- Member-authored Diary entries, with season and episode stored as zero-valued sentinels for title-level logs and exact identity for episodic logs
 - Watch history and progress
+- Private completion events use a per-attempt UUID unique to member and exact title/episode. The progress write and completion insert share a transaction; the event retains no provider or media URL. History reads are member-scoped and paged, exports include it, and account tombstoning deletes it with progress.
 - Stable catalog references
 - Playback-session history when durable retention is needed
 - Provider configuration and aggregates
@@ -293,6 +315,14 @@ High-volume raw playback telemetry belongs in an analytics-oriented store such a
 
 Use strong consistency for identity, access, privacy, and security-sensitive changes. Provider rankings, analytics, counters, and trending data may be eventually consistent.
 
+Circle activity is a read model over the existing Follow, DiaryEntry, Review, and MemberList tables. Each page reads a bounded recent slice from followed active public profiles, merges those rows by timestamp, and returns a stable cursor. Public lists are required even when their author is public; private profiles are excluded from search and activity. This avoids a second event store while volume is small. Member diary/review create times and list update times have matching member/time indexes.
+
+Profile archives are bounded reads over the existing WatchedTitle, DiaryEntry, Review, TitleLike, MemberList, Follow, and tag-array records. `/v1/profiles/:username/archives/:collection` returns typed cursor pages for Activity, Films, Diary, Reviews, Lists, Likes, and Network; Tags is a bounded aggregate over diary/review tag arrays. Every response is `private, no-store`. Archive authorization follows the profile visibility rule: public profiles are readable, and a member can read their own private profile. Network results include public active profiles only. SavedTitle has no profile-archive collection; its owner-only Library endpoints remain the only reads for Watchlist records. Individual title ratings are read only through authenticated `GET /v1/me/ratings`, filtered by rating value and paginated with owner-bound cursors; public profile responses continue to expose aggregate bins only.
+
+Diary owner screens enrich each bounded archive page through authenticated, no-store `/v1/me/ratings/lookup`, using at most 50 title references. Visitor routes and pagination skip this read entirely. The enrichment shows current title scores; DiaryEntry remains the date/episode/rewatch/tag record and stores no historical rating snapshot. A failed lookup is distinct from an unrated title and disables rating choices; Reset returns to the unfiltered logs.
+
+Native lists use the existing MemberList and ordered ListItem tables. Creation is idempotent on a member-scoped request key; title order, notes, description, name, and visibility update in one database transaction. SavedMemberList stores a member's reference to another owner's public list, with cascading cleanup when either account/list is removed. Discovery is a bounded query over followed active public profiles, and saved-list reads recheck current list/profile visibility. Member list endpoints are private/no-store so viewer-specific ownership and saved state cannot enter shared caches.
+
 ## Telemetry and reliability targets
 
 Playback emits structured lifecycle events such as:
@@ -309,7 +339,7 @@ Playback emits structured lifecycle events such as:
 - `SOURCE_SWITCHED`
 - `PLAYBACK_ENDED`
 
-Collect only the member data required for product and operations. Carry one trace identifier from web to API, resolver, adapter, validator, and telemetry.
+Collect only the member data required for product and operations. Browser Web Vitals use a separate anonymous, bounded intake: fixed route groups and CLS/FCP/INP/LCP/TTFB values only, with no raw URL, referrer, member identifier, or database persistence. Browser requests omit credentials; OpenTelemetry exports aggregated histograms when the opt-in collector is configured. Carry one trace identifier from web to API, resolver, adapter, validator, and playback telemetry.
 
 Primary measures are playback success, time to first frame, provider resolution latency, cache-hit ratio, rebuffer ratio, fallback rate, and fatal playback rate. Inspect p50, p95, and p99, not only averages.
 
@@ -359,6 +389,7 @@ This is an interface inventory, not route-level implementation approval. Contrac
 - Keep secrets in environment-backed secret storage initially and rotate them. Move to a dedicated secret manager as operations mature.
 - Keep public, internal, and admin interfaces separate.
 - Direct playback sources come from the configured provider set; system quality does not remove copyright, contract, or regional obligations.
+- Provider configuration is an allowlist, not a discovery mechanism. The base configuration defines adapters, region and title-kind scope, and exact permitted media hosts. Admin's durable enabled setting controls whether a configured adapter can resolve playback; the resolver also enforces region, kind, and source validation. Never allow a wildcard rooted at a shared-hosting tenant domain such as `*.workers.dev`; list the specific tenant host instead.
 
 ## Deployment progression
 
@@ -403,15 +434,15 @@ These standards generalize the catalog module's established shape (`apps/api/src
 - Zod validation at the route boundary; shared schemas live in `@consumit/contracts`.
 - Per-route rate limits layered under edge and per-provider limits.
 - Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
-- Resolver discipline for playback: tiered candidates, hedged starts, dedupe, observed-quality ranking, health quarantine (Stage 6).
-- Subtitle enrichment is implemented: the subtitles module aggregates YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, VDRK v2, RiveSubs, Natsuki, SubDL, Jimaku, and OpenSubtitles behind its adapter seam (keyed providers skip without credentials), converts archives to cached first-party VTT with originals kept, and merges direct upstream WebVTT untouched. A 9s overall budget returns partial rank-ordered results instead of failing cold searches; converted files are cache-checked before any refetch. Durable metadata (`SubtitleTrack`) and per-member sync corrections (`UserSubtitlePreference`) live in Postgres; files live on VPS disk when configured. Playback sessions additionally carry each streaming adapter's own direct WebVTT tracks.
+- Resolver discipline for playback: tiered candidates, bounded sequential waterfall, dedupe, observed-quality ranking, health quarantine (Stage 6).
+- Subtitle enrichment is implemented: the subtitles module aggregates YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, VDRK v2, RiveSubs, Natsuki, SubDL, Jimaku, OpenSubtitles, and AnimeTosho behind its adapter seam (keyed providers skip without credentials), converts archives (including XZ-compressed singles) to cached first-party VTT with originals kept, and merges direct upstream WebVTT untouched. Canonical anime episodes resolve to TMDB identity through the keyless ani.zip bridge, so the TMDB-keyed providers answer anime queries alongside the AniList-keyed AnimeTosho and Jimaku. A 9s overall budget returns partial rank-ordered results instead of failing cold searches; converted files are cache-checked before any refetch. Durable metadata (`SubtitleTrack`) and per-member sync corrections (`UserSubtitlePreference`) live in Postgres; files live on VPS disk when configured. Playback sessions additionally carry each streaming adapter's own direct WebVTT tracks.
 - Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
 
 ### Deliberately different this time
 
 1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
-2. **Validated media at both delivery paths.** Provider output is hostile until validated. Browser-direct sources require playable native URLs; proxy-enabled providers may use only signed, provider-scoped Worker grants. Cookie-bearing or off-allowlist sources are unavailable.
-3. **No rooms, DMs, watch parties, donations, or checkout.** That scope is excluded; do not scaffold it. Ads arrive as their own module in Phase 9 with fail-open playback (ad failure never blocks media).
+2. **Validated browser-direct media.** Provider output is hostile until validated. Every source must be playable directly by the browser and remain inside the configured media-host allowlist. Credential-bearing and relay-wrapped sources are unavailable.
+3. **No rooms, DMs, watch parties, donations, checkout, or ad-serving module in the active release scope.** Do not scaffold these without a new product decision. The watch-and-journal loop comes first, and playback remains member-controlled.
 4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
 5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
 6. **Localized failure.** No global API-down panic: auth/catalog/playback failures stay in their surface with retry or fallback, as the web shell already expects.
@@ -462,7 +493,7 @@ The provider SDK, injectable playback backend, dedicated playback Valkey, and he
 ## Architectural invariants
 
 1. Provider-specific behavior remains inside its adapter.
-2. The API does not proxy media; configured providers may use the signed Worker proxy.
+2. The API does not relay media; the browser fetches validated sources directly from configured providers.
 3. Cache entries respect source expiry.
 4. Concurrent misses are coalesced.
 5. Every external request is bounded.

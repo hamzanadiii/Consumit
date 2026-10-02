@@ -1,5 +1,6 @@
 import { playbackRefSchema } from '@consumit/contracts'
 import { z } from 'zod'
+import { assertHlsManifest } from '../manifest.ts'
 import type { ProviderAdapter, ProviderInput, ProviderSource, SkipSegment } from '../index.ts'
 
 /** Intro/outro/recap ranges in seconds from upstream skip metadata. Only
@@ -21,7 +22,12 @@ export function parseSkipSegments(value: unknown): SkipSegment[] {
 }
 
 /** The host application supplies bounded, DNS-pinned HTTP; adapters never call global fetch. */
-export type ProviderHttpRequest = { method?: 'POST'; body?: string }
+export type ProviderHttpRequest = {
+  method?: 'POST'
+  body?: string
+  /** Read only this many response bytes, for bounded media liveness probes. */
+  readPrefixBytes?: number
+}
 export type ProviderHttpResponse = { status: number; text: string; url: string; headers?: Headers }
 export type ProviderHttp = (url: string, headers: Record<string, string>, signal: AbortSignal, init?: ProviderHttpRequest) => Promise<ProviderHttpResponse>
 export const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
@@ -139,7 +145,10 @@ export async function verifiedPlaybackSources(
       if (source.type !== 'hls') { verified[index] = source; continue }
       try {
         const response = await document(http, source.url, signal, source.headers)
-        if (!response.text.trimStart().startsWith('#EXTM3U') || !/#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE):/.test(response.text)) continue
+        // Strict shared validation: error pages, empty playlists, and
+        // unsupported manifest features fail closed into a skipped
+        // candidate instead of a session.
+        assertHlsManifest(response.text)
         const settled = { ...source, url: response.url }
         verified[index] = refine ? refine(settled, response.text) : settled
       } catch { signal.throwIfAborted() }

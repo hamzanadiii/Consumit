@@ -23,10 +23,10 @@ function errorName(error: unknown) {
     : undefined
 }
 
-async function request(path: string, signal?: AbortSignal) {
+async function request(path: string, signal?: AbortSignal, timeoutMs = 8_000) {
   let response: Response
   try {
-    const timeout = AbortSignal.timeout(8_000)
+    const timeout = AbortSignal.timeout(timeoutMs)
     response = await fetch(path, {
       headers: { accept: 'application/json' },
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
@@ -88,4 +88,13 @@ export async function browserAnimeEpisode(anilistId: number, episode: number, si
   if (!response.ok) return null
   const parsed = animeEpisodeSchema.safeParse(await response.json().catch(() => null))
   return parsed.success ? parsed.data : null
+}
+
+export async function browserAnimeEpisodes(anilistId: number, numbers: number[], signal?: AbortSignal): Promise<(AnimeEpisode | null)[]> {
+  if (numbers.length === 0) return []
+  if (numbers.length > 24 || !numbers.every((number) => Number.isInteger(number) && number > 0 && number <= 10000)) throw new BrowserAnimeError('Choose up to 24 valid episodes.', false)
+  const raw = await request(`/v1/anime/${anilistId}/episodes?numbers=${numbers.join(',')}`, signal, 12_000)
+  const parsed = animeEpisodeSchema.nullable().array().length(numbers.length).safeParse((raw as { episodes?: unknown })?.episodes)
+  if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned invalid episode details.')
+  return parsed.data
 }

@@ -4,7 +4,7 @@ import { parseEmbedQuery } from './embed-query'
 
 describe('parseEmbedQuery', () => {
   it('defaults to autoplay at the start of the title', () => {
-    expect(parseEmbedQuery({})).toEqual({ autoPlay: true, lang: undefined, startAt: 0 })
+    expect(parseEmbedQuery({})).toEqual({ audio: 'sub', autoPlay: true, lang: undefined, startAt: 0 })
   })
 
   it('disables autoplay for false and 0', () => {
@@ -29,5 +29,13 @@ describe('parseEmbedQuery', () => {
     expect(parseEmbedQuery({ lang: '../../etc' }).lang).toBeUndefined()
     expect(parseEmbedQuery({ lang: 'not a lang!!' }).lang).toBeUndefined()
     expect(parseEmbedQuery({ lang: 'x'.repeat(17) }).lang).toBeUndefined()
+  })
+
+  it('accepts anime audio as sub or dub and clamps junk to sub', () => {
+    expect(parseEmbedQuery({ audio: 'dub' }).audio).toBe('dub')
+    expect(parseEmbedQuery({ audio: 'DUB' }).audio).toBe('dub')
+    expect(parseEmbedQuery({ audio: 'sub' }).audio).toBe('sub')
+    expect(parseEmbedQuery({ audio: 'surround' }).audio).toBe('sub')
+    expect(parseEmbedQuery({}).audio).toBe('sub')
   })
 })

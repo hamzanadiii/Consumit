@@ -44,6 +44,7 @@ import { createProbeScheduler } from './playback/probe.ts'
 import { registerAnimeRoutes } from './anime/routes.ts'
 import { createKitsuCatalog } from './catalog/kitsu/adapter.ts'
 import { createTmdbEpisodeArt, type TmdbEpisodeArtResolver } from './anime/tmdb-episode-art.ts'
+import { createAnizipEpisodeArt, type CanonicalEpisodeArt } from './anime/anizip-episode-art.ts'
 import { createCastleSubsProvider } from './subtitles/castlesubs.ts'
 import { createAnimeToshoProvider } from './subtitles/animetosho.ts'
 import { createAnizipClient } from './subtitles/anizip.ts'
@@ -78,6 +79,7 @@ type BuildAppOptions = {
   animeCatalog?: AnimeCatalog
   animeEpisodeArt?: KitsuCatalog
   animeTmdbEpisodeArt?: TmdbEpisodeArtResolver
+  animeCanonicalEpisodeArt?: CanonicalEpisodeArt
   env?: ApiEnv
   identity?: Identity
   letterboxdImporter?: LetterboxdImporter
@@ -88,7 +90,7 @@ type BuildAppOptions = {
   subtitlePreferences?: SubtitlePreferences
 }
 
-export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, env = loadEnv(), identity, letterboxdImporter, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
+export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, animeCanonicalEpisodeArt, env = loadEnv(), identity, letterboxdImporter, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
     // Matches requestTimeout: subtitle aggregation may legitimately work
@@ -183,7 +185,9 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   const resolvedAnimeCatalog = catalogCacheStore && env.nodeEnv !== 'test'
     ? createCachedAnimeCatalog(rawAnimeCatalog, catalogCache)
     : rawAnimeCatalog
+  const anizip = createAnizipClient(createSubtitleHttp(['api.ani.zip']))
   const animeService = createAnimeService(resolvedAnimeCatalog, {
+    ...(animeCanonicalEpisodeArt ? { canonicalEpisodeArt: animeCanonicalEpisodeArt } : env.nodeEnv !== 'test' ? { canonicalEpisodeArt: createAnizipEpisodeArt(anizip, catalogCache) } : {}),
     episodeArt: animeEpisodeArt ?? createKitsuCatalog({ cache: catalogCache }),
     ...(animeTmdbEpisodeArt ? { tmdbEpisodeArt: animeTmdbEpisodeArt } : resolvedCatalog !== unavailableCatalogAdapter ? { tmdbEpisodeArt: createTmdbEpisodeArt(resolvedCatalog, catalogCache) } : {}),
   })
@@ -221,7 +225,7 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     }, 5000)
     app.addHook('onClose', async () => clearInterval(timer))
   }
-  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, workerUrl: env.workerUrl, hmacSecret: env.embedHmacSecret, providerOrders })
+  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders })
   registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
   // Synthetic probes run in-process on a stagger (off in tests and when the
   // interval is zero). Past one instance every host probes; the reads are
@@ -243,7 +247,6 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   // (VDRK, VDRK v2, RiveSubs, Natsuki, NxshaSubs, plus SubDL/OpenSubtitles
   // when keyed) answers them too. CastleSubs and SubSource answer anime by
   // title on the TV path; TVSubtitles already did.
-  const anizip = createAnizipClient(createSubtitleHttp(['api.ani.zip']))
   const subtitleService = subtitles ?? createSubtitleService({
     providers: [
       createYifyProvider(createSubtitleHttp(['yifysubtitles.ch'])),

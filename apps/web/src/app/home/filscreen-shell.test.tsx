@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,6 @@ import { SessionProvider } from '../session/session'
 import { FilScreenShell } from './filscreen-shell'
 
 const mocks = vi.hoisted(() => ({
-  invalidateMemberLibraryCache: vi.fn(),
   logoutMember: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
@@ -19,7 +18,6 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/lib/identity-browser', () => ({
-  invalidateMemberLibraryCache: mocks.invalidateMemberLibraryCache,
   logoutMember: mocks.logoutMember,
 }))
 
@@ -65,6 +63,13 @@ describe('FilScreenShell', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Consumit home' })).toHaveClass('sr-only')
   })
 
+  it('uses Profile as the single member archive destination in the primary navigation', () => {
+    renderShell()
+    const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(within(navigation).getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile/hamzanadi')
+    for (const name of ['Watchlist', 'Library', 'Lists', 'History']) expect(within(navigation).queryByRole('link', { name })).not.toBeInTheDocument()
+  })
+
   it('signs out successfully and clears the session', async () => {
     const user = userEvent.setup()
     mocks.logoutMember.mockResolvedValue(undefined)
@@ -73,7 +78,6 @@ describe('FilScreenShell', () => {
     await user.click(screen.getByRole('button', { name: 'Log out' }))
 
     await waitFor(() => expect(mocks.logoutMember).toHaveBeenCalledTimes(1))
-    expect(mocks.invalidateMemberLibraryCache).toHaveBeenCalledTimes(1)
     expect(mocks.push).toHaveBeenCalledWith('/sign-in')
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

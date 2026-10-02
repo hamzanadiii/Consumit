@@ -4,6 +4,7 @@ import type { KitsuCatalog } from '../catalog/kitsu/kitsu.ts'
 import { AnimeError } from './errors.ts'
 import { matchesAnimeTitle } from './tmdb-episode-art.ts'
 import type { TmdbEpisodeArtResolver } from './tmdb-episode-art.ts'
+import type { CanonicalEpisodeArt, CanonicalEpisodeMetadata } from './anizip-episode-art.ts'
 
 export type AnimeService = {
   search(query: string, page?: number): Promise<AnimeSearchResult>
@@ -17,9 +18,8 @@ export type AnimeService = {
   franchise(anilistId: number): Promise<AnimeFranchise>
   airingSchedule(anilistId: number): Promise<AnimeAiringSchedule>
   batch(anilistIds: number[]): Promise<AnimeBatch>
-  /** Canonical episode metadata (title, synopsis, still) via Kitsu,
-   *  keyed by the AniList title's MAL id. Null art stays null — the UI
-   *  falls back to streaming thumbnails, then the placeholder. */
+  /** Canonical episode metadata by AniList id, with strict TMDB and
+   *  MAL-keyed Kitsu fallbacks. Null art stays null for the UI fallback. */
   episode(anilistId: number, episode: number): Promise<AnimeEpisode>
 }
 
@@ -28,6 +28,7 @@ export function createAnimeService(
   deps: {
     episodeArt?: KitsuCatalog | undefined
     tmdbEpisodeArt?: TmdbEpisodeArtResolver | undefined
+    canonicalEpisodeArt?: CanonicalEpisodeArt | undefined
   } = {},
 ): AnimeService {
   return {
@@ -60,6 +61,23 @@ export function createAnimeService(
             detail.seasonYear,
           )
           if (logo?.logoUrl) return { ...detail, logoUrl: logo.logoUrl }
+          // AniList splits seasons into titles while TMDB often keeps one
+          // series. Follow canonical prequels for logo artwork only; episode
+          // mapping stays on its strict, independent matching path.
+          if (['TV', 'TV_SHORT', 'ONA'].includes(detail.format)) {
+            const visited = new Set([anilistId])
+            let current = anilistId
+            for (let depth = 0; depth < 4; depth++) {
+              const franchise = await catalog.relations(current)
+              const previous = franchise.relations.find(relation => relation.type === 'PREQUEL' && !visited.has(relation.anime.anilistId))?.anime
+              if (!previous) break
+              current = previous.anilistId
+              visited.add(current)
+              if (!['TV', 'TV_SHORT', 'ONA'].includes(previous.format)) continue
+              const inherited = await deps.tmdbEpisodeArt.titleLogo(current, previous.titles, previous.seasonYear)
+              if (inherited?.logoUrl) return { ...detail, logoUrl: inherited.logoUrl }
+            }
+          }
         } catch {
           // Fall through to the unadorned detail below.
         }
@@ -88,7 +106,7 @@ export function createAnimeService(
     },
 
     async episode(anilistId, episode) {
-      if (!deps.episodeArt && !deps.tmdbEpisodeArt) throw new AnimeError('ANILIST_UNAVAILABLE', 'Episode artwork is not configured on this server.')
+      if (!deps.episodeArt && !deps.tmdbEpisodeArt && !deps.canonicalEpisodeArt) throw new AnimeError('ANILIST_UNAVAILABLE', 'Episode artwork is not configured on this server.')
       const detail = await catalog.title(anilistId)
       const duration = detail.episodeDuration && detail.episodeDuration > 0 ? detail.episodeDuration : null
       const usable = (art: { title: string | null; synopsis: string | null; stillUrl: string | null } | null): art is NonNullable<typeof art> =>
@@ -111,9 +129,17 @@ export function createAnimeService(
         airDate: fallback.airDate && /^\d{4}-\d{2}-\d{2}$/.test(fallback.airDate) ? fallback.airDate : null,
         duration,
       })
-      // TMDB is the primary source: it carries stills where Kitsu most
-      // often has titles alone. Kitsu stays as the canonical fallback.
-      // A failing source stays a miss (honest 404), never a 503.
+      let canonical: CanonicalEpisodeMetadata | null = null
+      if (deps.canonicalEpisodeArt) {
+        try {
+          canonical = await deps.canonicalEpisodeArt.episodeByAnilistId(anilistId, episode)
+        } catch {
+          // Independent metadata fallbacks remain available during outages.
+        }
+      }
+      if (canonical?.stillUrl && canonical.title) return toEpisode(canonical)
+      // TMDB and Kitsu fill missing fields; they never determine canonical
+      // anime identity from a parent logo or an unverified season guess.
       let tmdb: { title: string | null; overview: string | null; stillUrl: string | null; airDate: string | null } | null = null
       if (deps.tmdbEpisodeArt) {
         try {
@@ -131,10 +157,20 @@ export function createAnimeService(
         }
       }
       let kitsu: { title: string | null; synopsis: string | null; stillUrl: string | null; airDate: string | null } | null = null
-      if (deps.episodeArt && detail.malId && (!tmdb || !tmdb.stillUrl)) {
-        const art = await deps.episodeArt.episodeByMalId(detail.malId, episode)
-        if (art && usable(art)) kitsu = art
+      if (deps.episodeArt && detail.malId && ((!canonical?.stillUrl && !tmdb?.stillUrl) || (!canonical?.title && !tmdb?.title))) {
+        try {
+          const art = await deps.episodeArt.episodeByMalId(detail.malId, episode)
+          if (art && usable(art)) kitsu = art
+        } catch {
+          // A failed fallback must not discard already-known episode fields.
+        }
       }
+      if (canonical && usable(canonical)) return toEpisode({
+        title: canonical.title || tmdb?.title || kitsu?.title || null,
+        synopsis: canonical.synopsis || tmdb?.overview || kitsu?.synopsis || null,
+        stillUrl: canonical.stillUrl || tmdb?.stillUrl || kitsu?.stillUrl || null,
+        airDate: canonical.airDate || tmdb?.airDate || kitsu?.airDate || null,
+      })
       // Prefer still-bearing art (the card's whole job), then any usable
       // entry, TMDB first.
       if (tmdb?.stillUrl) return toTmdbEpisode(tmdb)

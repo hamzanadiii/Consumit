@@ -1,28 +1,35 @@
 export const relationsQuery = `query ($id: Int) {
   Media(id: $id, type: ANIME) {
-    id
-    title { romaji english }
+    ...AnimeRelationSummary
     relations {
       edges {
         relationType
         node {
           ... on Media {
-            id
-            idMal
-            isAdult
-            title { romaji english native }
-            format
-            status
-            season
-            seasonYear
-            episodes
-            coverImage { large color }
-            averageScore
-            popularity
-            description(asHtml: false)
+            ...AnimeRelationSummary
           }
         }
       }
     }
   }
+}
+fragment AnimeRelationSummary on Media {
+  id
+  idMal
+  type
+  isAdult
+  title { romaji english native }
+  format
+  status
+  season
+  seasonYear
+  episodes
+  duration
+  genres
+  coverImage { large color }
+  bannerImage
+  averageScore
+  popularity
+  description(asHtml: false)
+  nextAiringEpisode { episode airingAt }
 }`

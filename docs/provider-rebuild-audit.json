@@ -1,0 +1,1247 @@
+{
+  "method": "Static source and configured-input audit; no provider network calls",
+  "config": "infra/playback/providers.local.json",
+  "configuredRows": 62,
+  "enabledRows": 35,
+  "adapterCount": 49,
+  "centralBoundaries": [
+    "ProviderHttp DNS-pinned bounded transport",
+    "validatedSources HTTPS and media-host allowlist",
+    "resolver attempt deadline and viewer-failure circuit"
+  ],
+  "adapters": [
+    {
+      "adapter": "anibd",
+      "file": "packages\\provider-sdk\\src\\adapters\\anibd.ts",
+      "rows": [
+        {
+          "id": "anibd",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "anime123",
+      "file": "packages\\provider-sdk\\src\\adapters\\anime123.ts",
+      "rows": [
+        {
+          "id": "anime123",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "animekai",
+      "file": "packages\\provider-sdk\\src\\adapters\\animekai.ts",
+      "rows": [
+        {
+          "id": "animekai",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "animekitsu",
+      "file": "packages\\provider-sdk\\src\\adapters\\animekitsu.ts",
+      "rows": [
+        {
+          "id": "animekitsu",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "animeparadise",
+      "file": "packages\\provider-sdk\\src\\adapters\\animeparadise.ts",
+      "rows": [
+        {
+          "id": "animeparadise",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "anixo",
+      "file": "packages\\provider-sdk\\src\\adapters\\anixo.ts",
+      "rows": [
+        {
+          "id": "anixo",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "aphrodite",
+      "file": "packages\\provider-sdk\\src\\adapters\\aphrodite.ts",
+      "rows": [
+        {
+          "id": "aphrodite",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": true
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "castletv",
+      "file": "packages\\provider-sdk\\src\\adapters\\castletv.ts",
+      "rows": [
+        {
+          "id": "castletv",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "catflix",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidnest.ts",
+      "rows": [
+        {
+          "id": "catflix",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "cinehd",
+      "file": "packages\\provider-sdk\\src\\adapters\\cinehd.ts",
+      "rows": [
+        {
+          "id": "cinehd-hindi",
+          "enabled": true,
+          "regions": [
+            "IN",
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "cinehd-english",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "filmu",
+      "file": "packages\\provider-sdk\\src\\adapters\\filmu.ts",
+      "rows": [
+        {
+          "id": "filmu",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "filmuainary",
+      "file": "packages\\provider-sdk\\src\\adapters\\filmu.ts",
+      "rows": [
+        {
+          "id": "filmuainary",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "kyren",
+      "file": "packages\\provider-sdk\\src\\adapters\\kyren.ts",
+      "rows": [
+        {
+          "id": "kyren",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "lookmovie",
+      "file": "packages\\provider-sdk\\src\\adapters\\lookmovie.ts",
+      "rows": [
+        {
+          "id": "lookmovie",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "mapple",
+      "file": "packages\\provider-sdk\\src\\adapters\\mapple.ts",
+      "rows": [
+        {
+          "id": "mapple",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "modiplay",
+      "file": "packages\\provider-sdk\\src\\adapters\\modiplay.ts",
+      "rows": [
+        {
+          "id": "modiplay",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "nagare",
+      "file": "packages\\provider-sdk\\src\\adapters\\nagare.ts",
+      "rows": [
+        {
+          "id": "nagare",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "nhdapi",
+      "file": "packages\\provider-sdk\\src\\adapters\\nhdapi.ts",
+      "rows": [
+        {
+          "id": "nhdapi",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "nineanime",
+      "file": "packages\\provider-sdk\\src\\adapters\\nineanime.ts",
+      "rows": [
+        {
+          "id": "nineanime",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "nxsha",
+      "file": "packages\\provider-sdk\\src\\adapters\\nxsha.ts",
+      "rows": [
+        {
+          "id": "nxsha",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "perses",
+      "file": "packages\\provider-sdk\\src\\adapters\\perses.ts",
+      "rows": [
+        {
+          "id": "perses",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "poseidon",
+      "file": "packages\\provider-sdk\\src\\adapters\\poseidon.ts",
+      "rows": [
+        {
+          "id": "poseidon",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "riveapex",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "riveapex",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "riveapogee",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "riveapogee",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "riveapollo",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivedirect.ts",
+      "rows": [
+        {
+          "id": "riveapollo",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "riveaura",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "riveaura",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "rivecitadel",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "rivecitadel",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "riverigel",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "riverigel",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "rivestream",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "rivestream",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "rivestream-citadel",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "rivevanguard",
+      "file": "packages\\provider-sdk\\src\\adapters\\rivestream.ts",
+      "rows": [
+        {
+          "id": "rivevanguard",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "stellar",
+      "file": "packages\\provider-sdk\\src\\adapters\\stellar.ts",
+      "rows": [
+        {
+          "id": "stellar",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "stignebula",
+      "file": "packages\\provider-sdk\\src\\adapters\\stigstream.ts",
+      "rows": [
+        {
+          "id": "stignebula",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "stigorion",
+      "file": "packages\\provider-sdk\\src\\adapters\\stigstream.ts",
+      "rows": [
+        {
+          "id": "stigorion",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vaplayer",
+      "file": "packages\\provider-sdk\\src\\adapters\\vaplayer.ts",
+      "rows": [
+        {
+          "id": "vaplayer",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidapi",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidapi.ts",
+      "rows": [
+        {
+          "id": "vidapi",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidcore",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidcore.ts",
+      "rows": [
+        {
+          "id": "vidcore",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "vidcore-movy",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "videasy",
+      "file": "packages\\provider-sdk\\src\\adapters\\videasy.ts",
+      "rows": [
+        {
+          "id": "videasy",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidlink",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidlink.ts",
+      "rows": [
+        {
+          "id": "vidlink",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidlux",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidlux.ts",
+      "rows": [
+        {
+          "id": "vidlux",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidnest",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidnest.ts",
+      "rows": [
+        {
+          "id": "vidnest",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidrock",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidrock.ts",
+      "rows": [
+        {
+          "id": "vidrock-nova",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidsrc",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidsrc.ts",
+      "rows": [
+        {
+          "id": "vidsrc",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidsrcbuzz",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidsrcbuzz.ts",
+      "rows": [
+        {
+          "id": "vidsrcbuzz",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidstorm",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidstorm.ts",
+      "rows": [
+        {
+          "id": "vidstorm",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vidzen",
+      "file": "packages\\provider-sdk\\src\\adapters\\vidzen.ts",
+      "rows": [
+        {
+          "id": "vidzen",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vixsrc",
+      "file": "packages\\provider-sdk\\src\\adapters\\vixsrc.ts",
+      "rows": [
+        {
+          "id": "vixsrc",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "controlled-fixture-tested",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "vixsrc-it",
+      "file": "packages\\provider-sdk\\src\\adapters\\vixsrc.ts",
+      "rows": [
+        {
+          "id": "vixsrc-it",
+          "enabled": false,
+          "regions": [
+            "IT",
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "wecollege",
+      "file": "packages\\provider-sdk\\src\\adapters\\wecollege.ts",
+      "rows": [
+        {
+          "id": "wecollege",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-phoenix",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-miami",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-seattle",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-portland",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-paris",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": false
+        },
+        {
+          "id": "wecollege-boise",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-atlanta",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-austin",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-tampa",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        },
+        {
+          "id": "wecollege-berlin",
+          "enabled": false,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    },
+    {
+      "adapter": "zoko",
+      "file": "packages\\provider-sdk\\src\\adapters\\zoko.ts",
+      "rows": [
+        {
+          "id": "zoko",
+          "enabled": true,
+          "regions": [
+            "US"
+          ],
+          "proxy": true
+        }
+      ],
+      "staticChecks": {
+        "usesAdapterResultBoundary": true,
+        "hasDeadlineHandling": true,
+        "hasDirectGlobalFetch": false,
+        "executesProviderCode": false,
+        "importsOpaqueVendoredCode": false
+      },
+      "browserPlayback": "not-established-by-static-audit",
+      "liveResolveLatency": "unmeasured"
+    }
+  ]
+}

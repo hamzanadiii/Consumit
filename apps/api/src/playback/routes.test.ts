@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStaticProvider, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import { buildApp } from '../app.ts'
 import { loadEnv } from '../config/env.ts'
@@ -13,12 +13,70 @@ const apps: Awaited<ReturnType<typeof buildApp>>[] = []
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())) })
 async function setup() {
   const store = createMemoryPlaybackStore()
-  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const, ...(id === 'primary' ? { priority: 1 } : {}) }))
+  const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie', 'series'] as const, ...(id === 'primary' ? { priority: 1 } : {}) }))
   const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
   apps.push(app)
   return app
 }
 describe('playback session API', () => {
+  it.each([
+    { delivery: 'proxy', src: source.url },
+    { delivery: 'auto', src: source.url },
+    { delivery: 'direct', src: 'https://relay.example/proxy?url=https%3A%2F%2Fmedia.example%2Fvideo.mp4' },
+  ])('requires a fresh session for obsolete stored delivery $delivery ($src)', async (legacySource) => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = [{
+      adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true,
+      approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary',
+      concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'],
+    }]
+    try {
+      const playback = createPlayback({ providers, store, region: 'US' })
+      const session = await playback.resolve('viewer', body, new AbortController().signal)
+      const raw = await store.get(`session:${session.id}`)
+      const record = JSON.parse(raw!)
+      record.session.source = { ...record.session.source, ...legacySource }
+      await store.set(`session:${session.id}`, JSON.stringify(record), 3600)
+      await expect(playback.recover('viewer', session.id, { sourceId: 'stale-source-id', reason: 'expired' }, true, new AbortController().signal))
+        .rejects.toMatchObject({ code: 'NOT_FOUND', retryable: true })
+    } finally { await store.close() }
+  })
+  it('continues after the selected provider without retrying an earlier miss', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = ['first', 'second', 'third'].map((id) => ({
+      adapter: createStaticProvider(id, [{ ref, sources: id === 'first' ? [] : [source] }]),
+      enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id,
+      concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie'],
+    }))
+    const first = vi.spyOn(providers[0]!.adapter, 'resolve')
+    const playback = createPlayback({ providers, store, region: 'US', providerOrders: { movie: ['first', 'second', 'third'], series: [], anime: [] } })
+    const session = await playback.resolve('viewer', body, new AbortController().signal)
+    expect(session.source.providerId).toBe('second')
+    const fallback = await playback.recover('viewer', session.id, { sourceId: session.source.id, reason: 'network' }, false, new AbortController().signal)
+    expect(fallback.source.providerId).toBe('third')
+    expect(first).toHaveBeenCalledTimes(1)
+    await store.close()
+  })
+  it('can return to a recovered provider after the fallback window expires', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const store = createMemoryPlaybackStore()
+    try {
+      const providers: ProviderRegistration[] = ['first', 'second'].map((id) => ({
+        adapter: createStaticProvider(id, [{ ref, sources: [source] }]), enabled: true,
+        approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id,
+        concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie'],
+      }))
+      const playback = createPlayback({ providers, store, region: 'US', providerOrders: { movie: ['first', 'second'], series: [], anime: [] } })
+      const first = await playback.resolve('viewer', body, new AbortController().signal)
+      expect(first.source.providerId).toBe('first')
+      const second = await playback.recover('viewer', first.id, { sourceId: first.source.id, reason: 'network' }, false, new AbortController().signal)
+      expect(second.source.providerId).toBe('second')
+      vi.setSystemTime(Date.now() + 11 * 60_000)
+      const recovered = await playback.recover('viewer', second.id, { sourceId: second.source.id, reason: 'network' }, false, new AbortController().signal)
+      expect(recovered.source.providerId).toBe('first')
+      expect(recovered.fallbackCount).toBe(1)
+    } finally { vi.useRealTimers(); await store.close() }
+  })
   it('resolves guests, renews access, falls back, and rejects another guest', async () => {
     const app = await setup()
     const resolved = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers: { origin: 'http://localhost:3000' }, payload: body })
@@ -61,7 +119,7 @@ describe('playback session API', () => {
   it('lists the fixed fleet without resolving providers', async () => {
     const store = createMemoryPlaybackStore()
     const frTrack = { id: 'fr', label: 'French', language: 'fr', url: 'https://media.example/subs/fr.vtt', format: 'vtt' as const }
-    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const }))
+    const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, subtitles: [frTrack] }] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie', 'series'] as const }))
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
     apps.push(app)
     const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
@@ -78,8 +136,8 @@ describe('playback session API', () => {
   it('lists the whole fleet without resolving, answering or not', async () => {
     const store = createMemoryPlaybackStore()
     const providers: ProviderRegistration[] = [
-      { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const },
-      { adapter: createStaticProvider('ghost', [{ ref: { kind: 'movie', id: 999 }, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'ghost', concurrency: 2, requestsPerMinute: 30, proxy: false, mediaKinds: ['movie', 'series'] as const },
+      { adapter: createStaticProvider('primary', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'primary', concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie', 'series'] as const },
+      { adapter: createStaticProvider('ghost', [{ ref: { kind: 'movie', id: 999 }, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'ghost', concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie', 'series'] as const },
     ]
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers, store, region: 'US' }) })
     apps.push(app)
@@ -122,6 +180,48 @@ describe('playback session API', () => {
     expect(forth.json().source.providerId).toBe('backup')
     const unknown = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/switch`, headers, payload: { providerId: 'nope' } })
     expect(unknown.statusCode).toBe(400)
+  })
+  it('lists direct providers and rejects unknown delivery failures', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = [
+      { adapter: createStaticProvider('direct', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'direct', concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie'] },
+      { adapter: createStaticProvider('preferred', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'preferred', concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie'] },
+      { adapter: createStaticProvider('required', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'required', concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie'] },
+    ]
+    const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({
+      providers, store, region: 'US',
+    }) })
+    apps.push(app)
+    const listed = await app.inject({ method: 'POST', url: '/v1/playback/providers', headers: { origin: 'http://localhost:3000' }, payload: body })
+    expect(listed.statusCode).toBe(200)
+    expect(listed.json().providers.map((entry: { id: string }) => entry.id)).toEqual(['direct', 'preferred', 'required'])
+    expect(listed.json().providers.find((entry: { id: string }) => entry.id === 'preferred')).toMatchObject({  })
+    const resolved = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers: { origin: 'http://localhost:3000' }, payload: body })
+    expect(resolved.json().source.providerId).toBe('direct')
+    const session = resolved.json()
+    const cookie = resolved.cookies[0]!
+    const headers = { origin: 'http://localhost:3000', cookie: `${cookie.name}=${cookie.value}` }
+    const bogus = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/fallback`, headers, payload: { sourceId: session.source.id, reason: 'network', deliveryFailure: 'nope' } })
+    expect(bogus.statusCode).toBe(400)
+    await store.close()
+  })
+  it('cools definitively-failed providers five times longer than transient ones', async () => {
+    for (const [reason, expectedMs] of [['unsupported', 300_000], ['network', 60_000]] as const) {
+      const store = createMemoryPlaybackStore()
+      const providers: ProviderRegistration[] = [{ adapter: createStaticProvider('solo', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'solo', concurrency: 2, requestsPerMinute: 30,  mediaKinds: ['movie'] }]
+      const playback = createPlayback({ providers, store, region: 'US' })
+      const signal = new AbortController().signal
+      const session = await playback.resolve('viewer', body, signal)
+      providers[0]!.adapter.resolve = async () => ({ ok: false as const, code: 'empty' as const, retryable: false })
+      const before = Date.now()
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await playback.recover('viewer', session.id, { sourceId: session.source.id, reason }, true, signal).catch(() => undefined)
+      }
+      const status = playback.providerStatus!('movie').find((entry) => entry.id === 'solo')!
+      expect(status.openUntil - before).toBeGreaterThanOrEqual(expectedMs - 5000)
+      expect(status.openUntil - before).toBeLessThanOrEqual(expectedMs + 5000)
+      await store.close()
+    }
   })
   it('rejects cross-site resolution and incomplete episode identities', async () => {
     const app = await setup()

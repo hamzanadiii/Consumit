@@ -132,7 +132,7 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
     const { ref } = input
     // Movies + series only: an anime ref must never resolve by numeric-id
     // coincidence (AniList ids are not TMDB ids). Scoped rows can narrow
-    // further (apogee is movies-only): reject before any upstream work.
+    // further through kinds: reject before any upstream work.
     if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
     if (kinds && !(kinds as readonly string[]).includes(ref.kind)) throw new ProviderFailure('empty')
     const isTv = ref.kind === 'series'

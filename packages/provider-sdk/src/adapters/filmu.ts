@@ -71,35 +71,50 @@ function isDirectCandidate(rawUrl: string): boolean {
   return true
 }
 
-export function createFilmuProvider(http: ProviderHttp, identity: TmdbIdentityResolver, now = Date.now) {
-  return adapter('filmu', async (input, signal) => {
+export type FilmuExtractor = typeof EXTRACTORS[number]
+export type FilmuOptions = { id?: string; extractors?: readonly FilmuExtractor[] }
+
+export function createFilmuProvider(
+  http: ProviderHttp,
+  identity: TmdbIdentityResolver,
+  now = Date.now,
+  options: FilmuOptions = {},
+) {
+  const id = options.id ?? 'filmu'
+  const extractors = options.extractors ?? EXTRACTORS
+  return adapter(id, async (input, signal) => {
     const { ref } = input
     const isTv = ref.kind === 'series'
     const season = ref.season ?? 1
     const episode = ref.episode ?? 1
 
-    const ids = await identity(ref, signal).catch(() => ({}) as { imdbId?: string | undefined; tmdbId?: number | undefined })
-    let imdbId = ids?.imdbId
-    let title = ''
-    let year = ''
-    if (!imdbId) {
-      const metaOp = bounded(signal, JOB_TIMEOUT_MS)
-      try {
-        const metaRes = await document(http, `${metaOrigin}/api/tmdb/${isTv ? 'tv' : 'movie'}/${ref.id}?append_to_response=external_ids`, metaOp.signal, {
-          'user-agent': userAgent,
-          accept: 'application/json',
-        })
-        const meta = metaSchema.parse(JSON.parse(metaRes.text))
-        imdbId = meta.external_ids?.imdb_id ?? meta.imdb_id ?? undefined
-        title = meta.title ?? meta.name ?? ''
-        year = (meta.release_date ?? meta.first_air_date ?? '').slice(0, 4)
-      } finally {
-        metaOp.cleanup()
-      }
-    }
+    // TMDB supplies the canonical IMDb identity, while FilmU's own metadata
+    // endpoint supplies the title and year its extractors use for matching.
+    // Fetch both together: skipping FilmU metadata when TMDB already has an
+    // IMDb ID left Ainary with empty title/year query parameters for most films.
+    const [ids, meta] = await Promise.all([
+      identity(ref, signal).catch(() => ({}) as { imdbId?: string | undefined; tmdbId?: number | undefined }),
+      (async () => {
+        const metaOp = bounded(signal, JOB_TIMEOUT_MS)
+        try {
+          const metaRes = await document(http, `${metaOrigin}/api/tmdb/${isTv ? 'tv' : 'movie'}/${ref.id}?append_to_response=external_ids`, metaOp.signal, {
+            'user-agent': userAgent,
+            accept: 'application/json',
+          })
+          return metaSchema.parse(JSON.parse(metaRes.text))
+        } catch {
+          return null
+        } finally {
+          metaOp.cleanup()
+        }
+      })(),
+    ])
+    const imdbId = ids?.imdbId ?? meta?.external_ids?.imdb_id ?? meta?.imdb_id ?? undefined
+    const title = meta?.title ?? meta?.name ?? ''
+    const year = (meta?.release_date ?? meta?.first_air_date ?? '').slice(0, 4)
     if (!imdbId) throw new ProviderFailure('empty')
 
-    const settled = await Promise.all(EXTRACTORS.map(async (extractor) => {
+    const settled = await Promise.all(extractors.map(async (extractor) => {
       const op = bounded(signal, JOB_TIMEOUT_MS)
       try {
         const qs = new URLSearchParams({ tmdbId: String(ref.id), title, year })
@@ -125,7 +140,7 @@ export function createFilmuProvider(http: ProviderHttp, identity: TmdbIdentityRe
     const seenSubs = new Set<string>()
     for (const [index, data] of settled.entries()) {
       if (!data) continue
-      const extractor = EXTRACTORS[index]!.toLowerCase()
+      const extractor = extractors[index]!.toLowerCase()
       // Every labeled rendition becomes its own stream (1080p/720p/480p):
       // the resolver top-picks the best, the rest ride along as same-title
       // alternatives surfaced in the lab and the server menu detail.
@@ -142,7 +157,7 @@ export function createFilmuProvider(http: ProviderHttp, identity: TmdbIdentityRe
           continue
         }
         sources.push({
-          key: `filmu:${extractor}:${sources.length}`,
+          key: `${id}:${extractor}:${sources.length}`,
           url: item.url,
           type,
           qualityHint: quality || 'Auto',
@@ -158,7 +173,7 @@ export function createFilmuProvider(http: ProviderHttp, identity: TmdbIdentityRe
         if (!sub.url.startsWith('https://') || seenSubs.has(sub.url) || subtitles.length >= 20) continue
         seenSubs.add(sub.url)
         const label = (sub.label || sub.lang || 'Unknown').slice(0, 64)
-        subtitles.push({ id: `filmu-sub-${subtitles.length}`, label, language: label.slice(0, 32), url: sub.url, format: /\.srt/i.test(sub.url) ? 'srt' : 'vtt' })
+        subtitles.push({ id: `${id}-sub-${subtitles.length}`, label, language: label.slice(0, 32), url: sub.url, format: /\.srt/i.test(sub.url) ? 'srt' : 'vtt' })
       }
     }
     if (!sources.length) throw new ProviderFailure('empty')

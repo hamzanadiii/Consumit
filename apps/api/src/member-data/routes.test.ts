@@ -4,42 +4,57 @@ import { buildApp } from '../app.ts'
 import { loadEnv } from '../config/env.ts'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
 import { sessionCookieName } from '../identity/session.ts'
+import type { CreateDiaryEntryRequest } from '@consumit/contracts'
 import type { MemberData } from './member-data.ts'
 
 const origin = 'http://localhost:3000'
 
 function memberDataStub(): MemberData {
-  const emptyLibrary = { diary: [], favorites: [], lists: [], saved: [], watched: [] }
+  const emptyLibrary = { diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, savedLists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }
   const storedProgress = { completed: false, durationSeconds: 3600, id: 693134, kind: 'movie' as const, positionSeconds: 1200, updatedAt: '2026-09-06T00:00:00.000Z' }
   const storedRating = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null, value: 9 }
   const storedLike = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null }
   const storedReview = { body: 'A patient masterpiece.', id: 693134, kind: 'movie' as const, origin: 'native' as const, reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] }
   const storedTitleReview = { author: { avatarStyle: 'dusk' as const, avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }, body: 'A patient masterpiece.', liked: true, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }
   return {
-    createDiaryEntry: vi.fn(async () => ({ entryId: 'diary-1', id: 693134, kind: 'movie' as const, origin: 'native' as const, rewatch: false, sourceKey: null, tags: [], watchedOn: '2026-09-09' })),
+    circleActivity: vi.fn(async () => ({ items: [], nextCursor: null })),
+    createList: vi.fn(async () => { throw new Error('NOT_IMPLEMENTED') }),
+    discoverLists: vi.fn(async () => []),
+    createDiaryEntry: vi.fn(async (_memberId: string, input: CreateDiaryEntryRequest) => ({ ...(input.episode !== undefined ? { episode: input.episode } : {}), ...(input.season !== undefined ? { season: input.season } : {}), entryId: 'diary-1', id: input.id, kind: input.kind, origin: 'native' as const, rewatch: input.rewatch ?? false, sourceKey: null, tags: input.tags ?? [], watchedOn: input.watchedOn })),
+    deleteDiary: vi.fn(async () => true),
     createReview: vi.fn(async () => storedReview),
     isFollowing: vi.fn(async () => false),
-    library: vi.fn(async () => emptyLibrary),
+    libraryPage: vi.fn(async () => ({ collection: 'saved' as const, items: [], nextCursor: null })),
+    librarySnapshot: vi.fn(async () => emptyLibrary),
     like: vi.fn(async () => storedLike),
     list: vi.fn(async () => null),
     profile: vi.fn(async () => null),
+    profileArchive: vi.fn(async () => null),
     progress: vi.fn(async () => storedProgress),
+    watchHistory: vi.fn(async () => ({ items: [{ completedAt: '2026-09-28T12:00:00.000Z', entryId: 'history-1', id: 95396, kind: 'series' as const, season: 1, episode: 3 }], nextCursor: null })),
     rating: vi.fn(async () => storedRating),
+    ratingsByValue: vi.fn(async () => ({ items: [storedRating], nextCursor: null, totalCount: 1 })),
+    ratingsForTitles: vi.fn(async () => [storedRating]),
     removeLike: vi.fn(async () => true),
     removeRating: vi.fn(async () => true),
     removeReviewLike: vi.fn(async () => true),
     review: vi.fn(async () => storedReview),
     setReviewLiked: vi.fn(async () => ({ likesCount: 13, reviewId: 'review-1' })),
     titleReviews: vi.fn(async (_ref: unknown, page: number) => ({ items: [storedTitleReview], page, totalPages: 3, totalResults: 21 })),
-    setFavorites: vi.fn(async () => emptyLibrary),
+    setFavorites: vi.fn(async () => {}),
+    setListSaved: vi.fn(async () => true),
     setFollow: vi.fn(async () => ({ followers: 4, following: true })),
+    searchMembers: vi.fn(async () => []),
     setLiked: vi.fn(async () => storedLike),
     setProgress: vi.fn(async () => storedProgress),
     setRating: vi.fn(async () => storedRating),
-    setSaved: vi.fn(async () => emptyLibrary),
-    setWatched: vi.fn(async () => emptyLibrary),
+    setSaved: vi.fn(async () => {}),
+    setWatched: vi.fn(async () => {}),
+    titleState: vi.fn(async () => ({ rating: storedRating, like: storedLike, review: storedReview, saved: false, watched: false })),
     updateDiary: vi.fn(async () => true),
     updateList: vi.fn(async () => true),
+    updateListContent: vi.fn(async () => true),
+    deleteList: vi.fn(async () => true),
     updateReview: vi.fn(async () => true),
   }
 }
@@ -60,6 +75,22 @@ describe('member data mutation routes', () => {
     return { app, cookie: { [sessionCookieName(env)]: session.sessionToken }, memberData, memberId: session.member.id }
   }
 
+  it('serves bounded library pages and rejects invalid or mismatched cursors', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+    const cursor = JSON.stringify({ collection: 'saved', createdAt: '2026-09-28T12:00:00.000Z', id: 'saved-cursor' })
+    const page = await app.inject({ cookies: cookie, headers, method: 'GET', url: `/v1/me/library/collections/saved?limit=2&cursor=${encodeURIComponent(cursor)}` })
+
+    expect(page.statusCode).toBe(200)
+    expect(page.json()).toEqual({ collection: 'saved', items: [], nextCursor: null })
+    expect(memberData.libraryPage).toHaveBeenCalledWith(memberId, 'saved', cursor, 2)
+    expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/library/collections/saved?limit=51' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/library/collections/saved?cursor=not-json' })).statusCode).toBe(400)
+    const wrongCollection = encodeURIComponent(JSON.stringify({ collection: 'diary', createdAt: '2026-09-28T12:00:00.000Z', id: 'diary-cursor' }))
+    expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: `/v1/me/library/collections/saved?cursor=${wrongCollection}` })).statusCode).toBe(400)
+    expect((await app.inject({ headers, method: 'GET', url: '/v1/me/library/collections/saved' })).statusCode).toBe(401)
+  })
+
   it('serves one member title state with 200 instead of three 404-able reads', async () => {
     const { app, cookie, memberData, memberId } = await setup()
     const headers = { origin }
@@ -70,21 +101,19 @@ describe('member data mutation routes', () => {
       rating: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null, value: 9 },
       like: { id: 693134, kind: 'movie', origin: 'native', sourceKey: null },
       review: { body: 'A patient masterpiece.', id: 693134, kind: 'movie', origin: 'native', reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] },
+      saved: false,
+      watched: false,
     })
-    expect(memberData.rating).toHaveBeenCalledTimes(1)
-    expect(memberData.like).toHaveBeenCalledTimes(1)
-    expect(memberData.review).toHaveBeenCalledTimes(1)
+    expect(memberData.titleState).toHaveBeenCalledTimes(1)
 
-    vi.mocked(memberData.rating).mockResolvedValueOnce(null)
-    vi.mocked(memberData.like).mockResolvedValueOnce(null)
-    vi.mocked(memberData.review).mockResolvedValueOnce(null)
+    vi.mocked(memberData.titleState).mockResolvedValueOnce({ rating: null, like: null, review: null, saved: false, watched: false })
     const empty = await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/movie/1' })
     expect(empty.statusCode).toBe(200)
-    expect(empty.json()).toEqual({ rating: null, like: null, review: null })
+    expect(empty.json()).toEqual({ rating: null, like: null, review: null, saved: false, watched: false })
 
     expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/novel/1' })).statusCode).toBe(400)
     expect((await app.inject({ cookies: cookie, headers, method: 'GET', url: '/v1/me/titles/anime/1' })).statusCode).toBe(200)
-    expect(memberData.rating).toHaveBeenLastCalledWith(memberId, { id: 1, kind: 'anime' })
+    expect(memberData.titleState).toHaveBeenLastCalledWith(memberId, { id: 1, kind: 'anime' })
     expect((await app.inject({ headers, method: 'GET', url: '/v1/me/titles/movie/1' })).statusCode).toBe(401)
   })
 
@@ -145,6 +174,23 @@ describe('member data mutation routes', () => {
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/progress/series/95396?season=abc' })).statusCode).toBe(400)
   })
 
+  it('records an exact completion attempt and serves private paged history', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const completionId = '82ef6eaf-9248-4b77-820d-6d7bc025c823'
+    const payload = { completed: true, completionId, episode: 3, id: 95396, kind: 'series', positionSeconds: 1800, season: 1 }
+    const saved = await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload, url: '/v1/progress' })
+    expect(saved.statusCode).toBe(200)
+    expect(memberData.setProgress).toHaveBeenCalledWith(memberId, payload)
+    const history = await app.inject({ cookies: cookie, method: 'GET', url: '/v1/me/watch-history?limit=10' })
+    expect(history.statusCode).toBe(200)
+    expect(history.headers['cache-control']).toBe('private, no-store')
+    expect(history.json().items[0]).toMatchObject({ episode: 3, season: 1 })
+    expect(memberData.watchHistory).toHaveBeenCalledWith(memberId, undefined, 10)
+    expect((await app.inject({ method: 'GET', url: '/v1/me/watch-history' })).statusCode).toBe(401)
+    expect((await app.inject({ cookies: cookie, method: 'GET', url: '/v1/me/watch-history?limit=100' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', payload: { ...payload, episode: undefined }, url: '/v1/progress' })).statusCode).toBe(400)
+  })
+
   it('writes, reads, and removes member ratings through validated same-origin requests', async () => {
     const { app, cookie, memberData, memberId } = await setup()
     const headers = { origin }
@@ -181,11 +227,11 @@ describe('member data mutation routes', () => {
     const headers = { origin }
 
     const marked = await app.inject({ cookies: cookie, headers, method: 'PUT', url: '/v1/me/library/watched/movie/693134' })
-    expect(marked.statusCode).toBe(200)
+    expect(marked.statusCode).toBe(204)
     expect(memberData.setWatched).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, true)
 
     const cleared = await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/me/library/watched/movie/693134' })
-    expect(cleared.statusCode).toBe(200)
+    expect(cleared.statusCode).toBe(204)
     expect(memberData.setWatched).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie' }, false)
 
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'PUT', url: '/v1/me/library/watched/novel/693134' })).statusCode).toBe(400)
@@ -227,14 +273,20 @@ describe('member data mutation routes', () => {
     const { app, cookie, memberData, memberId } = await setup()
     const headers = { origin }
 
-    const created = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { id: 693134, kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' }, url: '/v1/me/diary' })
+    const created = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { id: 693134, idempotencyKey: 'f167ea18-4ea8-4d83-9ce7-e6bac7d3fef2', kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' }, url: '/v1/me/diary' })
     expect(created.statusCode).toBe(201)
     expect(created.json()).toMatchObject({ entryId: 'diary-1', id: 693134, watchedOn: '2026-09-09' })
-    expect(memberData.createDiaryEntry).toHaveBeenCalledWith(memberId, { id: 693134, kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' })
+    expect(memberData.createDiaryEntry).toHaveBeenCalledWith(memberId, { id: 693134, idempotencyKey: 'f167ea18-4ea8-4d83-9ce7-e6bac7d3fef2', kind: 'movie', rewatch: true, tags: ['cinema'], watchedOn: '2026-09-09' })
+
+    const episode = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { episode: 3, id: 95396, idempotencyKey: '693fd9d7-b207-4b99-9167-98d498e5e002', kind: 'series', season: 1, watchedOn: '2026-09-09' }, url: '/v1/me/diary' })
+    expect(episode.statusCode).toBe(201)
+    expect(episode.json()).toMatchObject({ episode: 3, id: 95396, kind: 'series', season: 1 })
+    expect(memberData.createDiaryEntry).toHaveBeenLastCalledWith(memberId, { episode: 3, id: 95396, idempotencyKey: '693fd9d7-b207-4b99-9167-98d498e5e002', kind: 'series', season: 1, watchedOn: '2026-09-09' })
 
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: 'not-a-date' }, url: '/v1/me/diary' })).statusCode).toBe(400)
+    expect((await app.inject({ cookies: cookie, headers, method: 'POST', payload: { episode: 3, id: 95396, idempotencyKey: '82ef6eaf-9248-4b77-820d-6d7bc025c823', kind: 'series', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(400)
     expect((await app.inject({ cookies: cookie, headers: { origin: 'https://evil.example' }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(403)
-    expect((await app.inject({ headers: { origin }, method: 'POST', payload: { id: 693134, kind: 'movie', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(401)
+    expect((await app.inject({ headers: { origin }, method: 'POST', payload: { id: 693134, idempotencyKey: 'f167ea18-4ea8-4d83-9ce7-e6bac7d3fef2', kind: 'movie', watchedOn: '2026-09-09' }, url: '/v1/me/diary' })).statusCode).toBe(401)
   })
 
   it('creates native reviews through validated same-origin requests', async () => {

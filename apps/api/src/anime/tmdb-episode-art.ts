@@ -157,7 +157,34 @@ export function createTmdbEpisodeArt(catalog: Catalog, cache = new StaleCache())
 
     async titleLogo(anilistId: number, titles: AnimeTitles, year: number | null) {
       if (!Number.isInteger(anilistId) || anilistId <= 0) return null
-      const match = await tmdbTitle(anilistId, titles, year)
+      let match = await tmdbTitle(anilistId, titles, year)
+      if (!match) {
+        // Artwork may belong to the parent series, whose debut predates the
+        // selected arc. This cache and match never feed episode identities.
+        const fallback = await cache.get<{ id: number; kind: 'series' } | null>(`tmdb:anime-logo:v3:${anilistId}`, mappingPolicy, async () => {
+          const bases = [...new Set([titles.english, titles.romaji].filter((name): name is string => !!name).flatMap(name => {
+            const trimmed = name.replace(/\s*[-:]?\s*(?:(?:season|part)\s*\d+|\d+(?:st|nd|rd|th)?\s*season)\b.*$/i, '').trim()
+            return [trimmed, name.includes(':') ? name.split(':')[0]!.trim() : ''].filter(base => base.length >= 4 && base !== name)
+          }))].slice(0, 3)
+          for (const base of bases) {
+            const page = await catalog.search({ kind: 'series', page: 1, query: base.slice(0, 100) })
+            const matches = page.items.filter(item => item.kind === 'series' && matchesTmdbTitle({ english: base, romaji: null, native: null }, null, { name: item.title, originalName: item.originalTitle, firstAirDate: item.releaseDate }) && (year === null || (item.year !== null && item.year <= year)))
+            if (!matches.length || matches.length > 3) continue
+            const identities: { id: number; kind: 'series' }[] = []
+            for (const candidate of matches) {
+              const item = (await catalog.title('series', candidate.id)).item
+              if (item.kind !== 'series' || !item.genreNames.includes('Animation') || !item.countries.some(country => country === 'JP' || country === 'Japan')) continue
+              // Same-name adaptations need an airing season in the selected
+              // arc's year. Never pick the most popular search result.
+              if (matches.length > 1 && (year === null || !item.seasons.some(season => { const aired = yearOf(season.airDate); return aired !== null && Math.abs(aired - year) <= 1 }))) continue
+              identities.push({ id: item.id, kind: 'series' })
+            }
+            if (identities.length === 1) return identities[0]!
+          }
+          return null
+        })
+        match = fallback.value
+      }
       if (!match) return null
       try {
         const detail = await catalog.title(match.kind, match.id)

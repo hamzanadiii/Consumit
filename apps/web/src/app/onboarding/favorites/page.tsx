@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
+import type { CatalogTitleSummary } from '@consumit/contracts'
 
 import { FavoritesOnboardingScreen } from '../onboarding-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
-import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
+import { getCatalogBatchForRefs } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
 
 export const metadata: Metadata = {
@@ -13,11 +14,11 @@ export const metadata: Metadata = {
 }
 
 export default async function OnboardingFavoritesPage() {
-  let response
+  let initialTitles: CatalogTitleSummary[] = []
   try {
-    response = await getCatalogBatch(refsKey(editorialRefs))
+    initialTitles = (await getCatalogBatchForRefs(editorialRefs))?.items ?? []
   } catch (error) {
     return <CatalogUnavailableScreen error={error} />
   }
-  return <FavoritesOnboardingScreen initialTitles={response.items} />
+  return <FavoritesOnboardingScreen initialTitles={initialTitles} />
 }

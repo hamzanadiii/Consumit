@@ -41,7 +41,7 @@ describe('series season selection', () => {
   it('keeps computed taste and numeric scores out of title details', () => {
     render(<TitleDetailScreen detail={movieDetail} />)
 
-    expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
+    expect(screen.getByRole('link', { name: 'Play' })).toHaveAttribute('href', '/watch/movie/693134')
     expect(screen.queryByText(/taste match|% match|TMDB ratings|TMDB votes|average/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/out of 5/i)).not.toBeInTheDocument()
   })
@@ -59,7 +59,7 @@ describe('series season selection', () => {
     expect(screen.getByText('★ 8.2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/library')
+    expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/sign-in')
     const synopses = screen.getAllByText('Paul unites with Chani and the Fremen.')
     expect(synopses).toHaveLength(2)
     expect(synopses[0]?.className).toMatch(/line-clamp-3/)
@@ -76,7 +76,7 @@ describe('series season selection', () => {
   })
 
   it('toggles the title save action between add and saved states', async () => {    const user = userEvent.setup()
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], saved: [], watched: [] }), { status: 200 })))
+const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] }), { status: 200 })))
     vi.stubGlobal('fetch', fetchMock)
     render(<SessionProvider initialMember={{ avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-09-07T12:00:00.000Z', displayName: null, email: 'member@example.com', emailVerified: true, id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca', role: 'member', username: 'cinema_fan' }} initialStatus="authenticated"><TitleDetailScreen detail={movieDetail} /></SessionProvider>)
 

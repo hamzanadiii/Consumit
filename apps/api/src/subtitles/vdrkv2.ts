@@ -14,14 +14,14 @@ export function createVdrkV2Provider(http: SubtitleHttp): SubtitleSearchProvider
     id: 'vdrkv2',
     name: 'VDRK v2',
     supports(query: SubtitleQuery) {
-      return (query.type === 'movie' || query.type === 'tv') && !!query.tmdbId
+      return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
       const tmdb = String(query.tmdbId)
       const url =
-        query.type === 'tv'
-          ? `${API}/tv/${tmdb}/${Number(query.season ?? 1)}/${Number(query.episode ?? 1)}`
-          : `${API}/movie/${tmdb}`
+        query.type === 'movie'
+          ? `${API}/movie/${tmdb}`
+          : `${API}/tv/${tmdb}/${Number(query.season ?? 1)}/${Number(query.episode ?? 1)}`
       const { text } = await http.get(url, { 'User-Agent': UA, Accept: 'application/json' }, signal)
       let parsed: unknown
       try {
@@ -34,7 +34,6 @@ export function createVdrkV2Provider(http: SubtitleHttp): SubtitleSearchProvider
       for (const entry of parsed) {
         const track = parseVdrkEntry(entry, 'vdrkv2')
         if (track) out.push(track)
-        if (out.length >= 40) break
       }
       return out
     },

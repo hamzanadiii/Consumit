@@ -34,8 +34,8 @@ describe('content cards', () => {
     expect(overlay?.className).toMatch(/inset-0/)
   })
 
-  it('pairs overlaid title and rating with a bookmark slot', () => {
-    const { container } = render(
+  it('keeps the poster title link accessible beside the bookmark action', () => {
+    render(
       <WatchCard
         bookmark={<button type="button">Save Dune</button>}
         href="/watch/movie/693134"
@@ -48,9 +48,7 @@ describe('content cards', () => {
 
     expect(screen.queryByRole('link', { name: 'Watch Dune: Part Two' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
-    const overlay = container.querySelector('[data-consumit-watch-card] > div > a[aria-hidden="true"]')
-    expect(overlay).toHaveAttribute('href', '/title/693134')
-    expect(overlay).toHaveAttribute('tabindex', '-1')
+    expect(screen.getAllByRole('link', { name: 'Dune: Part Two' })).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Save Dune' })).toBeInTheDocument()
     expect(screen.getByText('8.2')).toBeInTheDocument()
   })

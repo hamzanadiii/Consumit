@@ -1,0 +1,39 @@
+# Alertmanager routing for Consumit playback alerts.
+#
+# OPERATOR ACTION REQUIRED before unattended paging works: replace the
+# placeholder webhook URL below with the team's ops webhook (chat incoming
+# webhook, PagerDuty Events API via webhook, or any HTTP endpoint that
+# accepts the Alertmanager JSON payload). Until then alerts evaluate and
+# show in the admin Operations tab, but nothing notifies anyone.
+# See docs/runbooks/playback-alerts.md for verification steps.
+
+global:
+  # How long to wait before sending a second notification for a firing alert.
+  resolve_timeout: 5m
+
+route:
+  receiver: ops-webhook
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: ops-webhook
+      # Critical pages repeat faster than the default route.
+      repeat_interval: 30m
+    - matchers:
+        - severity = "warning"
+      receiver: ops-webhook
+
+receivers:
+  # PLACEHOLDER — replace with the real ops webhook URL. Prometheus rule
+  # state stays visible in admin even with the placeholder, but delivery
+  # only works after this points at a live endpoint.
+  - name: ops-webhook
+    webhook_configs:
+      - url: http://host.docker.internal:5111/hooks/consumit-playback
+        send_resolved: true
+        http_config:
+          follow_redirects: false

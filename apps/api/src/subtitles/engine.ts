@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import { assToVtt } from './ass.ts'
 import { langLabel } from './lang.ts'
 import { decodeSubtitleText, srtToVtt, unzipEntries } from './srt.ts'
@@ -65,9 +66,6 @@ export function detectTrackFlags(text: string): { forced: boolean; sdh: boolean;
 const SEARCH_TIMEOUT_MS = 12_000
 const FILE_TIMEOUT_MS = 8_000
 const CONVERT_CONCURRENCY = 4
-const MAX_RAW_PER_PROVIDER = 40
-const MAX_TRACKS = 24
-const MAX_PER_LANG = 2
 /** Whole-aggregation wall budget (under the 10s server connection bound).
  *  Whatever is ready in rank order is returned; conversions already cached
  *  from earlier views cost nothing, and the rest warm the cache for the
@@ -77,8 +75,8 @@ const MAX_FILE_BYTES = 5_242_880
 const MAX_VTT_BYTES = 524_288
 const FILE_TTL_SECONDS = 7 * 24 * 3600
 
-function fileKey(provider: string, sourceUrl: string, lang: string): string {
-  return createHash('sha1').update(`${provider}|${sourceUrl}|${lang}`).digest('hex').slice(0, 16)
+export function subtitleFileKey(raw: Pick<RawSubtitle, 'provider' | 'url' | 'identityUrl' | 'lang'>): string {
+  return createHash('sha1').update(`${raw.provider}|${raw.identityUrl ?? raw.url}|${raw.lang.toLowerCase()}`).digest('hex').slice(0, 16)
 }
 
 function trackId(provider: string, key: string): string {
@@ -87,6 +85,43 @@ function trackId(provider: string, key: string): string {
 
 function isZip(raw: RawSubtitle): boolean {
   return raw.needsExtract === true || raw.format === 'zip' || /\.zip(\?|#|$)/i.test(raw.url)
+}
+
+const XZ_MAGIC = Buffer.from([0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00])
+
+/** XZ single-file archives (AnimeTosho serves .ass.xz). Node and Bun ship
+ *  no XZ decoder, so this shells to the system `xz` binary the API image
+ *  carries (see Dockerfile); where the binary is absent the candidate is
+ *  skipped and other providers cover the title. Exported for tests. */
+export function isXz(buf: Buffer): boolean {
+  return buf.length > 6 && buf.subarray(0, 6).equals(XZ_MAGIC)
+}
+
+let xzAvailable: boolean | null = null
+
+async function unxz(buf: Buffer): Promise<Buffer | null> {
+  try {
+    if (xzAvailable === null) {
+      xzAvailable = await new Promise<boolean>((resolve) => {
+        execFile('xz', ['--version'], { timeout: 5000 }, (error) => resolve(!error))
+      })
+    }
+    if (!xzAvailable) return null
+    return await new Promise<Buffer | null>((resolve) => {
+      const child = execFile(
+        'xz',
+        ['-dc', '--memlimit=64M'],
+        { timeout: 8000, maxBuffer: MAX_FILE_BYTES, encoding: 'buffer' },
+        (error, stdout) => {
+          if (error) return resolve(null)
+          resolve(Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout))
+        },
+      )
+      child.stdin?.end(buf)
+    })
+  } catch {
+    return null
+  }
 }
 
 function validVtt(text: string): boolean {
@@ -157,9 +192,11 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
   }
   if (raw.format === 'ass' || (raw.format === 'other' && /\.ass|\.ssa$/i.test(fileUrl))) {
     const buf = await fetchFile(fileUrl, [url.hostname], headers, signal, MAX_FILE_BYTES)
-    const vtt = assToVtt(decodeSubtitleText(buf))
+    const source = isXz(buf) ? await unxz(buf) : buf
+    if (!source) return null
+    const vtt = assToVtt(decodeSubtitleText(source))
     if (!vtt || !validVtt(vtt)) return null
-    return { vtt, original: { bytes: buf, ext: originalExt(fileUrl, 'ass') } }
+    return { vtt, original: { bytes: source, ext: originalExt(fileUrl, 'ass') } }
   }
   const buf = await fetchFile(fileUrl, [url.hostname], headers, signal, MAX_FILE_BYTES)
   const text = decodeSubtitleText(buf)
@@ -173,19 +210,15 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
   return { vtt, original: { bytes: buf, ext: 'srt' } }
 }
 
-function isDirectVtt(raw: RawSubtitle): boolean {
-  return !isZip(raw) && (raw.format === 'vtt' || /\.vtt(\?|#|$)/i.test(raw.url))
-}
-
 /**
  * Aggregate caption tracks across subtitle providers for one title/episode.
  * Served entries are first-party VTT converted and cached by this module
  * (same-origin, no expiry, no CORS risk); direct entries are upstream https
  * WebVTT handed to the browser untouched. Ranked wanted-languages first,
  * full human tracks before forced/adjunct/machine variants, non-HI before
- * HI, then provider rating; best two per language, twenty-four max (the
- * watch menu caps at thirty-two; sessions carry a smaller subset). The top
- * full track per wanted language is marked Recommended.
+ * HI, then provider rating. The compatibility endpoint is bounded by a
+ * wall clock; the discovery interface pages every returned candidate. The
+ * top full track per wanted language is marked Recommended.
  */
 export async function resolveSubtitles(
   query: SubtitleQuery,
@@ -194,6 +227,7 @@ export async function resolveSubtitles(
   origin: string,
   signal: AbortSignal,
   fetchFile: FetchFile = fetchSubtitleBytes,
+  forceFirstParty = false,
 ): Promise<ServedSubtitle[]> {
   const wantLangs = (query.langs?.length ? query.langs : ['en']).map((lang) => lang.toLowerCase())
   const usable = providers.filter((provider) => {
@@ -218,8 +252,8 @@ export async function resolveSubtitles(
   )
   const raw: RawSubtitle[] = []
   settled.forEach((result) => {
-    if (result.status !== 'fulfilled') return
-    raw.push(...result.value.slice(0, MAX_RAW_PER_PROVIDER))
+    if (result.status !== 'fulfilled' || !Array.isArray(result.value)) return
+    raw.push(...result.value)
   })
   const langRank = (lang: string) => {
     const index = wantLangs.indexOf(lang.toLowerCase())
@@ -255,25 +289,21 @@ export async function resolveSubtitles(
   )
   // Rank order drives everything: take candidates in order, convert each
   // small group concurrently (sequential downloads would push cold searches
-  // past the route deadline), then apply caps in group order so limits stay
-  // exact. Direct upstream VTT needs no I/O; archives convert and cache.
-  const perLang = new Map<string, number>()
-  const picked = new Map<string, number>()
+  // past the route deadline). Discovery pages the full candidate set; this
+  // compatibility endpoint remains wall-time bounded.
+  const seen = new Set<string>()
   const tracks: ServedSubtitle[] = []
   const direct: ServedSubtitle[] = []
   let cursor = 0
   const take = (): RawSubtitle | null => {
     while (cursor < raw.length) {
       const entry = raw[cursor++]!
-      const lang = entry.lang.toLowerCase()
-      if ((perLang.get(lang) || 0) + (picked.get(lang) || 0) >= MAX_PER_LANG) continue
-      picked.set(lang, (picked.get(lang) || 0) + 1)
+      const key = `${entry.provider}|${entry.lang.toLowerCase()}|${entry.url}`
+      if (seen.has(key)) continue
+      seen.add(key)
       return entry
     }
     return null
-  }
-  const release = (lang: string) => {
-    picked.set(lang, Math.max(0, (picked.get(lang) || 0) - 1))
   }
   const labelFor = (entry: RawSubtitle) =>
     `${langLabel(entry.lang.toLowerCase())}${entry.hi ? ' [HI]' : ''} (${entry.provider})`
@@ -291,7 +321,7 @@ export async function resolveSubtitles(
     // Stop with a partial rank-ordered list when the budget runs out: the
     // menu shows what is ready, and warmed file caches complete the rest
     // on the next request instead of failing the whole search.
-    if (tracks.length + direct.length >= MAX_TRACKS || remainingMs() < 750) break
+    if (remainingMs() < 750) break
     const group: RawSubtitle[] = []
     for (let i = 0; i < CONVERT_CONCURRENCY; i++) {
       const entry = take()
@@ -302,32 +332,21 @@ export async function resolveSubtitles(
     const fileTimeout = Math.max(500, Math.min(FILE_TIMEOUT_MS, remainingMs()))
     const settled = await Promise.allSettled(
       group.map(async (entry): Promise<{ kind: 'direct' | 'served'; track: ServedSubtitle } | null> => {
-        if (isDirectVtt(entry)) {
+        if (!forceFirstParty && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
           try {
             const url = new URL(entry.url)
             if (url.protocol !== 'https:' || url.username || url.password) return null
-          } catch {
-            return null
-          }
+          } catch { return null }
           const lang = entry.lang.toLowerCase()
-          return {
-            kind: 'direct',
-            track: {
-              id: trackId(entry.provider, `d-${createHash('sha1').update(entry.url).digest('hex').slice(0, 8)}`),
-              label: labelFor(entry),
-              language: lang,
-              url: entry.url,
-              format: 'vtt',
-              provider: entry.provider,
-              ...(entry.hi ? { hi: true } : {}),
-              ...(typeof entry.rating === 'number' ? { rating: entry.rating } : {}),
-              ...(entry.release ? { release: entry.release } : {}),
-              ...flagFields(entry),
-            },
-          }
+          return { kind: 'direct', track: {
+            id: trackId(entry.provider, `d-${createHash('sha1').update(entry.url).digest('hex').slice(0, 8)}`),
+            label: labelFor(entry), language: lang, url: entry.url, format: 'vtt', provider: entry.provider,
+            ...(entry.hi ? { hi: true } : {}), ...(typeof entry.rating === 'number' ? { rating: entry.rating } : {}),
+            ...(entry.release ? { release: entry.release } : {}), ...flagFields(entry),
+          } }
         }
         const lang = entry.lang.toLowerCase()
-        const key = fileKey(entry.provider, entry.url, lang)
+        const key = subtitleFileKey(entry)
         const content = contentPath(query, lang)
         // Converted files cached by earlier views cost no I/O at all.
         try {
@@ -387,27 +406,15 @@ export async function resolveSubtitles(
       }),
     )
     for (let gi = 0; gi < group.length; gi++) {
-      if (tracks.length + direct.length >= MAX_TRACKS) break
-      const entry = group[gi]!
-      const lang = entry.lang.toLowerCase()
       const result = settled[gi]!
-      if (result.status !== 'fulfilled' || !result.value) {
-        release(lang)
-        continue
-      }
-      if ((perLang.get(lang) || 0) >= MAX_PER_LANG) {
-        release(lang)
-        continue
-      }
-      perLang.set(lang, (perLang.get(lang) || 0) + 1)
-      release(lang)
+      if (result.status !== 'fulfilled' || !result.value) continue
       if (result.value.kind === 'served') tracks.push(result.value.track)
       else direct.push(result.value.track)
     }
   }
   // Served first-party files before remote direct tracks: same-origin VTT
   // cannot expire, hit CORS walls, or vanish mid-watch.
-  const ordered = [...tracks, ...direct].slice(0, MAX_TRACKS)
+  const ordered = [...tracks, ...direct]
   // Mark the top pick per wanted language: first full (non-forced,
   // non-adjunct, human) track. The menu surfaces it as Recommended.
   const recommendedLangs = new Set<string>()

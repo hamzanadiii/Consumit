@@ -25,8 +25,8 @@ const imageHostname = 'image.tmdb.org'
 const requestTimeoutMs = 5_000
 
 const cachePolicies = {
-  configuration: { freshForMs: 86_400_000, staleForMs: 604_800_000 },
-  detail: { freshForMs: 21_600_000, staleForMs: 604_800_000 },
+  configuration: { freshForMs: 86_400_000, staleForMs: null },
+  detail: { freshForMs: 21_600_000, staleForMs: null },
   discover: { freshForMs: 900_000, staleForMs: 86_400_000 },
   search: { freshForMs: 300_000, staleForMs: 3_600_000 },
 } satisfies Record<string, CachePolicy>
@@ -466,7 +466,7 @@ export function createTmdbCatalog({
           statusCode: 503,
         })
       }
-      return new Map(parsed.data.genres.map((genre) => [genre.id, genre.name]))
+      return Object.fromEntries(parsed.data.genres.map((genre) => [genre.id, genre.name] as const))
     })
   }
 
@@ -481,7 +481,7 @@ export function createTmdbCatalog({
     const identity = titleFor(kind, value)
     return {
       backdropUrl: imageUrl(value.backdrop_path, images.value, 'backdrop'),
-      genreNames: value.genre_ids.map((id) => genres.value.get(id)).filter((name): name is string => Boolean(name)),
+      genreNames: value.genre_ids.map((id) => genres.value[String(id)]).filter((name): name is string => Boolean(name)),
       id: value.id,
       kind,
       logoUrl: null,
@@ -567,7 +567,7 @@ export function createTmdbCatalog({
         throw new CatalogError('CATALOG_INVALID_QUERY', 'Filters require popular or top-rated sorting.', { statusCode: 400 })
       }
       const genres = query.genre ? await genreMap(kind) : null
-      const genreId = genres ? [...genres.value].find(([, name]) => name === query.genre)?.[0] : undefined
+      const genreId = genres ? Object.entries(genres.value).find(([, name]) => name === query.genre)?.[0] : undefined
       if (query.genre && !genreId) {
         throw new CatalogError('CATALOG_INVALID_QUERY', 'Choose a genre from the catalog.', { statusCode: 400 })
       }

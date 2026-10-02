@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { assertHlsManifest } from '../manifest.ts'
 import { accessDeadline, adapter, document, ProviderFailure, titlePath, userAgent, type ProviderHttp } from './http.ts'
 
 const origin = 'https://vixsrc.to'
@@ -26,7 +27,11 @@ export function createVixsrcProvider(http: ProviderHttp, now = Date.now, options
     const expiresAt = accessDeadline(master.href, now(), Number(expires) * 1000)
     const deliveryHeaders = { referer: apiUrl, 'user-agent': userAgent }
     const manifest = await document(http, master.href, signal, deliveryHeaders)
-    if (!manifest.text.trimStart().startsWith('#EXTM3U') || !/#EXT-X-(STREAM-INF|TARGETDURATION):/.test(manifest.text)) throw new ProviderFailure('malformed')
+    try {
+      assertHlsManifest(manifest.text)
+    } catch {
+      throw new ProviderFailure('malformed')
+    }
     // Audio and segmented subtitle renditions remain in the adaptive HLS manifest.
     return [{ key: 'original-hls', url: manifest.url, type: 'hls', headers: deliveryHeaders, language: 'original', expiresAt, subtitles: [] }]
   })

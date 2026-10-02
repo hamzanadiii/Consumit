@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }))
 
-const emptyLibrary = { diary: [], favorites: [], lists: [], saved: [], watched: [] }
+const emptyLibrary = { diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] }
 const storedDiary = { entryId: 'diary-9', id: 550, kind: 'movie', origin: 'native', rewatch: false, sourceKey: null, tags: ['cinema'], watchedOn: '2026-09-09' }
 const storedRating = { id: 550, kind: 'movie', origin: 'native', sourceKey: null, value: 9 }
 const storedLike = { id: 550, kind: 'movie', origin: 'native', sourceKey: null }
@@ -21,7 +21,7 @@ function dialogFetch() {
     const url = String(input)
     const method = init?.method ?? 'GET'
     if (url.includes('/v1/me/titles/')) {
-      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null }), { status: 200 }))
+      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null, saved: false, watched: false }), { status: 200 }))
     }
     if (url.includes('/v1/ratings/') || url.includes('/v1/likes/')) {
       return Promise.resolve(new Response('Not found', { status: 404 }))

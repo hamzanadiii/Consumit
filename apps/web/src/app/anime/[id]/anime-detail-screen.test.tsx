@@ -1,10 +1,13 @@
-import type { AnimeTitleDetail } from '@consumit/contracts'
+import type { AnimeEpisode, AnimeTitleDetail } from '@consumit/contracts'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '@/test/render'
 
 import { AnimeDetailScreen, AnimeHeroTitle, indexStreamingMeta } from './anime-detail-screen'
+
+const batch = vi.hoisted(() => vi.fn<(_id: number, _numbers: number[]) => Promise<(AnimeEpisode | null)[]>>(async () => []))
+vi.mock('@/lib/anime-browser', () => ({ browserAnimeEpisodes: batch }))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -103,6 +106,13 @@ describe('anime hero title', () => {
 })
 
 describe('anime detail screen member surfaces', () => {
+  it('loads metadata once for the visible page and labels title artwork', async () => {
+    batch.mockResolvedValueOnce([{ anilistId: 21, number: 1, title: 'The Journey', description: 'A new beginning.', thumbnail: null, airDate: '2023-09-01', duration: 24 }, null])
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
+    expect(await screen.findByText('A new beginning.')).toBeInTheDocument()
+    expect(batch).toHaveBeenCalledWith(21, [1, 2])
+    expect(screen.getAllByText('Title artwork')).toHaveLength(2)
+  })
   it('shelves member actions in the hero with the anime namespace', () => {
     renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
 
@@ -142,6 +152,18 @@ describe('anime detail screen member surfaces', () => {
 })
 
 describe('anime recommendations', () => {
+  it('shows distinct related seasons and films before the overview and removes Staff', () => {
+    const original = animeFixture()
+    const sequel = animeFixture({ anilistId: 22, titles: { ...original.titles, preferred: 'Next Season' } })
+    const film = animeFixture({ anilistId: 23, format: 'MOVIE', titles: { ...original.titles, preferred: 'Related Film' } })
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={{ ...original, staff: [{ id: 1, name: 'Example Director', image: null, role: 'Director' }] }} relations={{ main: original, relations: [{ type: 'SEQUEL', anime: sequel }, { type: 'SIDE_STORY', anime: film }, { type: 'SEQUEL', anime: sequel }, { type: 'PREQUEL', anime: original }] }} />)
+    expect(screen.getAllByRole('link', { name: 'Next Season' })).toHaveLength(1)
+    expect(screen.getByRole('link', { name: 'Related Film' })).toHaveAttribute('href', '/anime/23')
+    expect(screen.getByText('Next season')).toBeInTheDocument()
+    expect(document.getElementById('staff')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Staff' })).not.toBeInTheDocument()
+    expect(document.getElementById('related')?.compareDocumentPosition(document.getElementById('overview')!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
   it('replaces external links with an AniList recommendations rail', () => {
     const recommended = animeFixture({
       anilistId: 7,
@@ -160,9 +182,9 @@ describe('anime recommendations', () => {
     const recommendations = document.getElementById('recommendations')
     expect(recommendations).not.toBeNull()
     expect(recommendations?.contains(screen.getByRole('heading', { name: 'Watch next' }))).toBe(true)
-    expect(screen.getByRole('link', { name: 'Other Show, 2023' })).toHaveAttribute('href', '/anime/7')
+    expect(screen.getByRole('link', { name: 'Other Show' })).toHaveAttribute('href', '/anime/7')
     // The current title and duplicate entries drop out of the rail.
-    expect(screen.getAllByRole('link', { name: 'Other Show, 2023' })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: 'Other Show' })).toHaveLength(1)
     expect(screen.queryByRole('link', { name: 'Frieren: Beyond Journey\u2019s End, 2023' })).not.toBeInTheDocument()
   })
 

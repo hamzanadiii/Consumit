@@ -5,12 +5,18 @@ import { looksLikeAnime } from '../../catalog/catalog-ui'
 import { SeriesDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
-import { getAnimeMatch } from '@/lib/anime-api'
-import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
+import { getCachedAnimeMatch } from '@/lib/anime-api'
+import { CatalogApiError, getCachedCatalogSeason, getCachedCatalogTitle } from '@/lib/catalog-api'
 import { serializeJsonLd } from '@/lib/json-ld'
 
 type SeriesDetailPageProps = {
   params: Promise<{ slug: string }>
+}
+
+export const revalidate = 300
+
+export function generateStaticParams() {
+  return []
 }
 
 export async function generateMetadata({ params }: SeriesDetailPageProps): Promise<Metadata> {
@@ -18,7 +24,7 @@ export async function generateMetadata({ params }: SeriesDetailPageProps): Promi
   const id = Number(slug)
   if (!Number.isInteger(id) || id <= 0) return { title: 'Series not found · Consumit' }
   try {
-    const { item } = await getCatalogTitle('series', id)
+    const { item } = await getCachedCatalogTitle('series', id)
     return {
       alternates: { canonical: `/series/${id}` },
       description: item.overview,
@@ -34,7 +40,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
   if (!Number.isInteger(id) || id <= 0) notFound()
   let response
   try {
-    response = await getCatalogTitle('series', id)
+    response = await getCachedCatalogTitle('series', id)
   } catch (error) {
     if (error instanceof CatalogApiError && error.status === 404) notFound()
     return <CatalogUnavailableScreen activeHref="/series" error={error} />
@@ -45,7 +51,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
   // providers, episode art): a confident match redirects straight there
   // instead of stranding the member on the TMDB mirror.
   if (looksLikeAnime(item)) {
-    const animeMatch = await getAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
+    const animeMatch = await getCachedAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
     if (animeMatch) redirect(`/anime/${animeMatch}`)
   }
   const jsonLd = {
@@ -60,7 +66,7 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
     ...(item.seasons.length ? { numberOfSeasons: item.seasons.length } : {}),
   }
   const firstSeason = response.item.seasons[0]?.number
-  const seasonResponse = firstSeason ? await getCatalogSeason(id, firstSeason).catch(() => null) : null
+  const seasonResponse = firstSeason ? await getCachedCatalogSeason(id, firstSeason).catch(() => null) : null
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} type="application/ld+json" />

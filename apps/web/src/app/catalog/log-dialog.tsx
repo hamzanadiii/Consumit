@@ -30,7 +30,10 @@ type LogDialogProps = {
   onClose: () => void
   onSaved: () => void
   posterUrl?: string | undefined
+  episode?: number | undefined
+  season?: number | undefined
   title: string
+  watchedOn?: string | undefined
   year?: number | null | undefined
 }
 
@@ -51,8 +54,8 @@ function parseTags(raw: string) {
  * a section that already landed. When `existingReview` is provided the dialog
  * edits that stored review in place (PATCH) instead of writing a new one.
  */
-export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, posterUrl, title, year }: LogDialogProps) {
-  const [date, setDate] = useState(existingReview?.reviewedOn ?? today())
+export function LogDialog({ existingReview = null, episode, id, kind, onClose, onSaved, posterUrl, season, title, watchedOn, year }: LogDialogProps) {
+  const [date, setDate] = useState(existingReview?.reviewedOn ?? watchedOn ?? today())
   const [logWatch, setLogWatch] = useState(true)
   const [rewatch, setRewatch] = useState(false)
   const [review, setReview] = useState(existingReview?.body ?? '')
@@ -63,6 +66,7 @@ export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, p
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const initial = useRef<{ liked: boolean; rating: number | null } | null>(null)
+  const diaryAttempt = useRef<{ fingerprint: string; key: string } | null>(null)
   const originalReview = useRef(existingReview)
   const done = useRef({ diary: false, liked: false, rating: false, review: false, watched: false })
   const panelRef = useRef<HTMLDivElement>(null)
@@ -122,7 +126,12 @@ export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, p
         done.current.watched = true
       }
       if (logWatch && !done.current.diary) {
-        await createDiaryEntry({ id, kind, rewatch, tags: parseTags(tags), watchedOn: date })
+        const diaryInput = { ...(episode !== undefined ? { episode } : {}), id, kind, rewatch, ...(season !== undefined ? { season } : {}), tags: parseTags(tags), watchedOn: date }
+        const fingerprint = JSON.stringify(diaryInput)
+        if (diaryAttempt.current?.fingerprint !== fingerprint) {
+          diaryAttempt.current = { fingerprint, key: globalThis.crypto.randomUUID() }
+        }
+        await createDiaryEntry({ ...diaryInput, idempotencyKey: diaryAttempt.current.key })
         done.current.diary = true
       }
       if (!done.current.rating) {
@@ -179,7 +188,7 @@ export function LogDialog({ existingReview = null, id, kind, onClose, onSaved, p
       >
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-display text-3xl text-ink" id="log-dialog-heading">
-            {`Log ${title}${year ? ` ${year}` : ''}`}
+            {`Log ${title}${year ? ` ${year}` : ''}${episode !== undefined ? ` · ${kind === 'series' && season !== undefined ? `S${String(season).padStart(2, '0')} ` : ''}E${String(episode).padStart(2, '0')}` : ''}`}
           </h2>
           <button
             aria-label="Close log dialog"

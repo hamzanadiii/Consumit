@@ -14,6 +14,7 @@ const envSchema = z.object({
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
   PLAYBACK_PROBE_INTERVAL_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),
+  ADMIN_METRICS_URL: z.url().optional(),
   RESEND_API_KEY: z.string().trim().min(1).optional(),
   SUBDL_API_KEY: z.string().trim().min(1).optional(),
   SUBTITLES_DIR: z.string().trim().min(1).optional(),
@@ -26,8 +27,6 @@ const envSchema = z.object({
   TMDB_REGION: z.string().trim().length(2).default('US'),
   TRUSTED_PROXIES: z.string().optional(),
   VALKEY_URL: z.string().trim().min(1).optional(),
-  WORKER_URL: z.url().refine((url) => new URL(url).protocol === 'https:', 'Worker URL must use HTTPS.').optional(),
-  EMBED_HMAC_SECRET: z.string().min(32).optional(),
 })
 
 export type ApiEnv = {
@@ -40,6 +39,7 @@ export type ApiEnv = {
      *  traffic; they only report to logs and the admin health endpoint. */
     probeIntervalMs: number
   }
+  adminMetricsUrl: string | undefined
   appOrigin: string
   authCodePepper: string | undefined
   authEmailFrom: string | undefined
@@ -62,8 +62,6 @@ export type ApiEnv = {
   tmdbToken: string | undefined
   trustedProxies: string[]
   valkeyUrl: string | undefined
-  workerUrl: string | undefined
-  embedHmacSecret: string | undefined
 }
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): ApiEnv {
@@ -84,9 +82,6 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     const authUrl = new URL(value.VALKEY_URL)
     if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
   }
-  if (value.WORKER_URL && !value.EMBED_HMAC_SECRET) {
-    throw new Error('Invalid API configuration: EMBED_HMAC_SECRET is required when WORKER_URL is set.')
-  }
   if (value.NODE_ENV === 'production') {
     const required = {
       AUTH_CODE_PEPPER: value.AUTH_CODE_PEPPER,
@@ -105,6 +100,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   return {
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
+    adminMetricsUrl: value.ADMIN_METRICS_URL,
     appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,
@@ -127,7 +123,5 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     tmdbToken: value.TMDB_API_READ_TOKEN,
     trustedProxies: (value.TRUSTED_PROXIES ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
     valkeyUrl: value.VALKEY_URL,
-    workerUrl: value.WORKER_URL,
-    embedHmacSecret: value.EMBED_HMAC_SECRET,
   }
 }

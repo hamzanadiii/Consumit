@@ -7,44 +7,10 @@ import Link from 'next/link'
 import { useMemo, useRef, useState } from 'react'
 
 import { useAnimeFeed, type AnimeFeedQuery } from './use-anime-feed'
+import { TitleCard } from '../shared/title-card'
 
 function animeHref(anime: AnimeTitleSummary) {
   return `/anime/${anime.anilistId}`
-}
-
-function AnimePosterCard({ anime }: { anime: AnimeTitleSummary }) {
-  const rating = anime.averageScore === null ? null : (anime.averageScore / 10).toFixed(1)
-  return (
-    <li className="min-w-0 w-40 shrink-0 snap-start sm:w-44 lg:w-48 [content-visibility:auto] [contain-intrinsic-size:auto_300px]">
-      <Link
-        aria-label={`${anime.titles.preferred}${anime.seasonYear ? `, ${anime.seasonYear}` : ''}`}
-        className="group block rounded-card outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-        href={animeHref(anime)}
-        prefetch={false}
-      >
-        <ArtworkFrame
-          alt={`${anime.titles.preferred} poster`}
-          className="transition-colors duration-200 group-hover:border-[var(--fs-accent)] motion-reduce:transition-none"
-          ratio="portrait"
-          src={anime.coverImage.url || undefined}
-        >
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            <p className="truncate text-sm font-bold text-white">{anime.titles.preferred}</p>
-            <p className="mt-1 flex items-center gap-1.5 text-xs text-white/80 tabular-nums">
-              {anime.seasonYear ? <span>{anime.seasonYear}</span> : null}
-              {rating ? (
-                <span className="inline-flex items-center gap-1 font-bold text-white">
-                  <Star aria-hidden="true" className="size-3 fill-current" />
-                  {rating}
-                  <span className="sr-only">score</span>
-                </span>
-              ) : null}
-            </p>
-          </div>
-        </ArtworkFrame>
-      </Link>
-    </li>
-  )
 }
 
 function AnimeFeaturedRail({ items }: { items: AnimeTitleSummary[] }) {
@@ -80,7 +46,7 @@ function AnimeFeaturedRail({ items }: { items: AnimeTitleSummary[] }) {
                       {anime.seasonYear && (rating || anime.genres[0]) ? <span aria-hidden="true">·</span> : null}
                       {rating ? (
                         <span className="inline-flex items-center gap-1 font-bold text-white">
-                          <Star aria-hidden="true" className="size-3.5 fill-current text-[#ffb800]" />
+                          <Star aria-hidden="true" className="size-3.5 fill-current text-orange" />
                           {rating}
                           <span className="sr-only">score</span>
                         </span>
@@ -107,7 +73,7 @@ function AnimeGrid({ items, loading, error, hasMore, loadMore, sentinelRef, onRe
         <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{items.length > 0 ? `${items.length} titles` : 'Finding titles…'}</p>
       </div>
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
-        {items.map((anime) => <AnimePosterCard key={`anime:${anime.anilistId}`} anime={anime} />)}
+        {items.map((anime) => <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" key={`anime:${anime.anilistId}`} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, year: anime.seasonYear, posterUrl: anime.coverImage.url, tmdbRating: anime.averageScore === null ? null : anime.averageScore / 10 }} />)}
         {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && items.length === 0 ? (

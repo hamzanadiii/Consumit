@@ -1,18 +1,27 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, Keyboard, Moon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Keyboard, Moon, Tv } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { titleHref, type PlaybackProvider, type PlaybackRef, type PlaybackSession } from '@consumit/contracts'
+import { titleHref, type PlaybackProvider, type PlaybackRef, type PlaybackSession, type DeliveryFailure } from '@consumit/contracts'
 import { Button, ConsumitPlayer, Toggle, buttonVariants, SUBTITLE_LANGUAGES_EVENT, readStoredSubtitleLanguages } from '@consumit/ui'
 import { useSession } from '../session/session'
 import { listPlaybackProviders, playbackCapabilities, playbackRequest, switchPlaybackProvider } from '@/lib/playback-browser'
-import { fetchAggregatedSubtitles, fetchSubtitlePreference, saveSubtitlePreference } from '@/lib/subtitles-browser'
+import { discoverSubtitles, pageSubtitles, searchSubtitles, prepareSubtitle, fetchSubtitlePreference, saveSubtitlePreference, type SubtitleDiscoveryEvent, type SubtitleCandidate, type SubtitleProviderStatus } from '@/lib/subtitles-browser'
 import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, readPlaybackProgress, writePlaybackProgress, type ProgressCheckpoint } from '@/lib/playback-progress'
 import { createPlaybackEvents } from '@/lib/playback-events'
+import { createPlaybackCoordinator, watchSourceExpiry } from '@/lib/playback-coordinator'
+import { castContentType, createCastSender, type CastStatus } from '@/lib/cast-sender'
 
 import type { WatchEpisode, WatchTitle } from './watch-screen'
+
+function formatClock(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00'
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = Math.floor(totalSeconds % 60)
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
 
 export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode, nextHref, prevHref, layout = 'fullscreen', pinnedProvider }: { audioLanguage?: string | undefined; title: WatchTitle; episode?: WatchEpisode | undefined; nextHref?: string | undefined; prevHref?: string | undefined; layout?: 'fullscreen' | 'embedded' | undefined; pinnedProvider?: string | undefined }) {
   const { member } = useSession()
@@ -20,6 +29,10 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const memberId = member?.id
   const ref = useMemo<PlaybackRef>(() => ({ kind: title.kind, id: title.id, ...(episode ? { season: episode.seasonNumber, episode: episode.episodeNumber } : {}) }), [title.id, title.kind, episode])
   const [session, setSession] = useState<PlaybackSession | null>(null)
+  // The session holds the newest lease. A healthy local engine can keep
+  // using its attached URL while a freshly minted URL waits for recovery.
+  const [localSource, setLocalSource] = useState<PlaybackSession['source']>()
+  const sourceFailed = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [syncError, setSyncError] = useState(false)
@@ -30,7 +43,14 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const activeRef = useRef(false)
   const interruptedRequest = useRef<(() => Promise<void>) | null>(null)
   const clock = useRef({ position: 0, duration: 0, playing: false, completed: false })
+  const completionId = useRef<string | null>(null)
   const [resume, setResume] = useState({ position: 0, playing: false })
+  const coordinator = useMemo(() => createPlaybackCoordinator({
+    resolve: (input, signal) => playbackRequest('resolve', input, signal),
+    providers: listPlaybackProviders,
+    recover: (current, action, failure, signal) => playbackRequest(`${current.id}/${action}`, failure, signal),
+    switch: (current, providerId, signal) => switchPlaybackProvider(current.id, { providerId }, signal),
+  }), [])
   // Resolve-time audio: an explicit prop (anime SUB/DUB toggle) always wins;
   // otherwise the member's stored player preference flows through so Hindi
   // (and other) selections reach language-aware providers. Storage reads stay
@@ -85,15 +105,8 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       /* Storage is optional. */
     }
   }, [])
-  // A refresh that mints new URLs for a provider whose bytes never play must
-  // not loop forever (re-minted signatures always differ, so the identical-URL
-  // check below never fires). When the same provider fails again within a
-  // short window after an accepted refresh, spend the fallback budget instead
-  // of re-minting. Routine mid-watch renewals fail hours apart and still
-  // refresh normally.
-  const lastRefresh = useRef<{ providerId: string; at: number } | null>(null)
-  const REFRESH_RETRY_WINDOW_MS = 90_000
-  const saveInFlight = useRef(false)
+  const saveInFlight = useRef<Promise<void> | null>(null)
+  const completionWrite = useRef<Promise<void> | null>(null)
   const lastSynced = useRef<ProgressCheckpoint | undefined>(undefined)
   const eventsRef = useRef<ReturnType<typeof createPlaybackEvents> | null>(null)
   const sessionId = session?.id
@@ -110,10 +123,17 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     // Coalesce server and local writes: the interval only persists meaningful
     // changes, while pause, seek, completion, and page exit save explicitly.
     if (!keepalive && !force && !hasMeaningfulProgressChange(lastSynced.current, { position: clock.current.position, completed: clock.current.completed })) return
-    saveInFlight.current = true
-    try { await writePlaybackProgress(ref, clock.current.position, clock.current.duration, clock.current.completed, memberId, keepalive); lastSynced.current = { position: clock.current.position, completed: clock.current.completed }; setSyncError(false) }
-    catch { setSyncError(true) }
-    finally { saveInFlight.current = false }
+    const snapshot = { ...clock.current, completionId: completionId.current ?? undefined }
+    const pending = (async () => {
+      try {
+        await writePlaybackProgress(ref, snapshot.position, snapshot.duration, snapshot.completed, memberId, keepalive, snapshot.completionId)
+        lastSynced.current = { position: snapshot.position, completed: snapshot.completed }
+        setSyncError(false)
+      } catch { setSyncError(true) }
+    })()
+    if (!keepalive) saveInFlight.current = pending
+    await pending
+    if (saveInFlight.current === pending) saveInFlight.current = null
   }, [ref, memberId])
 
   useEffect(() => {
@@ -149,22 +169,25 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storedAudio])
 
-  // Switched-provider toast: after any automatic or manual move to a
-  // different provider, name the destination once so silent auto-heals
-  // read as care, not glitches. Auto-dismisses; unmount-safe.
-  const [notice, setNotice] = useState<{ provider: string; quality?: string | undefined } | null>(null)
+  // Keep recovery language about the playback outcome, never provider names.
+  // Auto-dismisses; unmount-safe.
+  const [notice, setNotice] = useState<{ message: string } | null>(null)
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const prevProvider = useRef<string | null>(null)
+  const manualNotice = useRef(false)
+  const showNotice = useCallback((message: string) => {
+    setNotice({ message })
+    clearTimeout(noticeTimer.current)
+    noticeTimer.current = setTimeout(() => setNotice(null), 4500)
+  }, [])
   useEffect(() => {
     const current = session?.source.providerId ?? null
-    if (current && prevProvider.current && current !== prevProvider.current) {
-      const label = servers.find((server) => server.id === current)?.label ?? current
-      setNotice({ provider: label, ...(session?.source.qualityHint ? { quality: session.source.qualityHint } : {}) })
-      clearTimeout(noticeTimer.current)
-      noticeTimer.current = setTimeout(() => setNotice(null), 4500)
+    if (manualNotice.current) manualNotice.current = false
+    else if (current && prevProvider.current && current !== prevProvider.current) {
+      showNotice(`Playback resumed${session?.source.qualityHint ? ` · ${session.source.qualityHint}` : ''}`)
     }
     prevProvider.current = current
-  }, [session, servers])
+  }, [session, servers, showNotice])
   useEffect(() => () => { clearTimeout(noticeTimer.current) }, [])
 
   const finishRequest = useCallback((controller: AbortController, restart: () => Promise<void>) => {
@@ -178,6 +201,96 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     } else { interruptedRequest.current = null; setBusy(false) }
   }, [])
 
+  const completePlayback = useCallback(() => {
+    if (clock.current.completed) return
+    const precedingWrite = saveInFlight.current
+    clock.current.playing = false; clock.current.completed = true; completionId.current ??= crypto.randomUUID(); setEnded(true)
+    const immediate = save(true, true)
+    // A periodic write may already be on the wire. Repeat the same completion
+    // after it settles so its late position cannot reopen a finished stream.
+    completionWrite.current = precedingWrite ? Promise.all([precedingWrite, immediate]).then(() => save(true, true)) : immediate
+    void completionWrite.current
+    if (autoplay && nextHref) router.push(nextHref)
+  }, [autoplay, nextHref, router, save])
+
+  // Chromecast (P1): the TV plays while the phone keeps the session, progress,
+  // and telemetry. The TV never authenticates; disconnect resumes the phone
+  // player at the TV's position through the normal resume path.
+  const castSender = useMemo(() => createCastSender({}), [])
+  const [castAvailable, setCastAvailable] = useState(false)
+  const [castStatus, setCastStatus] = useState<CastStatus | null>(null)
+  const wasCasting = useRef(false)
+  const tvPlaying = useRef(false)
+  const loadCastMedia = useCallback(async (target: PlaybackSession) => {
+    await castSender.loadMedia({
+      contentId: target.source.src,
+      contentType: castContentType(target.source.type),
+      title: name,
+      artwork: episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined,
+      position: clock.current.position,
+      customData: {
+        sessionId: target.id,
+        providerId: target.source.providerId,
+        delivery: target.source.delivery,
+        audioLanguage,
+      },
+    })
+  }, [castSender, name, episode, title, audioLanguage])
+  useEffect(() => {
+    let cancelled = false
+    void castSender.ensure().then((ready) => { if (!cancelled && ready) setCastAvailable(castSender.available) })
+    const unsubscribe = castSender.subscribe(() => {
+      if (cancelled) return
+      setCastAvailable(castSender.available)
+      const status = castSender.status
+      setCastStatus(status)
+      if (status) {
+        wasCasting.current = true
+        clock.current.position = status.position
+        clock.current.duration = status.duration
+        clock.current.playing = status.playing
+        if (status.playing && !tvPlaying.current) {
+          tvPlaying.current = true
+          eventsRef.current?.push({ type: 'started', position: status.position })
+        }
+        if (!status.playing) tvPlaying.current = false
+        if (status.duration > 0 && status.position >= status.duration - 1 && !clock.current.completed) {
+          eventsRef.current?.push({ type: 'ended', position: status.position })
+          completePlayback()
+        }
+      } else if (wasCasting.current) {
+        wasCasting.current = false
+        tvPlaying.current = false
+        clock.current.playing = true
+        setResume({ position: clock.current.position, playing: true })
+      }
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [castSender, completePlayback])
+  const handleCastClick = useCallback(() => {
+    if (!session || requestRef.current) return
+    if (castSender.status) {
+      // Disconnect: the subscription above resumes local playback.
+      castSender.endSession(true)
+      return
+    }
+    const controller = new AbortController(); requestRef.current = controller
+    setBusy(true); setError(null)
+    void (async () => {
+      try {
+        await castSender.requestSession()
+        if (controller.signal.aborted) return
+        await loadCastMedia(session)
+      } catch {
+        if (!controller.signal.aborted) showNotice('Couldn’t reach the TV. Try again.')
+      }
+      finally { finishRequest(controller, async () => { handleCastClick() }) }
+    })()
+  }, [session, castSender, loadCastMedia, showNotice, finishRequest])
+
   async function start() {
     if (requestRef.current) return
     if ((ref.kind === 'series' || ref.kind === 'anime') && !episode) { setError(ref.kind === 'anime' ? 'Choose an episode to start watching.' : 'Choose an available episode from the series page.'); return }
@@ -185,78 +298,65 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     setBusy(true); setError(null); setEnded(false)
     try {
       const [next, position] = await Promise.all([
-        playbackRequest('resolve', { ref, capabilities: playbackCapabilities(), audioLanguage }, controller.signal),
+        coordinator.resolve({ ref, capabilities: playbackCapabilities(), audioLanguage }, controller.signal),
         readPlaybackProgress(ref, controller.signal, member?.id),
       ])
       if (controller.signal.aborted) return
       if (next.ref.id !== ref.id || next.ref.kind !== ref.kind || next.ref.season !== ref.season || next.ref.episode !== ref.episode) throw new Error('Playback returned a different title.')
       const resumePosition = session && !clock.current.completed ? clock.current.position : position
-      lastRefresh.current = null
       setResume({ position: resumePosition, playing: true }); clock.current.position = resumePosition; clock.current.playing = true; clock.current.completed = false
       setSession(next)
+      setLocalSource(next.source); sourceFailed.current = false
     } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Playback could not start. Try again.') }
     finally { finishRequest(controller, start) }
   }
 
-  const recover = useCallback(async (reason: 'network' | 'media' | 'expired' | 'gone') => {
+  const recover = useCallback(async (reason: 'network' | 'media' | 'expired' | 'gone', deliveryFailure?: DeliveryFailure) => {
+    if (reason !== 'expired') sourceFailed.current = true
     if (!session || requestRef.current) return
+    if (reason !== 'expired' && !castSender.status && localSource &&
+        session.source.providerId === localSource.providerId &&
+        session.source.type === localSource.type && session.source.delivery === localSource.delivery &&
+        session.source.src !== localSource.src && Date.parse(session.source.expiresAt) > Date.now() + 15_000) {
+      setResume({ position: clock.current.position, playing: clock.current.playing })
+      setLocalSource(session.source); sourceFailed.current = false
+      setError(null)
+      return
+    }
     const controller = new AbortController(); requestRef.current = controller
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(12000)])
-    setBusy(true); setError(null)
-    const retained = { position: clock.current.position, playing: clock.current.playing }
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(21000)])
+    if (reason !== 'expired') setBusy(true)
+    setError(null)
     try {
-      // HTTP 410 Gone is definitive at the contract boundary too: the bytes
-      // are not coming back, so skip the same-provider re-mint entirely and
-      // spend one windowed fallback on a different provider.
-      const failure = { sourceId: session.source.id, reason: reason === 'gone' ? 'unsupported' as const : reason }
-      // Signed segment URLs routinely die before the manifest expiry, so every
-      // failure first re-mints the same provider (refresh never consumes the
-      // automatic fallback budget). Only a failed — or identical-URL — refresh
-      // spends one windowed fallback on a different provider. This is why long
-      // watches stopped dying "after a while" once three segment blips had
-      // burned the old lifetime budget of three.
-      //
-      // Escape hatch for resolve-healthy but unplayable providers: a refresh
-      // that mints different URLs does not prove playability, so when the
-      // same provider fails again within a short window after an accepted
-      // refresh, skip re-minting and spend the fallback budget instead.
-      let next: PlaybackSession
-      const refreshedRecently = lastRefresh.current !== null
-        && lastRefresh.current.providerId === session.source.providerId
-        && Date.now() - lastRefresh.current.at < REFRESH_RETRY_WINDOW_MS
-      if (reason === 'gone' || refreshedRecently) {
-        lastRefresh.current = null
-        next = await playbackRequest(`${session.id}/fallback`, failure, signal)
-      } else {
-        try {
-          next = await playbackRequest(`${session.id}/refresh`, failure, signal)
-          if (next.source.src === session.source.src) next = await playbackRequest(`${session.id}/fallback`, failure, signal)
-          lastRefresh.current = { providerId: session.source.providerId, at: Date.now() }
-        } catch {
-          lastRefresh.current = null
-          next = await playbackRequest(`${session.id}/fallback`, failure, signal)
-        }
-      }
+      const next = await coordinator.recover(session, reason, signal, deliveryFailure)
       if (!controller.signal.aborted) {
         if (next.ref.id !== session.ref.id || next.ref.kind !== session.ref.kind || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Playback returned a different title.')
-        setResume(retained); setSession(next)
+        // The clock can advance while a healthy renewal is in flight.
+        setResume({ position: clock.current.position, playing: clock.current.playing }); setSession(next)
+        const keepAttached = reason === 'expired' && !sourceFailed.current && !castSender.status && localSource &&
+          next.source.providerId === localSource.providerId && next.source.type === localSource.type &&
+          next.source.delivery === localSource.delivery
+        if (!keepAttached) { setLocalSource(next.source); sourceFailed.current = false }
+        if (castSender.status) {
+          try { await loadCastMedia(next) }
+          catch { castSender.endSession(false); showNotice('Lost the TV connection. Playing here.') }
+        }
       }
     } catch { if (!controller.signal.aborted) setError('We couldn’t restore playback. Try again or return to the title.') }
-    finally { finishRequest(controller, () => recover(reason)) }
-  }, [session, finishRequest])
+    finally { finishRequest(controller, () => recover(reason, deliveryFailure)) }
+  }, [session, localSource, finishRequest, coordinator, castSender, loadCastMedia, showNotice])
 
   useEffect(() => {
+    // Renew every active playback lease, regardless of whether the diagnostic
+    // provider pin is enabled.
     if (!session) return
-    const timer = setTimeout(() => void recover('expired'), Math.max(1000, Date.parse(session.source.expiresAt) - Date.now() - 15000))
-    // Background-tab timers can slip past expiry; re-check on return so a
-    // hidden tab refreshes instead of playing into 403 segments.
-    const visible = () => { if (document.visibilityState === 'visible' && Date.parse(session.source.expiresAt) <= Date.now() + 60000) void recover('expired') }
-    document.addEventListener('visibilitychange', visible)
-    return () => { clearTimeout(timer); document.removeEventListener('visibilitychange', visible) }
+    return watchSourceExpiry(session.source.expiresAt, () => void recover('expired'))
   }, [recover, session])
 
   useEffect(() => {
-    if (!session) return
+    // Provider details are only needed for the internal ?provider= lab pin.
+    // Normal playback avoids this roster request entirely.
+    if (!session || !pinnedProvider) return
     const key = `${ref.kind}:${ref.id}:${ref.season ?? 0}:${ref.episode ?? 0}`
     if (serversFetchedFor.current === key) return
     serversFetchedFor.current = key
@@ -266,7 +366,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     // cancelling buys nothing — a late response is simply ignored below.
     // The request stays bounded by its own timeout instead.
     let stale = false
-    void listPlaybackProviders({ ref, capabilities: playbackCapabilities(), audioLanguage }, AbortSignal.timeout(12000))
+    void coordinator.providers({ ref, capabilities: playbackCapabilities(), audioLanguage }, AbortSignal.timeout(12000))
       .then((servers) => { if (!stale) setServers(servers) })
       .catch((error: unknown) => {
         if (stale) return
@@ -274,38 +374,38 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
         setServers([])
       })
     return () => { stale = true }
-  }, [audioLanguage, session, ref])
+  }, [audioLanguage, session, ref, coordinator, pinnedProvider])
 
-  const switchServer = useCallback(async (providerId: string, tried: readonly string[] = []) => {
+  const switchServer = useCallback(async (providerId: string) => {
     if (!session || requestRef.current || session.source.providerId === providerId) return
     const controller = new AbortController(); requestRef.current = controller
     setBusy(true); setError(null)
     const retained = { position: clock.current.position, playing: clock.current.playing }
     try {
-      const next = await switchPlaybackProvider(session.id, { providerId }, controller.signal)
+      const next = await coordinator.switchAvailable(session, providerId, servers, controller.signal)
       if (controller.signal.aborted) return
       if (next.ref.id !== session.ref.id || next.ref.kind !== session.ref.kind || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Playback returned a different title.')
-      lastRefresh.current = null
+      if (next.source.providerId !== providerId) {
+        // The chosen server didn't answer and a fallback took over: say so.
+        // Falling through silently is the bug where clicks "land on another
+        // provider" with no explanation.
+        manualNotice.current = true
+        showNotice('Playback resumed from another source.')
+      }
       setResume(retained); setSession(next)
+      setLocalSource(next.source); sourceFailed.current = false
+      if (castSender.status) {
+        try { await loadCastMedia(next) }
+        catch { castSender.endSession(false); showNotice('Lost the TV connection. Playing here.') }
+      }
     } catch {
       if (controller.signal.aborted) return
-      // Auto-advance: a tapped mirror that fails hands off to the next
-      // untried one — healthy and answering first — instead of stranding
-      // the member on an error. Each mirror is tried once per chain, so
-      // this always terminates at a player or an honest error.
-      const attempted = new Set([...tried, providerId])
-      const candidates = servers.filter((server) => !attempted.has(server.id) && server.id !== session.source.providerId)
-      const fallback = candidates.find((server) => server.available !== false && server.health !== 'degraded')
-        ?? candidates[0]
-      if (fallback) {
-        requestRef.current = null
-        await switchServer(fallback.id, [...attempted])
-        return
-      }
-      setError('We couldn’t switch server. Try again or return to the title.')
+      // Full failure keeps playing the current server, so it is a toast,
+      // not the error overlay (which only renders when nothing is playing).
+      showNotice('Couldn’t switch sources. Playback is still available.')
     }
     finally { finishRequest(controller, () => switchServer(providerId)) }
-  }, [session, finishRequest, servers])
+  }, [session, finishRequest, servers, coordinator, showNotice, castSender, loadCastMedia])
 
   // Lab pin (?provider=): after the opening resolve lands on another
   // provider, switch once to the pinned one. Consumed immediately so
@@ -325,6 +425,15 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   // The member's preferred subtitle languages ride along so the engine
   // tries those first; changing them refetches live.
   const [engineSubtitles, setEngineSubtitles] = useState<{ id: string; label: string; language: string; url: string }[]>([])
+  const preparedSubtitleFiles = useRef(new Map<string, { id: string; label: string; language: string; url: string }>())
+  const [subtitleSearchId, setSubtitleSearchId] = useState<string | null>(null)
+  const [subtitleLanguages, setSubtitleLanguages] = useState<SubtitleDiscoveryEvent['languages']>([])
+  const [subtitleProviders, setSubtitleProviders] = useState<SubtitleProviderStatus[]>([])
+  const [subtitleLoading, setSubtitleLoading] = useState(false)
+  const [subtitleError, setSubtitleError] = useState<string | null>(null)
+  const [subtitleRequested, setSubtitleRequested] = useState(false)
+  const [subtitleAttempt, setSubtitleAttempt] = useState(0)
+  const subtitleSessionId = session?.id
   const [subtitleLangs, setSubtitleLangs] = useState<string[]>(() => readStoredSubtitleLanguages())
   useEffect(() => {
     const sync = () => setSubtitleLangs(readStoredSubtitleLanguages())
@@ -332,23 +441,43 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     return () => window.removeEventListener(SUBTITLE_LANGUAGES_EVENT, sync)
   }, [])
   useEffect(() => {
-    if (!session) return
+    if (!subtitleSessionId || !subtitleRequested) return
     let active = true
-    const ref = session.ref
-    // No AbortController here on purpose: aborting in cleanup (or via a
-    // manual timer) surfaces uncaught AbortError overlays in dev even though
-    // the rejection is swallowed below. The timeout still bounds the request
-    // and `active` guards the late response.
-    void fetchAggregatedSubtitles(
+    void discoverSubtitles(
       { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
       AbortSignal.timeout(15_000),
-      subtitleLangs,
+      (event) => {
+        if (!active) return
+        setSubtitleSearchId(event.searchId)
+        setSubtitleLanguages(event.languages)
+        if (event.provider) setSubtitleProviders((current) => [...current.filter((item) => item.id !== event.provider!.id), event.provider!])
+        if (event.type === 'complete') setSubtitleLoading(false)
+      },
     ).then(
-      (subs) => { if (active) setEngineSubtitles(subs) },
-      () => {},
+      () => { if (active) setSubtitleLoading(false) },
+      () => { if (active) { setSubtitleLoading(false); setSubtitleError('Subtitle search is unavailable. Try again.') } },
     )
     return () => { active = false }
-  }, [session, subtitleLangs])
+  }, [subtitleSessionId, ref, subtitleRequested, subtitleAttempt])
+  const loadSubtitlePage = useCallback(async (language: string, cursor: number): Promise<{ tracks: SubtitleCandidate[]; total: number; nextCursor: number | null }> => {
+    if (!subtitleSearchId) return { tracks: [], total: 0, nextCursor: null }
+    return pageSubtitles(subtitleSearchId, language, cursor, subtitleLangs, AbortSignal.timeout(10_000))
+  }, [subtitleSearchId, subtitleLangs])
+  const searchSubtitleCandidates = useCallback(async (query: string, cursor: number) => {
+    if (!subtitleSearchId) return { tracks: [], total: 0, nextCursor: null }
+    return searchSubtitles(subtitleSearchId, query, cursor, AbortSignal.timeout(10_000))
+  }, [subtitleSearchId])
+  const selectSubtitleCandidate = useCallback(async (candidate: SubtitleCandidate) => {
+    if (!subtitleSearchId) throw new Error('Search subtitles again.')
+    const track = candidate.preparedUrl
+      ? { id: candidate.id, label: candidate.label, language: candidate.language, url: candidate.preparedUrl }
+      : await prepareSubtitle(subtitleSearchId, candidate.id, AbortSignal.timeout(11_000))
+    const attached = preparedSubtitleFiles.current.get(track.url)
+    if (attached) return attached
+    preparedSubtitleFiles.current.set(track.url, track)
+    setEngineSubtitles((current) => [...current, track])
+    return track
+  }, [subtitleSearchId])
   // Per-member subtitle sync correction: signed-in members reload their
   // stored offset per title and every nudge persists (debounced) — guests
   // keep the player's device-local behavior only. The screen remounts per
@@ -409,7 +538,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     const seenUrls = new Set<string>()
     const collected: { id: string; label: string; language: string; url: string; provider: string }[] = []
     const push = (track: { id: string; label: string; language: string; url: string }, provider: string) => {
-      if (!track.url || seenUrls.has(track.url) || collected.length >= 32) return
+      if (!track.url || seenUrls.has(track.url)) return
       seenUrls.add(track.url)
       collected.push({ id: track.id, label: track.label, language: track.language, url: track.url, provider })
     }
@@ -442,7 +571,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       ]
   ).filter((part): part is string | number => part != null && part !== '').join(' · ') || undefined
   const pauseOverview = episode?.overview || title.overview || undefined
-  const stateText = error ?? (busy ? (session ? 'Switching source…' : 'Finding a source…') : session ? 'Source ready' : 'Finding a source…')
+  const stateText = error ?? (castStatus ? `Playing on ${castStatus.deviceName ?? 'TV'}` : busy ? (session ? 'Switching source…' : 'Finding a source…') : session ? '' : 'Finding a source…')
 
   // Embedded mode keeps the identical playback flow and Consumit Player,
   // only the outer composition changes so the anime watch screen can sit
@@ -450,7 +579,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   // movie/series watch.
   const embedded = layout === 'embedded'
   return (
-    <main className={embedded ? 'flex w-full flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-black' : 'flex h-dvh flex-col bg-black'} data-consumit-player-screen>
+    <main className={embedded ? 'flex w-full flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-black' : 'flex h-dvh flex-col bg-black'} data-consumit-player-screen data-session={session ? 'ready' : 'searching'}>
       <section aria-label={`${name} playback`} className={embedded ? 'relative flex aspect-video w-full flex-col' : 'relative flex min-h-0 w-full flex-1 flex-col justify-center'}>
         <p className="sr-only" role="status">{stateText}</p>
         {busy && session ? (
@@ -460,32 +589,39 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
         ) : null}
         {!busy && notice && session ? (
           <p className="pointer-events-none absolute left-1/2 top-4 z-10 max-w-[80%] -translate-x-1/2 truncate rounded-control border border-border bg-black/80 px-3 py-1.5 text-xs font-bold text-ink" role="status">
-            Switched to {notice.provider}{notice.quality ? ` · ${notice.quality}` : ''}
+            {notice.message}
           </p>
         ) : null}
+        {castStatus ? (
+          <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 bg-black p-6 text-center" data-consumit-casting>
+            <Tv aria-hidden="true" className="size-10 text-copy" strokeWidth={1.5} />
+            <p className="font-display text-3xl text-ink">{name}</p>
+            <p className="text-sm text-copy" role="status">Playing on {castStatus.deviceName ?? 'TV'} · {formatClock(castStatus.position)}{castStatus.duration > 0 ? ` / ${formatClock(castStatus.duration)}` : ''}</p>
+            <Button variant="secondary" onClick={() => castSender.endSession(true)}>Disconnect</Button>
+          </div>
+        ) : (
         <ConsumitPlayer
           className="flex w-full flex-1 flex-col rounded-none border-0" title={name} posterSrc={episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined}
-          source={session?.source} extraSubtitles={extraSubtitles} resumeAt={resume.position} resumePlaying={resume.playing}
+          source={localSource} extraSubtitles={extraSubtitles} resumeAt={resume.position} resumePlaying={resume.playing}
+          castAvailable={castAvailable} castConnected={false} onCastClick={() => handleCastClick()}
+          subtitleDiscovery={{ languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
+          onSubtitlePage={loadSubtitlePage} onSubtitleSearch={searchSubtitleCandidates} onSubtitleCandidateSelect={selectSubtitleCandidate}
           topMeta={[episodeMeta, qualityMeta].filter(Boolean).join(' · ') || undefined}
           pauseFacts={pauseFacts} pauseOverview={pauseOverview} pauseLogoUrl={title.logoUrl ?? undefined}
           onBack={() => router.push(titleHref(title))}
           {...(memberId ? { subtitleDelayMs: syncedDelay ?? undefined, onSubtitleDelayMsChange: persistDelay } : {})}
-          serverOptions={servers.map((server) => ({ value: server.id, label: server.label, detail: server.detail, region: server.regions?.[0], health: server.health, available: server.available, ...(server.family ? { family: server.family } : {}), ...(server.mirror ? { mirror: server.mirror } : {}) }))}
-          selectedServer={session?.source.providerId}
-          onServerChange={(providerId) => void switchServer(providerId)}
-          onSourceError={(reason) => void recover(reason)} onRetry={() => void start()}
+          onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)} onRetry={() => void start()}
+          onSubtitleRequest={() => { if (!subtitleRequested || subtitleError) { setSubtitleLoading(true); setSubtitleError(null); setSubtitleRequested(true); setSubtitleAttempt((attempt) => attempt + 1) } }}
           onTimeUpdate={(event) => { clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration }}
-          onPlay={() => { clock.current.playing = true; clock.current.completed = false; setEnded(false) }}
-          onPause={() => { if (!requestRef.current) { clock.current.playing = false; void save(false, true) } }}
-          onEnded={() => {
-            clock.current.playing = false; clock.current.completed = true; setEnded(true); void save(false, true)
-            if (autoplay && nextHref) router.push(nextHref)
-          }}
+          onPlay={() => { const replay = clock.current.completed; if (replay) completionId.current = null; clock.current.playing = true; clock.current.completed = false; setEnded(false); if (replay) { const previous = completionWrite.current; void (previous ?? Promise.resolve()).then(() => { if (!clock.current.completed) void save(true, true) }) } if (!subtitleRequested) { setSubtitleLoading(true); setSubtitleRequested(true) } }}
+          onPause={() => { clock.current.playing = false; if (!requestRef.current) void save(false, true) }}
+          onEnded={() => completePlayback()}
           autoSkip={autoSkip}
           onAutoSkipChange={handleAutoSkip}
           onSeeked={() => { void save(false, true) }}
           onPlaybackEvent={(event) => eventsRef.current?.push(event)}
         />
+        )}
         {error && !session ? (
           <div className="absolute inset-0 grid place-items-center bg-black/70 p-6" role="alert">
             <div className="max-w-md text-center">

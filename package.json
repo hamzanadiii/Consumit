@@ -4,10 +4,10 @@
   "packageManager": "bun@1.4.0",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "worker"
+    "packages/*"
   ],
   "scripts": {
+    "design:cinema": "node design/nocturne/serve.mjs",
     "dev": "bun run --parallel dev:api dev:web",
     "dev:api": "bun --env-file=apps/api/.env --watch apps/api/src/index.ts",
     "dev:web": "bun --filter @consumit/web dev",
@@ -17,6 +17,7 @@
     "docker:up": "docker compose up --build",
     "docker:dev": "docker compose -f compose.yaml -f compose.dev.yaml up",
     "docker:dev:watch": "docker compose -f compose.yaml -f compose.dev.yaml up --watch",
+    "docker:web:fast": "docker compose -f compose.yaml build web && docker compose -f compose.yaml up -d --no-deps --no-build web",
     "docker:dev:playback": "docker compose -f compose.yaml -f compose.dev.yaml -f compose.playback.yaml --profile playback up --watch --build",
     "build": "bun run --sequential --workspaces --if-present build",
     "lint": "bun run --sequential --workspaces --if-present lint",

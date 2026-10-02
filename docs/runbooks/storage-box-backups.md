@@ -1,16 +1,16 @@
 # PostgreSQL backups to Hetzner Storage Box
 
-Production uses encrypted restic snapshots over SFTP. The database container remains the primary store; the Storage Box is an offsite recovery copy.
+The production Compose profile (`compose.production.yaml`) uses encrypted Restic snapshots over SFTP. The database remains the primary store; the Storage Box is the offsite recovery copy. The base/development Compose backup service writes local custom-format dumps into a Docker volume only. Those local dumps are a convenience and do not satisfy this runbook's encryption or separate-failure-domain requirements.
 
 ## Setup
 
-1. Create a restricted Storage Box sub-account and SSH key dedicated to backups.
-2. Put the SSH key, `known_hosts`, and a high-entropy restic password in `/opt/consumit/secrets` with root-only permissions.
-3. Set `RESTIC_REPOSITORY`, `RESTIC_PASSWORD_FILE`, and `STORAGE_BOX_SSH_DIR` in the ignored production environment.
-4. Install the supplied systemd service and timer from `infra/backup`, enable the timer, and run the service once manually.
-5. Run `bun run backup:check` and inspect `systemctl status consumit-backup.timer`.
+1. Create a restricted Storage Box sub-account and SSH key dedicated to backups. Keep its credentials separate from the database host.
+2. Pin the host key in `known_hosts` after comparing its fingerprint with Hetzner's published fingerprint. Put `known_hosts`, the private key, and an SSH config alias named `storage-box` in `/opt/consumit/secrets/ssh`; mount that directory read-only. The alias must set `HostName`, `User`, `IdentityFile`, `IdentitiesOnly yes`, `StrictHostKeyChecking yes`, and `ServerAliveInterval 60`. SFTP on port 22 expects the RFC4716 key format; using Hetzner's `install-ssh-key` procedure over port 23 installs both supported formats. Port 23 requires SSH Support to be enabled; external connections also require External Reachability. See [Hetzner SFTP access](https://docs.hetzner.com/storage/storage-box/access/access-sftp-scp/) and [SSH key setup](https://docs.hetzner.com/storage/storage-box/ssh-keys/add-ssh-keys/).
+3. Put a high-entropy Restic password in `/opt/consumit/secrets/restic-password` with root-only permissions. Keep a recovery copy outside the server; without this password, encrypted snapshots cannot be opened. Restic's [SFTP repository setup](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html#sftp) requires non-interactive SSH-key access.
+4. Set `RESTIC_REPOSITORY=sftp:storage-box:/backups/consumit`, `RESTIC_PASSWORD_FILE`, and `STORAGE_BOX_SSH_DIR` in the ignored production environment. Initialize the empty repository once, then run `bun run backup:run` and `bun run backup:check` before enabling the timer.
+5. Install the supplied systemd service and timer from `infra/backup`, enable the timer, run it once manually, and verify `systemctl status consumit-backup.timer`.
 
-Retention is seven daily, four weekly, and six monthly snapshots. Every run creates a custom-format `pg_dump`, uploads it through restic encryption, prunes retention, and checks a data subset. Any failed step exits non-zero.
+Retention is fourteen daily, four weekly, and six monthly snapshots. Every run creates a custom-format `pg_dump`, uploads it through Restic encryption, prunes retention, and checks a data subset. The script and production Compose defaults enforce that policy; any failed step exits non-zero. Also verify the selected database provider's seven-day point-in-time recovery window and snapshot storage in a separate failure domain as specified by [postgres-recovery.md](./postgres-recovery.md).
 
 ## Restore drill
 

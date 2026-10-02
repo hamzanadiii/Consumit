@@ -7,10 +7,7 @@ export {
   type WatchCardProps,
 } from './cards/content-cards'
 export {
-  MoodSelector,
   SectionHeading,
-  type MoodOption,
-  type MoodSelectorProps,
   type SectionHeadingProps,
 } from './editorial/editorial'
 export { Input, type InputProps } from './input/input'
@@ -28,9 +25,11 @@ export {
 export {
   ArtworkFrame,
   MissingArtwork,
+  PosterStack,
   type ArtworkFrameProps,
   type ArtworkRatio,
   type MissingArtworkProps,
+  type PosterStackProps,
 } from './media/media'
 export {
   FilterChip,

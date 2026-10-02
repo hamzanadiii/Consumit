@@ -1,6 +1,36 @@
 name: consumit
 
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    profiles: [playback]
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otel/config.yaml:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles: [playback]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--web.enable-lifecycle=false"]
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - consumit-prometheus:/prometheus
+    depends_on:
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [playback]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./infra/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - consumit-alertmanager:/alertmanager
+    restart: unless-stopped
+
   playback-valkey:
     image: valkey/valkey:9.1.1-alpine
     profiles: [playback]
@@ -120,6 +150,7 @@ services:
         required: false
     environment:
       CONSUMIT_API_URL: http://api:3001
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       HOSTNAME: 0.0.0.0
       NODE_ENV: production
       PORT: 3000
@@ -202,6 +233,8 @@ services:
       - /data
 
 volumes:
+  consumit-prometheus:
+  consumit-alertmanager:
   consumit-postgres:
   consumit-valkey:
   consumit-backups:

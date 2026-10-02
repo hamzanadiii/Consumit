@@ -1,6 +1,12 @@
 # Opt-in playback wiring. Uses the providers listed in the local file.
 # docker compose -f compose.yaml -f compose.playback.yaml --profile playback up -d --build api playback-valkey
 services:
+  otel-collector:
+    profiles: !reset []
+
+  prometheus:
+    profiles: !reset []
+
   playback-valkey:
     profiles: !reset []
 
@@ -9,6 +15,8 @@ services:
       PLAYBACK_ENABLED: "true"
       PLAYBACK_VALKEY_URL: valkey://playback-valkey:6379/0
       PLAYBACK_MEDIA_CONFIG: /run/consumit/providers.json
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      ADMIN_METRICS_URL: http://prometheus:9090
     volumes:
       - type: bind
         source: ./infra/playback/providers.local.json
@@ -19,3 +27,7 @@ services:
     depends_on:
       playback-valkey:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
+      prometheus:
+        condition: service_started

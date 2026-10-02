@@ -7,7 +7,7 @@
 # Dependencies and generated output
 node_modules/
 apps/api/generated/
-.next/
+.next*/
 dist/
 build/
 coverage/

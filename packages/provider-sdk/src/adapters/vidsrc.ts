@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 
@@ -9,69 +8,12 @@ const mirrorBase = 'https://vsembed.ru/'
 //   embed/movie?tmdb= -> iframe data-api -> gate JSON { src }
 //   -> inner landing window.CFG.playerUrl -> nested player window.CONFIG.api
 //      (data.vidsrcme.ru/api.php?...&stream_urls)
-//   -> stream_urls (plaintext array, or base64 ChaCha20 decrypted with the
-//      per-window WASM vsdec recipe) -> per-host generate.php IP-bound JWT
+//   -> stream_urls (plaintext array) -> per-host generate.php IP-bound JWT
 //      (?token=), minted just-in-time.
 // Streams land on VidSrc's rotating CDN edges as direct HLS. Caveat: the
 // tokens bind to the minter IP, so worker/browser consumption from a
 // different egress may 403 — the lab verdict decides whether this row stays.
 const HOP_TIMEOUT_MS = 4000
-
-const wasmCache = new Map<string, { mod: WebAssembly.Module; ts: number }>()
-
-function b64ToBytes(value: string): Uint8Array {
-  return new Uint8Array(Buffer.from(value, 'base64'))
-}
-
-async function wasmModule(w: unknown, wasmUrl?: unknown, wasmB64?: unknown): Promise<WebAssembly.Module | null> {
-  const key = `w:${String(w ?? 'x')}`
-  const hit = wasmCache.get(key)
-  if (hit && Date.now() - hit.ts < 4 * 60_000) return hit.mod
-  try {
-    let bytes: Uint8Array
-    if (typeof wasmUrl === 'string' && wasmUrl) {
-      // The decryptor runs outside the pinned transport, so its host must
-      // belong to the known API family — never an arbitrary upstream value.
-      let host = ''
-      try {
-        const parsed = new URL(wasmUrl)
-        if (parsed.protocol !== 'https:') return null
-        host = parsed.hostname.toLowerCase()
-      } catch {
-        return null
-      }
-      const allowed = ['vsembed.ru', 'data.vidsrc.sh', 'data.vidsrcme.ru', 'cloudorchestranova.com']
-      if (!allowed.some((domain) => host === domain || host.endsWith(`.${domain}`))) return null
-      const res = await fetch(wasmUrl, { headers: { 'user-agent': userAgent }, signal: AbortSignal.timeout(8000) })
-      if (!res.ok) return null
-      bytes = new Uint8Array(await res.arrayBuffer())
-    } else if (typeof wasmB64 === 'string' && wasmB64) {
-      bytes = b64ToBytes(wasmB64)
-    } else {
-      return null
-    }
-    const mod = await WebAssembly.compile(Uint8Array.from(bytes))
-    if (wasmCache.size > 8) wasmCache.delete(wasmCache.keys().next().value!)
-    wasmCache.set(key, { mod, ts: Date.now() })
-    return mod
-  } catch {
-    return null
-  }
-}
-
-async function vsDecrypt(mod: WebAssembly.Module, encB64: string): Promise<string | null> {
-  try {
-    const inst = await WebAssembly.instantiate(mod, {})
-    const api = inst.exports as Record<string, (...args: number[]) => number> & { memory: WebAssembly.Memory }
-    const enc = b64ToBytes(encB64)
-    const ptr = api.alloc!(enc.length)
-    new Uint8Array(api.memory.buffer, ptr, enc.length).set(enc)
-    const outLen = api.decrypt!(ptr, enc.length)
-    return new TextDecoder().decode(new Uint8Array(api.memory.buffer, ptr + 12, outLen))
-  } catch {
-    return null
-  }
-}
 
 function bounded(parent: AbortSignal, ms: number) {
   const controller = new AbortController()
@@ -168,17 +110,10 @@ export function createVidsrcProvider(http: ProviderHttp, now = Date.now) {
       if (Array.isArray(direct)) {
         for (const entry of direct) if (typeof entry === 'string' && /^https?:\/\//i.test(entry)) rawUrls.push(entry)
       } else if (typeof direct === 'string' && direct) {
-        // The decryptor block rides top-level beside data, not inside it.
-        const vs = (streamJson as { vs?: { w?: unknown; wasm_url?: unknown; wasm?: unknown } }).vs
-          ?? (data as { vs?: { w?: unknown; wasm_url?: unknown; wasm?: unknown } }).vs ?? {}
-        const mod = await wasmModule(vs.w, vs.wasm_url, vs.wasm)
-        if (mod) {
-          const text = await vsDecrypt(mod, direct)
-          if (text) for (const line of text.split('\n')) {
-            const clean = line.trim()
-            if (/^https?:\/\//i.test(clean)) rawUrls.push(clean)
-          }
-        }
+        // Provider-supplied executable decryptors are not a trusted adapter
+        // dependency. This configuration stays disabled until the format has
+        // a native, bounded decoder with a deterministic contract fixture.
+        throw new ProviderFailure('malformed')
       }
       if (!rawUrls.length) throw new ProviderFailure('empty')
       const playHeaders = { 'user-agent': userAgent, referer: `${innerOrigin}/`, origin: innerOrigin }

@@ -95,7 +95,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
 
   return (
     <header
-      className="relative isolate overflow-hidden rounded-2xl border border-[var(--fs-line)] bg-[#0b0b0e] text-white shadow-2xl"
+      className="relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#09090b] text-white"
       data-consumit-title-masthead
     >
       {detail.backdropUrl ? (
@@ -111,12 +111,12 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
         <div
           aria-hidden="true"
           className="absolute inset-0"
-          style={{ background: 'radial-gradient(120% 90% at 78% 8%, #f7b267 0%, #d97b3f 28%, #7a3a22 55%, #2a1a12 100%)' }}
+          style={{ background: 'radial-gradient(120% 90% at 78% 8%, #6b3c32 0%, #3a211d 34%, #211412 66%, #09090b 100%)' }}
         />
       )}
       {/* Dark atmospheric cinematic overlays matching Home hero */}
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.18)_100%)]" />
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,14,0.98)_0%,rgba(11,11,14,0.4)_40%,transparent_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,11,0.94)_0%,rgba(9,9,11,0.72)_50%,rgba(9,9,11,0.18)_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(9,9,11,0.98)_0%,rgba(9,9,11,0.4)_40%,transparent_100%)]" />
 
       <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
         <div className="flex max-w-2xl flex-col justify-center gap-3">
@@ -146,7 +146,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             {rating ? (
-              <strong className="inline-flex items-center gap-1 font-bold text-[#ffb800] tabular-nums">
+              <strong className="inline-flex items-center gap-1 font-bold text-orange tabular-nums">
                 <Star aria-hidden="true" className="size-3.5 fill-current" />
                 ★ {rating}
                 <span className="sr-only">on TMDB</span>
@@ -172,11 +172,11 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-6 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-orange px-6 text-sm font-bold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
               href={watchHref(detail)}
             >
               <Play aria-hidden="true" className="size-4" />
-              Watch
+              Play
             </Link>
           </div>
         </div>

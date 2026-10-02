@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig([
   globalIgnores([
-    '**/.next/**',
+    '**/.next*/**',
     '**/coverage/**',
     '**/dist/**',
     '**/generated/**',
@@ -20,7 +20,7 @@ export default defineConfig([
     extends: [nextVitals, nextTypeScript],
   },
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}', 'worker/**/*.ts'],
+    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {

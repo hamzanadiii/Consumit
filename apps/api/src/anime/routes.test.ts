@@ -118,6 +118,69 @@ describe('anime routes', () => {
     expect(response.json()).toMatchObject({ anilistId: 1, status: 'FINISHED', coverImage: { url: null } })
   })
 
+  it('uses exact canonical episode metadata for a separately cataloged anime season', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, anilistId: 142853, malId: null, episodeDuration: 24 })
+    const episodeByAnilistId = vi.fn(async (id: number, number: number) => id === 142853 && number === 1
+      ? { title: 'It Is What It Is', synopsis: 'Back in the present.', stillUrl: 'https://artworks.thetvdb.com/banners/season2-episode1.jpg', airDate: '2023-01-08' }
+      : null)
+    const app = await buildApp({
+      animeCatalog,
+      animeCanonicalEpisodeArt: { episodeByAnilistId },
+      animeEpisodeArt: { episodeByMalId: async () => null },
+      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
+    })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/142853/episodes/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ anilistId: 142853, number: 1, title: 'It Is What It Is', thumbnail: 'https://artworks.thetvdb.com/banners/season2-episode1.jpg', duration: 24 })
+    expect(episodeByAnilistId).toHaveBeenCalledWith(142853, 1)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/142853/episodes/99' })).statusCode).toBe(404)
+  })
+
+  it('fills partial canonical metadata from existing episode art', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const app = await buildApp({
+      animeCatalog,
+      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: 'Canonical title', synopsis: null, stillUrl: null, airDate: '2023-01-08' }) },
+      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: null, overview: 'Episode overview', stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
+      animeEpisodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
+    })
+    openApps.push(app)
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ title: 'Canonical title', thumbnail: 'https://image.tmdb.org/t/p/w780/episode.jpg', description: 'Episode overview', airDate: '2023-01-08' })
+  })
+
+  it('keeps a canonical still when a title fallback fails', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const app = await buildApp({
+      animeCatalog,
+      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: null, synopsis: null, stillUrl: 'https://artworks.thetvdb.com/banners/episode.jpg', airDate: '2023-01-08' }) },
+      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
+      animeEpisodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
+    })
+    openApps.push(app)
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ title: null, thumbnail: 'https://artworks.thetvdb.com/banners/episode.jpg', airDate: '2023-01-08' })
+  })
+
+  it('falls back to existing art when canonical metadata is unavailable', async () => {
+    const app = await buildApp({
+      animeCatalog: fakeAnimeCatalog(),
+      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => { throw new Error('Mapping unavailable') } },
+      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: 'Existing episode', overview: null, stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
+    })
+    openApps.push(app)
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
+    expect(hit.statusCode).toBe(200)
+    expect(hit.json()).toMatchObject({ title: 'Existing episode', thumbnail: 'https://image.tmdb.org/t/p/w780/episode.jpg' })
+  })
+
   it('serves episode art through the Kitsu mapping and 404s misses', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
@@ -137,6 +200,24 @@ describe('anime routes', () => {
     expect(episodeArt.episodeByMalId).toHaveBeenCalledWith(21, 5)
     expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/6' })).statusCode).toBe(404)
     expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/0' })).statusCode).toBe(400)
+  })
+
+  it('batches only a bounded visible page and caches partial episode details', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
+    const episodeByMalId = vi.fn(async (_malId: number, episode: number) => episode === 5
+      ? { kitsuId: '9', episode: 5, title: 'Ballad', synopsis: 'A past.', stillUrl: 'https://media.kitsu.app/x.jpeg', airDate: '1998-05-01' }
+      : null)
+    const app = await buildApp({ animeCatalog, animeEpisodeArt: { episodeByMalId } })
+    openApps.push(app)
+    const url = '/v1/anime/21/episodes?numbers=5,6'
+    const first = await app.inject({ method: 'GET', url })
+    expect(first.statusCode).toBe(200)
+    expect(first.json().episodes).toMatchObject([{ number: 5, title: 'Ballad', description: 'A past.' }, null])
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(200)
+    expect(episodeByMalId).toHaveBeenCalledTimes(2)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes?numbers=5,5' })).statusCode).toBe(400)
+    expect((await app.inject({ method: 'GET', url: `/v1/anime/21/episodes?numbers=${Array.from({ length: 25 }, (_, index) => index + 1).join(',')}` })).statusCode).toBe(400)
   })
 
   it('404s episode art without a MAL mapping', async () => {

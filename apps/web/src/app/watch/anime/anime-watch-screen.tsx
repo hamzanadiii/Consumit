@@ -6,7 +6,7 @@ import { Bell } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
 
-import { browserAnimeEpisode } from '@/lib/anime-browser'
+import { browserAnimeEpisodes } from '@/lib/anime-browser'
 import { useEpisodeArt, type EpisodeArt } from '../../anime/use-episode-art'
 import { EpisodeRail, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
@@ -21,7 +21,7 @@ function toWatchTitle(detail: AnimeTitleDetail): WatchTitle {
     overview: detail.description || null,
     posterUrl: detail.coverImage.url || null,
     backdropUrl: detail.bannerImage,
-    logoUrl: null,
+    logoUrl: detail.logoUrl,
     runtimeMinutes: null,
     episodeRuntimeMinutes: detail.episodeDuration,
   }
@@ -93,14 +93,14 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
   const isUpcoming = (number: number) => upcomingFrom !== null && number >= upcomingFrom
   const streaming = useMemo(() => indexStreamingEpisodes(detail), [detail])
   const currentStream = streaming.get(episode)
-  const currentArt = useEpisodeArt(detail.anilistId, episode, { covered: !!currentStream?.thumbnail, upcoming: isUpcoming(episode) })
+  const currentArt = useEpisodeArt(detail.anilistId, episode, { upcoming: isUpcoming(episode) })
   const duration = formatDuration(detail.episodeDuration)
   const altTitle = detail.titles.english && detail.titles.english !== detail.titles.preferred ? detail.titles.english : detail.titles.romaji
 
   const episodes = useMemo(() => Array.from({ length: total }, (_, index) => index + 1), [total])
-  const loadArt = useCallback(async (number: number) => {
-    const found = await browserAnimeEpisode(detail.anilistId, number, AbortSignal.timeout(8_000)).catch(() => null)
-    return found ? { title: found.title, thumbnail: found.thumbnail } : null
+  const loadPage = useCallback(async (numbers: number[]) => {
+    const found = await browserAnimeEpisodes(detail.anilistId, numbers, AbortSignal.timeout(12_000))
+    return Object.fromEntries(numbers.map((number, index) => [number, found[index] ? { title: found[index]!.title, thumbnail: found[index]!.thumbnail, airDate: found[index]!.airDate, duration: found[index]!.duration } : null]))
   }, [detail.anilistId])
   const railEpisodes = useMemo<RailEpisode[]>(
     () => episodes.map((number) => {
@@ -142,7 +142,7 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
                     <span className="text-[var(--fs-accent)]">{episode}.</span> {detail.titles.preferred}
                   </h1>
                   <p className="mt-1.5 text-xs tracking-wide text-[var(--fs-muted)] uppercase">
-                    {[altTitle, total ? `${total} EPS` : null, duration, detail.seasonYear].filter(Boolean).join(' · ')}
+                    {[altTitle, total ? `${total} EPS` : null, duration, currentArt?.airDate ? formatAirDate(currentArt.airDate) : null, detail.seasonYear].filter(Boolean).join(' · ')}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -155,9 +155,9 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
                   />
                 </div>
               </div>
-              {detail.description ? (
+              {currentArt?.synopsis || detail.description ? (
                 <p className="mt-4 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)] line-clamp-3">
-                  {detail.description}
+                  {currentArt?.synopsis ?? detail.description}
                 </p>
               ) : null}
             </section>
@@ -168,8 +168,10 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
               countLabel={`Episode ${episode} of ${total}`}
               currentLabel="Now playing"
               episodes={railEpisodes}
+              fallbackArt={detail.bannerImage ?? detail.coverImage.url}
               heading="Episodes"
-              loadArt={loadArt}
+              loadPage={loadPage}
+              pageSize={8}
             />
             {detail.nextAiringEpisode ? (
               <p className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--fs-rail)] px-3 py-2.5 text-xs tabular-nums text-[var(--fs-secondary)]" role="status">

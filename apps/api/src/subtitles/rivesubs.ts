@@ -11,19 +11,32 @@ const API = 'https://scrapper.rivestream.app/api'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 const SUBS = ['flowcast', 'citadel', 'apex'] as const
 
+function fileIdentity(file: string): string {
+  try {
+    const url = new URL(file)
+    // CloudFront signatures authorize a file; they do not identify a new
+    // subtitle. Keep all other query fields because they may select content.
+    if (url.searchParams.has('Signature') && url.searchParams.has('Key-Pair-Id') &&
+        (url.searchParams.has('Policy') || url.searchParams.has('Expires'))) {
+      for (const key of ['Policy', 'Signature', 'Key-Pair-Id', 'Expires']) url.searchParams.delete(key)
+    }
+    return url.href
+  } catch { return file }
+}
+
 export function createRiveSubsProvider(http: SubtitleHttp): SubtitleSearchProvider {
   return {
     id: 'rivesubs',
     name: 'RiveSubs',
     supports(query: SubtitleQuery) {
-      return (query.type === 'movie' || query.type === 'tv') && !!query.tmdbId
+      return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
       const tmdbId = String(query.tmdbId)
       const settled = await Promise.allSettled(
         SUBS.map(async (sub) => {
           let url = `${API}/provider?provider=${sub}&id=${encodeURIComponent(tmdbId)}`
-          if (query.type === 'tv') url += `&season=${Number(query.season ?? 1)}&episode=${Number(query.episode ?? 1)}`
+          if (query.type !== 'movie') url += `&season=${Number(query.season ?? 1)}&episode=${Number(query.episode ?? 1)}`
           const { text } = await http.get(url, { 'User-Agent': UA, Accept: 'application/json' }, signal)
           let parsed: unknown
           try {
@@ -46,18 +59,19 @@ export function createRiveSubsProvider(http: SubtitleHttp): SubtitleSearchProvid
       for (const result of settled) {
         if (result.status !== 'fulfilled') continue
         for (const caption of result.value) {
-          if (seen.has(caption.file) || out.length >= 30) continue
-          seen.add(caption.file)
+          const identityUrl = fileIdentity(caption.file)
+          if (seen.has(identityUrl)) continue
+          seen.add(identityUrl)
           const label = caption.label.replace(/\s*-\s*(FlowCast|Citadel|Apex)\s*$/i, '').trim() || caption.label
           out.push({
             url: caption.file,
+            identityUrl,
             lang: normTrackLang(caption.label),
             label,
             format: /\.srt/i.test(caption.file) ? 'srt' : 'vtt',
             provider: 'rivesubs',
           })
         }
-        if (out.length >= 30) break
       }
       return out
     },

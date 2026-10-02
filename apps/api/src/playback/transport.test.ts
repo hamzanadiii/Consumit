@@ -8,10 +8,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), request: vi.fn() }))
 vi.mock('node:dns/promises', () => ({ lookup: mocks.lookup }))
 vi.mock('node:https', () => ({ request: mocks.request }))
-import { fetchMedia } from './transport.ts'
+import { createMediaTransport } from './transport.ts'
+let fetchMedia = createMediaTransport()
 
 beforeEach(() => {
   vi.clearAllMocks()
+  fetchMedia = createMediaTransport()
   mocks.lookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
 })
 function response(status = 200, headers: Record<string, string> = { 'content-type': 'video/mp4' }) {
@@ -24,6 +26,30 @@ function response(status = 200, headers: Record<string, string> = { 'content-typ
   }
 }
 describe('provider network boundary', () => {
+  it('shares one DNS lookup across concurrent callers without sharing cancellation', async () => {
+    let answer!: (addresses: { address: string; family: number }[]) => void
+    mocks.lookup.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+    mocks.request.mockImplementation(response())
+    const controller = new AbortController()
+    const abandoned = fetchMedia('https://media.example/a', ['media.example'], {}, controller.signal).catch((error: Error) => error.message)
+    const active = fetchMedia('https://media.example/b', ['media.example'], {}, new AbortController().signal)
+    controller.abort(new Error('Member left'))
+    expect(await abandoned).toBe('Member left')
+    answer([{ address: '8.8.8.8', family: 4 }])
+    const resolved = await active
+    expect(mocks.lookup).toHaveBeenCalledOnce()
+    expect(mocks.request).toHaveBeenCalledOnce()
+    resolved.body.destroy()
+  })
+  it('cancels DNS immediately when the caller leaves, without opening a socket', async () => {
+    mocks.lookup.mockImplementation(() => new Promise(() => {}))
+    const controller = new AbortController()
+    const pending = fetchMedia('https://media.example/a', ['media.example'], {}, controller.signal)
+    controller.abort(new Error('Member left'))
+    const result = await Promise.race([pending.catch((error: Error) => error.message), new Promise((resolve) => setTimeout(() => resolve('still waiting'), 50))])
+    expect(result).toBe('Member left')
+    expect(mocks.request).not.toHaveBeenCalled()
+  })
   it('rejects a hostname resolving to any private address before opening a socket', async () => {
     mocks.lookup.mockResolvedValue([{ address: '8.8.8.8', family: 4 }, { address: '127.0.0.1', family: 4 }])
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow('Blocked media address')

@@ -31,6 +31,9 @@ export type SubtitleQuery = {
 export type RawSubtitle = {
   /** Direct file URL (srt/vtt) or zip URL (set needsExtract). */
   url: string
+  /** Adapter-owned file identity for rotating signed URLs. Downloads always
+   * use url; identityUrl is only used for deduplication and storage keys. */
+  identityUrl?: string | undefined
   /** ISO-ish language code, lowercased (en, fr, ar, ...). */
   lang: string
   label: string

@@ -2,9 +2,11 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { CatalogApiError, getCatalogSeason, getCatalogTitle } from '@/lib/catalog-api'
+import { getServerSession } from '@/lib/identity-server'
 import { serverRenderTime } from '@/lib/server-time'
 
 import { CatalogUnavailableScreen } from '../../../catalog/catalog-ui'
+import { SessionProvider } from '../../../session/session'
 import { sanitizePinnedProvider } from '../../watch-screen'
 import { SeriesWatchScreen } from '../series-watch-screen'
 
@@ -23,6 +25,7 @@ export async function generateMetadata({ params }: SeriesWatchPageProps): Promis
 export default async function SeriesWatchPage({ params, searchParams }: SeriesWatchPageProps) {
   const id = Number((await params).tmdbId)
   const query = await searchParams
+  const sessionPromise = getServerSession()
   const seasonValue = Array.isArray(query.season) ? query.season[0] : query.season
   const episodeValue = Array.isArray(query.episode) ? query.episode[0] : query.episode
   const seasonNumber = Number(seasonValue ?? 1)
@@ -39,18 +42,21 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   const prevSeason = episodeNumber === 1 ? titleResponse.item.seasons.find((item) => item.number === seasonNumber - 1 && item.episodeCount > 0) : undefined
   const prevHref = prev ? `/watch/series/${id}?season=${seasonNumber}&episode=${prev.episodeNumber}` : prevSeason ? `/watch/series/${id}?season=${prevSeason.number}&episode=${prevSeason.episodeCount}` : undefined
   const pinnedProvider = sanitizePinnedProvider(query.provider)
+  const session = await sessionPromise
   return (
-    <SeriesWatchScreen
-      detail={titleResponse.item}
-      episodeNumber={episodeNumber}
-      episodes={season?.item.episodes ?? []}
-      nextHref={nextHref}
-      now={serverRenderTime()}
-      prevHref={prevHref}
-      seasonNumber={seasonNumber}
-      seasons={titleResponse.item.seasons}
-      tmdbId={id}
-      {...(pinnedProvider ? { pinnedProvider } : {})}
-    />
+    <SessionProvider initialMember={session.member} initialStatus={session.status}>
+      <SeriesWatchScreen
+        detail={titleResponse.item}
+        episodeNumber={episodeNumber}
+        episodes={season?.item.episodes ?? []}
+        nextHref={nextHref}
+        now={serverRenderTime()}
+        prevHref={prevHref}
+        seasonNumber={seasonNumber}
+        seasons={titleResponse.item.seasons}
+        tmdbId={id}
+        {...(pinnedProvider ? { pinnedProvider } : {})}
+      />
+    </SessionProvider>
   )
 }

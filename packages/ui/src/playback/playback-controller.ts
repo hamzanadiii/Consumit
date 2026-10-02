@@ -1,4 +1,4 @@
-import { attachMediaEngine, type EngineTracks, type MediaEngine, type MediaOption } from './media-engine'
+import { attachMediaEngine, type EngineFailure, type EngineDeliveryFailure, type EngineTracks, type MediaEngine, type MediaOption } from './media-engine'
 import { isSafeMediaUrl, type DirectMediaSource } from './media-source'
 
 export type PlaybackPhase = 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'switching' | 'ended' | 'failed'
@@ -10,7 +10,7 @@ export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' 
 /** One controller per media element; async engine loads are serialized and generation-guarded. */
 export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   change: (snapshot: ControllerSnapshot) => void
-  fatal: (reason: 'network' | 'media' | 'gone') => void
+  fatal: (reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure) => void
   event?: (event: ControllerEvent) => void
 }, attach = attachMediaEngine) {
   let engine: MediaEngine | undefined
@@ -18,6 +18,14 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   let destroyed = false
   let retries = 0
   let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+  let startupTimer: ReturnType<typeof setTimeout> | undefined
+  function watchStartup() {
+    clearTimeout(startupTimer)
+    const current = generation
+    startupTimer = setTimeout(() => {
+      if (!destroyed && current === generation && !snapshot.needsGesture && snapshot.phase !== 'failed') fatal('network', 'timeout')
+    }, 12000)
+  }
   let queue = Promise.resolve()
   let tracks: HTMLTrackElement[] = []
   let externalOptions: MediaOption[] = []
@@ -43,6 +51,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     try {
       if (typeof window === 'undefined' || !window.location?.hostname) return false
       const parsed = new URL(url, window.location.href)
+      if (parsed.protocol === 'blob:') return parsed.origin === window.location.origin
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
       if (parsed.username || parsed.password) return false
       return parsed.hostname === window.location.hostname
@@ -84,10 +93,16 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   let audioPreference = 'original'
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Storage is optional. */ }
   try { audioPreference = localStorage.getItem('consumit.player.audio-language') ?? 'original' } catch { /* Storage is optional. */ }
+  let preferredPlaybackRate = video.playbackRate
+  const restorePlaybackRate = () => {
+    try { if (Number.isFinite(preferredPlaybackRate) && preferredPlaybackRate > 0) video.playbackRate = preferredPlaybackRate } catch { /* Playback speed is a preference, never a crash. */ }
+  }
   let metadataCleanup = () => {}
   let attachment: AbortController | undefined
   let startedAt = performance.now()
   let bufferedAt = 0
+  let lastPlaybackProgressAt = performance.now()
+  let lastPlaybackPosition = 0
   let firstFrame = false
   let snapshot: ControllerSnapshot = { phase: 'loading', needsGesture: false, qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [], quality: 'auto', audioTrack: '', subtitleTrack: 'off' }
   function update(value: Partial<ControllerSnapshot>) { if (destroyed) return; snapshot = { ...snapshot, ...value }; callbacks.change(snapshot) }
@@ -97,21 +112,37 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   }
   async function play() {
     const current = generation
-    try { await video.play(); if (current === generation) update({ needsGesture: false }) }
+    if (!firstFrame) watchStartup()
+    try { await video.play(); if (current === generation) { restorePlaybackRate(); update({ needsGesture: false }) } }
     catch (error) {
       if (current !== generation || destroyed) return
-      if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'NotAllowedError') update({ phase: 'ready', needsGesture: true })
+      if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'NotAllowedError') { clearTimeout(startupTimer); update({ phase: 'ready', needsGesture: true }) }
       else if (!destroyed) fatal('media')
     }
   }
-  function fatal(reason: 'network' | 'media' | 'gone') {
+  function fatal(reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure) {
     if (destroyed || snapshot.phase === 'failed') return
-    if (retries++ === 0 && engine?.recover()) {
+    clearTimeout(startupTimer)
+    if (reason !== 'gone' && reason !== 'expired' && retries++ === 0 && engine?.recover()) {
       update({ phase: 'buffering' })
-      recoveryTimer = setTimeout(() => fatal(reason), 3000)
+      recoveryTimer = setTimeout(() => fatal(reason, deliveryFailure), 3000)
       return
     }
-    clearTimeout(recoveryTimer); update({ phase: 'failed' }); event('error'); callbacks.fatal(reason)
+    clearTimeout(recoveryTimer); update({ phase: 'failed' }); event('error'); callbacks.fatal(reason, deliveryFailure)
+  }
+  function watchForStall() {
+    clearTimeout(recoveryTimer)
+    const inspect = () => {
+      if (destroyed || video.paused || video.seeking || snapshot.phase !== 'buffering') return
+      const position = video.currentTime
+      if (Number.isFinite(position) && position > lastPlaybackPosition + 0.1) {
+        lastPlaybackPosition = position
+        lastPlaybackProgressAt = performance.now()
+      }
+      if (performance.now() - lastPlaybackProgressAt >= 8000) { fatal('network', 'timeout'); return }
+      recoveryTimer = setTimeout(inspect, 1000)
+    }
+    recoveryTimer = setTimeout(inspect, 1000)
   }
   function selectSubtitle(value: string) {
     engine?.subtitle(value.startsWith('external:') ? 'off' : value)
@@ -121,7 +152,9 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       const textTrack = track.track as TextTrack | undefined
       if (textTrack) {
         const isSelected = value === `external:${track.id}`
-        textTrack.mode = isSelected ? 'showing' : 'disabled'
+        // Keep cues active for Consumit's caption overlay without also
+        // drawing a second native caption line over the video.
+        textTrack.mode = isSelected ? 'hidden' : 'disabled'
         track.default = isSelected
       }
     })
@@ -174,11 +207,16 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     engine?.audio(value); update({ audioTrack: value })
   }
   const listeners: [string, EventListener][] = [
-    ['playing', () => { clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
-    ['pause', () => { clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
-    ['waiting', () => { if (!video.paused && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); update({ phase: 'buffering' }); event('buffer-start') } clearTimeout(recoveryTimer); recoveryTimer = setTimeout(() => fatal('network'), 8000) } }],
-    ['ended', () => { clearTimeout(recoveryTimer); update({ phase: 'ended' }); event('ended') }],
-    ['error', () => fatal('media')],
+    ['playing', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
+    ['pause', () => { if (snapshot.phase !== 'loading' && snapshot.phase !== 'switching') clearTimeout(startupTimer); clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
+    ['waiting', () => { if (!video.paused && !video.seeking && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); lastPlaybackProgressAt = bufferedAt; lastPlaybackPosition = video.currentTime; update({ phase: 'buffering' }); event('buffer-start') } watchForStall() } }],
+    ['seeking', () => clearTimeout(recoveryTimer)],
+    ['timeupdate', () => { if (video.currentTime > lastPlaybackPosition + 0.1) { lastPlaybackPosition = video.currentTime; lastPlaybackProgressAt = performance.now() } }],
+    ['ended', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); update({ phase: 'ended' }); event('ended') }],
+    ['error', () => {
+      const networkFailure = video.error?.code === 2
+      fatal(networkFailure ? 'network' : 'media', networkFailure ? 'unstable' : undefined)
+    }],
   ]
   listeners.forEach(([name, listener]) => video.addEventListener(name, listener))
 
@@ -186,8 +224,9 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     async load(source: DirectMediaSource, position = 0, shouldPlay = false) {
       const current = ++generation
       startedAt = performance.now(); firstFrame = false
+      lastPlaybackProgressAt = startedAt; lastPlaybackPosition = position
       attachment?.abort(); metadataCleanup()
-      clearTimeout(recoveryTimer); retries = 0
+      clearTimeout(startupTimer); clearTimeout(recoveryTimer); retries = 0
       const previousSubtitle = snapshot.subtitleTrack
       update({ phase: engine ? 'switching' : 'loading', needsGesture: false, quality: 'auto', audioTrack: '', subtitleTrack: 'off', qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [] })
       queue = queue.catch(() => undefined).then(async () => {
@@ -201,14 +240,37 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         // shared menu, never wipe it. Republish so the fresh engine tracks
         // join the surviving external set immediately.
         publishTracks()
+        const seekChecks: ReturnType<typeof setTimeout>[] = []
+        const seekToRetainedPosition = (initial = false) => {
+          if (destroyed || current !== generation || !Number.isFinite(video.duration) || !Number.isFinite(position) || position <= 0) return
+          const targetPosition = Math.min(position, Math.max(0, video.duration - 0.25))
+          // Later checks only repair a decoder reset to the beginning. A
+          // member may seek after playback resumes, and that seek wins.
+          if ((initial || video.currentTime < 1) && Math.abs(video.currentTime - targetPosition) > 0.5) video.currentTime = targetPosition
+        }
+        const confirmSeek = () => {
+          restorePlaybackRate()
+          // WebKit can accept a seek on loadedmetadata, then reset it while
+          // replacing the old media resource. Check once bytes decode and
+          // briefly after, when its pending seek settles.
+          seekToRetainedPosition()
+          video.removeEventListener('canplay', confirmSeek)
+          for (const delay of [100, 500, 1500]) seekChecks.push(setTimeout(() => { restorePlaybackRate(); seekToRetainedPosition() }, delay))
+        }
         const restore = () => {
           if (destroyed || current !== generation) return
-          if (Number.isFinite(position) && position > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(position, Math.max(0, video.duration - 0.25))
+          clearTimeout(startupTimer)
+          // Replacing a native media source resets Safari's playback rate to
+          // 1×. Keep the member's selected speed across lease/provider changes.
+          restorePlaybackRate()
+          seekToRetainedPosition(true)
           update({ phase: 'ready' })
           if (shouldPlay) void play()
         }
         video.addEventListener('loadedmetadata', restore, { once: true })
-        metadataCleanup = () => video.removeEventListener('loadedmetadata', restore)
+        video.addEventListener('canplay', confirmSeek)
+        const cleanupMetadata = () => { video.removeEventListener('loadedmetadata', restore); video.removeEventListener('canplay', confirmSeek); seekChecks.forEach(clearTimeout) }
+        metadataCleanup = cleanupMetadata
         const deadline = setTimeout(() => controller.abort(new DOMException('Player loading timed out.', 'TimeoutError')), 8000)
         const pending = attach(video, source, {
           tracks(next) {
@@ -226,7 +288,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
               preferredAudio()
             }
           },
-          fatal(reason) { if (current === generation) fatal(reason) },
+          fatal(reason, deliveryFailure) { if (current === generation) fatal(reason, deliveryFailure) },
         }, controller.signal)
         let settled = false
         const settle = (late: MediaEngine) => {
@@ -245,8 +307,9 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         if (destroyed || current !== generation) { video.removeEventListener('loadedmetadata', restore); settle(attached); return }
         engine = {
           ...attached,
-          destroy() { video.removeEventListener('loadedmetadata', restore); attached.destroy() },
+          destroy() { cleanupMetadata(); attached.destroy() },
         }
+        if (snapshot.phase === 'loading' || snapshot.phase === 'switching') watchStartup()
         // The tracks callback above runs before any engine exists, so an
         // explicit pick can only be honored here: when the pre-load
         // external track survives the reload, keep it instead of
@@ -257,11 +320,19 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         if (reselected) selectSubtitle(previousSubtitle)
         else preferredSubtitle()
         preferredAudio()
-        if (video.readyState >= 1) { video.removeEventListener('loadedmetadata', restore); restore() }
+        // The old source can keep readyState >= 1 briefly after destroy() in
+        // WebKit. Seeking against that metadata loses the retained position
+        // when the replacement source loads. Only its metadata event may
+        // restore the seek and play intent.
       }).catch(() => { if (current === generation && !destroyed) { metadataCleanup(); fatal('media') } })
       await queue
     },
     play,
+    setPlaybackRate(rate: number) {
+      if (!Number.isFinite(rate) || rate <= 0) return
+      preferredPlaybackRate = rate
+      restorePlaybackRate()
+    },
     quality(value: string) { if (snapshot.qualities.some((option) => option.value === value)) { engine?.quality(value); update({ quality: value }) } },
     audio,
     subtitle,
@@ -277,7 +348,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       else preferredSubtitle()
     },
     destroy() {
-      destroyed = true; generation++; clearTimeout(recoveryTimer)
+      destroyed = true; generation++; clearTimeout(startupTimer); clearTimeout(recoveryTimer)
       attachment?.abort(); metadataCleanup()
       listeners.forEach(([name, listener]) => video.removeEventListener(name, listener))
       engine?.destroy(); engine = undefined; tracks.forEach((track) => track.remove()); tracks = []

@@ -60,6 +60,7 @@ describe('AniList adult exclusion', () => {
         relations: { edges: [
           { relationType: 'SEQUEL', node: media(3, 'Clean Sequel') },
           { relationType: 'PREQUEL', node: media(4, 'Adult Prequel', true) },
+          { relationType: 'SOURCE', node: { ...media(5, 'Source manga'), type: 'MANGA' } },
         ] },
       },
     }))

@@ -7,13 +7,31 @@ const apiOrigin = 'https://kyren.moe/api'
 const siteOrigin = 'https://kyren.moe'
 
 // Port of the PROVE Kyren recipe: clean JSON API keyed by AniList id, no
-// scraping, no crypto. Fast lanes race in parallel with first success
-// winning; kayo/neon stay sequential fallback. SUB and DUB ride the lang
-// param; dub falls back to sub when the backend has no dub.
-// Verified notes from PROVE: no Referer gate, CORS-open delivery.
-const RACE_SERVERS = ['viper', 'jett', 'gekko'] as const
-const FALLBACK_SERVERS = ['kayo', 'neon'] as const
-const SERVER_TIMEOUT_MS = 3500
+// scraping, no crypto. Kyren exposes five servers (viper/jett/gekko race,
+// kayo/neon fallback), but only neon and jett are enabled here: live probes
+// return sources from those two while the others answer ok:false. Neon races
+// first as the most reliable lane; jett stays sequential fallback. Scoped
+// rows (kyren-neon, kyren-jett) try only their server. SUB and DUB ride the
+// lang param; dub falls back to sub when the backend has no dub.
+// Verified notes from PROVE: no Referer gate, CORS-open delivery. Kyren's
+// upstreams rot per-title (master parses, segments 403 "Upstream returned
+// 403"), so a parseable master is not proof of playback: the winning hit's
+// top HLS source must serve its first segment before its sources stand.
+// Deviation: PROVE waits up to 15s per server under a 25s overall budget;
+// here each server gets 8s and the resolver's attempt deadline still caps
+// every attempt, so slow lanes may be cut short on tight budgets.
+const RACE_SERVERS = ['neon'] as const
+const FALLBACK_SERVERS = ['jett'] as const
+
+export type KyrenScope = { id?: string; servers?: string[] }
+const SERVER_TIMEOUT_MS = 8000
+const PROBE_TIMEOUT_MS = 8000
+// Ask for the first 64 KiB, but only read a small prefix because some upstreams
+// ignore Range and return the entire segment. Anything over a kilobyte proves
+// the segment is live without buffering a full media response.
+const PROBE_RANGE = 'bytes=0-65535'
+const PROBE_MIN_BYTES = 1000
+const PROBE_READ_BYTES = 16_384
 
 const hitSchema = z.object({
   ok: z.boolean(),
@@ -52,8 +70,50 @@ function classifyType(rawUrl: string): ProviderSource['type'] | null {
   return mediaType(rawUrl) ?? 'hls'
 }
 
-export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitleResolver, now = Date.now) {
-  return adapter('kyren', async (input, signal) => {
+export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitleResolver, now = Date.now, scope: KyrenScope = {}) {
+  // Scoped rows (e.g. kyren-jett) try only their own server so each Kyren
+  // server gets independent regions, health, and fallback groups behind the
+  // provider-adapter seam. Unknown scopes answer empty, never wide.
+  const { id = 'kyren', servers } = scope
+  const wanted = servers?.map((server) => server.toLowerCase())
+  const raceServers = RACE_SERVERS.filter((server) => !wanted || wanted.includes(server))
+  const fallbackServers = FALLBACK_SERVERS.filter((server) => !wanted || wanted.includes(server))
+  /** First-segment probe on the hit's top HLS source. Guards against dead
+   *  upstreams (master 200 + parseable, segments 403). The probe rides the
+   *  injected bounded client like any other resolution document; a blocked
+   *  destination or unserved segment fails the server closed. */
+  async function segmentsServe(sources: ProviderSource[], signal: AbortSignal): Promise<boolean> {
+    const top = sources.find((source) => /m3u8/i.test(source.url) || source.type === 'hls') ?? sources[0]
+    if (!top || !/^https:\/\//i.test(top.url)) return false
+    const probe = async (url: string, headers: Record<string, string>, readPrefixBytes?: number): Promise<string | null> => {
+      const op = bounded(signal, PROBE_TIMEOUT_MS)
+      try {
+        const response = await http(url, { 'user-agent': userAgent, ...headers }, op.signal,
+          readPrefixBytes === undefined ? undefined : { readPrefixBytes })
+        if (response.status < 200 || response.status >= 300) return null
+        return response.text
+      } catch {
+        return null
+      } finally {
+        op.cleanup()
+      }
+    }
+    const master = await probe(top.url, { accept: '*/*' })
+    if (!master || !master.trimStart().startsWith('#EXTM3U')) return false
+    const segment = master.split('\n').map((line) => line.trim()).find((line) => line && !line.startsWith('#'))
+    if (!segment) return false
+    let segmentUrl: string
+    try {
+      segmentUrl = new URL(segment, top.url).toString()
+    } catch {
+      return false
+    }
+    if (!/^https:\/\//i.test(segmentUrl)) return false
+    const body = await probe(segmentUrl, { range: PROBE_RANGE }, PROBE_READ_BYTES)
+    return body !== null && body.length > PROBE_MIN_BYTES
+  }
+
+  return Object.assign(adapter('kyren', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
     const dub = input.audioLanguage === 'en'
@@ -65,8 +125,8 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
       throw new ProviderFailure('empty')
     }
 
-    const tryServer = async (server: string): Promise<ProviderSource[]> => {
-      const op = bounded(signal, SERVER_TIMEOUT_MS)
+    const tryServer = async (server: string, parentSignal = signal): Promise<ProviderSource[]> => {
+      const op = bounded(parentSignal, SERVER_TIMEOUT_MS)
       try {
         const url = `${apiOrigin}/stream/${ref.id}/${ref.episode}?lang=${lang}&title=${encodeURIComponent(title)}&server=${server}`
         const response = await document(http, url, op.signal, {
@@ -110,15 +170,29 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
       }
     }
 
-    const raced = await Promise.all(RACE_SERVERS.map((server) => tryServer(server)))
-    for (const sources of raced) {
-      if (sources.length) return sources.slice(0, 3)
+    const raceControllers = raceServers.map(() => new AbortController())
+    const abortRaces = () => raceControllers.forEach((controller) => controller.abort(signal.reason))
+    signal.addEventListener('abort', abortRaces, { once: true })
+    if (signal.aborted) abortRaces()
+    try {
+      const raced = raceServers.map((server, index) => tryServer(server, raceControllers[index]!.signal))
+      for (const pending of raced) {
+        const sources = await pending
+        if (!sources.length) continue
+        signal.throwIfAborted()
+        if (await segmentsServe(sources, signal)) return sources.slice(0, 3)
+      }
+    } finally {
+      signal.removeEventListener('abort', abortRaces)
+      raceControllers.forEach((controller) => controller.abort())
     }
-    for (const server of FALLBACK_SERVERS) {
+    for (const server of fallbackServers) {
       if (signal.aborted) throw new ProviderFailure('empty')
       const sources = await tryServer(server)
-      if (sources.length) return sources.slice(0, 3)
+      if (!sources.length) continue
+      signal.throwIfAborted()
+      if (await segmentsServe(sources, signal)) return sources.slice(0, 3)
     }
     throw new ProviderFailure('empty')
-  })
+  }), { id })
 }

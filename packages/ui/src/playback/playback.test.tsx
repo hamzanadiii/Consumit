@@ -70,6 +70,47 @@ describe('playback shell components', () => {
     load.mockRestore()
   })
 
+  it('does not reload healthy media when only its source lease metadata changes', async () => {
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
+    try {
+      const source = { src: 'https://cdn.consumit.example/episode.mp4', type: 'native' as const, expiresAt: '2026-09-30T15:05:00Z' }
+      const renewed = { ...source, expiresAt: '2026-09-30T15:10:00Z' }
+      const { container, rerender } = render(<ConsumitPlayer source={source} title="Anime episode" />)
+      const video = container.querySelector('video')!
+      await waitFor(() => expect(video.src).toBe(source.src))
+      await act(async () => { await Promise.resolve() })
+      setClock(video, 120, 1200)
+      fireEvent.loadedMetadata(video)
+      fireEvent.playing(video)
+      const removeAttribute = vi.spyOn(video, 'removeAttribute')
+      await act(async () => {
+        rerender(<ConsumitPlayer source={renewed} title="Anime episode" />)
+        await Promise.resolve()
+      })
+      expect(container.querySelector('video')).toBe(video)
+      expect(removeAttribute).not.toHaveBeenCalledWith('src')
+    } finally {
+      load.mockRestore()
+    }
+  })
+
+  it('reloads the same media URL when retrying a failed engine', async () => {
+    const failed = vi.fn()
+    const source = { src: 'https://cdn.consumit.example/episode.mp4', type: 'native' as const }
+    const { container, rerender } = render(<ConsumitPlayer source={source} title="Anime episode" onSourceError={failed} />)
+    const video = container.querySelector('video')!
+    await waitFor(() => expect(video.src).toBe(source.src))
+    await act(async () => { await Promise.resolve() })
+    fireEvent.error(video)
+    expect(failed).toHaveBeenCalled()
+    const removeAttribute = vi.spyOn(video, 'removeAttribute')
+    await act(async () => {
+      rerender(<ConsumitPlayer source={{ ...source }} title="Anime episode" onSourceError={failed} />)
+      await Promise.resolve()
+    })
+    expect(removeAttribute).toHaveBeenCalledWith('src')
+  })
+
   it('synchronizes a finite media duration even when metadata is ready before hydration', () => {
     const { container } = render(
       <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
@@ -174,6 +215,14 @@ describe('playback shell components', () => {
     expect(screen.queryByText('Some places disappear long before anyone leaves them.')).not.toBeInTheDocument()
   })
 
+  it('requests optional subtitle search only when captions are opened', () => {
+    const request = vi.fn()
+    render(<ConsumitPlayer src="/movie.mp4" title="Fixture" onSubtitleRequest={request} />)
+    expect(request).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
   it('steps the subtitle sync offset from the subtitles menu and persists it', () => {
     window.localStorage.clear()
     try {
@@ -229,6 +278,46 @@ describe('playback shell components', () => {
     }
   })
 
+  it('refreshes the caption overlay every frame while playing, without media events', async () => {
+    const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nHello world\n'
+    const fetchMock = vi.fn(async () => ({ ok: true, body: undefined, text: async () => vtt }))
+    vi.stubGlobal('fetch', fetchMock)
+    const frames: (() => void)[] = []
+    const rafMock = vi.fn((callback: FrameRequestCallback) => {
+      frames.push(() => callback(0))
+      return frames.length
+    })
+    vi.stubGlobal('requestAnimationFrame', rafMock)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    try {
+      const { container } = render(
+        <ConsumitPlayer
+          title="Sea of Names"
+          src="/movie.mp4"
+          extraSubtitles={[{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }]}
+          subtitleOptions={[{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }]}
+          selectedSubtitle="external:consumit-external-a"
+          subtitleDelayMs={2000}
+        />,
+      )
+      const video = container.querySelector('video')!
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+      // Cue [1s, 4s] with a +2000ms shift is active at t=0.
+      expect(await screen.findByText('Hello world')).toBeInTheDocument()
+
+      // Advance the clock without dispatching any media event: the overlay is
+      // stale until the frame sampler runs (t=3 + 2s = 5s is past the cue).
+      setClock(video, 3, 120)
+      expect(screen.getByText('Hello world')).toBeInTheDocument()
+      fireEvent.playing(video)
+      expect(rafMock).toHaveBeenCalled()
+      act(() => { frames[frames.length - 1]?.() })
+      expect(screen.queryByText('Hello world')).not.toBeInTheDocument()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('lists subtitle tracks PROVE-embed style with native names and a count', () => {
     const { container } = render(
       <ConsumitPlayer
@@ -248,14 +337,10 @@ describe('playback shell components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
     const menu = screen.getByRole('menu', { name: 'Subtitles' })
     expect(within(menu).getByText('2 subs')).toBeInTheDocument()
-    const rows = within(menu).getAllByRole('menuitemradio')
-    expect(rows.map((row) => row.textContent)).toEqual([
-      expect.stringContaining('English'),
-      expect.stringContaining('العربية'),
-      'Off',
-    ])
+    expect(within(menu).getByRole('menuitemradio', { name: 'Off' })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('button', { name: /العربية1/ }))
     expect(within(menu).getByText('Arabic')).toBeInTheDocument()
-    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /العربية/ }))
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Arabic' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
@@ -274,6 +359,7 @@ describe('playback shell components', () => {
       const { rerender } = render(<ConsumitPlayer title="X" source={first} extraSubtitles={shared} />)
       fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
       const menu = screen.getByRole('menu', { name: 'Subtitles' })
+      fireEvent.click(within(menu).getByRole('button', { name: /English.*3/ }))
       await waitFor(() => expect(within(menu).getByText('English (A)')).toBeInTheDocument())
       expect(within(menu).getByText('3 subs')).toBeInTheDocument()
 
@@ -284,6 +370,73 @@ describe('playback shell components', () => {
       expect(within(kept).getByText('English (A)')).toBeInTheDocument()
       expect(within(kept).getByText('English (yify)')).toBeInTheDocument()
       expect(within(kept).getByText('3 subs')).toBeInTheDocument()
+    } finally {
+      load.mockRestore()
+    }
+  })
+
+  it('hides a discovered row once its track is selected', async () => {
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
+    try {
+      const prepare = vi.fn(async (candidate: { id: string }) => ({ id: candidate.id, label: 'Arabic (vdrkv2)', language: 'ar', url: `https://subs.example/${candidate.id}.vtt` }))
+      render(
+        <ConsumitPlayer
+          title="X"
+          source={{ src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [] }}
+          subtitleDiscovery={{ languages: [{ code: 'ar', count: 2 }], providers: [], loading: false, error: null }}
+          onSubtitlePage={async () => ({
+            tracks: [
+              { id: 'c1', label: 'Arabic', language: 'ar', provider: 'vdrkv2' },
+              { id: 'c2', label: 'Arabic', language: 'ar', provider: 'vdrk' },
+            ],
+            total: 2,
+            nextCursor: null,
+          })}
+          onSubtitleCandidateSelect={prepare}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+      const menu = await screen.findByRole('menu', { name: 'Subtitles' })
+      const languageRow = within(menu).getAllByRole('button', { name: /العربية/ }).find((entry) => entry.hasAttribute('aria-expanded'))!
+      fireEvent.click(languageRow)
+      expect(await within(menu).findByRole('button', { name: /^Arabic\s*vdrkv2$/ })).toBeInTheDocument()
+      expect(within(menu).getByRole('button', { name: /^Arabic\s*vdrk$/ })).toBeInTheDocument()
+
+      fireEvent.click(within(menu).getByRole('button', { name: /^Arabic\s*vdrkv2$/ }))
+      await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(screen.queryByRole('menu', { name: 'Subtitles' })).not.toBeInTheDocument())
+
+      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+      const reopened = await screen.findByRole('menu', { name: 'Subtitles' })
+      expect(await within(reopened).findByRole('menuitemradio', { name: 'Arabic (vdrkv2)' })).toHaveAttribute('aria-checked', 'true')
+      expect(within(reopened).queryByRole('button', { name: /^Arabic\s*vdrkv2$/ })).not.toBeInTheDocument()
+      expect(within(reopened).getByRole('button', { name: /^Arabic\s*vdrk$/ })).toBeInTheDocument()
+    } finally {
+      load.mockRestore()
+    }
+  })
+
+  it('never lists a discovered track whose prepared file is already active', async () => {
+    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
+    try {
+      render(
+        <ConsumitPlayer
+          title="X"
+          source={{ src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [{ id: 'a1', label: 'Arabic (vdrkv2)', language: 'ar', url: 'https://media.example/prep.vtt' }] }}
+          selectedSubtitle="external:consumit-external-a1"
+          onSubtitlePage={async () => ({
+            tracks: [{ id: 'c9', label: 'Arabic', language: 'ar', provider: 'vdrkv2', preparedUrl: 'https://media.example/prep.vtt' }],
+            total: 1,
+            nextCursor: null,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+      const menu = await screen.findByRole('menu', { name: 'Subtitles' })
+      const languageRow = within(menu).getAllByRole('button', { name: /العربية/ }).find((entry) => entry.hasAttribute('aria-expanded'))!
+      fireEvent.click(languageRow)
+      expect(await within(menu).findByRole('menuitemradio', { name: 'Arabic (vdrkv2)' })).toHaveAttribute('aria-checked', 'true')
+      expect(within(menu).queryByRole('button', { name: /^Arabic\s*vdrkv2$/ })).not.toBeInTheDocument()
     } finally {
       load.mockRestore()
     }
@@ -394,6 +547,18 @@ describe('playback shell components', () => {
     expect(overlay).toHaveTextContent('2021 · 1h 56m · ★ 6.0 · R')
   })
 
+  it('shows the cast control only when a cast runtime is available', () => {
+    const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
+    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
+    expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
+    const onCastClick = vi.fn()
+    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    const button = screen.getByRole('button', { name: 'Cast to TV' })
+    fireEvent.click(button)
+    expect(onCastClick).toHaveBeenCalledOnce()
+    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
+    expect(screen.getByRole('button', { name: 'Disconnect from TV' })).toBeInTheDocument()
+  })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()
     render(
@@ -562,6 +727,23 @@ describe('playback shell components', () => {
     } finally {
       window.localStorage.clear()
     }
+  })
+
+  it('keeps PiP support out of the first paint so SSR matches hydration', async () => {
+    const html = renderToString(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
+    // SSR has no window/document: PiP reports unsupported (disabled).
+    expect(html).toContain('Enter picture in picture')
+    const ssrDisabled = /disabled=""/.test(html.slice(html.indexOf('Enter picture in picture') - 200, html.indexOf('Enter picture in picture')))
+    expect(ssrDisabled || html.includes('disabled')).toBe(true)
+
+    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
+    const button = screen.getByRole('button', { name: 'Enter picture in picture' })
+    // First client paint still matches SSR (disabled); capability applies in an effect.
+    expect(button).toBeDisabled()
+    await waitFor(() => {
+      // jsdom has no picture-in-picture: stays disabled after mount too.
+      expect(button).toBeDisabled()
+    })
   })
 
   it('shows server flags, degraded status, and favorite hearts that persist', () => {

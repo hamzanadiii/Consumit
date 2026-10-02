@@ -1,4 +1,5 @@
 import type { AnimeCatalog } from '../catalog/anilist/adapter.ts'
+import type { AnimeTitleVariantsResolver } from '@consumit/provider-sdk'
 
 export type AnimeTitleResolver = (anilistId: number, signal: AbortSignal) => Promise<string>
 
@@ -12,6 +13,20 @@ const CACHE_MAX = 1000
 export function createAnimeTitleResolver(catalog: AnimeCatalog): AnimeTitleResolver {
   const meta = createAnimeMetaResolver(catalog)
   return async (anilistId: number, signal: AbortSignal) => meta(anilistId, signal).then(({ title }) => title)
+}
+
+/** AniList title aliases for anime providers whose catalogs index alternate
+ *  English, romaji, or native names. The catalog client caches this detail. */
+export function createAnimeTitleVariantsResolver(catalog: AnimeCatalog): AnimeTitleVariantsResolver {
+  return async (anilistId) => {
+    const detail = await catalog.title(anilistId)
+    return [...new Set([
+      detail.titles.english,
+      detail.titles.romaji,
+      detail.titles.native,
+      detail.titles.preferred,
+    ].map((title) => title?.trim()).filter((title): title is string => Boolean(title)))]
+  }
 }
 
 export type AnimeMetaResolver = (anilistId: number, signal: AbortSignal) => Promise<{ title: string; malId: number | null }>

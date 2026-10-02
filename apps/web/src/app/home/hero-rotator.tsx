@@ -1,12 +1,13 @@
 'use client'
 
 import { titleHref, watchHref } from '@consumit/contracts'
-import { Play, Star } from 'lucide-react'
+import { Pause, Play, Star } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { makerByline, type HeroDetail } from '../catalog/catalog-ui'
+import { OnDemandLink as Link } from '../shared/on-demand-link'
+import styles from './hero-rotator.module.css'
 
 const ADVANCE_MS = 4000
 const MAX_SLIDES = 5
@@ -51,7 +52,7 @@ function HeroArticle({ animate, eager, hero, titleId }: {
     : (seasonCount > 0 ? `${seasonCount} ${seasonCount === 1 ? 'season' : 'seasons'}` : null)
   const contentRating = hero.kind === 'series' ? hero.contentRating : hero.certification
   return (
-    <article className="relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#2a1a12] text-white">
+    <article className={`relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#2a1a12] text-white ${styles.frame}`}>
       {hero.backdropUrl ? (
         <Image
           alt=""
@@ -59,7 +60,7 @@ function HeroArticle({ animate, eager, hero, titleId }: {
           fill
           loading={eager ? undefined : 'lazy'}
           priority={eager}
-          sizes="(max-width: 1024px) 100vw, 900px"
+          sizes="(min-width: 1024px) calc(100vw - 112px), 100vw"
           src={hero.backdropUrl}
         />
       ) : (
@@ -69,9 +70,9 @@ function HeroArticle({ animate, eager, hero, titleId }: {
           style={{ background: 'radial-gradient(120% 90% at 78% 8%, #f7b267 0%, #d97b3f 28%, #7a3a22 55%, #2a1a12 100%)' }}
         />
       )}
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92)_0%,rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.08)_100%)]" />
+      <div aria-hidden="true" className={`absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92)_0%,rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.08)_100%)] ${styles.shade}`} />
       <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0)_40%)]" />
-      <div className={`relative flex max-w-2xl flex-col justify-center gap-3 p-6 sm:p-10 lg:p-12 min-h-[calc(100svh-100px)] sm:min-h-[calc(100svh-104px)] lg:min-h-[calc(100svh-112px)]${animate ? ' fs-hero-in' : ''}`} key={animate ? `${titleId}-in` : `${titleId}-idle`}>
+      <div className={`relative flex max-w-2xl flex-col justify-center gap-3 p-6 sm:p-10 lg:p-12 min-h-[calc(100svh-100px)] sm:min-h-[calc(100svh-104px)] lg:min-h-[calc(100svh-112px)] ${styles.copy}${animate ? ' fs-hero-in' : ''}`} key={animate ? `${titleId}-in` : `${titleId}-idle`}>
         <h2 className="max-w-[24ch] text-balance font-bold" id={titleId}>
           {hero.logoUrl ? (
             <Image alt={hero.title} className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28" height={240} loading={eager ? undefined : 'lazy'} priority={eager} src={hero.logoUrl} width={640} />
@@ -79,7 +80,7 @@ function HeroArticle({ animate, eager, hero, titleId }: {
             <span className="font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">{hero.title}</span>
           )}
         </h2>
-        {hero.tagline ? <p className="max-w-[48ch] font-display text-2xl leading-snug text-white/95">{hero.tagline}</p> : null}
+        {hero.tagline ? <p className={`max-w-[48ch] font-display text-2xl leading-snug text-white/95 ${styles.tagline}`}>{hero.tagline}</p> : null}
         <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
           {rating ? (
             <span className="inline-flex items-center gap-1 font-bold text-white tabular-nums">
@@ -88,14 +89,14 @@ function HeroArticle({ animate, eager, hero, titleId }: {
               <span className="sr-only">on TMDB</span>
             </span>
           ) : null}
-          {hero.year ? <span className="font-bold text-white tabular-nums">{hero.year}</span> : null}
+          {hero.year ? <span className="font-bold text-white tabular-nums lg:font-medium lg:text-white/85">{hero.year}</span> : null}
           {duration ? <span className="text-white/70">{duration}</span> : null}
           {hero.genreNames.length ? <span className="text-white/70">{hero.genreNames.slice(0, 3).join(' · ')}</span> : null}
           {contentRating ? <span className="rounded border border-white/30 bg-black/40 px-1.5 py-0.5 text-[11px] font-bold text-white">{contentRating}</span> : null}
         </p>
-        {byline ? <p className="text-xs font-bold tracking-wide text-white/75">{byline}</p> : null}
-        {hero.overview ? <p className="max-w-[62ch] text-sm leading-6 text-white/85 line-clamp-3">{hero.overview}</p> : null}
-        <div className="mt-1 flex flex-wrap items-center gap-3">
+        {byline ? <p className="text-xs font-bold tracking-wide text-white/75 lg:font-medium lg:tracking-normal">{byline}</p> : null}
+        {hero.overview ? <p className={`max-w-[62ch] text-sm leading-6 text-white/85 line-clamp-3 ${styles.overview}`}>{hero.overview}</p> : null}
+        <div className={`mt-1 flex flex-wrap items-center gap-3 ${styles.actions}`}>
           <Link
             className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-5 text-sm font-bold text-[#09090b] outline-none transition-colors hover:bg-white focus-visible:ring-2 focus-visible:ring-white"
             href={watchHref(hero)}
@@ -136,10 +137,10 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   const [documentVisible, setDocumentVisible] = useState(true)
   const [inView, setInView] = useState(true)
   const [reducedMotion, setReducedMotion] = useState(false)
+  const [pausedByMember, setPausedByMember] = useState(false)
   const sectionRef = useRef<HTMLElement>(null)
   const fillRef = useRef<HTMLSpanElement>(null)
   const progressRef = useRef(0)
-  const runningRef = useRef(false)
   const count = slides.length
 
   const go = useCallback(
@@ -184,32 +185,26 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   // One shared clock drives the fill bar and the slide advance together,
   // so they can never drift apart. Pausing freezes both mid-frame and
   // resuming continues from the exact same position.
-  const running = count > 1 && !hovered && !focused && inView && documentVisible && !reducedMotion
+  const running = count > 1 && !hovered && !focused && inView && documentVisible && !reducedMotion && !pausedByMember
 
   useEffect(() => {
-    runningRef.current = running
-  }, [running])
-
-  useEffect(() => {
-    if (slides.length <= 1 || reducedMotion) return
+    if (!running) return
     let frame = 0
     let last = performance.now()
     const tick = (now: number) => {
       const elapsed = now - last
       last = now
-      if (runningRef.current) {
-        progressRef.current += elapsed / ADVANCE_MS
-        if (progressRef.current >= 1) {
-          progressRef.current = 0
-          setIndex((current) => (current + 1) % count)
-        }
-        if (fillRef.current) fillRef.current.style.transform = `scaleY(${Math.min(progressRef.current, 1)})`
+      progressRef.current += elapsed / ADVANCE_MS
+      if (progressRef.current >= 1) {
+        progressRef.current = 0
+        setIndex((current) => (current + 1) % count)
       }
+      if (fillRef.current) fillRef.current.style.transform = `scaleY(${Math.min(progressRef.current, 1)})`
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [count, reducedMotion, slides.length])
+  }, [count, running])
 
   if (count <= 1) {
     const only = slides[0] ?? hero
@@ -261,7 +256,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
             <button
               aria-current={active || undefined}
               aria-label={`Show ${item.title}`}
-              className="grid h-11 w-11 cursor-pointer place-items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
+              className={`grid h-11 w-11 cursor-pointer place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none ${styles.selector}`}
               key={`${item.kind}:${item.id}`}
               onClick={() => go(position)}
               type="button"
@@ -285,6 +280,18 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
           )
         })}
       </div>
+      {!reducedMotion ? (
+        <button
+          aria-label={pausedByMember ? 'Resume featured titles' : 'Pause featured titles'}
+          aria-pressed={pausedByMember}
+          className={`hidden cursor-pointer items-center outline-none focus-visible:ring-2 focus-visible:ring-white lg:inline-flex ${styles.pause}`}
+          onClick={() => setPausedByMember((paused) => !paused)}
+          type="button"
+        >
+          {pausedByMember ? <Play aria-hidden="true" className="size-3.5" /> : <Pause aria-hidden="true" className="size-3.5" />}
+          {pausedByMember ? 'Resume' : 'Pause'}
+        </button>
+      ) : null}
     </section>
   )
 }

@@ -2,10 +2,13 @@ import { playbackTrackSchema } from '@consumit/contracts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { TitleMetadataResolver } from '../playback/tmdb-metadata.ts'
 import { servedStorageKey, toServedTracks, type SubtitleCatalog } from './catalog.ts'
+import { createSubtitleDiscovery } from './discovery.ts'
 import { resolveSubtitles, type ServedSubtitle } from './engine.ts'
 import { MAX_OFFSET_MS, shiftVtt } from './sync.ts'
 import { createStoreFileStore, type OriginalFile, type SubtitleFileStore } from './storage.ts'
+import type { AnimeMappingResolver } from './anizip.ts'
 import type { SubtitleSearchProvider } from './types.ts'
+import type { SubtitleQuery } from './types.ts'
 import { z } from 'zod'
 
 const SEARCH_CACHE_TTL_SECONDS = 3600
@@ -13,7 +16,7 @@ const SEARCH_CACHE_TTL_SECONDS = 3600
 /** Cached track lists keep the serving provider name; the public response
  *  contract carries it inside the label instead. */
 const cachedTracksSchema = z.object({
-  subtitles: z.array(playbackTrackSchema.extend({ format: z.literal('vtt'), provider: z.string().min(1).max(64) })).max(32),
+  subtitles: z.array(playbackTrackSchema.extend({ format: z.literal('vtt'), provider: z.string().min(1).max(64) })),
 })
 
 export type SubtitleRef = {
@@ -37,6 +40,7 @@ export interface SubtitleService {
   /** Original source bytes (srt/vtt/ass) for a file key, kept for future
    *  styled rendering. Null on backends without original storage. */
   original(key: string): Promise<OriginalFile | null>
+  discovery?: ReturnType<typeof createSubtitleDiscovery>
 }
 
 /** Lenient query parsing: keep well-formed codes in order (max 3), drop
@@ -63,6 +67,9 @@ export function createSubtitleService(deps: {
    *  it, title-keyed providers skip and only tmdbId-keyed ones answer. */
   metadata?: TitleMetadataResolver | undefined
   animeTitle: AnimeTitleLookup
+  /** Canonical anime episode to TMDB identity (ani.zip bridge). Absent
+   *  keeps title/AniList-only anime queries; the TMDB-keyed fleet skips. */
+  animeMapping?: AnimeMappingResolver | undefined
   store: PlaybackStore
   origin: string
   /** File backend for converted VTT + originals. Defaults to the
@@ -71,9 +78,64 @@ export function createSubtitleService(deps: {
   /** Durable Neon metadata catalog. Read on search-cache miss, written
    *  after fresh discoveries. Absent keeps today's cache-only behavior. */
   catalog?: SubtitleCatalog | undefined
+  requirements?: Readonly<Record<string, string>> | undefined
 }): SubtitleService {
   const files = deps.files ?? createStoreFileStore(deps.store)
+  /** Best-effort TMDB identity for a canonical anime episode. Bounded so a
+   *  slow mapping never holds discovery; misses just narrow the provider set
+   *  to title/AniList-keyed sources. */
+  async function animeMap(anilistId: number, episode: number, signal: AbortSignal): Promise<{ tmdbId?: number | undefined; season?: number | undefined }> {
+    if (!deps.animeMapping) return {}
+    try {
+      const mapped = await Promise.race([
+        deps.animeMapping(anilistId, episode, signal),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ])
+      if (!mapped) return {}
+      return {
+        ...(mapped.tmdbId !== undefined ? { tmdbId: mapped.tmdbId } : {}),
+        ...(mapped.season !== undefined ? { season: mapped.season } : {}),
+      }
+    } catch {
+      return {}
+    }
+  }
+  async function usableTracks(tracks: readonly ServedSubtitle[]): Promise<ServedSubtitle[]> {
+    const checked = await Promise.all(tracks.map(async (track) => {
+      const key = servedStorageKey(track.url)
+      return !key || await files.getVtt(key) ? track : null
+    }))
+    return checked.filter((track): track is ServedSubtitle => track !== null)
+  }
+  async function queryFor(ref: SubtitleRef, signal: AbortSignal): Promise<SubtitleQuery> {
+    const season = ref.season ?? 1
+    const episode = ref.episode ?? 1
+    if (ref.kind === 'anime') {
+      const detail = await deps.animeTitle(ref.id)
+      // Episode stays canonical (absolute): AnimeTosho keys off it while the
+      // mapped TVDB season unlocks the TMDB-keyed fleet for the same query.
+      const mapped = await animeMap(ref.id, episode, signal)
+      return { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped }
+    }
+    let title: string | undefined
+    let year: number | undefined
+    let imdbId: string | undefined
+    try {
+      const meta = await deps.metadata?.({ kind: ref.kind, id: ref.id }, signal)
+      title = meta?.title; year = meta?.year; imdbId = meta?.imdbId
+    } catch { /* ID-keyed providers can still answer. */ }
+    return {
+      type: ref.kind === 'movie' ? 'movie' : 'tv', tmdbId: ref.id,
+      ...(imdbId ? { imdbId } : {}), ...(title ? { title } : {}), ...(year ? { year } : {}),
+      season, episode,
+    }
+  }
+  const discovery = createSubtitleDiscovery({
+    providers: deps.providers, store: deps.store, files, origin: deps.origin, catalog: deps.catalog,
+    query: queryFor, requirements: deps.requirements,
+  })
   return {
+    discovery,
     async search(ref: SubtitleRef, signal: AbortSignal, langs?: readonly string[] | undefined): Promise<ServedSubtitle[]> {
       const season = ref.season ?? 1
       const episode = ref.episode ?? 1
@@ -85,7 +147,10 @@ export function createSubtitleService(deps: {
         const cached = await deps.store.get(cacheKey)
         if (cached) {
           const parsed = cachedTracksSchema.safeParse(JSON.parse(cached))
-          if (parsed.success) return parsed.data.subtitles
+          if (parsed.success) {
+            const usable = await usableTracks(parsed.data.subtitles)
+            if (usable.length) return usable
+          }
         }
       } catch {
         // Cache failure never blocks a fresh search.
@@ -95,9 +160,10 @@ export function createSubtitleService(deps: {
       // without hammering subtitle upstreams for every hourly expiry.
       if (deps.catalog) {
         try {
-          const rows = await deps.catalog.find(ref, wanted.length ? wanted : ['en'])
+          const rows = await deps.catalog.find(ref, [])
           if (rows.length) {
-            const cataloged = toServedTracks(rows, deps.origin)
+            const cataloged = await usableTracks(toServedTracks(rows, deps.origin))
+            if (!cataloged.length) throw new Error('Catalog files expired.')
             try {
               await deps.store.set(cacheKey, JSON.stringify({ subtitles: cataloged }), SEARCH_CACHE_TTL_SECONDS)
             } catch {
@@ -112,8 +178,9 @@ export function createSubtitleService(deps: {
       let tracks: ServedSubtitle[]
       if (ref.kind === 'anime') {
         const detail = await deps.animeTitle(ref.id)
+        const mapped = await animeMap(ref.id, episode, signal)
         tracks = await resolveSubtitles(
-          { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...(queryLangs ? { langs: queryLangs } : {}) },
+          { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped, ...(queryLangs ? { langs: queryLangs } : {}) },
           deps.providers,
           files,
           deps.origin,

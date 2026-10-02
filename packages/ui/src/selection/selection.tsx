@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChangeEvent, ComponentProps } from 'react'
+import type { ChangeEvent, ComponentProps, ReactNode } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 
@@ -39,6 +39,7 @@ export function Tabs({
           return (
             <li key={item.value}>
               <a
+                aria-label={item.count === undefined ? undefined : `${item.label}, ${item.count}`}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
                   'relative flex min-h-14 items-center gap-2 text-sm font-bold text-muted outline-none transition-colors hover:text-ink focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange motion-reduce:transition-none',
@@ -185,7 +186,9 @@ export type SelectProps = Omit<ComponentProps<'div'>, 'children' | 'onChange'> &
   onValueChange?: ((value: string) => void) | undefined
   options: readonly SelectionOption[]
   placeholder?: string | undefined
+  triggerLabel?: ReactNode | undefined
   value?: string | undefined
+  variant?: 'field' | 'toolbar' | undefined
 }
 
 /**
@@ -204,7 +207,9 @@ export function Select({
   onValueChange,
   options,
   placeholder = 'Select…',
+  triggerLabel,
   value,
+  variant = 'field',
   ...props
 }: SelectProps) {
   const generatedId = useId()
@@ -220,8 +225,8 @@ export function Select({
 
   function openListbox(atIndex?: number) {
     if (disabled) return
-    const fallback = selectedIndex >= 0 ? selectedIndex : 0
-    setActiveIndex(atIndex ?? fallback)
+    const requested = atIndex ?? selectedIndex
+    setActiveIndex(requested >= 0 && options[requested] && !options[requested]?.disabled ? requested : options.findIndex((option) => !option.disabled))
     setOpen(true)
   }
 
@@ -308,7 +313,7 @@ export function Select({
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-labelledby={`${labelId} ${triggerId}-value`}
-        className="flex h-11 w-full cursor-pointer items-center gap-2 rounded-xl border border-control-outline bg-field pr-3 pl-4 text-left text-sm text-ink outline-none transition-colors hover:border-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-not-allowed disabled:opacity-40"
+        className={cn('flex w-full cursor-pointer items-center gap-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-not-allowed disabled:opacity-40', variant === 'toolbar' ? 'h-10 rounded-control px-2 text-muted hover:bg-surface-raised hover:text-ink' : 'h-11 rounded-xl border border-control-outline bg-field pr-3 pl-4 text-ink hover:border-muted focus-visible:border-orange')}
         disabled={disabled}
         id={triggerId}
         onClick={() => (open ? closeListbox(false) : openListbox())}
@@ -324,15 +329,15 @@ export function Select({
         ref={triggerRef}
         type="button"
       >
-        <span className="min-w-0 flex-1 truncate font-bold" id={`${triggerId}-value`}>
-          {selected ? selected.label : <span className="font-normal text-muted">{placeholder}</span>}
+        <span className={cn('min-w-0 flex-1 truncate', variant === 'toolbar' ? 'max-w-[24ch] font-medium' : 'font-bold')} id={`${triggerId}-value`}>
+          {triggerLabel ?? (selected ? selected.label : <span className="font-normal text-muted">{placeholder}</span>)}
         </span>
         <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-muted transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-180')} />
       </button>
       {open ? (
         <ul
           aria-labelledby={labelId}
-          className="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-xl border border-control-outline bg-surface p-1.5 shadow-xl outline-none"
+          className={cn('absolute top-full z-50 mt-2 max-h-64 overflow-y-auto border border-control-outline bg-surface p-1.5 shadow-xl outline-none', variant === 'toolbar' ? 'right-0 w-max min-w-[14rem] max-w-[min(22rem,calc(100vw-2rem))] rounded-control' : 'inset-x-0 rounded-xl')}
           id={listboxId}
           onKeyDown={onListboxKeyDown}
           role="listbox"

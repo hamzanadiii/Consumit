@@ -43,7 +43,11 @@ export function isSafeMediaUrl(url: string): boolean {
   } catch {
     return false
   }
-  if (parsed.protocol !== 'https:') return false
+  // Controlled browser fixture only; production still requires HTTPS media.
+  // The explicit public flag is set only when building the production-like fixture harness.
+  const fixtureOrigin = (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PLAYBACK_FIXTURE === '1')
+    && parsed.origin === 'http://127-0-0-1.nip.io:18560'
+  if (parsed.protocol !== 'https:' && !fixtureOrigin) return false
   if (parsed.username || parsed.password) return false
   const host = parsed.hostname.toLowerCase()
   if (host === 'localhost') return false

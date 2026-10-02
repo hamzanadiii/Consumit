@@ -28,7 +28,7 @@ export function SettingsRail({
   ...props
 }: SettingsRailProps) {
   return (
-    <aside className={cn('rounded-card border border-border bg-surface p-4', className)} data-consumit-settings-rail {...props}>
+    <aside className={cn('border-t border-border pt-4', className)} data-consumit-settings-rail {...props}>
       {memberName ? (
         <div className="flex items-center gap-3 border-b border-border pb-4">
           <Avatar name={memberName} size="md" src={avatarSrc} treatment={avatarTreatment} />
@@ -84,7 +84,7 @@ export function SettingsSection({
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="mt-6 rounded-card border border-border bg-surface px-5">{children}</div>
+      <div className="mt-6 border-t border-border">{children}</div>
     </section>
   )
 }

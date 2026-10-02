@@ -32,7 +32,7 @@ describe('catalog browsing', () => {
     discover.mockResolvedValue({ ...page, items: [movieSummary, second], page: 2, totalPages: 2 })
     show()
     await user.click(screen.getByRole('button', { name: 'Load more' }))
-    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toHaveAttribute('href', '/title/2')
+    expect(await results().findByRole('link', { name: 'Arrival' })).toHaveAttribute('href', '/title/2')
     expect(results().getAllByRole('link')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
     expect(discover).toHaveBeenCalledWith({ kind: 'movie', feed: 'popular', genre: undefined, year: undefined }, 2, expect.any(AbortSignal))
@@ -44,9 +44,9 @@ describe('catalog browsing', () => {
     show()
     await user.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('couldn’t load more titles')
-    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toBeInTheDocument()
+    expect(await results().findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
     expect(discover.mock.calls.map((call) => call[1])).toEqual([2, 2])
   })
 
@@ -62,9 +62,9 @@ describe('catalog browsing', () => {
     // The superseded fetch is left to settle, never aborted: aborting leaked
     // an AbortError that Next surfaces as a runtime error.
     expect(oldSignal?.aborted).toBe(false)
-    expect(await results().findByRole('link', { name: 'Arrival, 2024' })).toBeInTheDocument()
+    expect(await results().findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
     await act(async () => resolveOld(page))
-    expect(results().queryByRole('link', { name: 'Dune: Part Two, 2024' })).not.toBeInTheDocument()
+    expect(results().queryByRole('link', { name: 'Dune: Part Two' })).not.toBeInTheDocument()
     expect(discover.mock.calls[1]?.[0]).toMatchObject({ genre: 'Adventure', year: 2024 })
   })
 
@@ -75,7 +75,7 @@ describe('catalog browsing', () => {
     await chooseOption(user, 'Sort by Popular', 'Top rated')
     expect(await screen.findByRole('heading', { name: 'No titles found' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
-    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two' })).toBeInTheDocument()
     expect(discover).toHaveBeenCalledTimes(1)
   })
 
@@ -96,7 +96,7 @@ describe('catalog browsing', () => {
     expect(discover).toHaveBeenCalledTimes(1)
     await act(async () => finish({ ...page, items: [], page: 2 }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument())
-    expect(results().getByRole('link', { name: 'Dune: Part Two, 2024' })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two' })).toBeInTheDocument()
     expect(disconnect).toHaveBeenCalled()
   })
 })

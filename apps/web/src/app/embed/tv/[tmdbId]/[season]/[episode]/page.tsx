@@ -36,12 +36,10 @@ export default async function EmbedTvPage({ params, searchParams }: EmbedTvPageP
   ) notFound()
 
   const query = parseEmbedQuery(await searchParams)
-  const [streams, context] = await Promise.all([
-    fetchEmbedStreams(`/v1/embed/tv/${id}/${seasonNumber}/${episodeNumber}`, query.lang),
-    loadEmbedEpisodeContext(id, seasonNumber, episodeNumber),
-  ])
-
-  if (!streams.sources.length) return <EmbedEmptyState />
+  const context = await loadEmbedEpisodeContext(id, seasonNumber, episodeNumber)
+  const legacy = process.env.NODE_ENV === 'production' && process.env.PLAYBACK_EMBED_SESSIONS !== '1'
+  const streams = legacy ? await fetchEmbedStreams(`/v1/embed/tv/${id}/${seasonNumber}/${episodeNumber}`, { lang: query.lang }) : null
+  if (streams && !streams.sources.length) return <EmbedEmptyState />
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#09090b]">
@@ -51,9 +49,8 @@ export default async function EmbedTvPage({ params, searchParams }: EmbedTvPageP
         overview={context.overview}
         pauseFacts={context.pauseFacts}
         posterSrc={context.posterSrc}
-        sources={streams.sources}
+        {...(streams ? { sources: streams.sources, subtitles: streams.subtitles } : { playbackRef: { kind: 'series' as const, id, season: seasonNumber, episode: episodeNumber } })}
         startAt={query.startAt}
-        subtitles={streams.subtitles}
         title={context.title}
         videoId={id}
       />

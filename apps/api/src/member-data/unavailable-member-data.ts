@@ -1,27 +1,40 @@
 import type { MemberData } from './member-data.ts'
 
 export const unavailableMemberData: MemberData = {
+  circleActivity: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
   createDiaryEntry: async () => {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
+  deleteDiary: async () => false,
   createReview: async () => {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
   isFollowing: async () => false,
-  library: async () => ({ diary: [], favorites: [], lists: [], saved: [], watched: [] }),
+  libraryPage: async (memberId, collection) => ({ collection, items: [], nextCursor: null }),
+  librarySnapshot: async () => ({ diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, savedLists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }),
   like: async () => null,
   list: async () => null,
+  createList: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
+  discoverLists: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
+  updateListContent: async () => false,
+  deleteList: async () => false,
+  setListSaved: async () => false,
   profile: async () => null,
+  profileArchive: async () => null,
   progress: async () => null,
+  watchHistory: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
   rating: async () => null,
+  ratingsByValue: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
+  ratingsForTitles: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
   removeLike: async () => false,
   removeRating: async () => false,
   removeReviewLike: async () => false,
   review: async () => null,
-  setFavorites: async () => ({ diary: [], favorites: [], lists: [], saved: [], watched: [] }),
+  setFavorites: async () => {},
   setFollow: async () => {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
+  searchMembers: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },
   setLiked: async () => {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
@@ -34,8 +47,9 @@ export const unavailableMemberData: MemberData = {
   setReviewLiked: async () => {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
-  setSaved: async () => ({ diary: [], favorites: [], lists: [], saved: [], watched: [] }),
-  setWatched: async () => ({ diary: [], favorites: [], lists: [], saved: [], watched: [] }),
+  setSaved: async () => {},
+  setWatched: async () => {},
+  titleState: async () => ({ like: null, rating: null, review: null, saved: false, watched: false }),
   titleReviews: async (_ref, page) => ({ items: [], page, totalPages: 0, totalResults: 0 }),
   updateDiary: async () => false,
   updateList: async () => false,

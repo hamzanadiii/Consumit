@@ -36,7 +36,9 @@ model Member {
   savedTitles     SavedTitle[]
   favorites       Favorite[]
   progress        PlaybackProgress[]
+  watchHistory    WatchHistoryEntry[]
   lists           MemberList[]
+  savedLists      SavedMemberList[]
   importBatches   ImportBatch[]
   subtitlePreferences UserSubtitlePreference[]
 }
@@ -72,8 +74,7 @@ model Profile {
   displayNameOrigin DataOrigin @default(NATIVE)
   bioOrigin         DataOrigin @default(NATIVE)
   locationOrigin    DataOrigin @default(NATIVE)
-  // Private by default (docs/PROVIDER-POLICY.md). Per-surface visibility arrives
-  // with the social slice; nothing reads this as public until then.
+  // Private by default; member search and Circle reads require a public profile.
   visibility  String  @default("private")
 }
 
@@ -147,17 +148,22 @@ model DiaryEntry {
   member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
   catalogKind   CatalogKind @default(MOVIE)
   tmdbId        Int
+  season        Int         @default(0)
+  episode       Int         @default(0)
   watchedOn     DateTime    @db.Date
   rewatch       Boolean     @default(false)
   tags          String[]    @default([])
   origin        DataOrigin  @default(NATIVE)
   sourceKey     String?
+  idempotencyKey String?
   importBatchId String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
   @@unique([memberId, origin, sourceKey])
-  @@index([memberId, watchedOn])
+  @@unique([memberId, origin, idempotencyKey])
+  @@index([memberId, watchedOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)], map: "Diary_member_date_created_desc_idx")
+  @@index([memberId, createdAt])
 }
 
 model Rating {
@@ -211,6 +217,7 @@ model Review {
 
   @@unique([memberId, origin, sourceKey])
   @@index([memberId, reviewedOn])
+  @@index([memberId, createdAt])
 }
 
 model ReviewLike {
@@ -251,6 +258,7 @@ model SavedTitle {
 
   @@unique([memberId, catalogKind, tmdbId])
   @@unique([memberId, origin, sourceKey])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)], map: "SavedTitle_member_created_desc_idx")
 }
 
 // Resume position by member and title/episode. Never keyed by provider or
@@ -272,6 +280,23 @@ model PlaybackProgress {
 
   @@unique([memberId, catalogKind, tmdbId, season, episode])
   @@index([memberId, updatedAt(sort: Desc)])
+}
+
+// Private factual completions. An attempt id makes retries idempotent while a
+// new attempt can record a rewatch. No provider or media source is retained.
+model WatchHistoryEntry {
+  id          String      @id @default(cuid())
+  memberId    String
+  member      Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId      Int
+  season      Int         @default(0)
+  episode     Int         @default(0)
+  completionId String     @db.Uuid
+  completedAt DateTime    @default(now())
+
+  @@unique([memberId, catalogKind, tmdbId, season, episode, completionId])
+  @@index([memberId, completedAt(sort: Desc), id(sort: Desc)])
 }
 
 model Favorite {
@@ -301,13 +326,29 @@ model MemberList {
   visibility    String      @default("private")
   origin        DataOrigin  @default(NATIVE)
   sourceKey     String?
+  idempotencyKey String?
   importBatchId String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         ListItem[]
+  savedBy       SavedMemberList[]
 
   @@unique([memberId, origin, sourceKey])
-  @@index([memberId])
+  @@unique([memberId, idempotencyKey])
+  @@index([memberId, updatedAt(sort: Desc), id(sort: Desc)], map: "MemberList_member_updated_desc_idx")
+}
+
+model SavedMemberList {
+  id        String     @id @default(cuid())
+  memberId  String
+  member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  listId    String
+  list      MemberList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([memberId, listId])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)], map: "SavedList_member_created_desc_idx")
+  @@index([listId])
 }
 
 model ListItem {
@@ -384,6 +425,18 @@ model AllowedDomain {
   createdAt DateTime @default(now())
 }
 
+// Shared cache of validated provider metadata. Finite stale entries are
+// periodically pruned; a null staleUntil preserves last-known-good details.
+model CatalogCacheEntry {
+  key        String   @id @db.VarChar(64)
+  payload    Json
+  fetchedAt  DateTime
+  freshUntil DateTime
+  staleUntil DateTime?
+
+  @@index([staleUntil])
+}
+
 enum SubtitleKind {
   MOVIE
   SERIES
@@ -451,4 +504,28 @@ model UserSubtitlePreference {
   @@unique([memberId, kind, tmdbId, anilistId, season, episode])
   @@index([memberId])
   @@index([kind, tmdbId, anilistId, season, episode])
+}
+
+model ProviderOverride {
+  id         String   @id
+  configJson String
+  revision   Int      @default(1)
+  updatedAt  DateTime @updatedAt
+}
+
+model ProviderConfigRevision {
+  id        Int      @id
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderChange {
+  id         String   @id @default(cuid())
+  providerId String
+  actorId    String
+  beforeJson String
+  afterJson  String
+  createdAt  DateTime @default(now())
+
+  @@index([providerId, createdAt(sort: Desc)])
 }

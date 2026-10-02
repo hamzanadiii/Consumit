@@ -1,8 +1,26 @@
 [
   {
+    "id": "vixsrc-it",
+    "adapter": "vixsrc-it",
+    "enabled": false,
+    "regions": [
+      "IT",
+      "US"
+    ],
+    "mediaHosts": [
+      "vixsrc.to",
+      "*.vix-content.net"
+    ],
+    "resolutionHosts": [],
+    "upstreamGroup": "vixsrc-it",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 0
+  },
+  {
     "id": "vixsrc",
     "adapter": "vixsrc",
-    "enabled": true,
+    "enabled": false,
     "regions": [
       "US"
     ],
@@ -17,496 +35,6 @@
     "priority": 100
   },
   {
-    "id": "nhdapi",
-    "adapter": "nhdapi",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "nhdapi.com",
-      "goodstream.cc",
-      "*.goodstream.cc",
-      "*.hoxcv.com",
-      "*.flocw.com",
-      "*.wnowe.com",
-      "*.bxncw.com",
-      "*.bxcnm.com",
-      "*.fhxod.com",
-      "*.fodcyy.com",
-      "*.bhcxy.com",
-      "*.fvncw.com",
-      "img1.klcxm.com",
-      "img.klcxm.com",
-      "img1.ktxcw.com",
-      "img.ktxcw.com"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vixsrc",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vaplayer",
-    "adapter": "vaplayer",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "remoteconsultinggroup.site",
-      "highperformancebrands.site",
-      "quietmidnightgardeningideas.site"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vaplayer",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "mapple",
-    "adapter": "mapple",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "source.wwwplexus.com",
-      "*.wwwplexus.com"
-    ],
-    "resolutionHosts": [
-      "mapple.rip"
-    ],
-    "upstreamGroup": "mapple",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "wecollege",
-    "adapter": "wecollege",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "*.peakstorm.top",
-      "keenanchor.top",
-      "*.keenanchor.top",
-      "ashenlion.top",
-      "cybergate.top",
-      "api.playhq.net",
-      "*.playhq.net",
-      "sub.ourmovie.net",
-      "*.ourmovie.net"
-    ],
-    "resolutionHosts": [
-      "api.wecollege.net"
-    ],
-    "upstreamGroup": "wecollege",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "perses",
-    "adapter": "perses",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "streamguide.cfd"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "perses",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "rivestream",
-    "adapter": "rivestream",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "*.hakunaymatata.com",
-      "cacdn.hakunaymatata.com",
-      "tiki.aether.cx",
-      "*.aether.cx",
-      "remoteconsultinggroup.site",
-      "highperformancebrands.site",
-      "quietmidnightgardeningideas.site",
-      "www.incvideo1.online",
-      "leadgenerationblueprint.site",
-      "*.uqload.vc",
-      "*.fvncw.com",
-      "*.flocw.com",
-      "*.wnowe.com",
-      "*.bxncw.com",
-      "*.bxcnm.com",
-      "*.hoxcv.com",
-      "*.fhxod.com",
-      "*.fodcyy.com",
-      "*.bhcxy.com",
-      "*.vidsonic.net",
-      "*.s1q2105.com",
-      "*.97bf1.com"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "rivestream",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "riveapex",
-    "adapter": "riveapex",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "remoteconsultinggroup.site",
-      "scalablecontentengine.site",
-      "scalableimpactgroup.site",
-      "onlinevisibilitysystem.site"
-    ],
-    "mediaHostPatterns": [
-      "^[a-z]+\\.site$"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "riveapex",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "rivevanguard",
-    "adapter": "rivevanguard",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "ok.solarpanelcleaning.cc"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "rivevanguard",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "riveaura",
-    "adapter": "riveaura",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "asm.solarpanelcleaning.cc"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "riveaura",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "riveapogee",
-    "adapter": "riveapogee",
-    "enabled": false,
-    "mediaKinds": ["movie"],
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "img.rousav.tech"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "riveapogee",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "rivecitadel",
-    "adapter": "rivecitadel",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "img1.flulp.com"
-    ],
-    "mediaHostPatterns": [
-      "^img1\\.[a-z0-9-]+\\.com$"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "rivecitadel",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "riverigel",
-    "adapter": "riverigel",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "*.entertainmentfilmu.workers.dev"
-    ],
-    "resolutionHosts": [
-      "scrapper.rivestream.app"
-    ],
-    "upstreamGroup": "riverigel",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "catflix",
-    "adapter": "catflix",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "pwcloud.animanga.fun",
-      "*.animanga.fun",
-      "*.sunrisefieldinnovation.store"
-    ],
-    "resolutionHosts": [
-      "new.vidnest.fun"
-    ],
-    "upstreamGroup": "catflix",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "poseidon",
-    "adapter": "poseidon",
-    "enabled": false,
-    "attemptMs": 10000,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "remoteconsultinggroup.site",
-      "scalablecontentengine.site",
-      "scalableimpactgroup.site",
-      "onlinevisibilitysystem.site"
-    ],
-    "mediaHostPatterns": [
-      "^[a-z]+\\.site$"
-    ],
-    "resolutionHosts": [
-      "hahaevilcraft.site"
-    ],
-    "upstreamGroup": "poseidon",
-    "concurrency": 2,
-    "requestsPerMinute": 30,
-    "priority": 60
-  },
-  {
-    "id": "vidapi",
-    "adapter": "vidapi",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "remoteconsultinggroup.site",
-      "highperformancebrands.site",
-      "*.remoteconsultinggroup.site",
-      "*.highperformancebrands.site",
-      "quietmidnightgardeningideas.site",
-      "*.quietmidnightgardeningideas.site"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidapi",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "screenscape",
-    "adapter": "screenscape",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "screenscape.me",
-      "proxyes.kuronix.app",
-      "*.kuronix.app"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "screenscape",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vidrock",
-    "adapter": "vidrock",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "vidrock.to",
-      "streamrk.site",
-      "*.ngcorp.dad"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidrock",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vidnest",
-    "adapter": "vidnest",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "new.vidnest.fun",
-      "sub.vdrk.site",
-      "*.vdrk.site"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidnest",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "netmirror",
-    "adapter": "netmirror",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "net27.cc",
-      "tv.imgcdn.kim",
-      "*.imgcdn.kim",
-      "s21.freecdn4.top",
-      "*.freecdn4.top"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "netmirror",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vidstorm",
-    "adapter": "vidstorm",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "vidstorm.ru",
-      "sub.vdrk.site",
-      "*.vdrk.site"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "vidstorm",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "vidlink",
-    "adapter": "vidlink",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "vidlink.pro",
-      "*.hakunaymatata.com"
-    ],
-    "resolutionHosts": [
-      "enc-dec.app"
-    ],
-    "upstreamGroup": "vidlink",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "cinehd",
-    "adapter": "cinehd",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "cinehd.vc",
-      "slast430did.com",
-      "*.slast430did.com"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "cinehd",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "nxsha",
-    "adapter": "nxsha",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "nxsha.space"
-    ],
-    "resolutionHosts": [],
-    "upstreamGroup": "nxsha",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
-    "id": "stellar",
-    "adapter": "stellar",
-    "enabled": false,
-    "regions": [
-      "US"
-    ],
-    "mediaHosts": [
-      "stellar.maybeoneday.ch",
-      "cdn.maybeoneday.ch",
-      "natsuki.maybeoneday.ch",
-      "sub.vdrk.site",
-      "cache.vdrk.site",
-      "totallyacdn.org",
-      "*.workers.dev",
-      "atlantic.st",
-      "*.atlantic.st"
-    ],
-    "resolutionHosts": [
-      "cdn.maybeoneday.ch",
-      "natsuki.maybeoneday.ch",
-      "sub.vdrk.site"
-    ],
-    "upstreamGroup": "stellar",
-    "concurrency": 2,
-    "requestsPerMinute": 30
-  },
-  {
     "id": "aphrodite",
     "adapter": "aphrodite",
     "enabled": false,
@@ -514,24 +42,302 @@
       "US"
     ],
     "mediaHosts": [
-      "peraspera.nbsycfzrpa4.workers.dev",
-      "*.workers.dev",
+      "cdn.hls.lol",
       "totallyacdn.org",
       "*.totallyacdn.org",
-      "natsuki.maybeoneday.ch",
+      "peraspera.nbsycfzrpa4.workers.dev",
+      "natsuki.hls.lol",
       "sub.vdrk.site",
       "cache.vdrk.site",
-      "*.vdrk.site",
-      "atlantic.st",
-      "*.atlantic.st"
+      "*.vdrk.site"
     ],
     "resolutionHosts": [
-      "cdn.maybeoneday.ch",
-      "natsuki.maybeoneday.ch",
+      "stream.hls.lol",
+      "natsuki.hls.lol",
       "sub.vdrk.site"
     ],
     "upstreamGroup": "aphrodite",
     "concurrency": 2,
-    "requestsPerMinute": 30
+    "requestsPerMinute": 30,
+    "priority": 40,
+    "attemptMs": 8000
+  },
+  {
+    "id": "riveapogee",
+    "adapter": "riveapogee",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "scrapper.rivestream.app",
+      "proxy.valhallastream.com",
+      "*.valhallastream.com",
+      "img.rousav.tech",
+      "*.rousav.tech"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "probes": {
+      "movie": {
+        "ref": {
+          "kind": "movie",
+          "id": 550
+        },
+        "audioLanguage": "en"
+      },
+      "series": {
+        "ref": {
+          "kind": "series",
+          "id": 1399,
+          "season": 1,
+          "episode": 1
+        },
+        "audioLanguage": "en"
+      }
+    },
+    "resolutionHosts": [],
+    "upstreamGroup": "riveapogee",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 60,
+    "attemptMs": 8000
+  },
+  {
+    "id": "kyren",
+    "adapter": "kyren",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "kyren.moe",
+      "api.kyren.moe",
+      "megaplay.buzz",
+      "*.megaplay.buzz"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 21,
+          "episode": 1
+        },
+        "audioLanguage": "en"
+      }
+    },
+    "resolutionHosts": [],
+    "upstreamGroup": "kyren",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 80,
+    "attemptMs": 15000
+  },
+  {
+    "id": "kyren-jett",
+    "adapter": "kyren",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "kyren.moe",
+      "api.kyren.moe",
+      "megaplay.buzz",
+      "*.megaplay.buzz"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 21,
+          "episode": 1
+        },
+        "audioLanguage": "en"
+      }
+    },
+    "resolutionHosts": [],
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "attemptMs": 15000
+  },
+  {
+    "id": "kyren-neon",
+    "adapter": "kyren",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "kyren.moe",
+      "api.kyren.moe",
+      "megaplay.buzz",
+      "*.megaplay.buzz"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 21,
+          "episode": 1
+        },
+        "audioLanguage": "en"
+      }
+    },
+    "resolutionHosts": [],
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "attemptMs": 15000
+  },
+  {
+    "id": "lookmovie",
+    "adapter": "lookmovie",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie"
+    ],
+    "mediaHosts": [
+      "lmscript.xyz",
+      "srv315.faitioninthrey.site"
+    ],
+    "mediaHostPatterns": [
+      "^srv[0-9]+\\.faitioninthrey\\.site$",
+      "^srv[0-9]+\\.superoled\\.site$"
+    ],
+    "resolutionHosts": [],
+    "upstreamGroup": "lookmovie",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 40,
+    "attemptMs": 15000
+  },
+  {
+    "id": "castletv",
+    "adapter": "castletv",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "img1.bwcly.com",
+      "*.bwcly.com",
+      "img1.hlnom.com",
+      "img1.klnwm.com"
+    ],
+    "resolutionHosts": [
+      "api.hlowb.com"
+    ],
+    "upstreamGroup": "castletv",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 40,
+    "attemptMs": 15000
+  },
+  {
+    "id": "animeparadise",
+    "adapter": "animeparadise",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "stream.animeparadise.moe"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 21,
+          "episode": 21
+        },
+        "audioLanguage": "ja"
+      }
+    },
+    "resolutionHosts": [],
+    "upstreamGroup": "animeparadise",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 70,
+    "attemptMs": 15000
+  },
+  {
+    "id": "animekai",
+    "adapter": "animekai",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "edge1-frankfurt-sprintcdn.owphbf24.com"
+    ],
+    "mediaHostPatterns": [
+      "^edge[0-9]+-[a-z0-9-]+-sprintcdn\\.[a-z0-9]+\\.[a-z0-9]+$"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 21,
+          "episode": 1
+        },
+        "audioLanguage": "en"
+      }
+    },
+    "resolutionHosts": [],
+    "upstreamGroup": "animekai",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 35,
+    "attemptMs": 15000
+  },
+  {
+    "id": "animekitsu",
+    "adapter": "animekitsu",
+    "enabled": false,
+    "regions": [
+      "US"
+    ],
+    "mediaHosts": [
+      "cdn.animekitsu.com"
+    ],
+    "mediaKinds": [
+      "anime"
+    ],
+    "probes": {
+      "anime": {
+        "ref": {
+          "kind": "anime",
+          "id": 172463,
+          "episode": 1
+        },
+        "audioLanguage": "ja"
+      }
+    },
+    "resolutionHosts": [],
+    "upstreamGroup": "animekitsu",
+    "concurrency": 2,
+    "requestsPerMinute": 30,
+    "priority": 35,
+    "attemptMs": 10000
   }
 ]

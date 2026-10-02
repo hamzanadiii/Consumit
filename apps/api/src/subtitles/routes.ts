@@ -1,6 +1,8 @@
-import { playbackRefSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitlesResponseSchema } from '@consumit/contracts'
+import { playbackRefSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { metrics } from '@opentelemetry/api'
 import { z } from 'zod'
+import { Readable } from 'node:stream'
 
 import type { ApiEnv } from '../config/env.ts'
 import { ApiError } from '../http/errors.ts'
@@ -22,6 +24,12 @@ const querySchema = z.object({
 })
 
 const fileParamsSchema = z.object({ key: z.string().min(1).max(64) })
+const discoveryPageSchema = z.object({
+  searchId: z.uuid(), language: z.string().regex(/^[a-z]{2,3}$/), cursor: z.coerce.number().int().min(0).max(100000).default(0),
+  langs: z.string().max(64).optional(),
+})
+const discoverySearchSchema = z.object({ searchId: z.uuid(), q: z.string().trim().min(1).max(80), cursor: z.coerce.number().int().min(0).max(100000).default(0) })
+const prepareBodySchema = z.object({ searchId: z.uuid(), candidateId: z.string().min(1).max(128) })
 const fileQuerySchema = z.object({
   /** Per-member sync correction in milliseconds (±120s). Shifted variants
    *  are served and cached without touching the source file. */
@@ -64,6 +72,9 @@ export function registerSubtitleRoutes(
   app: FastifyInstance,
   deps: { subtitles: SubtitleService; env?: ApiEnv | undefined; identity?: Identity | undefined; preferences?: SubtitlePreferences | undefined },
 ) {
+  const meter = metrics.getMeter('consumit.subtitles')
+  const searches = meter.createCounter('subtitle.searches')
+  const searchDuration = meter.createHistogram('subtitle.search.duration', { unit: 'ms' })
   const preferenceDeps = deps.env && deps.identity && deps.preferences
     ? { env: deps.env, identity: deps.identity, preferences: deps.preferences }
     : null
@@ -90,6 +101,8 @@ export function registerSubtitleRoutes(
   app.get('/v1/subtitles', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = querySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a title kind, a positive numeric id, and a valid season/episode.')
+    const startedAt = Date.now()
+    let outcome = 'failed'
     try {
       const controller = new AbortController()
       // Under the 15s server request bound so failures stay clean 503s.
@@ -101,13 +114,68 @@ export function registerSubtitleRoutes(
           cleanQueryLangs(parsed.data.langs),
         )
         reply.header('cache-control', 'public, max-age=300, s-maxage=900')
-        return subtitlesResponseSchema.parse({ subtitles })
+        const response = subtitlesResponseSchema.parse({ subtitles })
+        outcome = 'success'
+        return response
       } finally {
         clearTimeout(timer)
       }
     } catch (error) {
       return sendSubtitleError(error)
+    } finally {
+      searches.add(1, { outcome, kind: parsed.data.kind })
+      searchDuration.record(Date.now() - startedAt, { outcome, kind: parsed.data.kind })
     }
+  })
+
+  app.get('/v1/subtitles/discover', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+    if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
+    const parsed = querySchema.safeParse(request.query)
+    if (!parsed.success) return invalidQuery('Use a title kind, numeric id, and valid season/episode.')
+    const { kind, id, season, episode } = parsed.data
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 13_000)
+    const stream = Readable.from((async function* () {
+      try {
+        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal)) {
+          yield `${JSON.stringify(event)}\n`
+        }
+      } finally { clearTimeout(timer) }
+    })())
+    reply.header('cache-control', 'no-store')
+    reply.header('x-accel-buffering', 'no')
+    return reply.type('application/x-ndjson; charset=utf-8').send(stream)
+  })
+
+  app.get('/v1/subtitles/discover/page', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
+    if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
+    const parsed = discoveryPageSchema.safeParse(request.query)
+    if (!parsed.success) return invalidQuery('Use a discovery id, language, and nonnegative cursor.')
+    const page = await deps.subtitles.discovery.page(parsed.data.searchId, parsed.data.language, parsed.data.cursor, cleanQueryLangs(parsed.data.langs))
+    if (!page) throw new SubtitleError('SUBTITLES_NOT_FOUND', 'Search subtitles again.')
+    reply.header('cache-control', 'no-store')
+    return page
+  })
+
+  app.get('/v1/subtitles/discover/search', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
+    if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
+    const parsed = discoverySearchSchema.safeParse(request.query)
+    if (!parsed.success) return invalidQuery('Use a discovery id, search term, and nonnegative cursor.')
+    const result = await deps.subtitles.discovery.search(parsed.data.searchId, parsed.data.q, parsed.data.cursor)
+    if (!result) throw new SubtitleError('SUBTITLES_NOT_FOUND', 'Search subtitles again.')
+    reply.header('cache-control', 'no-store')
+    return result
+  })
+
+  app.post('/v1/subtitles/discover/prepare', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+    if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
+    if (deps.env && !isAllowedOrigin(request.headers, deps.env.appOrigin, deps.env.nodeEnv !== 'production')) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
+    const parsed = prepareBodySchema.safeParse(request.body)
+    if (!parsed.success) return invalidQuery('Use a valid discovery and candidate id.')
+    const track = await deps.subtitles.discovery.prepare(parsed.data.searchId, parsed.data.candidateId, AbortSignal.timeout(10_000))
+    if (!track) throw new SubtitleError('SUBTITLES_NOT_FOUND', 'This subtitle is unavailable. Choose another track.')
+    reply.header('cache-control', 'no-store')
+    return subtitleTrackSchema.parse(track)
   })
 
   // First-party converted VTT bytes. Same-origin, immutable, long-lived:

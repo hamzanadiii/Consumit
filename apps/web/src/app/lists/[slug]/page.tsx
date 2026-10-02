@@ -4,7 +4,8 @@ import type { CatalogTitleSummary } from '@consumit/contracts'
 import { ListDetailScreen } from '../list-detail-screen'
 import { notFound } from 'next/navigation'
 
-import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
+import { getCatalogBatchForRefs, MAX_PAGE_CATALOG_ENRICHMENT } from '@/lib/catalog-api'
+import { getServerSession } from '@/lib/identity-server'
 import { getMemberList, MemberApiError } from '@/lib/member-server'
 
 export const metadata: Metadata = {
@@ -18,6 +19,7 @@ type ListPageProps = {
 
 export default async function ListPage({ params }: ListPageProps) {
   const { slug } = await params
+  const session = await getServerSession()
   let list
   try {
     list = await getMemberList(slug)
@@ -27,6 +29,7 @@ export default async function ListPage({ params }: ListPageProps) {
   }
   let titles: CatalogTitleSummary[] = []
   let catalogUnavailable = false
-  try { titles = list.items.length ? (await getCatalogBatch(refsKey(list.items))).items : [] } catch { catalogUnavailable = true }
-  return <ListDetailScreen catalogUnavailable={catalogUnavailable} data={list} titles={titles} />
+  try { titles = (await getCatalogBatchForRefs(list.items))?.items ?? [] } catch { catalogUnavailable = true }
+  const catalogDetailsLimited = new Set(list.items.map((item) => `${item.kind}:${item.id}`)).size > MAX_PAGE_CATALOG_ENRICHMENT
+  return <ListDetailScreen catalogDetailsLimited={catalogDetailsLimited} catalogUnavailable={catalogUnavailable} data={list} signedIn={session.status === 'authenticated'} titles={titles} />
 }

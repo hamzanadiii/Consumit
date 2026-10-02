@@ -1,18 +1,41 @@
+import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-for (const command of ['docker', 'terraform']) {
-  const probe = spawnSync(command, ['version'], { stdio: 'ignore', shell: process.platform === 'win32' })
-  if (probe.status !== 0) {
-    console.error(`Infrastructure validation requires ${command} on PATH. Install it and rerun bun run infra:validate.`)
-    process.exit(1)
-  }
+function commandWorks(command) {
+  const probe = spawnSync(command, ['version'], { stdio: 'ignore' })
+  return probe.status === 0
 }
 
+if (!commandWorks('docker')) {
+  console.error('Infrastructure validation requires Docker Compose on PATH. Install Docker and rerun bun run infra:validate.')
+  process.exit(1)
+}
+
+const useTerraformContainer = !commandWorks('terraform')
+const terraformImage = process.env.CONSUMIT_TERRAFORM_IMAGE?.trim() || 'hashicorp/terraform:1.8.5'
+const projectRoot = process.cwd()
+const cloudflareDir = path.resolve(projectRoot, 'infra/cloudflare')
+
 const run = (command, args, cwd) => {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit', shell: process.platform === 'win32' })
+  const result = spawnSync(command, args, { cwd, stdio: 'inherit' })
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
+const runTerraform = (args) => {
+  if (!useTerraformContainer) {
+    run('terraform', args, cloudflareDir)
+    return
+  }
+  run('docker', [
+    'run', '--rm',
+    '--mount', `type=bind,source=${cloudflareDir.replaceAll('\\', '/')},target=/workspace`,
+    '--workdir', '/workspace',
+    terraformImage,
+    ...args,
+  ], projectRoot)
+}
+
 run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.production.yaml', 'config', '--quiet'])
-run('terraform', ['fmt', '-check', '-recursive'], 'infra/cloudflare')
-run('terraform', ['init', '-backend=false'], 'infra/cloudflare')
-run('terraform', ['validate'], 'infra/cloudflare')
+run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.playback.yaml', '--profile', 'playback', 'config', '--quiet'])
+runTerraform(['fmt', '-check', '-recursive'])
+runTerraform(['init', '-backend=false'])
+runTerraform(['validate'])

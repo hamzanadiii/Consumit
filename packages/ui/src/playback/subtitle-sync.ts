@@ -13,11 +13,11 @@ export type SubtitleCue = {
   text: string
 }
 
-const MAX_SUBTITLE_CHARS = 900_000
+const MAX_SUBTITLE_CHARS = 2 * 1024 * 1024
 const MAX_LINES = 80_000
 const MAX_CUES = 20_000
 const MAX_CUE_TEXT_CHARS = 1_200
-const MAX_FETCH_BYTES = 900 * 1024
+const MAX_FETCH_BYTES = 2 * 1024 * 1024
 
 export const SUBTITLE_DELAY_KEY = 'consumit.player.subtitle-delay'
 export const MAX_SUBTITLE_DELAY_MS = 30_000
@@ -251,7 +251,8 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
   } catch {
     throw new Error('Subtitle file URL invalid.')
   }
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') throw new Error('Subtitle file URL unsupported.')
+  const localUpload = parsedUrl.protocol === 'blob:' && parsedUrl.origin === window.location.origin
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:' && !localUpload) throw new Error('Subtitle file URL unsupported.')
   const response = await fetch(parsedUrl.href, { credentials: 'same-origin', signal })
   if (!response.ok) throw new Error(`Subtitle file HTTP ${response.status}.`)
   const reader = response.body?.getReader()

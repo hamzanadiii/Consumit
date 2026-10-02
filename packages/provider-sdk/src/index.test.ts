@@ -3,7 +3,7 @@ import { createStaticProvider, sourceIdentity, validatedSources, type ProviderRe
 
 const ref = { kind: 'movie' as const, id: 1 }
 const source: ProviderSource = { key: 'main', url: 'https://media.example/test.m3u8?token=1', type: 'hls', language: 'original', expiresAt: new Date(Date.now() + 3600000).toISOString(), headers: {}, subtitles: [] }
-const registration: ProviderRegistration = { adapter: createStaticProvider('owned', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'owned', concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'], proxy: false }
+const registration: ProviderRegistration = { adapter: createStaticProvider('owned', [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'owned', concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }
 describe('provider contract', () => {
   it('resolves exact episodes without guessing another season or episode', async () => {
     const episode = { kind: 'series' as const, id: 9, season: 2, episode: 3 }
@@ -22,6 +22,11 @@ describe('provider contract', () => {
       expect(validatedSources({ ok: true, sources: [bad] }, registration)).toEqual([])
     }
     expect(validatedSources({ ok: true, sources: [source, source] }, registration)).toHaveLength(1)
+  })
+  it('rejects relay-wrapped sources even on configured hosts', () => {
+    for (const url of ['https://media.example/proxy?url=https%3A%2F%2Fupstream.example%2Fv.m3u8', 'https://media.example/v.m3u8?target=https%3A%2F%2Fupstream.example%2Fv.m3u8']) {
+      expect(validatedSources({ ok: true, sources: [{ ...source, url }] }, registration)).toEqual([])
+    }
   })
   it('identifies renditions by canonical content and key rather than access URLs', () => {
     expect(sourceIdentity('owned', ref, 'main')).toBe(sourceIdentity('owned', ref, 'main'))

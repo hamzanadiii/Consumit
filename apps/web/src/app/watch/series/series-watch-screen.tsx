@@ -43,6 +43,7 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
           title: item.title || `Episode ${item.episodeNumber}`,
           ...(item.stillUrl ? { stillUrl: item.stillUrl } : {}),
           ...(formatRuntime(item.runtimeMinutes) ? { meta: formatRuntime(item.runtimeMinutes) } : {}),
+          ...(item.airDate ? { airDate: item.airDate } : {}),
           ...(upcoming ? { upcoming: true } : { href: watchHref({ kind: 'series', id: tmdbId }, { episode: item.episodeNumber, season: seasonNumber }) }),
           ...(item.episodeNumber === episodeNumber ? { current: true } : {}),
         }
@@ -87,6 +88,7 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
             countLabel={`Season ${seasonNumber} · ${railEpisodes.length} episode${railEpisodes.length === 1 ? '' : 's'}`}
             currentLabel="Now playing"
             episodes={railEpisodes}
+            fallbackArt={detail.backdropUrl ?? detail.posterUrl}
             heading="Episodes"
           />
         </div>

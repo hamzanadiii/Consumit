@@ -18,7 +18,7 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-ink text-canvas hover:bg-white active:bg-copy',
+        primary: 'bg-orange text-canvas hover:brightness-110 active:brightness-95',
         accent:
           'bg-orange text-canvas hover:brightness-110 active:brightness-95',
         secondary:

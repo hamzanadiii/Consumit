@@ -26,18 +26,18 @@ const clearStellar = () => {
   }
 }
 
-async function ensureSession(): Promise<void> {
+async function ensureSession(sign: GateSign): Promise<void> {
   try {
-    await signStellar(ARTEMIS_BASE, '/resolve?tmdbId=0&type=movie')
+    await sign(ARTEMIS_BASE, '/resolve?tmdbId=0&type=movie')
   } catch {
     // The next attempt performs its own handshake.
   }
 }
 
-async function signedFileHeaders(path: string): Promise<Record<string, string> | null> {
+async function signedFileHeaders(path: string, sign: GateSign): Promise<Record<string, string> | null> {
   try {
-    await ensureSession()
-    const headers = await signStellar(NATSUKI_BASE, path)
+    await ensureSession(sign)
+    const headers = await sign(NATSUKI_BASE, path)
     if (!headers?.['X-S-Sid']) return null
     return { Referer: REFERER, ...headers }
   } catch {
@@ -54,22 +54,22 @@ export function releaseTagRating(fileName: string): number {
   return 0
 }
 
-export function createNatsukiProvider(http: SubtitleHttp): SubtitleSearchProvider {
+export function createNatsukiProvider(http: SubtitleHttp, sign: GateSign = signStellar): SubtitleSearchProvider {
   return {
     id: 'natsuki',
     name: 'Natsuki',
     supports(query: SubtitleQuery) {
-      return (query.type === 'movie' || query.type === 'tv') && !!query.tmdbId
+      return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
-      await ensureSession()
+      await ensureSession(sign)
       const params = new URLSearchParams({ tmdbId: String(query.tmdbId) })
-      if (query.type === 'tv') {
+      if (query.type !== 'movie') {
         params.set('season', String(Number(query.season ?? 1)))
         params.set('episode', String(Number(query.episode ?? 1)))
       }
       const attempt = async (): Promise<string> => {
-        const headers = await signStellar(NATSUKI_BASE, `/subs?${params.toString()}`)
+        const headers = await sign(NATSUKI_BASE, `/subs?${params.toString()}`)
         if (!headers) throw new Error('Natsuki signing failed.')
         const { text } = await http.get(`${NATSUKI_BASE}/subs?${params.toString()}`, {
           'User-Agent': UA,
@@ -95,14 +95,14 @@ export function createNatsukiProvider(http: SubtitleHttp): SubtitleSearchProvide
       const data = parsed as { subtitles?: unknown }
       const list = Array.isArray(data?.subtitles) ? data.subtitles : []
       if (!list.length) return []
-      const want = new Set((query.langs?.length ? query.langs : ['en']).map((lang) => lang.toLowerCase()))
+      const want = new Set((query.langs ?? []).map((lang) => lang.toLowerCase()))
       const picked = list.filter((entry) => {
         const code = String((entry as Record<string, unknown>)?.langCode || '').toLowerCase()
         return code && want.has(code)
       })
-      const pool = picked.length ? picked : list.slice(0, 12)
+      const pool = picked.length ? picked : list
       const out: RawSubtitle[] = []
-      for (const entry of pool.slice(0, 40)) {
+      for (const entry of pool) {
         const record = entry as Record<string, unknown>
         const rawUrl = String(record.url || '')
         if (!rawUrl) continue
@@ -115,7 +115,7 @@ export function createNatsukiProvider(http: SubtitleHttp): SubtitleSearchProvide
           continue
         }
         const path = fileUrl.slice('https://natsuki.hls.lol'.length) || '/'
-        const headers = await signedFileHeaders(path)
+        const headers = await signedFileHeaders(path, sign)
         if (!headers) continue
         const code = String(record.langCode || '').toLowerCase() || 'en'
         const fileName = String(record.fileName || '')

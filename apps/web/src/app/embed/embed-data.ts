@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { getCatalogTitle } from '@/lib/catalog-api'
+import { getAnimeTitle } from '@/lib/anime-api'
 import type { EmbedSource, EmbedSub } from './embed-player'
 
 type EmbedStreamResponse = {
@@ -15,15 +16,21 @@ function apiBaseUrl() {
 
 /** Resolve configured sources for the public embed route. Failures stay
  *  honest: the page renders the empty state, never a fixture or demo. */
-export async function fetchEmbedStreams(path: string, lang?: string | undefined): Promise<{
+export async function fetchEmbedStreams(
+  path: string,
+  params?: { audio?: string | undefined; lang?: string | undefined },
+): Promise<{
   sources: EmbedSource[]
   subtitles: EmbedSub[]
 }> {
-  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
+  const search = new URLSearchParams()
+  if (params?.lang) search.set('lang', params.lang)
+  if (params?.audio) search.set('audio', params.audio)
+  const query = search.toString() ? `?${search.toString()}` : ''
   try {
     const res = await fetch(`${apiBaseUrl()}${path}${query}`, {
       headers: { Accept: 'application/json' },
-      next: { revalidate: 60 },
+      cache: 'no-store',
     })
     if (!res.ok) return { sources: [], subtitles: [] }
     const data = await res.json() as EmbedStreamResponse
@@ -110,6 +117,39 @@ export async function loadEmbedEpisodeContext(
       pauseFacts: facts || episodeLabel,
       posterSrc: item.backdropUrl ?? item.posterUrl ?? undefined,
       title: `${item.title} · S${season} E${episode}`,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+/** AniList title context for the public anime embed. Catalog outages fall
+ *  back to an honest generic label — never a demo title. */
+export async function loadEmbedAnimeContext(
+  anilistId: number,
+  episode: number,
+): Promise<EmbedCatalogContext> {
+  const episodeLabel = `Episode ${episode}`
+  const fallback: EmbedCatalogContext = {
+    overview: undefined,
+    pauseFacts: `Anime · AniList ${anilistId} · ${episodeLabel}`,
+    posterSrc: undefined,
+    title: `Anime ${anilistId} · ${episodeLabel}`,
+  }
+  try {
+    const detail = await getAnimeTitle(anilistId)
+    if (detail.episodes && episode > detail.episodes) return fallback
+    const facts = [
+      episodeLabel,
+      detail.seasonYear,
+      detail.episodeDuration ? `${detail.episodeDuration}m` : null,
+      detail.averageScore != null ? `★ ${(detail.averageScore / 10).toFixed(1)}` : null,
+    ].filter((part): part is string | number => part != null).join(' · ')
+    return {
+      overview: detail.description || undefined,
+      pauseFacts: facts || episodeLabel,
+      posterSrc: detail.bannerImage ?? detail.coverImage.url ?? undefined,
+      title: `${detail.titles.preferred} · Episode ${episode}`,
     }
   } catch {
     return fallback

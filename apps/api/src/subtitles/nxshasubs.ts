@@ -16,10 +16,10 @@ export function createNxshaSubsProvider(http: SubtitleHttp): SubtitleSearchProvi
     id: 'nxshasubs',
     name: 'NxshaSubs',
     supports(query: SubtitleQuery) {
-      return (query.type === 'movie' || query.type === 'tv') && !!query.tmdbId
+      return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
-      const isTv = query.type === 'tv'
+      const isTv = query.type !== 'movie'
       const payload = encodeNxshaPayload({
         tmdbId: String(query.tmdbId),
         type: isTv ? 'tv' : 'movie',
@@ -39,7 +39,7 @@ export function createNxshaSubsProvider(http: SubtitleHttp): SubtitleSearchProvi
         throw new Error('NxshaSubs response malformed.')
       }
       const out: RawSubtitle[] = []
-      for (const entry of list.slice(0, 30)) {
+      for (const entry of list) {
         const record = entry as Record<string, unknown>
         const url = String(record.uri || '')
         if (!/^https?:\/\//.test(url)) continue

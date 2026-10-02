@@ -1,10 +1,10 @@
 import { titleHref, watchHref, type CatalogPerson, type CatalogTitleSummary } from '@consumit/contracts'
 import { RotateCcw } from 'lucide-react'
-import Link from 'next/link'
 
-import { buttonVariants, ErrorState, WatchCard } from '@consumit/ui'
+import { buttonVariants, ErrorState } from '@consumit/ui'
 
 import { FilScreenShell } from '../home/filscreen-shell'
+import { TitleCard } from '../shared/title-card'
 
 import { SaveTitleButton } from './save-title-button'
 
@@ -52,21 +52,18 @@ export function CatalogGrid({
 }) {
   const visible = limit === undefined ? items : items.slice(0, limit)
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <ul className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {visible.map((title) => (
-        <WatchCard
-          artworkSrc={title.posterUrl ?? undefined}
-          bookmark={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />}
+        <TitleCard
+          action={<SaveTitleButton id={title.id} kind={title.kind} title={title.title} />}
           href={watchHref(title)}
           key={`${title.kind}:${title.id}`}
-          linkComponent={Link}
           meta={titleMeta(title)}
-          rating={title.tmdbRating ?? undefined}
-          title={title.title}
           titleHref={titleHref(title)}
+          title={title}
         />
       ))}
-    </div>
+    </ul>
   )
 }
 

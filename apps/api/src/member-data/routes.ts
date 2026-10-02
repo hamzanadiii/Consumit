@@ -1,14 +1,35 @@
 import {
   catalogRefSchema,
+  circleActivityCursorSchema,
+  type CircleActivityCursor,
+  circleActivityPageSchema,
+  circleActivityQuerySchema,
+  createMemberListRequestSchema,
+  discoverMemberListsSchema,
   createDiaryEntryRequestSchema,
   createReviewRequestSchema,
   diaryEntrySchema,
   favoriteSelectionRequestSchema,
   followStateSchema,
   followStatusSchema,
-  memberLibrarySchema,
+  memberLibraryCollectionPageSchema,
+  memberLibraryCollectionSchema,
+  memberLibraryPageQuerySchema,
+  memberLibrarySnapshotSchema,
   memberListDetailSchema,
+  memberSearchQuerySchema,
+  memberSuggestionSchema,
   memberProfileDataSchema,
+  memberProfileArchiveCursorSchema,
+  memberProfileArchiveKindSchema,
+  memberProfileArchivePageSchema,
+  memberProfileArchiveQuerySchema,
+  memberRatingCursorSchema,
+  memberRatingLookupQuerySchema,
+  memberRatingLookupRequestSchema,
+  memberRatingLookupResponseSchema,
+  memberRatingPageQuerySchema,
+  memberRatingPageSchema,
   memberRatingSchema,
   memberReviewSchema,
   memberTitleRecordSchema,
@@ -16,6 +37,7 @@ import {
   playbackProgressSchema,
   progressRefSchema,
   progressWriteRequestSchema,
+  watchHistoryPageSchema,
   reviewLikeSchema,
   setRatingRequestSchema,
   setReviewLikeRequestSchema,
@@ -23,10 +45,12 @@ import {
   titleReviewsQuerySchema,
   updateDiaryEntryRequestSchema,
   updateMemberListRequestSchema,
+  updateMemberListContentRequestSchema,
   updateMemberReviewRequestSchema,
   usernameSchema,
 } from '@consumit/contracts'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { z } from 'zod'
 
 import type { ApiEnv } from '../config/env.ts'
 import { ApiError } from '../http/errors.ts'
@@ -63,22 +87,78 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     void reply.header('cache-control', 'private, no-store')
     const parsed = usernameSchema.safeParse((request.params as { username?: unknown }).username)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
-    const profile = await deps.memberData.profile(parsed.data, await viewer(request, false))
+    const profile = await deps.memberData.profile(parsed.data, await viewer(request, true))
     if (!profile) throw new ApiError('NOT_FOUND', 'Profile not found.')
     return memberProfileDataSchema.parse(profile)
   })
 
+  app.get('/v1/profiles/:username/archives/:collection', async (request, reply) => {
+    const params = request.params as { collection?: unknown; username?: unknown }
+    const username = usernameSchema.safeParse(params.username)
+    const collection = memberProfileArchiveKindSchema.safeParse(params.collection)
+    const query = memberProfileArchiveQuerySchema.safeParse(request.query)
+    if (!username.success || !collection.success || !query.success) throw new ApiError('BAD_REQUEST', 'Use a valid profile archive request.')
+    let cursor: z.infer<typeof memberProfileArchiveCursorSchema> | undefined
+    if (query.data.cursor) {
+      let value: unknown
+      try { value = JSON.parse(query.data.cursor) } catch { throw new ApiError('BAD_REQUEST', 'Use a valid profile archive cursor.') }
+      const parsed = memberProfileArchiveCursorSchema.safeParse(value)
+      const validFields = parsed.success && parsed.data.collection === collection.data && (
+        ['films', 'likes'].includes(collection.data) ? Boolean(parsed.data.updatedAt)
+          : collection.data === 'diary' ? Boolean(parsed.data.createdAt && parsed.data.watchedOn)
+            : ['reviews', 'lists'].includes(collection.data) ? Boolean(collection.data === 'lists' ? parsed.data.updatedAt : parsed.data.createdAt)
+              : ['activity'].includes(collection.data) ? Boolean(parsed.data.createdAt && parsed.data.kind)
+                : false
+      )
+      if (!parsed.success || !validFields) throw new ApiError('BAD_REQUEST', 'Use a valid profile archive cursor.')
+      cursor = parsed.data
+    }
+    void reply.header('cache-control', 'private, no-store')
+    const page = await deps.memberData.profileArchive(username.data, collection.data, await viewer(request, true), cursor, query.data.limit)
+    if (!page) throw new ApiError('NOT_FOUND', 'Profile archive not found.')
+    return memberProfileArchivePageSchema.parse(page)
+  })
+
   app.get('/v1/me/library', async (request, reply) => {
     void reply.header('cache-control', 'private, no-store')
-    return memberLibrarySchema.parse(await deps.memberData.library((await viewer(request, true))!))
+    return memberLibrarySnapshotSchema.parse(await deps.memberData.librarySnapshot((await viewer(request, true))!))
   })
+
+  app.get('/v1/me/library/collections/:collection', async (request, reply) => {
+    const params = request.params as { collection?: unknown }
+    const collection = memberLibraryCollectionSchema.safeParse(params.collection)
+    const query = memberLibraryPageQuerySchema.safeParse(request.query)
+    if (!collection.success || !query.success) throw new ApiError('BAD_REQUEST', 'Use a valid library collection page.')
+    if (query.data.cursor) {
+      let cursor: unknown
+      try { cursor = JSON.parse(query.data.cursor) } catch { throw new ApiError('BAD_REQUEST', 'Use a valid library collection cursor.') }
+      if (!cursor || typeof cursor !== 'object') throw new ApiError('BAD_REQUEST', 'Use a valid library collection cursor.')
+      const value = cursor as { collection?: unknown; createdAt?: unknown; id?: unknown; updatedAt?: unknown; watchedOn?: unknown }
+      const idIsValid = typeof value.id === 'string' && value.id.length > 0 && value.id.length <= 64
+      const hasValidDate = (date: unknown) => typeof date === 'string' && z.iso.datetime().safeParse(date).success
+      const dateIsValid = collection.data === 'diary'
+        ? hasValidDate(value.createdAt) && hasValidDate(value.watchedOn)
+        : collection.data === 'lists'
+          ? hasValidDate(value.updatedAt)
+          : hasValidDate(value.createdAt)
+      if (value.collection !== collection.data || !idIsValid || !dateIsValid) throw new ApiError('BAD_REQUEST', 'Use a valid library collection cursor.')
+    }
+    void reply.header('cache-control', 'private, no-store')
+    const page = await deps.memberData.libraryPage((await viewer(request, true))!, collection.data, query.data.cursor, query.data.limit)
+    return memberLibraryCollectionPageSchema.parse(page)
+  })
+
+  
+
+  
 
   app.put('/v1/me/favorites', async (request, reply) => {
     guardMutation(request)
     const parsed = favoriteSelectionRequestSchema.safeParse(request.body)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose up to four valid Favorites.')
     void reply.header('cache-control', 'private, no-store')
-    return memberLibrarySchema.parse(await deps.memberData.setFavorites((await viewer(request, true))!, parsed.data.favorites))
+    await deps.memberData.setFavorites((await viewer(request, true))!, parsed.data.favorites)
+    return reply.code(204).send()
   })
 
   app.patch('/v1/me/diary/:id', async (request, reply) => {
@@ -87,6 +167,13 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide valid diary changes.')
     const updated = await deps.memberData.updateDiary((await viewer(request, true))!, recordId(request), parsed.data)
     if (!updated) throw new ApiError('NOT_FOUND', 'Diary entry not found.')
+    return reply.code(204).send()
+  })
+
+  app.delete('/v1/me/diary/:id', async (request, reply) => {
+    guardMutation(request)
+    const deleted = await deps.memberData.deleteDiary((await viewer(request, true))!, recordId(request))
+    if (!deleted) throw new ApiError('NOT_FOUND', 'Diary entry not found.')
     return reply.code(204).send()
   })
 
@@ -117,6 +204,37 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return reply.code(204).send()
   })
 
+  app.post('/v1/me/lists', async (request, reply) => {
+    guardMutation(request)
+    const parsed = createMemberListRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide a valid list name and request key.')
+    void reply.header('cache-control', 'private, no-store')
+    void reply.code(201)
+    return memberListDetailSchema.parse(await deps.memberData.createList((await viewer(request, true))!, parsed.data))
+  })
+
+  app.put('/v1/me/lists/:id', async (request, reply) => {
+    guardMutation(request)
+    const parsed = updateMemberListContentRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide valid list details and an ordered list of unique titles.')
+    const updated = await deps.memberData.updateListContent((await viewer(request, true))!, recordId(request), parsed.data)
+    if (!updated) throw new ApiError('NOT_FOUND', 'List not found.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  app.delete('/v1/me/lists/:id', async (request, reply) => {
+    guardMutation(request)
+    const deleted = await deps.memberData.deleteList((await viewer(request, true))!, recordId(request))
+    if (!deleted) throw new ApiError('NOT_FOUND', 'List not found.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  
+
+  
+
   for (const method of ['PUT', 'DELETE'] as const) {
     app.route({
       handler: async (request, reply) => {
@@ -125,7 +243,8 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
         const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
         if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
         void reply.header('cache-control', 'private, no-store')
-        return memberLibrarySchema.parse(await deps.memberData.setSaved((await viewer(request, true))!, parsed.data, method === 'PUT'))
+        await deps.memberData.setSaved((await viewer(request, true))!, parsed.data, method === 'PUT')
+        return reply.code(204).send()
       },
       method,
       url: '/v1/me/library/titles/:kind/:id',
@@ -156,11 +275,50 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return playbackProgressSchema.parse(record)
   })
 
+  app.get('/v1/me/watch-history', async (request, reply) => {
+    const query = request.query as { cursor?: unknown; limit?: unknown }
+    const cursor = query.cursor
+    const limit = query.limit === undefined ? 20 : Number(query.limit)
+    if ((cursor !== undefined && (typeof cursor !== 'string' || !/^[a-z0-9]{8,64}$/i.test(cursor))) || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new ApiError('BAD_REQUEST', 'Use a valid history page.')
+    }
+    void reply.header('cache-control', 'private, no-store')
+    return watchHistoryPageSchema.parse(await deps.memberData.watchHistory((await viewer(request, true))!, cursor, limit))
+  })
+
+  app.get('/v1/me/ratings', async (request, reply) => {
+    const query = memberRatingPageQuerySchema.safeParse(request.query)
+    if (!query.success) throw new ApiError('BAD_REQUEST', 'Use a valid rating archive page.')
+    if (query.data.cursor) {
+      let value: unknown
+      try { value = JSON.parse(query.data.cursor) } catch { throw new ApiError('BAD_REQUEST', 'Use a valid rating archive cursor.') }
+      const parsed = memberRatingCursorSchema.safeParse(value)
+      if (!parsed.success || parsed.data.value !== query.data.value) throw new ApiError('BAD_REQUEST', 'Use a valid rating archive cursor.')
+    }
+    void reply.header('cache-control', 'private, no-store')
+    const page = await deps.memberData.ratingsByValue((await viewer(request, true))!, query.data.value, query.data.cursor, query.data.limit)
+    return memberRatingPageSchema.parse(page)
+  })
+
+  app.get('/v1/me/ratings/lookup', async (request, reply) => {
+    const query = memberRatingLookupQuerySchema.safeParse(request.query)
+    if (!query.success) throw new ApiError('BAD_REQUEST', 'Use valid title references for rating lookup.')
+    const titles = query.data.titles.split(',').map((item) => {
+      const match = /^(movie|series|anime):([1-9]\d*)$/.exec(item)
+      return match ? { id: Number(match[2]), kind: match[1] } : null
+    })
+    if (titles.some((title) => !title || !Number.isSafeInteger(title.id))) throw new ApiError('BAD_REQUEST', 'Use valid title references for rating lookup.')
+    const parsed = memberRatingLookupRequestSchema.safeParse({ titles })
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use up to 50 valid title references for rating lookup.')
+    void reply.header('cache-control', 'private, no-store')
+    return memberRatingLookupResponseSchema.parse(await deps.memberData.ratingsForTitles((await viewer(request, true))!, parsed.data.titles))
+  })
+
   app.get('/v1/lists/:slug', async (request, reply) => {
     void reply.header('cache-control', 'private, no-store')
     const slug = (request.params as { slug?: unknown }).slug
     if (typeof slug !== 'string' || !slug || slug.length > 200) throw new ApiError('BAD_REQUEST', 'Use a valid list slug.')
-    const list = await deps.memberData.list(slug, await viewer(request, false))
+    const list = await deps.memberData.list(slug, await viewer(request, true))
     if (!list) throw new ApiError('NOT_FOUND', 'List not found.')
     return memberListDetailSchema.parse(list)
   })
@@ -201,7 +359,8 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
         const parsed = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
         if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
         void reply.header('cache-control', 'private, no-store')
-        return memberLibrarySchema.parse(await deps.memberData.setWatched((await viewer(request, true))!, parsed.data, method === 'PUT'))
+        await deps.memberData.setWatched((await viewer(request, true))!, parsed.data, method === 'PUT')
+        return reply.code(204).send()
       },
       method,
       url: '/v1/me/library/watched/:kind/:id',
@@ -252,12 +411,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
     void reply.header('cache-control', 'private, no-store')
     const memberId = (await viewer(request, true))!
-    const [rating, like, review] = await Promise.all([
-      deps.memberData.rating(memberId, parsed.data),
-      deps.memberData.like(memberId, parsed.data),
-      deps.memberData.review(memberId, parsed.data),
-    ])
-    return memberTitleStateSchema.parse({ rating, like, review })
+    return memberTitleStateSchema.parse(await deps.memberData.titleState(memberId, parsed.data))
   })
 
   app.get('/v1/reviews/:kind/:id', async (request, reply) => {
@@ -267,50 +421,16 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     const query = titleReviewsQuerySchema.safeParse(request.query)
     if (!query.success) throw new ApiError('BAD_REQUEST', 'Use a valid reviews page, sort, and audience.')
     void reply.header('cache-control', 'private, no-store')
-    return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, false), query.data.audience))
+    return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, true)))
   })
 
-  app.get('/v1/follows/:username', async (request, reply) => {
-    const username = usernameSchema.safeParse((request.params as { username?: unknown }).username)
-    if (!username.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
-    void reply.header('cache-control', 'private, no-store')
-    return followStateSchema.parse({ following: await deps.memberData.isFollowing((await viewer(request, true))!, username.data) })
-  })
+  
 
-  for (const method of ['PUT', 'DELETE'] as const) {
-    app.route({
-      handler: async (request, reply) => {
-        guardMutation(request)
-        const username = usernameSchema.safeParse((request.params as { username?: unknown }).username)
-        if (!username.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
-        void reply.header('cache-control', 'private, no-store')
-        const status = await deps.memberData.setFollow((await viewer(request, true))!, username.data, method === 'PUT')
-        if (!status) throw new ApiError('NOT_FOUND', 'Member not found.')
-        return followStatusSchema.parse(status)
-      },
-      method,
-      url: '/v1/follows/:username',
-    })
-  }
+  
 
-  app.put('/v1/review-likes', async (request, reply) => {
-    guardMutation(request)
-    const parsed = setReviewLikeRequestSchema.safeParse(request.body)
-    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid review identifier.')
-    void reply.header('cache-control', 'private, no-store')
-    const like = await deps.memberData.setReviewLiked((await viewer(request, true))!, parsed.data.reviewId, true)
-    if (!like) throw new ApiError('NOT_FOUND', 'Review not found.')
-    return reviewLikeSchema.parse(like)
-  })
+  
 
-  app.delete('/v1/review-likes/:reviewId', async (request, reply) => {
-    guardMutation(request)
-    const reviewId = (request.params as { reviewId?: unknown }).reviewId
-    if (typeof reviewId !== 'string' || !reviewId || reviewId.length > 128) throw new ApiError('BAD_REQUEST', 'Use a valid review identifier.')
-    const removed = await deps.memberData.removeReviewLike((await viewer(request, true))!, reviewId)
-    if (!removed) throw new ApiError('NOT_FOUND', 'Review not found.')
-    return reply.code(204).send()
-  })
+  
 
   app.post('/v1/me/reviews', async (request, reply) => {
     guardMutation(request)

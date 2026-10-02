@@ -1,6 +1,6 @@
 # Consumit
 
-Consumit is a social streaming and taste-discovery product for movies and series. This glossary defines the product language used across design, product, and engineering.
+Consumit is a social streaming and taste-discovery product for movies, series, and anime. This glossary defines the product language used across design, product, and engineering.
 
 ## People and taste
 
@@ -55,7 +55,7 @@ An episodic title organized into seasons and episodes.
 _Avoid_: TV item, show asset
 
 **Anime**:
-A title sourced from AniList, identified by AniList ID, with episodes organized by canonical episode number. Anime follows the movie/series classification for playback but has its own metadata domain (AniList), episode identity engine, and provider mapping system.
+A title sourced from AniList, identified by AniList ID, with episodes organized by canonical episode number. Anime follows the movie/series classification for playback but has its own metadata domain (AniList), episode identity engine, and provider mapping system. Member records (saves, favorites, progress, ratings, reviews, diary) store anime under the same title kind as movies and series, keyed by AniList ID, so an anime and a TMDB title may share a numeric ID without colliding.
 _Avoid_: Japanese animation, anime series
 
 **Episode**:
@@ -87,7 +87,7 @@ The factual record of titles and episodes a member has started or completed.
 _Avoid_: Diary, activity feed
 
 **Diary**:
-The member-facing chronological record of completed watches and rewatches.
+The member-authored chronological record of completed watches and rewatches. An entry may retain an exact season and episode for series or anime.
 _Avoid_: Watch history, activity log
 
 **Library**:
@@ -124,8 +124,20 @@ _Avoid_: Scrape, fetch URL
 A replacement source selected after the current source becomes unavailable or unusable.
 _Avoid_: Retry, refresh
 
+**Cast**:
+Sending the active playback session to a TV through Chromecast. The sender keeps the session, progress, and history; the TV only plays media and reports status.
+_Avoid_: Stream to TV, mirror
+
+**Receiver**:
+The TV-side Consumit playback surface (a custom CAF app) that plays cast media and reports status. It never holds member identity or progress.
+_Avoid_: Embed frame, provider player
+
+**Delivery Failure**:
+The recorded browser-side reason an active playback source failed, used to guide renewal, fallback, and provider reliability.
+_Avoid_: Error message, failure detail
+
 **Watch**:
-The focused Consumit screen that contains the Consumit Player and provides source selection, recovery, reporting, and trust guidance.
+The focused Consumit screen that contains the Consumit Player and provides automatic recovery, reporting, and trust guidance. Provider and source identities stay out of normal viewing controls.
 _Avoid_: Watch / Embed, provider frame
 
 **Consumit Player**:

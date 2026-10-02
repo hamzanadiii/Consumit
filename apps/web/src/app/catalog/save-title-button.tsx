@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 
 import { Button, buttonVariants, cn } from '@consumit/ui'
 
-import { getCachedMemberLibrary, replaceCachedMemberLibrary, setMemberSaved } from '@/lib/identity-browser'
+import { getMemberTitleState, setMemberSaved } from '@/lib/identity-browser'
 
 import { useSession } from '../session/session'
 
@@ -16,10 +16,11 @@ type SaveTitleButtonProps = {
   id: number
   initialSaved?: boolean | undefined
   kind: CatalogKind
+  onSavedChange?: (saved: boolean) => void
   title: string
 }
 
-export function SaveTitleButton({ className, id, initialSaved = false, kind, title }: SaveTitleButtonProps) {
+export function SaveTitleButton({ className, id, initialSaved = false, kind, onSavedChange, title }: SaveTitleButtonProps) {
   const session = useSession()
   const [saved, setSaved] = useState(initialSaved)
   const [busy, setBusy] = useState(false)
@@ -28,15 +29,30 @@ export function SaveTitleButton({ className, id, initialSaved = false, kind, tit
   useEffect(() => {
     if (!session.member || initialSaved) return
     let cancelled = false
-    void getCachedMemberLibrary(session.member.id)
-      .then((library) => {
-        if (!cancelled) setSaved(library.saved.some((entry) => entry.kind === kind && entry.id === id))
+    void getMemberTitleState({ id, kind })
+      .then((state) => {
+        if (!cancelled) setSaved(state.saved)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [session.member, initialSaved, id, kind])
+
+  if (session.status === 'loading') {
+    return (
+      <Button
+        aria-label="Checking your account"
+        className={className}
+        disabled
+        size="icon"
+        type="button"
+        variant="secondary"
+      >
+        <Bookmark aria-hidden="true" />
+      </Button>
+    )
+  }
 
   if (!session.member) {
     return (
@@ -56,9 +72,9 @@ export function SaveTitleButton({ className, id, initialSaved = false, kind, tit
     setBusy(true)
     setError(null)
     try {
-      const library = await setMemberSaved({ id, kind }, next)
-      if (session.member) replaceCachedMemberLibrary(session.member.id, library)
+      await setMemberSaved({ id, kind }, next)
       setSaved(next)
+      onSavedChange?.(next)
     } catch {
       setError('The library could not be updated.')
     } finally {

@@ -24,7 +24,8 @@ function EpisodeCard({ detail, episode }: {
   episode: CatalogSeason['episodes'][number]
 }) {
   const href = watchHref(detail, { episode: episode.episodeNumber, season: episode.seasonNumber })
-  const meta = [episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null, episode.airDate].filter(Boolean).join(' · ')
+  const date = episode.airDate ? new Date(`${episode.airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null
+  const meta = [episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null, date].filter(Boolean).join(' · ')
   return (
     <article className="group flex min-w-0 flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none" data-filscreen-episode-card>
       <Link
@@ -33,11 +34,12 @@ function EpisodeCard({ detail, episode }: {
         href={href}
       >
         <ArtworkFrame
-          alt={`${episode.title} episode still`}
+          alt={episode.stillUrl ? `${episode.title} episode still` : `${episode.title} title artwork`}
           className="rounded-none border-0"
           ratio="landscape"
-          src={episode.stillUrl ?? undefined}
+          src={episode.stillUrl ?? detail.backdropUrl ?? detail.posterUrl ?? undefined}
         >
+          {!episode.stillUrl && (detail.backdropUrl || detail.posterUrl) ? <span className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">Title artwork</span> : null}
           <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none" />
           <span aria-hidden="true" className="absolute inset-0 grid place-items-center opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
             <span className="grid size-12 place-items-center rounded-full bg-[var(--fs-accent)] text-[var(--fs-on-accent)] shadow-lg transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none motion-reduce:transform-none">

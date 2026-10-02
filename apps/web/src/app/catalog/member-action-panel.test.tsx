@@ -24,7 +24,7 @@ const member = {
   username: 'cinema_fan',
 } as const
 
-const emptyLibrary = { diary: [], favorites: [], lists: [], saved: [], watched: [] }
+const emptyLibrary = { diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] }
 const storedLike = { id: 693134, kind: 'movie', origin: 'native', sourceKey: null }
 const storedReview = {
   body: 'A patient masterpiece.',
@@ -41,7 +41,7 @@ function libraryFetch() {
   return vi.fn().mockImplementation((input: string | URL | Request) => {
     const url = String(input)
     if (url.includes('/v1/me/titles/')) {
-      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null }), { status: 200 }))
+      return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null, saved: false, watched: false }), { status: 200 }))
     }
     if (url.includes('/v1/likes/') || url.includes('/v1/ratings/')) {
       return Promise.resolve(new Response('Not found', { status: 404 }))
@@ -81,7 +81,7 @@ describe('member action panel', () => {
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /watched|Like|library/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/library')
+    expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/sign-in')
   })
 
   it('toggles watched, liked, and saved through real member records', async () => {

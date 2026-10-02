@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, ElementType, ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
 
@@ -74,7 +74,7 @@ export function ArtworkFrame({
       {src ? (
         <img
           alt={alt}
-          className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.025] motion-reduce:transition-none"
+          className="size-full object-cover"
           loading={loading}
           src={src}
         />
@@ -82,6 +82,29 @@ export function ArtworkFrame({
         <MissingArtwork label={alt || 'Artwork unavailable'} />
       )}
       {children}
+    </div>
+  )
+}
+
+export type PosterStackProps = Omit<ComponentProps<'div'>, 'children'> & {
+  items: readonly { key: string; label: string; src?: string | undefined; href?: string | undefined }[]
+  linkComponent?: ElementType | undefined
+}
+
+/** A compact collection preview. The first cover leads; every linked cover stays keyboard reachable. */
+export function PosterStack({ items, className, linkComponent: LinkComponent = 'a', ...props }: PosterStackProps) {
+  return (
+    <div className={cn('relative aspect-[12/5] min-w-0', className)} data-consumit-poster-stack {...props}>
+      {items.slice(0, 5).map((item, index) => {
+        const style = { left: `${index * (100 - 250 / 9) / 4}%`, width: `${250 / 9}%`, zIndex: 5 - index }
+        const artwork = <ArtworkFrame alt={item.href ? '' : item.label} className="h-full w-full" src={item.src} />
+        return item.href ? (
+          <LinkComponent aria-label={item.label} className="consumit-poster-stack-cover absolute inset-y-0 block rounded-card outline-none" href={item.href} key={item.key} style={style} title={item.label}>
+            {artwork}
+          </LinkComponent>
+        ) : <div className="consumit-poster-stack-cover absolute inset-y-0" key={item.key} style={style}>{artwork}</div>
+      })}
+      {items.length === 0 ? <ArtworkFrame alt="Collection artwork unavailable" className="absolute inset-y-0 w-[27.7778%]" /> : null}
     </div>
   )
 }

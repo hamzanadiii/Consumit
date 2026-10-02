@@ -83,7 +83,7 @@ export function createTvSubtitlesProvider(http: SubtitleHttp): SubtitleSearchPro
           lang: (flag[2] ?? 'en').toLowerCase(),
         }))
         const picked = wantLangs.length ? flags.filter((flag) => wantLangs.includes(flag.lang)) : flags
-        for (const flag of (picked.length ? picked : flags).slice(0, 24)) {
+        for (const flag of (picked.length ? picked : flags)) {
           out.push({ url: flag.url, lang: flag.lang, label: `S${season}E${episode}`, format: 'other', provider: 'tvsubtitles' })
         }
         break // Only the requested episode row.

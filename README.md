@@ -36,7 +36,7 @@ bun run dev
 ```
 
 Run the complete local quality gate with `bun run check`.
-Worker tests, type checks, and a Wrangler dry run are part of that gate. `bun run infra:validate` also requires Docker and Terraform on the host; database integration tests and the k6 playback load scenario require their documented local test services.
+`bun run infra:validate` also requires Docker and Terraform on the host; database integration tests and the k6 playback load scenario require their documented local test services.
 
 ## Docker stack
 
@@ -88,4 +88,4 @@ Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml 
 
 ## Implementation foundation
 
-The repository uses Bun workspaces with a Next.js web application, Bun/Fastify API, shared Zod contracts, shared UI, provider SDK, and Cloudflare media Worker. Postgres stores member data; dedicated Valkey instances hold authentication and optional shared playback state. Regular Watch and public embeds use the first-party player with validated configured media, either browser-direct or through signed Worker grants.
+The repository uses Bun workspaces with a Next.js web application, Bun/Fastify API, shared Zod contracts, shared UI, and provider SDK. Postgres stores member data; dedicated Valkey instances hold authentication and optional shared playback state. Watch uses the first-party player with validated browser-direct media. Public embeds remain deferred.

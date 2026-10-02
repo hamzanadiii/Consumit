@@ -20,6 +20,10 @@ services:
       RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-missing-restic-repository}
       RESTIC_PASSWORD_FILE: /run/secrets/restic_password
       BACKUP_HOST: ${BACKUP_HOST:-consumit-production}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-14}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-6}
+      BACKUP_CHECK_SUBSET: ${BACKUP_CHECK_SUBSET:-5%}
     volumes:
       - type: bind
         source: ${RESTIC_PASSWORD_FILE:-./infra/secrets/missing-restic-password}

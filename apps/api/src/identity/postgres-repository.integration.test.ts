@@ -32,6 +32,23 @@ describeIdentityContract('Postgres repository', async () => {
 })
 
 describe('Postgres username advisory locks', () => {
+  it('includes private completed episode history in an account export', async () => {
+    const db = createDbClient(databaseUrl)
+    const pool = new pg.Pool({ connectionString: databaseUrl })
+    try {
+      const repository = createPostgresIdentityRepository(db.prisma)
+      const member = await repository.createVerifiedAccount({ createdAt: new Date(), email: 'export-history@example.com', passwordHash: 'hash', username: 'export_history' })
+      await db.prisma.watchHistoryEntry.create({ data: { catalogKind: 'SERIES', completionId: crypto.randomUUID(), episode: 4, memberId: member.id, season: 2, tmdbId: 95396 } })
+      await db.prisma.diaryEntry.create({ data: { catalogKind: 'SERIES', episode: 4, memberId: member.id, season: 2, tmdbId: 95396, watchedOn: new Date('2026-09-27T00:00:00.000Z') } })
+      const exported = await repository.exportMember(member.id, new Date('2026-09-28T00:00:00.000Z'))
+      expect(exported?.watchHistory).toMatchObject([{ episode: 4, id: 95396, kind: 'series', season: 2 }])
+      expect(exported?.library.diary).toMatchObject([{ episode: 4, id: 95396, kind: 'series', season: 2 }])
+    } finally {
+      await pool.query('TRUNCATE "Member" CASCADE')
+      await pool.end()
+      await db.close()
+    }
+  })
   it('creates verified accounts and renames usernames without void-column failures', async () => {
     const db = createDbClient(databaseUrl)
     const pool = new pg.Pool({ connectionString: databaseUrl })
@@ -71,6 +88,8 @@ describe('Postgres username advisory locks', () => {
       })
       await db.prisma.importBatch.create({ data: { archiveSha256: 'archive', memberId: member.id, sourceFilename: 'letterboxd.zip' } })
       await db.prisma.watchedTitle.create({ data: { memberId: member.id, tmdbId: 843 } })
+      await db.prisma.playbackProgress.create({ data: { memberId: member.id, tmdbId: 843 } })
+      await db.prisma.watchHistoryEntry.create({ data: { completionId: crypto.randomUUID(), memberId: member.id, catalogKind: 'MOVIE', tmdbId: 843 } })
       await db.prisma.diaryEntry.create({ data: { memberId: member.id, tmdbId: 843, watchedOn: new Date('2024-02-03T00:00:00.000Z') } })
       await db.prisma.rating.create({ data: { memberId: member.id, tmdbId: 843, value: 10 } })
       await db.prisma.review.create({ data: { body: 'Review', memberId: member.id, tmdbId: 843 } })
@@ -87,13 +106,15 @@ describe('Postgres username advisory locks', () => {
         db.prisma.credential.count({ where: { memberId: member.id } }),
         db.prisma.importBatch.count({ where: { memberId: member.id } }),
         db.prisma.watchedTitle.count({ where: { memberId: member.id } }),
+        db.prisma.playbackProgress.count({ where: { memberId: member.id } }),
+        db.prisma.watchHistoryEntry.count({ where: { memberId: member.id } }),
         db.prisma.diaryEntry.count({ where: { memberId: member.id } }),
         db.prisma.rating.count({ where: { memberId: member.id } }),
         db.prisma.review.count({ where: { memberId: member.id } }),
         db.prisma.savedTitle.count({ where: { memberId: member.id } }),
         db.prisma.favorite.count({ where: { memberId: member.id } }),
         db.prisma.memberList.count({ where: { memberId: member.id } }),
-      ])).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+      ])).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
     } finally {
       await pool.query('TRUNCATE "Member" CASCADE')
       await pool.end()

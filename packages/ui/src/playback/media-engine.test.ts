@@ -24,6 +24,22 @@ vi.mock('hls.js', () => ({
 
 const source = { type: 'hls' as const, src: 'https://cdn.consumit.example/master.m3u8' }
 
+describe('media engine native teardown', () => {
+  it('empties a native engine without an intermediate empty load', async () => {
+    const video = document.createElement('video')
+    const load = vi.spyOn(video, 'load')
+    const engine = await attachMediaEngine(
+      video,
+      { type: 'native', src: 'https://cdn.consumit.example/clip.mp4' },
+      { tracks: vi.fn(), fatal: vi.fn() },
+    )
+    expect(video.getAttribute('src')).toBe('https://cdn.consumit.example/clip.mp4')
+    engine.destroy()
+    expect(video.hasAttribute('src')).toBe(false)
+    expect(load).not.toHaveBeenCalled()
+  })
+})
+
 describe('media engine hls errors', () => {
   it('maps a fatal 410 segment error to gone and declines in-place recovery', async () => {
     handlers.clear()
@@ -31,18 +47,18 @@ describe('media engine hls errors', () => {
     const fatal = vi.fn()
     const engine = await attachMediaEngine(video, source, { tracks: vi.fn(), fatal })
     handlers.get('error')?.('error', { fatal: true, type: 'other', response: { code: 410 } })
-    expect(fatal).toHaveBeenCalledWith('gone')
+    expect(fatal).toHaveBeenCalledWith('gone', undefined)
     expect(engine.recover()).toBe(false)
     engine.destroy()
   })
-  it('keeps fatal non-410 network errors recoverable in place', async () => {
+  it('classifies a fatal 403 as a header delivery failure and skips futile in-place retry', async () => {
     handlers.clear()
     const video = document.createElement('video')
     const fatal = vi.fn()
     const engine = await attachMediaEngine(video, source, { tracks: vi.fn(), fatal })
     handlers.get('error')?.('error', { fatal: true, type: 'other', response: { code: 403 } })
-    expect(fatal).toHaveBeenCalledWith('network')
-    expect(engine.recover()).toBe(true)
+    expect(fatal).toHaveBeenCalledWith('network', 'headers')
+    expect(engine.recover()).toBe(false)
     engine.destroy()
   })
 })

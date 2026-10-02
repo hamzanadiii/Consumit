@@ -2,6 +2,7 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  ...(process.env.CONSUMIT_NEXT_DIST_DIR ? { distDir: process.env.CONSUMIT_NEXT_DIST_DIR } : {}),
   output: 'standalone',
   outputFileTracingRoot: `${process.cwd()}/../..`,
   images: {
@@ -24,7 +25,7 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    if (process.env.NODE_ENV !== 'development') return []
+    if (process.env.NODE_ENV !== 'development' && process.env.PLAYBACK_FIXTURE_PROXY !== '1') return []
     const api = (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
     return [{ destination: `${api}/v1/:path*`, source: '/v1/:path*' }]
   },

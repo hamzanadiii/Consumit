@@ -15,6 +15,8 @@ import { connection } from 'next/server'
 import { cache } from 'react'
 import type { ZodType } from 'zod'
 
+import { publicCatalogFetchOptions } from './public-catalog-cache'
+
 export class AnimeApiError extends Error {
   readonly code: string
   readonly retryable: boolean
@@ -33,13 +35,15 @@ function apiBaseUrl() {
   return (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
 }
 
-async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
-  await connection()
+type RenderMode = 'request' | 'cached-public'
+
+async function request<T>(path: string, schema: ZodType<T>, renderMode: RenderMode = 'request'): Promise<T> {
+  if (renderMode === 'request') await connection()
 
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
-      cache: 'no-store',
+      ...(renderMode === 'cached-public' ? publicCatalogFetchOptions() : { cache: 'no-store' as const }),
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(6_000),
     })
@@ -87,12 +91,25 @@ export const getAnimeTitle = cache((anilistId: number) => (
   request(`/v1/anime/${anilistId}`, animeTitleDetailSchema)
 ))
 
+/** Public AniList detail used by the cacheable title route. */
+export const getCachedAnimeTitle = cache((anilistId: number) => (
+  request(`/v1/anime/${anilistId}`, animeTitleDetailSchema, 'cached-public')
+))
+
 export const getAnimeRelations = cache((anilistId: number) => (
   request(`/v1/anime/${anilistId}/relations`, animeFranchiseSchema)
 ))
 
+export const getCachedAnimeRelations = cache((anilistId: number) => (
+  request(`/v1/anime/${anilistId}/relations`, animeFranchiseSchema, 'cached-public')
+))
+
 export const getAnimeAiring = cache((anilistId: number) => (
   request(`/v1/anime/${anilistId}/airing`, animeAiringScheduleSchema)
+))
+
+export const getCachedAnimeAiring = cache((anilistId: number) => (
+  request(`/v1/anime/${anilistId}/airing`, animeAiringScheduleSchema, 'cached-public')
 ))
 
 export function searchAnime(query: string, page = 1) {
@@ -106,14 +123,27 @@ export function getAnimeBatch(ids: number[]) {
 
 /** Confident AniList match for a TMDB title, or null when nothing matches.
  *  Misses (including 404s) are normal — the caller keeps its honest page. */
-export async function getAnimeMatch(title: string, originalTitle: string | null, year: number | null): Promise<number | null> {
+async function matchAnimeTitle(
+  title: string,
+  originalTitle: string | null,
+  year: number | null,
+  renderMode: RenderMode,
+): Promise<number | null> {
   const params = new URLSearchParams({ title: title.trim().slice(0, 200) })
   if (originalTitle?.trim()) params.set('originalTitle', originalTitle.trim().slice(0, 200))
   if (year !== null) params.set('year', String(year))
   try {
-    const { anilistId } = await request(`/v1/anime/match?${params}`, animeMatchSchema)
+    const { anilistId } = await request(`/v1/anime/match?${params}`, animeMatchSchema, renderMode)
     return anilistId
   } catch {
     return null
   }
+}
+
+export function getAnimeMatch(title: string, originalTitle: string | null, year: number | null) {
+  return matchAnimeTitle(title, originalTitle, year, 'request')
+}
+
+export function getCachedAnimeMatch(title: string, originalTitle: string | null, year: number | null) {
+  return matchAnimeTitle(title, originalTitle, year, 'cached-public')
 }

@@ -6,6 +6,7 @@ import {
   type CatalogKind,
   type CatalogFeed,
   type CatalogRef,
+  type CatalogTitleSummary,
 } from '@consumit/contracts'
 
 export class BrowserCatalogError extends Error {
@@ -78,6 +79,22 @@ export async function browserCatalogBatch(refs: readonly CatalogRef[], signal?: 
   const parsed = catalogBatchSchema.safeParse(await request(`/v1/titles/batch?${params}`, signal))
   if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid batch response.')
   return parsed.data
+}
+
+/** Resolve at most 120 unique titles, respecting the 24-title route limit and
+ * keeping no more than three catalog requests in flight at once. */
+export async function browserCatalogBatches(refs: readonly CatalogRef[], signal?: AbortSignal): Promise<CatalogTitleSummary[]> {
+  const unique = [...new Map(refs.map((ref) => [`${ref.kind}:${ref.id}`, ref])).values()].slice(0, 120)
+  const titles: CatalogTitleSummary[] = []
+  for (let start = 0; start < unique.length; start += 72) {
+    const requests: Promise<Awaited<ReturnType<typeof browserCatalogBatch>>>[] = []
+    for (let offset = start; offset < Math.min(start + 72, unique.length); offset += 24) {
+      requests.push(browserCatalogBatch(unique.slice(offset, offset + 24), signal))
+    }
+    const results = await Promise.all(requests)
+    titles.push(...results.flatMap((result) => result.items))
+  }
+  return titles
 }
 
 export type BrowseCatalogQuery = {

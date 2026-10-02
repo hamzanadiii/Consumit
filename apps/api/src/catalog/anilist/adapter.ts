@@ -144,14 +144,14 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
       const data = await queryAnime<AnilistMediaResponse>(
         relationsQuery,
         { id: anilistId },
-        `relations:${anilistId}`,
+        `relations:v2:${anilistId}`,
         'relations',
       )
       if (!data.Media) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
       const media = data.Media as { id: number; title: { romaji: string | null; english: string | null }; isAdult?: boolean | null; relations: { edges: Array<{ relationType: string; node: Record<string, unknown> }> } | null }
       if (isAdultMedia(media)) throw new AnimeError('ANIME_NOT_FOUND', `Anime not found: ${anilistId}`)
       const relations = media.relations?.edges
-        .filter((edge) => !isAdultMedia(edge.node as { isAdult?: boolean | null }))
+        .filter((edge) => edge.node.type !== 'MANGA' && !isAdultMedia(edge.node as { isAdult?: boolean | null }))
         .map((edge) => mapFranchiseRelation({ relationType: edge.relationType, node: edge.node as Parameters<typeof mapFranchiseRelation>[0]['node'] }))
         .filter((r): r is NonNullable<typeof r> => r !== null) ?? []
       return {

@@ -25,12 +25,10 @@ export default async function EmbedMoviePage({ params, searchParams }: EmbedMovi
   if (!Number.isInteger(id) || id <= 0) notFound()
 
   const query = parseEmbedQuery(await searchParams)
-  const [streams, context] = await Promise.all([
-    fetchEmbedStreams(`/v1/embed/movie/${id}`, query.lang),
-    loadEmbedMovieContext(id),
-  ])
-
-  if (!streams.sources.length) return <EmbedEmptyState />
+  const context = await loadEmbedMovieContext(id)
+  const legacy = process.env.NODE_ENV === 'production' && process.env.PLAYBACK_EMBED_SESSIONS !== '1'
+  const streams = legacy ? await fetchEmbedStreams(`/v1/embed/movie/${id}`, { lang: query.lang }) : null
+  if (streams && !streams.sources.length) return <EmbedEmptyState />
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#09090b]">
@@ -40,9 +38,8 @@ export default async function EmbedMoviePage({ params, searchParams }: EmbedMovi
         overview={context.overview}
         pauseFacts={context.pauseFacts}
         posterSrc={context.posterSrc}
-        sources={streams.sources}
+        {...(streams ? { sources: streams.sources, subtitles: streams.subtitles } : { playbackRef: { kind: 'movie' as const, id } })}
         startAt={query.startAt}
-        subtitles={streams.subtitles}
         title={context.title}
         videoId={id}
       />

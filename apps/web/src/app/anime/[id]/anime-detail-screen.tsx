@@ -1,14 +1,16 @@
 'use client'
 
-import type { AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule } from '@consumit/contracts'
+import type { AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule, AnimeEpisode } from '@consumit/contracts'
 import { watchHref } from '@consumit/contracts'
 import { ArtworkFrame, CastCard, SectionHeading, Tabs } from '@consumit/ui'
 import { CalendarClock, ChevronLeft, ChevronRight, Play, Star } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { useEpisodeArt } from '../use-episode-art'
+import { browserAnimeEpisodes } from '@/lib/anime-browser'
+
+import { TitleCard } from '../../shared/title-card'
 
 import { MemberActionPanel } from '../../catalog/member-action-panel'
 import { TitleReviews } from '../../catalog/title-reviews'
@@ -79,7 +81,7 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
 
   return (
     <header
-      className="relative isolate overflow-hidden rounded-2xl border border-[var(--fs-line)] bg-[#0b0b0e] text-white shadow-2xl"
+      className="relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#09090b] text-white"
       data-consumit-anime-masthead
     >
       {detail.bannerImage ? (
@@ -104,11 +106,11 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
         <div
           aria-hidden="true"
           className="absolute inset-0"
-          style={{ background: `radial-gradient(120% 90% at 78% 8%, ${detail.coverImage.color ?? '#6366f1'} 0%, #1a1a2e 55%, #0b0b0e 100%)` }}
+          style={{ background: `radial-gradient(120% 90% at 78% 8%, ${detail.coverImage.color ?? '#6b3c32'} 0%, #3a211d 40%, #09090b 100%)` }}
         />
       )}
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.18)_100%)]" />
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,14,0.98)_0%,rgba(11,11,14,0.4)_40%,transparent_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,18,32,0.94)_0%,rgba(10,18,32,0.72)_50%,rgba(10,18,32,0.18)_100%)]" />
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(10,18,32,0.98)_0%,rgba(10,18,32,0.4)_40%,transparent_100%)]" />
 
       <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
         <div className="flex max-w-2xl flex-col justify-center gap-3">
@@ -116,7 +118,7 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
             {score ? (
-              <strong className="inline-flex items-center gap-1 font-bold text-[#ffb800] tabular-nums">
+              <strong className="inline-flex items-center gap-1 font-bold text-orange tabular-nums">
                 <Star aria-hidden="true" className="size-3.5 fill-current" />
                 ★ {score}
                 <span className="sr-only">on AniList</span>
@@ -140,11 +142,11 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <Link
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-6 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-orange px-6 text-sm font-bold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
               href={watchHref({ kind: 'anime', id: detail.anilistId }, { episode: 1, season: 1 })}
             >
               <Play aria-hidden="true" className="size-4 fill-current" />
-              Watch
+              Play
             </Link>
           </div>
         </div>
@@ -175,21 +177,24 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
   )
 }
 
-function AnimeEpisodeCard({ anilistId, duration, episode, stillUrl, title, upcoming }: {
+function AnimeEpisodeCard({ anilistId, airDate, duration, episode, fallbackArt, stillUrl, summary, title, upcoming }: {
   anilistId: number
+  airDate?: string | null | undefined
   duration: string | null
   episode: number
+  fallbackArt?: string | null | undefined
   stillUrl?: string | null | undefined
+  summary?: string | null | undefined
   title?: string | null | undefined
   upcoming: boolean
 }) {
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none" data-filscreen-episode-card>
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-card border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-colors hover:border-[var(--fs-accent)]/60 motion-reduce:transition-none" data-filscreen-episode-card>
       <ArtworkFrame
-        alt={title ? `${title} still` : `Episode ${episode} still`}
+        alt={stillUrl ? title ? `${title} still` : `Episode ${episode} still` : `Episode ${episode} title artwork`}
         className="rounded-none border-0"
         ratio="landscape"
-        src={stillUrl ?? undefined}
+        src={stillUrl ?? fallbackArt ?? undefined}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
         <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
@@ -201,20 +206,22 @@ function AnimeEpisodeCard({ anilistId, duration, episode, stillUrl, title, upcom
           ) : null}
         </p>
         {title ? <p className="truncate text-sm font-bold text-[var(--fs-ink)]" title={title}>{title}</p> : null}
-        {duration ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{duration}</p> : null}
+        {!stillUrl && fallbackArt ? <p className="text-[10px] text-[var(--fs-muted)]">Title artwork</p> : null}
+        {duration || airDate ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{[duration, airDate ? new Date(`${airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null].filter(Boolean).join(' · ')}</p> : null}
+        {summary ? <p className="line-clamp-2 text-xs leading-5 text-[var(--fs-muted)]">{summary}</p> : null}
         <div className="mt-3">
           {upcoming ? (
-            <span className="inline-flex min-h-9 cursor-not-allowed items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] opacity-60">
+            <span className="inline-flex min-h-9 cursor-not-allowed items-center gap-1.5 rounded-control border border-[var(--fs-line)] px-4 text-xs font-bold text-[var(--fs-muted)]">
               <Play aria-hidden="true" className="size-3 fill-current" />
               Upcoming
             </span>
           ) : (
             <Link
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-orange px-4 text-xs font-bold text-canvas outline-none transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
               href={watchHref({ kind: 'anime', id: anilistId }, { episode, season: 1 })}
             >
               <Play aria-hidden="true" className="size-3 fill-current" />
-              Watch
+              Play episode
             </Link>
           )}
         </div>
@@ -238,27 +245,28 @@ export function indexStreamingMeta(detail: AnimeTitleDetail): Map<number, { titl
   return indexed
 }
 
-/** Episode still/title with the honest fallback chain: AniList streaming
- *  art first (already in hand), canonical episode art (TMDB primary)
- *  when the licensor supplied nothing, placeholder otherwise. Fetched
- *  per card only for episodes the streaming index misses, so covered
- *  episodes cost zero extra requests. */
-function AnimeEpisodeWithArt({ anilistId, duration, episode, stream, upcoming }: {
+/** Episode details come from the current page's bounded batch. Streaming
+ *  art can fill a missing still; title art is labeled when neither has one. */
+function AnimeEpisodeWithArt({ anilistId, art, duration, episode, fallbackArt, stream, upcoming }: {
   anilistId: number
+  art?: AnimeEpisode | null | undefined
   duration: string | null
   episode: number
+  fallbackArt?: string | null | undefined
   stream: { title: string; thumbnail: string | null } | undefined
   upcoming: boolean
 }) {
-  const art = useEpisodeArt(anilistId, episode, { covered: !!stream?.thumbnail, upcoming })
   const name = stream?.title?.replace(/^episode\s+\d+\s*[-–:]\s*/i, '').trim()
     || art?.title || null
   return (
     <AnimeEpisodeCard
       anilistId={anilistId}
-      duration={duration}
+      airDate={art?.airDate}
+      duration={art?.duration ? formatDuration(art.duration) : duration}
       episode={episode}
+      fallbackArt={fallbackArt}
       stillUrl={stream?.thumbnail ?? art?.thumbnail ?? null}
+      summary={art?.description}
       title={name}
       upcoming={upcoming}
     />
@@ -267,6 +275,7 @@ function AnimeEpisodeWithArt({ anilistId, duration, episode, stream, upcoming }:
 
 function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
   const [page, setPage] = useState(1)
+  const [episodeArt, setEpisodeArt] = useState<{ id: number; results: Record<number, AnimeEpisode | null> }>({ id: detail.anilistId, results: {} })
   const streaming = useMemo(() => indexStreamingMeta(detail), [detail])
   // AniList omits the count for some long-runners; the airing position still
   // tells us how many episodes have aired. Streaming entries carry titles
@@ -281,6 +290,17 @@ function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
   const safePage = Math.min(page, totalPages)
   const start = (safePage - 1) * ANIME_EPISODES_PER_PAGE
   const visible = episodes.slice(start, start + ANIME_EPISODES_PER_PAGE)
+  const cachedArt = episodeArt.id === detail.anilistId ? episodeArt.results : {}
+  const missing = visible.filter((number) => (upcomingFrom === null || number < upcomingFrom) && cachedArt[number] === undefined).join(',')
+  useEffect(() => {
+    if (!missing) return
+    let active = true
+    const numbers = missing.split(',').map(Number)
+    void browserAnimeEpisodes(detail.anilistId, numbers).then((found) => {
+      if (active) setEpisodeArt((previous) => ({ id: detail.anilistId, results: { ...(previous.id === detail.anilistId ? previous.results : {}), ...Object.fromEntries(numbers.map((number, index) => [number, found[index] ?? null])) } }))
+    }).catch(() => { if (active) setEpisodeArt((previous) => ({ id: detail.anilistId, results: { ...(previous.id === detail.anilistId ? previous.results : {}), ...Object.fromEntries(numbers.map((number) => [number, null])) } })) })
+    return () => { active = false }
+  }, [detail.anilistId, missing])
 
   return (
     <div data-filscreen-episodes>
@@ -307,8 +327,10 @@ function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
                 <li className="min-w-0" key={episode}>
                   <AnimeEpisodeWithArt
                     anilistId={detail.anilistId}
+                    art={cachedArt[episode]}
                     duration={duration}
                     episode={episode}
+                    fallbackArt={detail.bannerImage ?? detail.coverImage.url}
                     stream={streaming.get(episode)}
                     upcoming={upcomingFrom !== null && episode >= upcomingFrom}
                   />
@@ -391,24 +413,6 @@ function AnimeCastRail({ characters }: { characters: AnimeTitleDetail['character
   )
 }
 
-function AnimeStaffRail({ staff }: { staff: AnimeTitleDetail['staff'] }) {
-  if (!staff.length) return null
-  return (
-    <div className="mt-8 grid auto-cols-[minmax(9.5rem,42vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[11rem] xl:grid-flow-row xl:grid-cols-6 xl:overflow-visible xl:pb-0">
-      {staff.slice(0, 12).map((member, index) => (
-        <CastCard
-          className="transition-transform duration-200 hover:-translate-y-1 motion-reduce:transition-none motion-reduce:transform-none"
-          imageSrc={member.image ?? undefined}
-          // AniList repeats people across roles, so bare ids collide.
-          key={`${member.id}:${index}`}
-          name={member.name}
-          role={member.role ?? undefined}
-        />
-      ))}
-    </div>
-  )
-}
-
 function formatCountdown(totalSeconds: number): string {
   if (totalSeconds <= 0) return 'Airing now'
   const days = Math.floor(totalSeconds / 86_400)
@@ -470,6 +474,15 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
   detail: AnimeTitleDetail
   relations: AnimeFranchise | null
 }) {
+  const related = useMemo(() => {
+    const seen = new Set([detail.anilistId])
+    const priority = (type: string) => type === 'PREQUEL' ? 0 : type === 'SEQUEL' ? 1 : 2
+    return (relations?.relations ?? []).filter(relation => {
+      if (seen.has(relation.anime.anilistId)) return false
+      seen.add(relation.anime.anilistId)
+      return true
+    }).sort((a, b) => priority(a.type) - priority(b.type))
+  }, [detail.anilistId, relations])
   const recommendations = useMemo(() => {
     const seen = new Set<number>()
     return detail.recommendations.filter((item) => {
@@ -483,9 +496,8 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
     { href: '#overview', label: 'Overview', value: 'overview' },
     { href: '#reviews', label: 'Reviews', value: 'reviews' },
     { href: '#cast', label: 'Characters', value: 'cast' },
-    ...(detail.staff.length ? [{ href: '#staff', label: 'Staff', value: 'staff' }] : []),
     ...(airing && airing.episodes.length ? [{ href: '#airing', label: 'Airing', value: 'airing' }] : []),
-    ...(relations?.relations.length ? [{ href: '#related', label: 'Related', value: 'related' }] : []),
+    ...(related.length ? [{ href: '#related', label: 'Related anime', value: 'related' }] : []),
     ...(recommendations.length ? [{ href: '#recommendations', label: 'Recommendations', value: 'recommendations' }] : []),
   ]
   return (
@@ -501,6 +513,14 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
           <section className="py-10 sm:py-12 lg:py-14" id="episodes" aria-labelledby="episodes-heading">
             <AnimeEpisodesSection detail={detail} key={detail.anilistId} />
           </section>
+          {related.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="anime-related-heading">
+            <SectionHeading description="Explore the seasons and stories connected to this anime." id="anime-related-heading" title="Related anime" />
+            <ul className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">{related.map(({ anime, type }) => {
+              const format = anime.format === 'MOVIE' ? 'Film' : anime.format.replace(/_/g, ' ')
+              const relation = type === 'PREQUEL' ? anime.format === 'MOVIE' ? 'Previous film' : 'Previous season' : type === 'SEQUEL' ? anime.format === 'MOVIE' ? 'Next film' : 'Next season' : type.replace(/_/g, ' ').toLowerCase().replace(/^./, character => character.toUpperCase())
+              return <TitleCard className="min-w-0" footer={<p className="text-xs leading-5 text-[var(--fs-muted)]">{relation} <span className="text-[var(--fs-faint)]">· {format}</span></p>} key={anime.anilistId} meta={[anime.seasonYear, format].filter(Boolean).join(' · ')} rating={null} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, posterUrl: anime.coverImage.url, year: anime.seasonYear }} />
+            })}</ul>
+          </section> : relations === null ? <p className="border-t border-[var(--fs-line)] py-6 text-sm text-[var(--fs-muted)]" role="status">Related anime could not load. Refresh to try again.</p> : null}
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="anime-about-heading">
             <div className="max-w-5xl">
               <SectionHeading id="anime-about-heading" title={`About ${detail.titles.preferred}`} />
@@ -524,27 +544,10 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
               year={detail.seasonYear}
             />
           </section>
-          {detail.staff.length ? (
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="staff" aria-labelledby="anime-staff-heading">
-              <SectionHeading id="anime-staff-heading" title="Staff" />
-              <AnimeStaffRail staff={detail.staff} />
-            </section>
-          ) : null}
           {airing && airing.episodes.length ? (
             <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="airing" aria-labelledby="anime-airing-heading">
               <SectionHeading description="Broadcast schedule from AniList" id="anime-airing-heading" title="Airing schedule" />
               <AnimeAiringSection airing={airing} />
-            </section>
-          ) : null}
-          {relations?.relations.length ? (
-            <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="anime-related-heading">
-              <SectionHeading id="anime-related-heading" title="Related" />
-              <AnimeTitleRail
-                description="Franchise relations from AniList"
-                id="anime-detail-related"
-                items={relations.relations.map((r) => r.anime)}
-                title="Relations"
-              />
             </section>
           ) : null}
           {recommendations.length ? (

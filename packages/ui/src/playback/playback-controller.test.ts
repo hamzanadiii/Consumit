@@ -13,6 +13,51 @@ function media() {
 function engine(): MediaEngine { return { destroy: vi.fn(), recover: vi.fn(() => false), quality: vi.fn(), audio: vi.fn(), subtitle: vi.fn() } }
 afterEach(() => { vi.useRealTimers(); localStorage.clear() })
 describe('playback controller', () => {
+  it('recovers when an attached source never supplies metadata', async () => {
+    vi.useFakeTimers()
+    const fatal = vi.fn()
+    const controller = createPlaybackController(media(), { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source)
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(fatal).toHaveBeenCalledWith('network', 'timeout')
+    controller.destroy()
+  })
+  it('keeps a blocked autoplay in the gesture state without a startup timeout', async () => {
+    vi.useFakeTimers()
+    const video = media()
+    video.play = vi.fn().mockRejectedValue(new DOMException('Gesture required', 'NotAllowedError'))
+    const fatal = vi.fn(), change = vi.fn()
+    const controller = createPlaybackController(video, { change, fatal }, async () => engine())
+    await controller.load(source)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    await vi.advanceTimersByTimeAsync(0)
+    await controller.play()
+    await vi.advanceTimersByTimeAsync(13_000)
+    expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ needsGesture: true }))
+    expect(fatal).not.toHaveBeenCalled()
+    controller.destroy()
+  })
+  it('recovers when metadata arrives but first playback never starts', async () => {
+    vi.useFakeTimers()
+    const video = media(), fatal = vi.fn()
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source, 0, true)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(fatal).toHaveBeenCalledWith('network', 'timeout')
+    controller.destroy()
+  })
+  it('cancels the startup timeout when playback starts', async () => {
+    vi.useFakeTimers()
+    const video = media(), fatal = vi.fn()
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source, 0, true)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    video.dispatchEvent(new Event('playing'))
+    await vi.advanceTimersByTimeAsync(13_000)
+    expect(fatal).not.toHaveBeenCalled()
+    controller.destroy()
+  })
   it('selects English from real tracks and preserves an explicit Off preference across sources', async () => {
     const adapter = engine()
     const controller = createPlaybackController(media(), { change: vi.fn(), fatal: vi.fn() }, async (_video, _source, events) => {
@@ -47,6 +92,11 @@ describe('playback controller', () => {
       return adapter
     })
     await controller.load(source, 42, true)
+    expect(video.currentTime).toBe(0)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    expect(video.currentTime).toBe(42)
+    video.currentTime = 0
+    video.dispatchEvent(new Event('canplay'))
     expect(video.currentTime).toBe(42)
     expect(video.play).toHaveBeenCalledTimes(1)
     controller.quality('0'); controller.audio('0')
@@ -56,6 +106,47 @@ describe('playback controller', () => {
     expect(adapter.quality).toHaveBeenCalledTimes(1)
     controller.destroy()
     expect(adapter.destroy).toHaveBeenCalledOnce()
+  })
+  it('preserves the selected playback rate across a source replacement', async () => {
+    const video = media()
+    const adapter = engine()
+    adapter.destroy = vi.fn(() => { video.playbackRate = 1 })
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal: vi.fn() }, async () => adapter)
+    await controller.load(source)
+    video.playbackRate = 0.75
+    controller.setPlaybackRate(0.75)
+    await controller.load({ ...source, src: 'https://media.example/renewed.mp4' })
+    expect(video.playbackRate).toBe(1)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    expect(video.playbackRate).toBe(0.75)
+    video.playbackRate = 1
+    video.dispatchEvent(new Event('canplay'))
+    expect(video.playbackRate).toBe(0.75)
+    controller.destroy()
+  })
+  it('restores a position WebKit resets just after new media becomes playable', async () => {
+    vi.useFakeTimers()
+    const video = media()
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal: vi.fn() }, async () => engine())
+    await controller.load(source, 42, false)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    video.dispatchEvent(new Event('canplay'))
+    video.currentTime = 0
+    await vi.advanceTimersByTimeAsync(500)
+    expect(video.currentTime).toBe(42)
+    controller.destroy()
+  })
+  it('does not overwrite a member seek while delayed restoration checks are pending', async () => {
+    vi.useFakeTimers()
+    const video = media()
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal: vi.fn() }, async () => engine())
+    await controller.load(source, 42, false)
+    video.dispatchEvent(new Event('loadedmetadata'))
+    video.dispatchEvent(new Event('canplay'))
+    video.currentTime = 12
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(video.currentTime).toBe(12)
+    controller.destroy()
   })
   it('turns autoplay rejection into a ready state requiring a gesture', async () => {
     const video = media(); video.play = vi.fn().mockRejectedValue(new DOMException('gesture required', 'NotAllowedError'))
@@ -83,6 +174,24 @@ describe('playback controller', () => {
     expect(fatal).toHaveBeenCalledOnce()
     controller.destroy()
   })
+  it('does not fail a waiting stream while its playback position keeps advancing', async () => {
+    vi.useFakeTimers()
+    const video = media()
+    Object.defineProperty(video, 'paused', { configurable: true, value: false })
+    const fatal = vi.fn()
+    const controller = createPlaybackController(video, { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source)
+    video.dispatchEvent(new Event('waiting'))
+    for (let position = 1; position <= 5; position++) {
+      await vi.advanceTimersByTimeAsync(2000)
+      video.currentTime = position
+      video.dispatchEvent(new Event('timeupdate'))
+    }
+    expect(fatal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(fatal).toHaveBeenCalledWith('network', 'timeout')
+    controller.destroy()
+  })
   it('reports a declined recovery immediately without waiting', async () => {
     vi.useFakeTimers()
     const adapter = engine()
@@ -91,11 +200,10 @@ describe('playback controller', () => {
     const controller = createPlaybackController(media(), { change: vi.fn(), fatal }, async (_video, _source, callbacks) => { events = callbacks; return adapter })
     await controller.load(source)
     events?.fatal('gone')
-    // The controller always asks the engine first; a declining engine means
-    // no 3s recovery wait before the application fallback.
-    expect(adapter.recover).toHaveBeenCalledOnce()
+    // A definitive Gone skips in-place recovery and asks the application to switch.
+    expect(adapter.recover).not.toHaveBeenCalled()
     expect(fatal).toHaveBeenCalledOnce()
-    expect(fatal).toHaveBeenCalledWith('gone')
+    expect(fatal).toHaveBeenCalledWith('gone', undefined)
     controller.destroy()
   })
   it('leaves external subtitles to the merged list instead of the load', async () => {

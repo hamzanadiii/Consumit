@@ -8,43 +8,8 @@ import { useMemo, useRef, useState } from 'react'
 
 import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
+import { TitleCard } from '../shared/title-card'
 import { useCatalogFeed } from './use-catalog-feed'
-
-function BrowsePoster({ title }: { title: CatalogTitleSummary }) {
-  const rating = title.tmdbRating === null ? null : title.tmdbRating.toFixed(1)
-  return (
-    <li className="min-w-0 w-40 shrink-0 snap-start sm:w-44 lg:w-48 [content-visibility:auto] [contain-intrinsic-size:auto_300px]">
-      <Link
-        aria-label={`${title.title}${title.year ? `, ${title.year}` : ''}`}
-        className="group block rounded-card outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-        href={titleHref(title)}
-        prefetch={false}
-      >
-        <ArtworkFrame
-          alt={`${title.title} poster`}
-          className="transition-colors duration-200 group-hover:border-[var(--fs-accent)] motion-reduce:transition-none"
-          ratio="portrait"
-          src={title.posterUrl ?? undefined}
-        >
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            <p className="truncate text-sm font-bold text-white">{title.title}</p>
-            <p className="mt-1 flex items-center gap-1.5 text-xs text-white/80 tabular-nums">
-              {title.year ? <span>{title.year}</span> : null}
-              {rating ? (
-                <span className="inline-flex items-center gap-1 font-bold text-white">
-                  <Star aria-hidden="true" className="size-3 fill-current" />
-                  {rating}
-                  <span className="sr-only">on TMDB</span>
-                </span>
-              ) : null}
-            </p>
-          </div>
-          {!title.posterUrl ? <p className="absolute inset-x-3 top-3 text-sm font-bold text-[var(--fs-ink)]">{title.title}</p> : null}
-        </ArtworkFrame>
-      </Link>
-    </li>
-  )
-}
 
 function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: CatalogKind }) {
   const railRef = useRef<HTMLUListElement>(null)
@@ -79,7 +44,7 @@ function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: Cat
                       {title.year && (rating || title.genreNames[0]) ? <span aria-hidden="true">·</span> : null}
                       {rating ? (
                         <span className="inline-flex items-center gap-1 font-bold text-white">
-                          <Star aria-hidden="true" className="size-3.5 fill-current text-[#ffb800]" />
+                          <Star aria-hidden="true" className="size-3.5 fill-current text-orange" />
                           {rating}
                           <span className="sr-only">score</span>
                         </span>
@@ -108,7 +73,7 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
-        {page?.items.map((title) => <BrowsePoster key={`${title.kind}:${title.id}`} title={title} />)}
+        {page?.items.map((title) => <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" key={`${title.kind}:${title.id}`} title={title} />)}
         {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && page?.items.length === 0 ? (

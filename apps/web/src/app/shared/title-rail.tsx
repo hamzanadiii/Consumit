@@ -1,7 +1,8 @@
 'use client'
 
 import type { CatalogTitleSummary } from '@consumit/contracts'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { SectionHeading } from '@consumit/ui'
 import Link from 'next/link'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -51,24 +52,15 @@ export function TitleRail({ id, title, items, description, viewAllHref, icon }: 
 
   return (
     <section aria-labelledby={`${id}-heading`} className="group/rail relative mt-8">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id={`${id}-heading`}>
-            {title}
-            {icon}
-          </h2>
-          {description ? <p className="mt-1 text-xs text-[var(--fs-muted)]">{description}</p> : null}
-        </div>
-        {viewAllHref ? (
+      <SectionHeading id={`${id}-heading`} title={title} description={description} action={<div className="flex items-center gap-2">{icon}{viewAllHref ? (
           <Link
-            className="flex items-center gap-1 text-xs font-bold text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+            className="flex min-h-10 items-center gap-1 text-xs text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={viewAllHref}
           >
             View All
-            <span aria-hidden="true">&rarr;</span>
+            <ArrowUpRight aria-hidden="true" className="size-3.5" />
           </Link>
-        ) : null}
-      </div>
+        ) : null}</div>} />
 
       <div className="relative mt-4">
         {canScrollLeft ? (
@@ -90,7 +82,7 @@ export function TitleRail({ id, title, items, description, viewAllHref, icon }: 
           tabIndex={0}
         >
           {items.map((item) => (
-            <TitleCard key={`${item.kind}:${item.id}`} title={item} />
+            <TitleCard className="w-40 shrink-0 snap-start sm:w-44 lg:w-48" key={`${item.kind}:${item.id}`} title={item} />
           ))}
         </ul>
 

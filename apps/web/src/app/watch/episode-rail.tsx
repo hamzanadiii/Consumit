@@ -11,6 +11,7 @@ export type RailEpisode = {
   title: string | null
   stillUrl?: string | null | undefined
   meta?: string | null | undefined
+  airDate?: string | null | undefined
   /** Absent renders a disabled upcoming row. */
   href?: string | undefined
   current?: boolean | undefined
@@ -20,19 +21,20 @@ export type RailEpisode = {
 export type EpisodeArt = {
   title: string | null
   thumbnail: string | null
+  airDate?: string | null
+  duration?: number | null
 }
 
-/** Shared episode picker for the anime and series watch rails: full-bleed
- *  still cards with overlaid titles, filter, and paging. Art resolves
- *  streaming still → `loadArt` (canonical episode endpoint) → placeholder;
- *  failures stay placeholder, never an error state. */
-export function EpisodeRail({ actions, countLabel, currentLabel, episodes, heading, loadArt, pageSize = 24 }: {
+/** Shared episode picker for anime and series Watch. The visible page loads
+ *  canonical details in one batch; missing stills use labeled title art. */
+export function EpisodeRail({ actions, countLabel, currentLabel, episodes, fallbackArt, heading, loadPage, pageSize = 24 }: {
   actions?: React.ReactNode | undefined
   countLabel: string
   currentLabel: string
   episodes: readonly RailEpisode[]
+  fallbackArt?: string | null | undefined
   heading: string
-  loadArt?: ((episode: number) => Promise<EpisodeArt | null>) | undefined
+  loadPage?: ((episodes: number[]) => Promise<Record<number, EpisodeArt | null>>) | undefined
   pageSize?: number | undefined
 }) {
   const [filter, setFilter] = useState('')
@@ -49,6 +51,19 @@ export function EpisodeRail({ actions, countLabel, currentLabel, episodes, headi
   const totalPages = Math.max(1, Math.ceil(matches.length / pageSize))
   const safePage = Math.min(page, totalPages)
   const visible = query ? matches : matches.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const [artCache, setArtCache] = useState<{ loader: typeof loadPage; art: Record<number, EpisodeArt | null> }>({ loader: loadPage, art: {} })
+  const pageArt = artCache.loader === loadPage ? artCache.art : {}
+  const missingNumbers = visible.filter((episode) => !episode.upcoming && pageArt[episode.number] === undefined).map((episode) => episode.number)
+  const missingKey = missingNumbers.join(',')
+  useEffect(() => {
+    const loader = loadPage
+    if (!loader || !missingKey) return
+    let active = true
+    void loader(missingKey.split(',').map(Number)).then((found) => { if (active) setArtCache((previous) => ({ loader, art: { ...(previous.loader === loader ? previous.art : {}), ...found } })) }).catch(() => {
+      if (active) setArtCache((previous) => ({ loader, art: { ...(previous.loader === loader ? previous.art : {}), ...Object.fromEntries(missingKey.split(',').map((number) => [number, null])) } }))
+    })
+    return () => { active = false }
+  }, [loadPage, missingKey])
 
   return (
     <section aria-labelledby="episode-rail-heading" className="flex min-w-0 flex-col rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
@@ -79,7 +94,7 @@ export function EpisodeRail({ actions, countLabel, currentLabel, episodes, headi
       {visible.length ? (
         <ul aria-label="Episode picker" className="mt-3 flex max-h-[50vh] flex-col gap-3 overflow-y-auto pr-0.5 lg:max-h-[44rem]">
           {visible.map((item) => (
-            <RailRow currentLabel={currentLabel} key={item.number} item={item} loadArt={loadArt} />
+            <RailRow currentLabel={currentLabel} fallbackArt={fallbackArt} key={item.number} item={item} art={pageArt[item.number]} />
           ))}
         </ul>
       ) : (
@@ -123,53 +138,32 @@ export function EpisodeRail({ actions, countLabel, currentLabel, episodes, headi
   )
 }
 
-function RailRow({ currentLabel, item, loadArt }: {
+function RailRow({ currentLabel, item, art, fallbackArt }: {
   currentLabel: string
   item: RailEpisode
-  loadArt?: ((episode: number) => Promise<EpisodeArt | null>) | undefined
+  art?: EpisodeArt | null | undefined
+  fallbackArt?: string | null | undefined
 }) {
-  const [result, setResult] = useState<{ episode: number; art: EpisodeArt } | null>(null)
-  useEffect(() => {
-    if (item.stillUrl || item.upcoming || !loadArt) return
-    let active = true
-    let retry: ReturnType<typeof setTimeout> | undefined
-    const load = (attempt: number) => {
-      void loadArt(item.number).then(
-        (found) => {
-          if (!active) return
-          if (found && (found.thumbnail || found.title)) {
-            setResult({ episode: item.number, art: found })
-          } else if (attempt === 0) {
-            retry = setTimeout(() => { if (active) load(1) }, 3_000)
-          }
-        },
-        () => {
-          if (active && attempt === 0) retry = setTimeout(() => { if (active) load(1) }, 3_000)
-        },
-      )
-    }
-    load(0)
-    return () => {
-      active = false
-      clearTimeout(retry)
-    }
-  }, [item.number, item.stillUrl, item.upcoming, loadArt])
-  const art = !item.stillUrl && !item.upcoming && result?.episode === item.number ? result.art : null
   const still = item.stillUrl ?? art?.thumbnail ?? undefined
   const title = item.title ?? art?.title ?? `Episode ${item.number}`
   const status = item.current ? currentLabel : item.upcoming ? 'Not aired yet' : null
-  const meta = [item.meta, status].filter(Boolean).join(' · ')
+  const airDate = item.airDate ?? art?.airDate
+  // Explicit locale: bare toLocaleDateString renders the server locale during
+  // SSR and the browser locale on hydration, which splits the tree.
+  const date = airDate ? new Date(`${airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null
+  const meta = [item.meta ?? (art?.duration ? `${art.duration}m` : null), date, status].filter(Boolean).join(' · ')
   const rowClass = item.current
     ? 'group block min-w-0 overflow-hidden rounded-xl bg-[var(--fs-accent-soft)] text-left shadow-[inset_0_0_0_1px_var(--fs-accent)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
     : 'group block min-w-0 overflow-hidden rounded-xl border border-transparent text-left outline-none transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
   const body = (
     <ArtworkFrame
-      alt={`${title} still`}
+      alt={still ? `${title} still` : `${title} title artwork`}
       className="rounded-xl border-0"
       ratio="wide"
-      src={still}
+      src={still ?? fallbackArt ?? undefined}
     >
       <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/10" />
+      {!still && fallbackArt ? <span className="absolute top-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">Title artwork</span> : null}
       <span className="absolute top-2 left-2 flex items-center gap-1.5">
         <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">
           EP {item.number}

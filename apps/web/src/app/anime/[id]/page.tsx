@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { AnimeApiError, getAnimeTitle, getAnimeRelations, getAnimeAiring } from '@/lib/anime-api'
+import { AnimeApiError, getCachedAnimeTitle, getCachedAnimeRelations, getCachedAnimeAiring } from '@/lib/anime-api'
 import { serializeJsonLd } from '@/lib/json-ld'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 import { AnimeDetailScreen } from './anime-detail-screen'
@@ -10,12 +10,18 @@ type AnimeDetailPageProps = {
   params: Promise<{ id: string }>
 }
 
+export const revalidate = 300
+
+export function generateStaticParams() {
+  return []
+}
+
 export async function generateMetadata({ params }: AnimeDetailPageProps): Promise<Metadata> {
   const { id } = await params
   const anilistId = Number(id)
   if (!Number.isInteger(anilistId) || anilistId <= 0) return { title: 'Anime not found · Consumit' }
   try {
-    const detail = await getAnimeTitle(anilistId)
+    const detail = await getCachedAnimeTitle(anilistId)
     const title = detail.titles.preferred
     return {
       alternates: { canonical: `/anime/${anilistId}` },
@@ -40,7 +46,7 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
 
   let detail
   try {
-    detail = await getAnimeTitle(anilistId)
+    detail = await getCachedAnimeTitle(anilistId)
   } catch (error) {
     if (error instanceof AnimeApiError && error.status === 404) notFound()
     return <CatalogUnavailableScreen activeHref="/anime" error={error} />
@@ -48,14 +54,14 @@ export default async function AnimeDetailPage({ params }: AnimeDetailPageProps) 
 
   let relations
   try {
-    relations = await getAnimeRelations(anilistId)
+    relations = await getCachedAnimeRelations(anilistId)
   } catch {
     relations = null
   }
 
   let airing
   try {
-    airing = await getAnimeAiring(anilistId)
+    airing = await getCachedAnimeAiring(anilistId)
   } catch {
     airing = null
   }

@@ -7,12 +7,15 @@ import {
   catalogSeasonResponseSchema,
   catalogTitleResponseSchema,
   type CatalogFeed,
+  type CatalogBatch,
   type CatalogKind,
   type CatalogRef,
 } from '@consumit/contracts'
 import { connection } from 'next/server'
 import { cache } from 'react'
 import type { ZodType } from 'zod'
+
+import { publicCatalogFetchOptions } from './public-catalog-cache'
 
 export class CatalogApiError extends Error {
   readonly code: string
@@ -32,13 +35,15 @@ function apiBaseUrl() {
   return (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
 }
 
-async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
-  await connection()
+type RenderMode = 'request' | 'cached-public'
+
+async function request<T>(path: string, schema: ZodType<T>, renderMode: RenderMode = 'request'): Promise<T> {
+  if (renderMode === 'request') await connection()
 
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
-      cache: 'no-store',
+      ...(renderMode === 'cached-public' ? publicCatalogFetchOptions() : { cache: 'no-store' as const }),
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(6_000),
     })
@@ -78,13 +83,58 @@ export const getCatalogTitle = cache((kind: CatalogKind, id: number) => (
   request(`/v1/titles/${kind}/${id}`, catalogTitleResponseSchema)
 ))
 
+/** Public title data for ISR pages. It contains no member or request state. */
+export const getCachedCatalogTitle = cache((kind: CatalogKind, id: number) => (
+  request(`/v1/titles/${kind}/${id}`, catalogTitleResponseSchema, 'cached-public')
+))
+
 export const getCatalogSeason = cache((seriesId: number, season: number) => (
   request(`/v1/titles/series/${seriesId}/seasons/${season}`, catalogSeasonResponseSchema)
+))
+
+export const getCachedCatalogSeason = cache((seriesId: number, season: number) => (
+  request(`/v1/titles/series/${seriesId}/seasons/${season}`, catalogSeasonResponseSchema, 'cached-public')
 ))
 
 export const getCatalogBatch = cache((refsKey: string) => (
   request(`/v1/titles/batch?refs=${encodeURIComponent(refsKey)}`, catalogBatchSchema)
 ))
+
+export const CATALOG_BATCH_SIZE = 24
+export const MAX_PAGE_CATALOG_ENRICHMENT = 120
+const MAX_CONCURRENT_CATALOG_BATCHES = 3
+
+/**
+ * Resolve a bounded set of page references without violating the batch route's
+ * 24-title limit or fanning out an unbounded imported library in one render.
+ */
+export async function getCatalogBatchForRefs(
+  refs: readonly CatalogRef[],
+  maxTitles = MAX_PAGE_CATALOG_ENRICHMENT,
+): Promise<CatalogBatch | null> {
+  const unique = [...new Map(refs.map((ref) => [`${ref.kind}:${ref.id}`, ref])).values()]
+    .slice(0, Math.max(0, maxTitles))
+  if (unique.length === 0) return null
+
+  const chunks: string[] = []
+  for (let index = 0; index < unique.length; index += CATALOG_BATCH_SIZE) {
+    chunks.push(refsKey(unique.slice(index, index + CATALOG_BATCH_SIZE)))
+  }
+
+  const batches: CatalogBatch[] = []
+  for (let index = 0; index < chunks.length; index += MAX_CONCURRENT_CATALOG_BATCHES) {
+    const wave = await Promise.all(chunks.slice(index, index + MAX_CONCURRENT_CATALOG_BATCHES).map(getCatalogBatch))
+    batches.push(...wave)
+  }
+
+  const first = batches[0]
+  if (!first) return null
+  return {
+    items: batches.flatMap((batch) => batch.items),
+    meta: { ...first.meta, stale: batches.some((batch) => batch.meta.stale) },
+    missing: batches.flatMap((batch) => batch.missing),
+  }
+}
 
 export function getCatalogDiscovery(options: {
   feed: CatalogFeed

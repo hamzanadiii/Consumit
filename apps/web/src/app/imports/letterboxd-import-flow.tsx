@@ -104,7 +104,7 @@ function ImportProgress({ detail }: { detail: LetterboxdImportDetail }) {
   )
 }
 
-export function LetterboxdImportFlow({ completeHref = '/library' }: { completeHref?: string }) {
+export function LetterboxdImportFlow({ completeHref = '/' }: { completeHref?: string }) {
   const inputId = useId()
   const [detail, setDetail] = useState<LetterboxdImportDetail | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'uploading' | 'working'>('loading')
@@ -250,7 +250,7 @@ export function LetterboxdImportFlow({ completeHref = '/library' }: { completeHr
             <div className="mt-8 rounded-card border border-lime/20 bg-lime/5 p-6">
               <p className="text-sm font-bold text-lime">Import complete. Your real member data is ready.</p>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link className={buttonVariants({ size: 'lg', variant: 'accent' })} href={completeHref}>View your library</Link>
+                <Link className={buttonVariants({ size: 'lg', variant: 'accent' })} href={completeHref}>{completeHref.startsWith('/onboarding/') ? 'Continue' : 'View your profile'}</Link>
                 {confirmDelete ? (
                   <>
                     <Button disabled={state === 'working'} onClick={() => void action(async () => { await deleteLetterboxdData(); setDetail(null); setConfirmDelete(false) }, false)} variant="danger">

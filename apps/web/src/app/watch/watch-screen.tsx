@@ -111,7 +111,7 @@ export function WatchScreen({ audioLanguage, demo, episode, title, interactive =
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Link className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(title)}>Return to title</Link>
-            <Link className={buttonVariants({ size: 'sm', variant: 'ghost' })} href="/settings#support">Report an issue</Link>
+            <Link className={buttonVariants({ size: 'sm', variant: 'ghost' })} href="/report-issue?category=playback">Report an issue</Link>
           </div>
         </div>
       </section>

@@ -99,6 +99,36 @@ export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps)
     }
   })
 
+  const episodeCache = new Map<string, { until: number; result: Promise<Awaited<ReturnType<AnimeService['episode']>> | null> }>()
+  app.get('/v1/anime/:anilistId/episodes', async (request, reply) => {
+    const params = idParamsSchema.safeParse(request.params)
+    const query = z.object({ numbers: z.string().min(1).max(120) }).safeParse(request.query)
+    if (!params.success || !query.success) return invalidQuery('Provide an AniList ID and up to 24 episode numbers.')
+    const numbers = query.data.numbers.split(',').map(Number)
+    if (!numbers.length || numbers.length > 24 || new Set(numbers).size !== numbers.length || !numbers.every((number) => Number.isInteger(number) && number >= 1 && number <= 10000)) return invalidQuery('Provide 1–24 unique episode numbers between 1 and 10000.')
+    const results: Array<Awaited<ReturnType<AnimeService['episode']>> | null> = Array(numbers.length).fill(null)
+    let next = 0
+    await Promise.all(Array.from({ length: Math.min(4, numbers.length) }, async () => {
+      while (next < numbers.length) {
+        const index = next++
+        const number = numbers[index]!
+        const key = `${params.data.anilistId}:${number}`
+        let cached = episodeCache.get(key)
+        if (!cached || cached.until <= Date.now()) {
+          const result = anime.episode(params.data.anilistId, number).catch(() => null)
+          cached = { until: Date.now() + 5 * 60_000, result }
+          episodeCache.set(key, cached)
+          const entry = cached
+          void result.then((value) => { if (value && episodeCache.get(key) === entry) entry.until = Date.now() + 6 * 3600_000 })
+          if (episodeCache.size > 1000) episodeCache.delete(episodeCache.keys().next().value!)
+        }
+        results[index] = await cached.result
+      }
+    }))
+    reply.header('cache-control', 'public, max-age=300')
+    return { episodes: results.map((result) => result ? animeEpisodeSchema.parse(result) : null) }
+  })
+
   app.get('/v1/anime/:anilistId/episodes/:episode', async (request, reply) => {
     const params = episodeParamsSchema.safeParse(request.params)
     if (!params.success) return invalidQuery('Use a positive whole AniList ID and an episode between 1 and 10000.')

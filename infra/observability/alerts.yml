@@ -1,0 +1,14 @@
+groups:
+  - name: consumit-playback
+    rules:
+      - alert: ProviderPlaybackFailure
+        expr: |
+          sum by (provider, kind, region) (increase(consumit_playback_events_total{event="error"}[15m])) >= 10
+          and on (provider, kind, region)
+          sum by (provider, kind, region) (increase(consumit_playback_events_total{event="error"}[15m]))
+          / clamp_min(sum by (provider, kind, region) (increase(consumit_playback_events_total{event=~"started|error"}[15m])), 1) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Playback failures exceed 50% for a provider, title kind, and region.

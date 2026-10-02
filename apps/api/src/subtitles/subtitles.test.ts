@@ -31,11 +31,11 @@ describe('resolveSubtitles', () => {
     expect(tracks[0]?.label).toContain('(a)')
   })
 
-  it('caps two tracks per language and sixteen total', async () => {
+  it('keeps every returned track in one language', async () => {
     const store = createMemoryPlaybackStore()
     const raws = Array.from({ length: 20 }, (_, i) => direct('a', 'en', `https://cdn.example/en-${i}.vtt`))
     const tracks = await resolveSubtitles({ type: 'movie' }, [provider('a', raws)], createStoreFileStore(store), 'https://api.example', signal)
-    expect(tracks).toHaveLength(2)
+    expect(tracks).toHaveLength(20)
   })
 
   it('converts fetched SRT through the injected fetcher and serves it first-party', async () => {
@@ -205,16 +205,18 @@ describe('scoring v2', () => {
       'https://api.example',
       signal,
     )
-    // Direct tracks keep raw labels; flags come from URL matching. The
-    // per-language cap drops the machine variant entirely.
+    // Direct tracks keep raw labels; flags come from URL matching. All
+    // variants remain available, with full human tracks ranked first.
     expect(tracks.map((track) => track.url)).toEqual([
       'https://cdn.example/en.vtt',
       'https://cdn.example/en.forced.vtt',
+      'https://cdn.example/en.machine-translated.vtt',
     ])
     expect(tracks[0]).toMatchObject({ recommended: true })
     expect(tracks[0]?.label).toContain('Recommended')
     expect(tracks[1]).toMatchObject({ forced: true })
     expect(tracks[1]?.recommended).toBeUndefined()
+    expect(tracks[2]).toMatchObject({ machineTranslated: true })
   })
 
   it('prefers non-HI full tracks for the recommended pick', async () => {
@@ -296,6 +298,7 @@ describe('createSubtitleService', () => {
     expect(saved).toHaveLength(1)
     // Seeded catalog: upstream is skipped entirely.
     rows.push({ language: 'en', label: 'English (vdrk)', format: 'vtt', provider: 'vdrk', storageKey: 'abcdef0123456789', originalExt: null, hi: false, rating: null, releaseTag: null })
+    await createStoreFileStore(store).putVtt('abcdef0123456789', 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nCached\n', { content: 'tmdb/movie/2/1/1/en', ttlSeconds: 3600 })
     const cached = await service.search({ kind: 'movie', id: 2 }, signal)
     expect(searches).toBe(1)
     expect(cached).toHaveLength(1)

@@ -9,7 +9,9 @@ export type MediaEngine = {
   audio(value: string): void
   subtitle(value: string): void
 }
-export type EngineEvents = { tracks(value: EngineTracks): void; fatal(reason: 'network' | 'media' | 'gone'): void }
+export type EngineFailure = 'network' | 'media' | 'gone' | 'expired'
+export type EngineDeliveryFailure = 'cors' | 'headers' | 'manifest' | 'timeout' | 'unstable'
+export type EngineEvents = { tracks(value: EngineTracks): void; fatal(reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure): void }
 type NativeAudio = { id: string; label: string; language: string; enabled: boolean }
 
 export async function attachMediaEngine(video: HTMLVideoElement, source: DirectMediaSource, events: EngineEvents, signal?: AbortSignal): Promise<MediaEngine> {
@@ -39,7 +41,14 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       audio(value) { audio().forEach((track, index) => { track.enabled = String(index) === value }) },
       subtitle(value) { Array.from(video.textTracks).forEach((track) => { track.mode = value !== 'off' && (track.id || track.language) === value ? 'showing' : 'disabled' }) },
       recover() { return false },
-      destroy() { video.removeEventListener('loadedmetadata', publish); video.textTracks.removeEventListener?.('addtrack', publish); video.removeAttribute('src'); video.load() },
+      // Removing src already empties the element and aborts its fetch per
+      // spec. An extra explicit load() here inserts a synchronous empty
+      // cycle that intermittently strands WebKit's resource loader on
+      // same-element source switches: the renewal URL installs but never
+      // reaches loadedmetadata, leaving the clip paused at 0:00. The next
+      // attach assigns src in the same task and starts the new load
+      // directly. MSE engines below keep their explicit load for teardown.
+      destroy() { video.removeEventListener('loadedmetadata', publish); video.textTracks.removeEventListener?.('addtrack', publish); video.removeAttribute('src') },
     }
   }
   if (source.type === 'hls') {
@@ -48,7 +57,8 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     // Direct CDN media must stay credential-free so wildcard CORS remains
     // valid and no member cookies can cross the provider boundary.
     const hls = new Hls({ enableWorker: true, backBufferLength: 30, maxBufferLength: 30, capLevelToPlayerSize: true, renderTextTracksNatively: true })
-    let lastError: 'network' | 'media' | 'gone' = 'network'
+    let lastError: EngineFailure = 'network'
+    let lastDeliveryFailure: EngineDeliveryFailure | undefined
     const publish = () => {
       try {
         // Device-tier Auto ceiling (ADR-0002 amendment A): phones never burn
@@ -76,9 +86,21 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       // HTTP 410 Gone is definitive: the bytes are not coming back, so a
       // same-source retry or re-mint is pointless — the application should
       // switch sources instead of recovering in place.
-      const gone = (data as unknown as { response?: { code?: unknown } }).response?.code === 410
-      lastError = gone ? 'gone' : data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'network'
-      events.fatal(lastError)
+      const status = (data as unknown as { response?: { code?: unknown } }).response?.code
+      const detail = String((data as unknown as { details?: unknown }).details ?? '')
+      const networkError = data.type === Hls.ErrorTypes.NETWORK_ERROR
+      const forbidden = status === 401 || status === 403
+      const manifestFailure = /manifest/i.test(detail)
+      // A 401/403 from a direct media URL may be a provider referer gate, not
+      // an expired lease. Try another direct provider when renewal fails.
+      lastError = status === 410 ? 'gone' : forbidden || manifestFailure ? 'network' : data.type === Hls.ErrorTypes.MEDIA_ERROR ? 'media' : 'network'
+      lastDeliveryFailure = lastError !== 'network' || (!networkError && !forbidden && !manifestFailure) ? undefined
+        : forbidden ? 'headers'
+        : /timeout/i.test(detail) ? 'timeout'
+        : manifestFailure ? 'manifest'
+        : (status === undefined || status === 0) ? 'cors'
+        : undefined
+      events.fatal(lastError, lastDeliveryFailure)
     })
     hls.loadSource(source.src); hls.attachMedia(video)
     return {
@@ -96,7 +118,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       recover() {
         // Gone sources never recover in place; report false so the controller
         // skips its retry wait and asks the application to switch sources.
-        if (lastError === 'gone') return false
+        if (lastError === 'gone' || lastError === 'expired' || lastDeliveryFailure === 'headers') return false
         if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(); return true
       },
       destroy() { hls.destroy(); video.removeAttribute('src'); video.load() },
@@ -111,7 +133,12 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     subtitles: player.getTracksFor('text').map((track, index) => ({ value: String(index), label: track.lang || `Subtitles ${index + 1}`, language: track.lang ?? undefined })),
   })
   player.on(dash.MediaPlayer.events.STREAM_INITIALIZED, publish)
-  player.on(dash.MediaPlayer.events.ERROR, () => events.fatal('media'))
+  player.on(dash.MediaPlayer.events.ERROR, (event: unknown) => {
+    const detail = event as { error?: { data?: { status?: number }; code?: number } } | undefined
+    const status = detail?.error?.data?.status
+    const failure = status === 410 ? 'gone' : status === 401 || status === 403 ? 'expired' : status === 0 || (status !== undefined && status >= 500) ? 'network' : 'media'
+    events.fatal(failure, status === 0 ? 'cors' : undefined)
+  })
   player.initialize(video, source.src, false)
   return {
     quality(value) { player.updateSettings({ streaming: { abr: { autoSwitchBitrate: { video: value === 'auto' } } } }); if (value !== 'auto') player.setRepresentationForTypeById('video', value) },

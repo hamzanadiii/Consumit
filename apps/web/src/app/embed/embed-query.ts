@@ -1,4 +1,8 @@
+export type EmbedAudio = 'sub' | 'dub'
+
 export type EmbedQuery = {
+  /** Anime SUB/DUB preference; ignored on movie/TV routes. */
+  audio: EmbedAudio
   autoPlay: boolean
   /** Preferred caption language (BCP-47-ish). Absent when unset or invalid. */
   lang: string | undefined
@@ -14,7 +18,7 @@ function first(value: string | string[] | undefined): string | undefined {
   return value
 }
 
-/** VixSrc-style embed query surface: `autoplay`, `startAt`, `lang`.
+/** VixSrc-style embed query surface: `autoplay`, `startAt`, `lang`, plus anime `audio`.
  *  Invalid values fall back to safe defaults; they never reach the player. */
 export function parseEmbedQuery(raw: Record<string, string | string[] | undefined>): EmbedQuery {
   const autoplayRaw = first(raw.autoplay)?.trim().toLowerCase()
@@ -28,5 +32,7 @@ export function parseEmbedQuery(raw: Record<string, string | string[] | undefine
   const langRaw = first(raw.lang)?.trim()
   const lang = langRaw && langRaw.length <= 16 && LANG_PATTERN.test(langRaw) ? langRaw.toLowerCase() : undefined
 
-  return { autoPlay, lang, startAt }
+  const audio: EmbedAudio = first(raw.audio)?.trim().toLowerCase() === 'dub' ? 'dub' : 'sub'
+
+  return { audio, autoPlay, lang, startAt }
 }

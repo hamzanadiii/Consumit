@@ -4,8 +4,8 @@ import { notFound, redirect } from 'next/navigation'
 import { TitleDetailScreen } from '../../catalog/detail-screens'
 import { CatalogUnavailableScreen } from '../../catalog/catalog-ui'
 
-import { getAnimeMatch } from '@/lib/anime-api'
-import { CatalogApiError, getCatalogTitle } from '@/lib/catalog-api'
+import { getCachedAnimeMatch } from '@/lib/anime-api'
+import { CatalogApiError, getCachedCatalogTitle } from '@/lib/catalog-api'
 import { looksLikeAnime } from '../../catalog/catalog-ui'
 import { serializeJsonLd } from '@/lib/json-ld'
 
@@ -13,12 +13,18 @@ type TitleDetailPageProps = {
   params: Promise<{ slug: string }>
 }
 
+export const revalidate = 300
+
+export function generateStaticParams() {
+  return []
+}
+
 export async function generateMetadata({ params }: TitleDetailPageProps): Promise<Metadata> {
   const { slug } = await params
   const id = Number(slug)
   if (!Number.isInteger(id) || id <= 0) return { title: 'Title not found · Consumit' }
   try {
-    const { item } = await getCatalogTitle('movie', id)
+    const { item } = await getCachedCatalogTitle('movie', id)
     return {
       alternates: { canonical: `/title/${id}` },
       description: item.overview,
@@ -34,7 +40,7 @@ export default async function TitleDetailPage({ params }: TitleDetailPageProps) 
   if (!Number.isInteger(id) || id <= 0) notFound()
   let response
   try {
-    response = await getCatalogTitle('movie', id)
+    response = await getCachedCatalogTitle('movie', id)
   } catch (error) {
     if (error instanceof CatalogApiError && error.status === 404) notFound()
     return <CatalogUnavailableScreen error={error} />
@@ -44,7 +50,7 @@ export default async function TitleDetailPage({ params }: TitleDetailPageProps) 
   // Japanese animation belongs to the anime domain: a confident match
   // redirects straight there instead of stranding the member here.
   if (looksLikeAnime(item)) {
-    const animeMatch = await getAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
+    const animeMatch = await getCachedAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
     if (animeMatch) redirect(`/anime/${animeMatch}`)
   }
   const jsonLd = {

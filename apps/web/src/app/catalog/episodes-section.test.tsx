@@ -62,7 +62,9 @@ describe('episodes section', () => {
       '/watch/series/95396?season=1&episode=1',
     )
     expect(screen.getByText('Episode Title 1')).toBeInTheDocument()
-    expect(screen.getByText('50 min · 2023-05-01')).toBeInTheDocument()
+    const date = new Date('2023-05-01T00:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+    expect(screen.getByText(`50 min · ${date}`)).toBeInTheDocument()
+    expect(screen.getAllByText('Title artwork')).toHaveLength(8)
   })
 
   it('paginates long seasons eight at a time with a result count', async () => {

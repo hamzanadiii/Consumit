@@ -132,6 +132,32 @@ describe('anime reverse matching', () => {
 })
 
 describe('tmdb episode walk', () => {
+  it('resolves a later-season franchise logo without broadening episode matching', async () => {
+    const catalog = catalogStub()
+    const originalTitle = catalog.title
+    catalog.title = vi.fn(async () => {
+      const result = await originalTitle('series', 34969)
+      return { ...result, item: { ...result.item, countries: ['JP'], logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png' } }
+    })
+    const seasonTitles = { english: 'Cowboy Bebop: Later Arc Part 2', romaji: 'Cowboy Bebop 2nd Season', native: null }
+    const resolver = createTmdbEpisodeArt(catalog)
+    expect((await resolver.titleLogo(9, seasonTitles, 2026))?.logoUrl).toBe('https://image.tmdb.org/t/p/w500/logo.png')
+    expect(await resolver.episodeByTitle(9, seasonTitles, 2026, 1)).toBeNull()
+  })
+
+  it('distinguishes same-name adaptations by the selected arc’s season year', async () => {
+    const catalog = catalogStub()
+    const originalSearch = catalog.search
+    catalog.search = vi.fn(async query => {
+      const page = await originalSearch(query)
+      return { ...page, items: [...page.items, { ...page.items[0]!, id: 2, year: 1993, releaseDate: '1993-01-01' }] }
+    })
+    catalog.title = vi.fn(async (_kind, id) => {
+      const detail = seriesDetail([{ number: 1, episodeCount: 12 }])
+      return { ...detail, item: { ...detail.item, id, countries: ['JP'], logoUrl: `https://image.tmdb.org/t/p/w500/${id}.png`, seasons: [{ number: 1, episodeCount: 12, name: 'Season', posterUrl: null, airDate: id === 2 ? '1993-01-01' : '2025-01-01' }] } }
+    })
+    expect((await createTmdbEpisodeArt(catalog).titleLogo(9, { english: 'Cowboy Bebop: Later Arc', romaji: null, native: null }, 2026))?.tmdbId).toBe(34969)
+  })
   it('maps absolute episodes across split seasons', async () => {
     const catalog = catalogStub()
     const art = createTmdbEpisodeArt(catalog)

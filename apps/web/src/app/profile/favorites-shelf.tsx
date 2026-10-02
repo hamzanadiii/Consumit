@@ -1,19 +1,19 @@
 'use client'
 
-import { kindLabel, titleHref, type CatalogRef, type CatalogTitleSummary } from '@consumit/contracts'
+import { kindLabel, MAX_MEMBER_FAVORITES, type CatalogRef, type CatalogTitleSummary } from '@consumit/contracts'
 import { Check, LoaderCircle, Plus, Search, X } from 'lucide-react'
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { ArtworkFrame, Button, FilterChip, Input } from '@consumit/ui'
+
+import { TitleCard } from '../shared/title-card'
 
 import { browserSearchCatalog } from '@/lib/catalog-browser'
 import { saveMemberFavorites } from '@/lib/identity-browser'
 
 import { ProfileEditorDialog } from './profile-editor-dialog'
 
-const MAX_FAVORITES = 6
 const SEARCH_DEBOUNCE_MS = 150
 
 function refKey(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
@@ -34,7 +34,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
 }) {
   const router = useRouter()
   const titleMap = new Map(titles.map((title) => [refKey(title), title]))
-  const [items, setItems] = useState<readonly CatalogRef[]>(favorites)
+  const [items, setItems] = useState<readonly CatalogRef[]>(() => favorites.slice(0, MAX_MEMBER_FAVORITES))
   const [removingKey, setRemovingKey] = useState<string | null>(null)
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +109,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
   }
 
   async function pickFavorite(title: CatalogTitleSummary) {
-    if (busy || items.length >= MAX_FAVORITES) return
+    if (busy || items.length >= MAX_MEMBER_FAVORITES) return
     if (items.some((item) => refKey(item) === refKey(title))) return
     const previous = items
     const next = [...previous, { id: title.id, kind: title.kind } as CatalogRef]
@@ -131,55 +131,39 @@ export function FavoritesShelf({ favorites, owner, titles }: {
   return (
     <>
       {error && !paletteOpen ? <p className="mt-8 text-xs text-[var(--fs-danger)]" role="alert">{error}</p> : null}
-      <ul className="mt-8 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
+      <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {items.map((favorite) => {
           const title = titleMap.get(refKey(favorite))
           const label = title?.title ?? `${kindLabel(favorite.kind)} #${favorite.id}`
           const key = refKey(favorite)
           const removing = removingKey === key
+          const cardTitle = title ?? { id: favorite.id, kind: favorite.kind, title: label, year: null, posterUrl: null, tmdbRating: null }
           return (
-            <li key={key}>
-              <div className="group relative">
-                <Link
-                  aria-label={label}
-                  className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-                  href={titleHref(favorite)}
-                  prefetch={false}
+            <TitleCard
+              action={owner ? (
+                <button
+                  aria-label={`Remove ${label} from favorites`}
+                  className="grid size-8 cursor-pointer place-items-center rounded-full bg-black/70 text-white outline-none transition-colors hover:bg-[var(--fs-accent-strong)] hover:text-[var(--fs-on-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-100 [@media(hover:none)]:opacity-100"
+                  disabled={busy}
+                  onClick={() => void removeFavorite(favorite)}
+                  type="button"
                 >
-                  <ArtworkFrame
-                    alt={`${label} poster`}
-                    className="rounded-lg transition-all duration-200 ease-out group-hover:-translate-y-1 group-hover:border-[var(--fs-accent)]/70 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none"
-                    ratio="portrait"
-                    src={title?.posterUrl ?? undefined}
-                  >
-                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-                      <span className="block truncate text-sm font-bold text-white">{label}</span>
-                      <span className="mt-1 block text-xs text-white/80 tabular-nums">
-                        {[title?.year ? String(title.year) : null, kindLabel(favorite.kind)].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                  </ArtworkFrame>
-                </Link>
-                {owner ? (
-                  <button
-                    aria-label={`Remove ${label} from favorites`}
-                    className="absolute top-2 right-2 z-10 grid size-8 cursor-pointer place-items-center rounded-full bg-black/70 text-white opacity-0 outline-none transition-all duration-200 group-hover:opacity-100 hover:bg-[var(--fs-accent-strong)] hover:text-[var(--fs-on-accent)] focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none [@media(hover:none)]:opacity-100 disabled:cursor-default disabled:opacity-100"
-                    disabled={busy}
-                    onClick={() => void removeFavorite(favorite)}
-                    type="button"
-                  >
-                    {removing ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <X aria-hidden="true" className="size-4" />}
-                  </button>
-                ) : null}
-              </div>
-            </li>
+                  {removing ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" /> : <X aria-hidden="true" className="size-4" />}
+                </button>
+              ) : undefined}
+              className="min-w-0"
+              key={key}
+              meta={[title?.year, kindLabel(favorite.kind)].filter(Boolean).join(' · ')}
+              rating={null}
+              title={cardTitle}
+            />
           )
         })}
-        {owner ? Array.from({ length: MAX_FAVORITES - items.length }, (_, index) => (
+        {owner ? Array.from({ length: MAX_MEMBER_FAVORITES - items.length }, (_, index) => (
           <li key={`empty-${items.length + index + 1}`}>
             <button
               aria-label={`Add favorite ${items.length + index + 1}`}
-              className="group grid aspect-[2/3] w-full cursor-pointer place-items-center rounded-lg border border-[var(--fs-field-border)] bg-[var(--fs-field)] outline-none transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/60 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none disabled:cursor-default disabled:opacity-45 disabled:hover:transform-none"
+              className="group grid aspect-[2/3] w-full cursor-pointer place-items-center rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] outline-none transition-all duration-200 ease-out hover:border-[var(--fs-accent)]/60 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none disabled:cursor-default disabled:opacity-45 disabled:hover:transform-none"
               disabled={busy}
               onClick={() => setPaletteOpen(true)}
               type="button"
@@ -192,11 +176,11 @@ export function FavoritesShelf({ favorites, owner, titles }: {
         )) : null}
       </ul>
       {owner && items.length === 0 ? (
-        <p className="mt-4 text-xs leading-5 text-[var(--fs-muted)]">No favorites yet — tap a frame to pick the six titles that define you.</p>
+        <p className="mt-4 text-xs leading-5 text-[var(--fs-muted)]">Start with a story you would gladly revisit. Choose up to four titles to make this shelf yours.</p>
       ) : null}
       {owner && paletteOpen ? (
         <ProfileEditorDialog
-          description="Search the real catalog — films and series."
+          description="Search the real catalog — movies, series, and anime."
           eyebrow="Favorites"
           footer={(
             <Button disabled={picking} onClick={closePalette} variant="secondary">Cancel</Button>
@@ -208,7 +192,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
         >
           <form className="relative min-w-0" onSubmit={(event) => event.preventDefault()} role="search">
             <label className="block text-xs font-bold tracking-[0.12em] text-[var(--fs-muted)] uppercase" htmlFor="pick-favorite-search">
-              Name of film or series
+              Name of movie, series, or anime
             </label>
             <span className="relative mt-2 block">
               <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-[var(--fs-muted)]" />

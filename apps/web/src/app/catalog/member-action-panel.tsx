@@ -7,10 +7,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 import {
-  getCachedMemberLibrary,
   getMemberTitleState,
   IdentityApiError,
-  replaceCachedMemberLibrary,
   setMemberLiked,
   setMemberSaved,
   setMemberWatched,
@@ -56,16 +54,16 @@ function ShelfToggle({ active, activeLabel, engagedLabel, fillClass, icon, inact
       aria-label={active ? activeLabel : inactiveLabel}
       aria-pressed={active}
       className={active
-        ? 'group flex min-h-[76px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl bg-[rgba(255,93,56,0.16)] px-2 text-white shadow-[inset_0_0_0_1px_rgba(255,93,56,0.55)] outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-[rgba(255,93,56,0.24)] active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'
-        : 'group flex min-h-[76px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-white/65 outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-white/10 hover:text-white active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'}
+        ? 'group flex min-h-[72px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control bg-orange/15 px-2 text-ink ring-1 ring-inset ring-orange/55 outline-none transition-colors hover:bg-orange/20 active:bg-orange/25 focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none'
+        : 'group flex min-h-[72px] flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-control px-2 text-copy outline-none transition-colors hover:bg-white/5 hover:text-ink active:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none'}
       onClick={onToggle}
       type="button"
     >
       <span
         aria-hidden="true"
         className={active
-          ? `text-[#ff5d38] transition-transform duration-200 ease-out group-hover:scale-110 group-active:scale-95 motion-reduce:transition-none motion-reduce:transform-none ${fillClass}`
-          : 'transition-all duration-200 ease-out group-hover:scale-110 group-hover:text-white group-active:scale-95 motion-reduce:transition-none motion-reduce:transform-none'}
+          ? `text-orange ${fillClass}`
+          : 'text-muted transition-colors group-hover:text-ink motion-reduce:transition-none'}
       >
         {icon}
       </span>
@@ -82,10 +80,10 @@ function ShelfToggle({ active, activeLabel, engagedLabel, fillClass, icon, inact
 }
 
 const SHELF_ROW_CLASS =
-  'group flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-left text-sm font-bold text-white/80 outline-none transition-all duration-200 ease-out hover:-translate-y-px hover:bg-white/10 hover:text-white active:translate-y-0 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none'
+  'group flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-control px-3 text-left text-sm font-semibold text-copy outline-none transition-colors hover:bg-white/5 hover:text-ink active:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none'
 
 const SHELF_ICON_CLASS =
-  'grid place-items-center text-white/50 transition-all duration-200 ease-out group-hover:scale-110 group-hover:text-white motion-reduce:transition-none motion-reduce:transform-none'
+  'grid place-items-center text-muted transition-colors group-hover:text-ink motion-reduce:transition-none'
 
 /**
  * Member shelf for title heroes: watched / liked / saved toggles with
@@ -93,10 +91,9 @@ const SHELF_ICON_CLASS =
  * copy-link share row, and the library activity destination. Every row
  * reads or writes stored member data; nothing here is implied.
  *
- * The shelf lives inside the dark cinematic title hero, so it speaks the
- * FilScreen row language (rounded-xl hover-lift rows, accent-soft actives,
- * white focus rings) in fixed dark-glass tones that stay legible over
- * backdrop art in either theme.
+ * The shelf stays inside the cinematic title hero but uses the same solid
+ * midnight surfaces and signal-orange decisions as the rest of Consumit.
+ * Its readable surface does not depend on backdrop blur or theme-specific art.
  */
 export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }: MemberActionPanelProps) {
   const session = useSession()
@@ -113,16 +110,13 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
   useEffect(() => {
     if (!session.member) return
     let cancelled = false
-    void getCachedMemberLibrary(session.member.id)
-      .then((library) => {
-        if (cancelled) return
-        setWatched(library.watched.some((entry) => entry.kind === kind && entry.id === id))
-        setSaved(library.saved.some((entry) => entry.kind === kind && entry.id === id))
-      })
-      .catch(() => {})
     void getMemberTitleState({ id, kind })
       .then((state) => {
-        if (!cancelled) setLiked(state.like !== null)
+        if (!cancelled) {
+          setLiked(state.like !== null)
+          setSaved(state.saved)
+          setWatched(state.watched)
+        }
       })
       .catch((cause) => {
         if (!cancelled && (!(cause instanceof IdentityApiError) || cause.status !== 404)) {
@@ -155,8 +149,8 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
     if (slot === 'watched') setWatched(next)
     else setSaved(next)
     try {
-      const library = slot === 'watched' ? await setMemberWatched({ id, kind }, next) : await setMemberSaved({ id, kind }, next)
-      replaceCachedMemberLibrary(session.member.id, library)
+      if (slot === 'watched') await setMemberWatched({ id, kind }, next)
+      else await setMemberSaved({ id, kind }, next)
     } catch {
       if (slot === 'watched') setWatched(!next)
       else setSaved(!next)
@@ -183,14 +177,14 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[rgba(18,18,22,0.72)] p-4 text-[#f4f0e8] backdrop-blur-md" data-consumit-member-shelf>
+    <div className="rounded-card border border-border bg-nav p-4 text-ink" data-consumit-member-shelf>
       {session.member ? (
         <div className="grid grid-cols-3 gap-2" role="group" aria-label="Your shelf for this title">
           <ShelfToggle
             active={watched}
             activeLabel={`Mark ${title} as not watched`}
             engagedLabel="Watched"
-            fillClass="fill-[#ff5d38]/20"
+            fillClass="fill-current"
             icon={<Eye aria-hidden="true" className="size-6" />}
             inactiveLabel={`Mark ${title} as watched`}
             onToggle={() => void toggle('watched')}
@@ -218,14 +212,14 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
           />
         </div>
       ) : null}
-      {error ? <p className="mt-3 text-xs text-orange" role="alert">{error}</p> : null}
-      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] p-3.5">
-        <p className="text-sm font-bold text-white">Your rating</p>
+      {error ? <p className="mt-3 text-xs text-danger" role="alert">{error}</p> : null}
+      <div className="mt-3 rounded-control border border-border bg-surface p-3.5">
+        <p className="text-sm font-bold text-ink">Your rating</p>
         <div className="mt-2">
           <RatingWidget id={id} kind={kind} title={title} />
         </div>
       </div>
-      <div className="mt-3 grid gap-1 border-t border-white/10 pt-3">
+      <div className="mt-3 grid gap-1 border-t border-border pt-3">
         {session.member ? (
           <button
             className={SHELF_ROW_CLASS}
@@ -247,13 +241,13 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
           type="button"
         >
           <span aria-hidden="true" className={SHELF_ICON_CLASS}>
-            {copied ? <Check aria-hidden="true" className="size-[18px] text-[#ff5d38]" /> : <Link2 aria-hidden="true" className="size-[18px]" />}
+            {copied ? <Check aria-hidden="true" className="size-[18px] text-orange" /> : <Link2 aria-hidden="true" className="size-[18px]" />}
           </span>
           {copied ? 'Link copied' : 'Share'}
         </button>
         <Link
           className={SHELF_ROW_CLASS}
-          href="/library"
+          href={session.member ? `/profile/${encodeURIComponent(session.member.username)}/activity` : '/sign-in'}
         >
           <span aria-hidden="true" className={SHELF_ICON_CLASS}>
             <ArrowRight aria-hidden="true" className="size-[18px]" />
@@ -261,13 +255,12 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
           Your activity
         </Link>
       </div>
-      {logged ? <p className="mt-3 text-xs font-bold text-[#ff5d38]" role="status">Logged.</p> : null}
-      {shareFailed ? <p className="mt-3 text-xs text-orange" role="alert">The link could not be copied.</p> : null}
+      {logged ? <p className="mt-3 text-xs font-bold text-lime" role="status">Logged.</p> : null}
+      {shareFailed ? <p className="mt-3 text-xs text-danger" role="alert">The link could not be copied.</p> : null}
       {/*
-        * Portaled to document.body: the shelf's backdrop glass establishes a
-        * containing block that would otherwise trap this fixed dialog inside
-        * the card. `logging` only turns true from a client click, so this
-        * never renders on the server.
+        * Portaled to document.body so the dialog stays viewport-fixed and
+        * above the title art. `logging` only turns true from a client click,
+        * so this never renders on the server.
         */}
       {logging
         ? createPortal(

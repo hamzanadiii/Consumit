@@ -8,6 +8,7 @@ export type EpisodeArt = {
   title: string | null
   synopsis: string | null
   thumbnail: string | null
+  airDate: string | null
 }
 
 /** Canonical episode art with the honest fallback chain: caller-supplied
@@ -28,7 +29,7 @@ export function useEpisodeArt(anilistId: number, episode: number, options: { cov
         (detail) => {
           if (!active) return
           if (detail) {
-            setResult({ key, art: { title: detail.title, thumbnail: detail.thumbnail, synopsis: detail.description } })
+            setResult({ key, art: { title: detail.title, thumbnail: detail.thumbnail, synopsis: detail.description, airDate: detail.airDate } })
           } else if (attempt === 0) {
             // One delayed retry: API restarts and cold rate-limit bursts
             // fail the first wave and placeholders would otherwise stick

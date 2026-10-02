@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlaybackStore } from './state.ts'
 
-export type ResolvedSource = { source: ProviderSource; registration: ProviderRegistration; subtitles: SubtitleCandidate[] }
+export type ResolvedSource = { source: ProviderSource; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
 /** A caption track plus the provider context needed to lease it: subtitle and
  *  video sources stay independent decisions behind one resolve. */
 export type SubtitleCandidate = { track: z.infer<typeof playbackTrackSchema>; hosts: readonly string[]; headers: Record<string, string> }
@@ -47,7 +47,7 @@ export function dedupeSubtitleTracks(candidates: readonly SubtitleCandidate[]): 
   }
   return tracks
 }
-type Health = { active: number; failures: number; openUntil: number; window: number; requests: number; latency: number; success: number; outcomes: number }
+type Health = { active: number; failures: number; playbackFailures: number; playbackWindow: number; openUntil: number; window: number; requests: number; latency: number; success: number; outcomes: number }
 type Cached = { value: ResolvedSource | null; until: number }
 type Pending = { controller: AbortController; promise: Promise<ResolvedSource | null>; waiters: number }
 
@@ -60,8 +60,12 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; proxyAvailable?: boolean }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
   const now = options.now ?? Date.now
+  // One resolve is a sequential waterfall with a shared deadline. Each
+  // adapter gets its configured attempt limit; the usual limit is three
+  // seconds, and explicitly slower adapters may use more of the 20s budget.
+  const deadlineMs = options.deadlineMs ?? 20_000
   const cache = new Map<string, Cached>()
   const pending = new Map<string, Pending>()
   const health = new Map<string, Health>()
@@ -73,7 +77,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   function state(id: string, kind: ResolvePlaybackRequest['ref']['kind']) {
     const key = healthKey(id, kind)
     let value = health.get(key)
-    if (!value) { value = { active: 0, failures: 0, openUntil: 0, window: now(), requests: 0, latency: 0, success: 0, outcomes: 0 }; health.set(key, value) }
+    if (!value) { value = { active: 0, failures: 0, playbackFailures: 0, playbackWindow: now(), openUntil: 0, window: now(), requests: 0, latency: 0, success: 0, outcomes: 0 }; health.set(key, value) }
     return value
   }
 
@@ -86,14 +90,14 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       if (!raw) return
       const row = JSON.parse(raw) as Partial<Health>
       if ([row.failures, row.openUntil, row.latency, row.success, row.outcomes].every((value) => typeof value === 'number' && Number.isFinite(value))) {
-        health.set(key, { active: 0, requests: 0, window: now(), failures: row.failures!, openUntil: row.openUntil!, latency: row.latency!, success: row.success!, outcomes: row.outcomes! })
+        health.set(key, { active: 0, requests: 0, window: now(), failures: row.failures!, playbackFailures: Number.isFinite(row.playbackFailures) ? row.playbackFailures! : 0, playbackWindow: Number.isFinite(row.playbackWindow) ? row.playbackWindow! : now(), openUntil: row.openUntil!, latency: row.latency!, success: row.success!, outcomes: row.outcomes! })
       }
     } catch { /* Shared ranking is an optimization, never an availability dependency. */ }
   }
 
   function persist(id: string, kind: ResolvePlaybackRequest['ref']['kind'], value: Health) {
     if (!options.store) return
-    const row = { failures: value.failures, openUntil: value.openUntil, latency: value.latency, success: value.success, outcomes: value.outcomes }
+    const row = { failures: value.failures, playbackFailures: value.playbackFailures, playbackWindow: value.playbackWindow, openUntil: value.openUntil, latency: value.latency, success: value.success, outcomes: value.outcomes }
     void options.store.set(healthKey(id, kind), JSON.stringify(row), 24 * 3600).catch(() => undefined)
   }
 
@@ -110,7 +114,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         const result = await cancellable(registration.adapter.resolve({ ref: input.ref, region: options.region, audioLanguage: input.audioLanguage }, signal), signal)
         const parsed = providerResultSchema.safeParse(result)
         if (parsed.success && ((!parsed.data.ok && (parsed.data.code === 'empty' || parsed.data.code === 'cancelled')) || (parsed.data.ok && !parsed.data.sources.length))) {
-          current.outcomes++; attempts.add(1, { provider: registration.adapter.id, outcome: 'empty' }); return null
+          current.outcomes++; attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'empty' }); return null
         }
         const validated = validatedSources(result, registration, now())
         const tracks = collectSubtitleCandidates(validated, registration)
@@ -122,26 +126,34 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         const targetHeight = input.capabilities.maxHeight ?? 1080
         const qualityScore = (source: ProviderSource) => source.height === undefined ? 10_000
           : source.height <= targetHeight ? 5_000 + source.height : 4_000 - source.height
-        candidates.sort((a, b) => Number(b.language === 'original') - Number(a.language === 'original')
-          || Number(b.language === input.audioLanguage) - Number(a.language === input.audioLanguage)
+        candidates.sort((a, b) => Number(b.language === input.audioLanguage) - Number(a.language === input.audioLanguage)
+          || Number(b.language === 'original') - Number(a.language === 'original')
           || Number(input.capabilities.nativeHls && b.type === 'hls') - Number(input.capabilities.nativeHls && a.type === 'hls')
           || qualityScore(b) - qualityScore(a))
         const source = candidates[0]
-        if (!source) { current.outcomes++; if (!validated.length) current.failures++; attempts.add(1, { provider: registration.adapter.id, outcome: 'empty' }); return null }
-        current.failures = 0; current.openUntil = 0; current.success++
+        if (!source) { current.outcomes++; if (!validated.length) current.failures++; attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'empty' }); return null }
+        current.failures = 0; if (current.playbackFailures < 3) current.openUntil = 0; current.success++
         current.latency = current.latency ? current.latency * 0.8 + (now() - started) * 0.2 : now() - started
         current.outcomes++
-        attempts.add(1, { provider: registration.adapter.id, outcome: 'success' })
-        return { source, registration, subtitles: tracks }
+        attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'success' })
+        return { source, registration, subtitles: tracks, delivery: 'direct' as const }
       } catch {
-        if (!signal.aborted || signal.reason?.name === 'TimeoutError') { current.failures++; current.outcomes++ }
+        const message = signal.reason instanceof Error ? signal.reason.message : typeof signal.reason === 'string' ? signal.reason : ''
+        const ourCut = message === 'Resolution deadline reached'
+        if (ourCut) {
+          // Overall deadline exhaustion does not establish provider failure.
+          // A provider's own timeout does, so repeated hangs cool down.
+          current.outcomes++
+        } else if (!signal.aborted || signal.reason?.name === 'TimeoutError') {
+          current.failures++; current.outcomes++
+        }
         span.setStatus({ code: SpanStatusCode.ERROR })
-        attempts.add(1, { provider: registration.adapter.id, outcome: signal.aborted ? 'cancelled' : 'error' })
+        attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: signal.aborted ? 'cancelled' : 'error' })
         return null
       } finally {
         current.active--
         if (current.failures >= 3) current.openUntil = now() + 60000
-        latency.record(now() - started, { provider: registration.adapter.id })
+        latency.record(now() - started, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region })
         persist(registration.adapter.id, input.ref.kind, current)
         span.end()
       }
@@ -150,26 +162,29 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
 
   async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string) {
     await Promise.all(providers.map((provider) => hydrate(provider.adapter.id, input.ref.kind)))
-    // Direct providers run before proxy providers. Priority still controls
-    // order within each delivery tier; manual selection targets its provider.
-    // upstream-group dedupe window — the player tries the first provider,
-    // then the next, so the server list stays fixed.
     // Kind routing is load-bearing: without it a movie provider answers an
     // anime ref by numeric-id coincidence (AniList 793 played as TMDB 793).
     // Menu listing and probes already filter this way; the waterfall must too
     // — including manual switches, where a mismatch fails honest instead of
     // playing the wrong title.
-    const candidates = providers.filter((p) => p.enabled && (!p.proxy || options.proxyAvailable !== false) && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind) && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred))
-      .sort((a, b) => Number(a.proxy) - Number(b.proxy) || (b.priority ?? 0) - (a.priority ?? 0))
+    const order = options.providerOrders?.[input.ref.kind]
+    const orderIndex = (id: string) => {
+      const index = order?.indexOf(id) ?? -1
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index
+    }
+    const candidates = providers.filter((p) => {
+      return p.enabled && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind)
+        && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred)
+    }).sort((a, b) => order ? orderIndex(a.adapter.id) - orderIndex(b.adapter.id)
+      : (b.priority ?? 0) - (a.priority ?? 0))
     if (!candidates.length) return null
     const controller = new AbortController()
-    const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), options.deadlineMs ?? 12000)
+    const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), deadlineMs)
     const signal = AbortSignal.any([parent, controller.signal])
     // One hung provider must not hold the whole request: bound each
     // sequential attempt so a stalled first provider falls through to the
     // next instead of burning the full deadline. Slow-but-good providers
     // carry their own budget, still capped by the total deadline.
-    const deadlineMs = options.deadlineMs ?? 12000
     try {
       for (const candidate of candidates) {
         if (signal.aborted) return null
@@ -178,7 +193,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         signal.addEventListener('abort', onAbort, { once: true })
         const attemptSignal = AbortSignal.any([signal, perAttempt.signal])
         let timer: ReturnType<typeof setTimeout> | undefined
-        const budget = Math.min(candidate.attemptMs ?? 5000, deadlineMs)
+        const budget = candidate.attemptMs ?? 3000
         const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, budget) })
         try {
           const value = await Promise.race([attempt(candidate, input, attemptSignal), timeout])
@@ -203,7 +218,11 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   return {
     async resolve(input: ResolvePlaybackRequest, signal: AbortSignal, excluded: readonly string[] = [], preferred?: string, fresh = false): Promise<ResolvedSource | null> {
       if (signal.aborted) return null
-      const key = JSON.stringify([input, options.region, excluded, preferred])
+      // Admin overrides mutate registrations in place. Include configuration
+      // and saved order so a prior winner cannot bypass an Admin change.
+      const deliveryConfig: unknown[] = providers.map((provider) => [provider.adapter.id, provider.enabled, provider.priority ?? 0, provider.approvedRegions, provider.mediaKinds, provider.mediaHosts, provider.upstreamGroup])
+      deliveryConfig.push([input.ref.kind, ...(options.providerOrders?.[input.ref.kind] ?? [])])
+      const key = JSON.stringify([input, options.region, excluded, preferred, deliveryConfig])
       const cached = cache.get(key)
       if (!fresh && cached && cached.until > now()) return cached.value
       if (fresh) cache.delete(key)
@@ -211,7 +230,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       if (!work) {
         if (pending.size >= 100) return null
         const controller = new AbortController()
-        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(options.deadlineMs ?? 12000)])
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(deadlineMs)])
         const sharedKey = `access:${createHash('sha256').update(key).digest('hex')}`
         const discover = async () => {
           if (!fresh && options.store) {
@@ -219,11 +238,15 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
               const raw = await cancellable(options.store.get(sharedKey), signal)
               if (raw) {
                 const cached = JSON.parse(raw) as { provider: string; source: unknown }
-                const registration = providers.find((entry) => entry.adapter.id === cached.provider && entry.enabled && (!entry.proxy || options.proxyAvailable !== false) && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup) && (!preferred || preferred === entry.adapter.id) && state(entry.adapter.id, input.ref.kind).failures === 0)
+                const registration = providers.find((entry) => {
+                  return entry.adapter.id === cached.provider && entry.enabled && entry.mediaKinds.includes(input.ref.kind)
+                    && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup)
+                    && (!preferred || preferred === entry.adapter.id) && state(entry.adapter.id, input.ref.kind).failures === 0
+                })
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
                   if (source && input.capabilities[source.type]) {
-                    return { source, registration, subtitles: [] }
+                    return { source, registration, subtitles: [], delivery: 'direct' as const }
                   }
                 }
               }
@@ -234,10 +257,11 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         const promise = discover().then((value) => {
           if (!controller.signal.aborted) {
             if (cache.size >= 500) cache.delete(cache.keys().next().value!)
-            cache.set(key, { value, until: value ? Math.min(now() + 30000, Date.parse(value.source.expiresAt) - 30000) : now() + 3000 })
+            const cacheSeconds = 30
+            cache.set(key, { value, until: value ? Math.min(now() + cacheSeconds * 1000, Date.parse(value.source.expiresAt) - 30000) : now() + 3000 })
             if (value && options.store) {
-              const ttl = Math.min(30, (Date.parse(value.source.expiresAt) - now() - 30000) / 1000)
-              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source }), ttl).catch(() => undefined)
+              const ttl = Math.min(cacheSeconds, (Date.parse(value.source.expiresAt) - now() - 30000) / 1000)
+              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source, delivery: value.delivery }), ttl).catch(() => undefined)
             }
           }
           return value
@@ -248,7 +272,30 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       try { return await cancellable(work.promise, signal) } catch { return null }
       finally { if (--work.waiters === 0) work.controller.abort() }
     },
-    recordFailure(providerId: string, kind: ResolvePlaybackRequest['ref']['kind']) { const value = state(providerId, kind); value.failures++; value.outcomes++; if (value.failures >= 3) value.openUntil = now() + 60000; persist(providerId, kind, value); invalidateProvider(providerId) },
+    recordFailure(providerId: string, kind: ResolvePlaybackRequest['ref']['kind'], cause: 'transient' | 'definitive' = 'transient') {
+      const value = state(providerId, kind)
+      if (now() - value.playbackWindow > 5 * 60_000) { value.playbackWindow = now(); value.playbackFailures = 0 }
+      value.playbackFailures++
+      value.outcomes++
+      // Definitive failures (gone-class sources, blocked direct paths) are
+      // not coming back soon: cool the provider five times longer than a
+      // transient stall so traffic demotes to healthy providers instead of
+      // burning budget and upstream goodwill on 60-second retries.
+      if (value.playbackFailures >= 3) value.openUntil = now() + (cause === 'definitive' ? 300_000 : 60_000)
+      persist(providerId, kind, value)
+      invalidateProvider(providerId)
+    },
     status(kind: ResolvePlaybackRequest['ref']['kind'] = 'movie') { return providers.map((p) => ({ id: p.adapter.id, enabled: p.enabled, ...state(p.adapter.id, kind) })) },
+    async reset(providerId: string, kind: ResolvePlaybackRequest['ref']['kind']) {
+      const current = state(providerId, kind)
+      current.failures = 0
+      current.playbackFailures = 0
+      current.playbackWindow = now()
+      current.openUntil = 0
+      current.outcomes = 0
+      current.success = 0
+      if (options.store) await options.store.set(healthKey(providerId, kind), JSON.stringify({ failures: 0, playbackFailures: 0, playbackWindow: now(), openUntil: 0, latency: current.latency, success: 0, outcomes: 0 }), 24 * 3600)
+      invalidateProvider(providerId)
+    },
   }
 }

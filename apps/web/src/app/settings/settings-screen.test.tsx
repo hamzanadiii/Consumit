@@ -80,7 +80,7 @@ describe('settings preferred subtitle languages', () => {
     await user.click(within(group).getByRole('button', { name: /Français/ }))
     expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'es'])
     expect(within(group).getByRole('button', { name: /Deutsch/ })).toBeEnabled()
-  })
+  }, 15_000)
 })
 
 describe('settings avatar portrait picker', () => {

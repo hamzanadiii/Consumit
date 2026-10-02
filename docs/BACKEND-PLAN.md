@@ -245,7 +245,7 @@ Hard cost rules:
 
 1. **Media bytes are direct-first.** Authorized provider/CDN → browser whenever technically and
    contractually permitted.
-2. **Lease proxy is an exception.** Proxy only header-locked sources that truly require it.
+2. **Browser-direct media only.** A failed provider falls back to another configured direct provider.
 3. **Ad creatives are direct.** Ad network/CDN → browser; Consumit owns policy and telemetry, not
    the creative bandwidth.
 4. **One production compute box first.** Web + API + resolver + tiny worker can share one VPS while
@@ -1851,7 +1851,7 @@ embed-only
 Product rule remains:
 
 - direct preferred;
-- header-locked only through audited lease proxy when allowed;
+- header-locked sources are unavailable;
 - embed-only excluded.
 
 ## Touch 7.2 — One provider adapter
@@ -2015,9 +2015,6 @@ Track the economics of the playback path explicitly:
 direct_playback_sessions
 proxied_playback_sessions
 direct_playback_ratio
-proxy_bytes
-proxy_minutes
-proxy_cost_per_watch_hour
 resolver_requests_per_watch
 provider_calls_per_cold_resolve
 ```
@@ -2025,8 +2022,7 @@ provider_calls_per_cold_resolve
 Target direction: **well above 90% direct delivery**, and ideally materially higher, subject to
 what the authorized provider set technically supports.
 
-A new provider that forces broad video proxying must justify the bandwidth/reliability cost before
-becoming a primary source.
+A configured provider must demonstrate browser-direct playback compatibility.
 
 ---
 
@@ -2207,49 +2203,6 @@ core navigation or create deceptive click targets.
 - player resumes correctly after ad completion/error;
 - ad events are measurable;
 - ad vendor can be replaced behind the module interface.
-
----
-
-# 14. Lease proxy security, if a provider truly requires it
-
-This is an escape hatch, not a general proxy.
-
-A lease contains:
-
-```text
-allowed host/domain
-allowed method
-allowed headers
-expiration
-source/session binding
-optional byte/range limits
-signature / server-side lease id
-```
-
-Proxy rules:
-
-- HTTPS/HTTP only as explicitly allowed;
-- explicit domain allowlist;
-- resolve DNS and reject private/loopback/link-local/metadata ranges;
-- defend against DNS rebinding;
-- validate every redirect target;
-- no arbitrary user-supplied destination;
-- header allowlist, not "forward all";
-- strict connection/request timeout;
-- response size/range guard where appropriate;
-- no credential leakage;
-- short lease TTL;
-- rate limit;
-- audit logs with safe/redacted URL fields;
-- network egress firewall if infrastructure supports it.
-
-Never turn it into:
-
-```text
-GET /proxy?url=<anything>
-```
-
-That becomes an SSRF machine.
 
 ---
 
@@ -2477,7 +2430,7 @@ Free/low-cost tiers where sufficient:
 - backups/PITR;
 - a VPS with enough CPU/RAM headroom;
 - domain/security essentials;
-- additional resolver/proxy capacity only when measured.
+- additional resolver capacity only when measured.
 
 ### Do not spend money here at launch
 
@@ -2516,8 +2469,6 @@ infra_cost_total
 infra_cost_per_1k_DAU
 infra_cost_per_1k_watch_sessions
 resolver_cost_per_1k_resolves
-proxy_GB
-proxy_cost_per_watch_hour
 database_cost_per_1k_DAU
 ad_revenue_per_1k_watch_sessions
 net_revenue_after_infra
@@ -2977,7 +2928,7 @@ Based on the current docs, I would execute:
 STOP if authorized provider decision is still unresolved
 
 7.x 2–3 authorized provider pilot
-8.x resolver hardening + direct/proxy cost telemetry
+8.x resolver hardening + direct playback telemetry
 9.x ads & monetization (fake/policy -> AdController -> first network -> telemetry)
 
 10. personalization only after real member/library/social signals exist
@@ -3045,7 +2996,7 @@ For Consumit it means:
 - managed Postgres protects irreplaceable data;
 - disposable cache and analytics infrastructure arrive only on measured triggers; the auth
   Valkey and import worker are active product requirements;
-- proxy bandwidth is visible and intentionally minimized;
+- media is delivered directly to the browser;
 - cost per successful watch session is measured;
 - ad revenue scales with watch sessions without making Consumit serve the ad creative bytes.
 
