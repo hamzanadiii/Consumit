@@ -1,25 +1,41 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Tabs, type TabItem } from '@consumit/ui'
 
-const sections = ['Overview', 'Favorites', 'Diary', 'Reviews', 'Lists'] as const
+export type ProfileSectionId = 'overview' | 'activity' | 'films' | 'diary' | 'history' | 'reviews' | 'watchlist' | 'lists' | 'likes' | 'tags'
 
-export function ProfileSectionNavigation({ name }: { name: string }) {
-  const [active, setActive] = useState('overview')
+/**
+ * Profile tabs link to focused personal archives. Saved titles remain private
+ * and appear only in the owner's Watchlist destination.
+ */
+export function ProfileSectionNavigation({ active = 'overview', counts, name, owner = false, username }: {
+  active?: ProfileSectionId
+  counts: Partial<Record<ProfileSectionId, number>>
+  name: string
+  owner?: boolean
+  username: string
+}) {
+  const root = `/profile/${encodeURIComponent(username)}`
 
-  useEffect(() => {
-    const sync = () => setActive(window.location.hash.slice(1) || 'overview')
-    sync()
-    window.addEventListener('hashchange', sync)
-    return () => window.removeEventListener('hashchange', sync)
-  }, [])
+  const items: TabItem[] = [
+    { href: root, label: 'Overview', value: 'overview' },
+    { href: `${root}/activity`, label: 'Activity', value: 'activity' },
+    { href: `${root}/films`, label: 'Films', value: 'films', ...(counts.films === undefined ? {} : { count: counts.films }) },
+    { href: `${root}/diary`, label: 'Diary', value: 'diary', ...(counts.diary === undefined ? {} : { count: counts.diary }) },
+    ...(owner ? [{ href: `${root}/history`, label: 'History', value: 'history' }] : []),
+    { href: `${root}/reviews`, label: 'Reviews', value: 'reviews', ...(counts.reviews === undefined ? {} : { count: counts.reviews }) },
+    ...(owner ? [{ href: `${root}/watchlist`, label: 'Watchlist', value: 'watchlist' }] : []),
+    { href: `${root}/lists`, label: 'Lists', value: 'lists', ...(counts.lists === undefined ? {} : { count: counts.lists }) },
+    { href: `${root}/likes`, label: 'Likes', value: 'likes', ...(counts.likes === undefined ? {} : { count: counts.likes }) },
+    { href: `${root}/tags`, label: 'Tags', value: 'tags', ...(counts.tags === undefined ? {} : { count: counts.tags }) },
+  ]
 
   return (
-    <nav aria-label={`${name} profile sections`} className="consumit-profile-sections px-5 sm:px-8 lg:px-[50px]">
-      {sections.map((label) => {
-        const id = label.toLowerCase()
-        return <a aria-current={active === id ? 'location' : undefined} href={`#${id}`} key={id}>{label}</a>
-      })}
-    </nav>
+    <Tabs
+      activeValue={active}
+      aria-label={`${name} profile sections`}
+      className="[&_ul]:gap-5 [&_a]:min-h-12 [&_a]:text-[0.875rem] [&_a]:font-medium"
+      items={items}
+    />
   )
 }

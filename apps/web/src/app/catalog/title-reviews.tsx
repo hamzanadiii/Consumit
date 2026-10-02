@@ -27,21 +27,19 @@ const RECENT_PREVIEW_COUNT = 3
 
 /**
  * Member reviews for a title: the signed-in member's own stored review plus
- * recent reviews from members with public profiles. Follows and
- * circle-filtered reviews have no backing behavior yet, so they stay out.
- * Nothing here is implied.
+ * recent reviews from members with public profiles.
  */
 export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsProps) {
-  const { member } = useSession()
+  const { member, status: sessionStatus } = useSession()
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'empty' | 'error'>(member ? 'loading' : 'idle')
   const [review, setReview] = useState<MemberReview | null>(null)
   const [logging, setLogging] = useState(false)
   const [recent, setRecent] = useState<TitleReviewsPage | null>(null)
   const [recentStatus, setRecentStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [showAllRecent, setShowAllRecent] = useState(false)
-  const [tab, setTab] = useState<'recent' | 'popular' | 'friends'>('recent')
+  const [tab, setTab] = useState<'recent' | 'popular'>('recent')
   const sort = tab === 'popular' ? 'popular' : 'recent'
-  const audience = tab === 'friends' ? 'circle' : 'all'
+  const audience = 'all' as const
 
   useEffect(() => {
     if (!member) return
@@ -125,7 +123,9 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         ) : null}
       </div>
 
-      {!member ? (
+      {sessionStatus === 'loading' ? (
+        <p className="mt-6 text-sm text-[var(--fs-muted)]" role="status">Checking your account…</p>
+      ) : !member ? (
         <div className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
           <p className="text-sm leading-6 text-[var(--fs-secondary)]">
             <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/sign-in">Sign in</Link>
@@ -175,20 +175,20 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         <div className="mt-8">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fs-muted)]">
-              {tab === 'popular' ? 'Popular reviews' : tab === 'friends' ? 'Friend reviews' : 'Recent reviews'}
+              {tab === 'popular' ? 'Popular reviews' : 'Recent reviews'}
               <span aria-hidden="true" className="ml-2 font-normal normal-case tabular-nums">{recent?.totalResults}</span>
               <span className="sr-only">, {recent?.totalResults} in total</span>
             </p>
             <span aria-hidden="true" className="text-xs text-[var(--fs-muted)]">·</span>
             <div className="flex items-center gap-1" role="group" aria-label="Sort member reviews">
-              {(['recent', 'popular', 'friends'] as const).map((option) => (
+              {(['recent', 'popular'] as const).map((option) => (
                 <button
                   className={`inline-flex min-h-9 cursor-pointer items-center rounded-lg px-3 text-xs font-bold capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${tab === option ? 'bg-[var(--fs-accent-soft)] text-[var(--fs-accent)]' : 'text-[var(--fs-muted)] hover:text-[var(--fs-ink)]'}`}
                   key={option}
                   onClick={() => setTab(option)}
                   type="button"
                 >
-                  {option === 'friends' ? 'Friends' : option === 'popular' ? 'Popular' : 'Recent'}
+                  {option === 'popular' ? 'Popular' : 'Recent'}
                 </button>
               ))}
             </div>
@@ -221,14 +221,6 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
                 </Link>
               ) : null}
             </>
-          ) : tab === 'friends' ? (
-            <div className="mt-5 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-              <p className="text-sm leading-6 text-[var(--fs-secondary)]">
-                {member
-                  ? 'No reviews from your circle yet. Follow members whose taste you trust, and their reviews will appear here.'
-                  : <>No friend reviews to show yet. <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/sign-in">Sign in</Link> and follow members whose taste you trust.</>}
-              </p>
-            </div>
           ) : null}
         </div>
       ) : recentStatus === 'error' ? (

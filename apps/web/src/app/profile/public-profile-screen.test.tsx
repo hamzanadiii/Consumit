@@ -1,8 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MemberProfileData } from '@consumit/contracts'
-import { movieSummary } from '@/test/catalog-fixtures'
+import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 import { SessionProvider } from '../session/session'
 import { ProfileScreen } from './public-profile-screen'
@@ -52,25 +52,66 @@ const profile: MemberProfileData = {
 }
 
 describe('profile as a personal cinema', () => {
+  it('previews five saved titles with their original destinations and honest pagination language', () => {
+    render(<ProfileScreen data={profile} owner savedPreview={{ hasMore: true, items: Array.from({ length: 5 }, (_, index) => ({ kind: 'anime', id: 100 + index })) }} titles={[]} />)
+    const preview = screen.getByRole('region', { name: 'Watchlist' })
+    expect(within(preview).getAllByRole('link')).toHaveLength(6)
+    expect(within(preview).getByRole('link', { name: 'Anime #104' })).toHaveAttribute('href', '/anime/104')
+    expect(within(preview).getByText('Latest 5 saved titles · more in your Watchlist')).toBeInTheDocument()
+  })
   it('keeps an empty public profile honest and hides owner editing controls', () => {
     render(<ProfileScreen data={profile} titles={[]} />)
-    expect(screen.getByText('This member has not picked favorites yet.')).toBeInTheDocument()
+    expect(screen.getByText('No Favorite titles yet.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit favorites' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'In the favorites' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Favorite titles' })).toBeInTheDocument()
     expect(screen.queryByText(/Taste Match/i)).not.toBeInTheDocument()
   })
   it('derives genre evidence from available Favorites while preserving unavailable title destinations', () => {
     render(<ProfileScreen catalogUnavailable data={{ ...profile, favorites: [{ id: movieSummary.id, kind: 'movie', position: 1, origin: 'native', sourceKey: null }, { id: 99, kind: 'movie', position: 2, origin: 'native', sourceKey: null }] }} titles={[movieSummary]} />)
     expect(screen.getByText('Genres across 1 selected title.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Movie #99' })).toHaveAttribute('href', '/title/99')
-    expect(screen.getByText('Your profile is available, but TMDB artwork and title details could not load.')).toBeInTheDocument()
+    expect(screen.getByText('The profile is here, but catalog artwork and title details could not load.')).toHaveAttribute('role', 'status')
   })
-  it('offers follow actions and live circle counts to other members', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ following: false }), { status: 200 })))
+  it('links unavailable anime favorites into the anime namespace', () => {
+    render(<ProfileScreen catalogUnavailable data={{ ...profile, favorites: [{ id: 21, kind: 'anime', position: 1, origin: 'native', sourceKey: null }] }} titles={[]} />)
+    expect(screen.getByRole('link', { name: 'Anime #21' })).toHaveAttribute('href', '/anime/21')
+  })
+  it('keeps other member profiles personal with no follow actions', () => {
     render(<SessionProvider initialMember={{ ...viewer }} initialStatus="authenticated"><ProfileScreen data={{ ...profile, social: { followers: 4, following: 2 } }} titles={[]} /></SessionProvider>)
-    expect(await screen.findByRole('button', { name: 'Follow alex_sample' })).toBeInTheDocument()
-    expect(screen.getByText('followers')).toBeInTheDocument()
-    expect(screen.getByText('following')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /follow/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('followers')).not.toBeInTheDocument()
+    expect(screen.queryByText('following')).not.toBeInTheDocument()
+  })
+  it('renders profile stats, collection links, and recent activity', () => {
+    render(
+      <ProfileScreen
+        data={{
+          ...profile,
+          diary: [{ entryId: 'e1', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, rewatch: false, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-02` }, { entryId: 'e2', episode: 3, id: seriesSummary.id, kind: 'series', origin: 'native', rewatch: false, season: 1, sourceKey: null, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-01` }],
+          favorites: [{ id: movieSummary.id, kind: 'movie', position: 1, origin: 'native', sourceKey: null }],
+          lists: [{ description: null, id: 'l1', itemCount: 2, name: 'Shortlist', origin: 'native', slug: 'shortlist', visibility: 'public' }],
+          reviews: [{ body: 'A patient masterpiece.', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, reviewId: 'r1', reviewedOn: '2026-09-06', tags: [] }],
+          statistics: { diaryEntries: 1, lists: 1, reviews: 1, watched: 1 },
+        }}
+        titles={[movieSummary, seriesSummary]}
+      />,
+    )
+    const stats = screen.getByRole('navigation', { name: 'Alex profile statistics' })
+    expect(within(stats).getByText('watched').closest('a')).toHaveAttribute('href', '/profile/alex_sample/films')
+    expect(within(stats).getByText('diary').closest('a')).toHaveAttribute('href', '/profile/alex_sample/diary')
+    const tabs = screen.getByRole('navigation', { name: 'Alex profile sections' })
+    expect(within(tabs).getByRole('link', { name: 'Films, 1' })).toHaveAttribute('href', '/profile/alex_sample/films')
+    expect(within(tabs).getByRole('link', { name: 'Diary, 1' })).toHaveAttribute('href', '/profile/alex_sample/diary')
+    expect(within(tabs).getByRole('link', { name: 'Reviews, 1' })).toHaveAttribute('href', '/profile/alex_sample/reviews')
+    expect(within(tabs).getByRole('link', { name: 'Lists, 1' })).toHaveAttribute('href', '/profile/alex_sample/lists')
+    expect(screen.getByRole('heading', { name: 'Favorite titles' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument()
+    const activityList = document.querySelector('[data-consumit-profile-activity]')
+    expect(activityList).not.toBeNull()
+    expect(within(activityList as HTMLElement).getAllByText(/watched/i)).toHaveLength(2)
+    expect(screen.getAllByText(/Watched · S01 E03/).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: `${seriesSummary.title}` }).some((link) => link.getAttribute('href') === `/watch/series/${seriesSummary.id}?season=1&episode=3`)).toBe(true)
+    expect(within(activityList as HTMLElement).getByText(/reviewed/i)).toBeInTheDocument()
   })
   it('hides follow actions on the owner profile', () => {
     render(<SessionProvider initialMember={{ ...viewer, username: 'alex_sample' }} initialStatus="authenticated"><ProfileScreen data={profile} owner titles={[]} /></SessionProvider>)
@@ -119,11 +160,11 @@ describe('profile as a personal cinema', () => {
       </SessionProvider>,
     )
     await user.click(screen.getByRole('button', { name: 'Add favorite 1' }))
-    await user.type(screen.getByRole('searchbox', { name: 'Name of film or series' }), 'dune')
+    await user.type(screen.getByRole('searchbox', { name: 'Name of movie, series, or anime' }), 'dune')
     expect(await screen.findByRole('button', { name: 'Pick Dune: Part Two' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Pick Dune: Part Two' }))
     await waitFor(() => expect(mocks.saveMemberFavorites).toHaveBeenCalledWith([{ id: movieSummary.id, kind: 'movie' }]))
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('searchbox', { name: 'Name of film or series' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('searchbox', { name: 'Name of movie, series, or anime' })).not.toBeInTheDocument()
   })
 })

@@ -133,15 +133,13 @@ describe('title reviews page', () => {
     expect(screen.getByRole('link', { name: 'Try again' })).toHaveAttribute('href', '/title/693134/reviews?sort=recent&audience=all&page=1')
   })
 
-  it('marks the friends tab current and explains an empty circle', async () => {
+  it('keeps the review archive personal with no friends tab', async () => {
     mocks.getTitleReviews.mockResolvedValue({ items: [], page: 1, totalPages: 0, totalResults: 0 })
-    render(<SessionProvider>{await TitleReviewsPage({ audience: 'circle', id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
+    render(<SessionProvider>{await TitleReviewsPage({ audience: 'all', id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
 
-    expect(mocks.getTitleReviews).toHaveBeenCalledWith('movie', 693134, 1, 'recent', 'circle')
-    const friends = screen.getByRole('link', { name: 'Friends' })
-    expect(friends).toHaveAttribute('href', '/title/693134/reviews?sort=recent&audience=circle')
-    expect(friends).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('heading', { name: 'No circle reviews yet' })).toBeInTheDocument()
+    expect(mocks.getTitleReviews).toHaveBeenCalledWith('movie', 693134, 1, 'recent', 'all')
+    expect(screen.queryByRole('link', { name: 'Friends' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No member reviews yet' })).toBeInTheDocument()
   })
 
   it('resolves anime titles from AniList and serves the anime archive', async () => {

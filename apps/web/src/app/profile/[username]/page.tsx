@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
-import type { CatalogTitleSummary, MemberProfileData } from '@consumit/contracts'
+import type { CatalogRef, CatalogTitleSummary, MemberProfileData } from '@consumit/contracts'
 
 import { ProfileScreen } from '../public-profile-screen'
 import { notFound, redirect } from 'next/navigation'
 
-import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
+import { getCatalogBatchForRefs } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'
-import { getPublicProfile, MemberApiError } from '@/lib/member-server'
+import { getMemberLibrarySnapshot, getMemberList, getPublicProfile, MemberApiError } from '@/lib/member-server'
 
 type PublicProfilePageProps = {
   params: Promise<{ username: string }>
@@ -30,9 +30,29 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     throw error
   }
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}`)
-  const refs = [...profile.favorites, ...profile.diary, ...profile.reviews]
+  const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  let savedPreview: { hasMore: boolean; items: CatalogRef[] } | { unavailable: true } | undefined
+  if (owner) {
+    try {
+      const library = await getMemberLibrarySnapshot()
+      savedPreview = { hasMore: Boolean(library.saved.nextCursor) || library.saved.items.length > 5, items: library.saved.items.slice(0, 5) }
+    } catch {
+      savedPreview = { unavailable: true }
+    }
+  }
+  const listCovers = await Promise.all(profile.lists.slice(0, 2).map(async (list) => {
+    try {
+      const detail = await getMemberList(list.slug)
+      return [list.slug, detail.items.slice(0, 4).map(({ id, kind }) => ({ id, kind }))] as const
+    } catch {
+      return [list.slug, []] as const
+    }
+  }))
+  const listCoverRefs = listCovers.flatMap(([, items]) => items)
+  const savedRefs = savedPreview && 'items' in savedPreview ? savedPreview.items : []
+  const refs = [...profile.favorites, ...profile.diary, ...profile.reviews, ...savedRefs, ...listCoverRefs]
   let titles: CatalogTitleSummary[] = []
   let catalogUnavailable = false
-  try { titles = refs.length ? (await getCatalogBatch(refsKey(refs))).items : [] } catch { catalogUnavailable = true }
-  return <ProfileScreen catalogUnavailable={catalogUnavailable} data={profile} owner={session.status === 'authenticated' && session.member.username === profile.canonicalUsername} titles={titles} />
+  try { titles = (await getCatalogBatchForRefs(refs))?.items ?? [] } catch { catalogUnavailable = true }
+  return <ProfileScreen catalogUnavailable={catalogUnavailable} data={profile} listPosters={Object.fromEntries(listCovers.map(([slug, items]) => [slug, items.map((ref) => titles.find((title) => title.kind === ref.kind && title.id === ref.id)?.posterUrl ?? undefined)]))} owner={owner} titles={titles} {...(savedPreview ? { savedPreview } : {})} />
 }

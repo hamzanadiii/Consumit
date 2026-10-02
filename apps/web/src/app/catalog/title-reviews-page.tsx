@@ -102,16 +102,15 @@ export async function TitleReviewsPage({ audience, id, kind, page, sort }: Title
               title={`${title.title} reviews`}
             />
           </div>
-          {reviews.totalResults > 0 || audience === 'circle' ? (
+          {reviews.totalResults > 0 ? (
             <>
               <div className="mt-6">
                 <Tabs
-                  activeValue={audience === 'circle' ? 'friends' : sort}
+                  activeValue={sort}
                   aria-label="Sort member reviews"
                   items={[
                     { href: tabHref(kind, id, 'recent', 'all'), label: 'Recent', value: 'recent' },
                     { href: tabHref(kind, id, 'popular', 'all'), label: 'Popular', value: 'popular' },
-                    { href: tabHref(kind, id, 'recent', 'circle'), label: 'Friends', value: 'friends' },
                   ]}
                 />
               </div>
@@ -147,8 +146,8 @@ export async function TitleReviewsPage({ audience, id, kind, page, sort }: Title
               ) : (
                 <div className="mt-8">
                   <EmptyState
-                    description="Follow members whose taste you trust, and their reviews will appear here."
-                    title="No circle reviews yet"
+                    description="No member reviews match this filter yet."
+                    title="No reviews yet"
                   />
                 </div>
               )}

@@ -13,7 +13,7 @@ type TitleMovieReviewsPageProps = {
 function parseSearchParams(searchParams: { audience?: string | undefined; page?: string | undefined; sort?: string | undefined }) {
   const page = Number(searchParams.page ?? '1')
   return {
-    audience: searchParams.audience === 'circle' ? 'circle' as const : 'all' as const,
+    audience: 'all' as const,
     page: Number.isInteger(page) && page >= 1 ? page : 1,
     sort: searchParams.sort === 'popular' ? 'popular' as const : 'recent' as const,
   }

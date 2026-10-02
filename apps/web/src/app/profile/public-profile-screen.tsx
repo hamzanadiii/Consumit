@@ -1,16 +1,17 @@
-import { titleHref, type CatalogRef, type CatalogTitleSummary, type MemberProfileData } from '@consumit/contracts'
-import { Pencil } from 'lucide-react'
+import { diaryEntryHref, kindLabel, titleHref, type CatalogRef, type CatalogTitleSummary, type MemberProfileData } from '@consumit/contracts'
+import { ArrowUpRight, Bookmark, Eye, Pencil, Repeat2 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 
-import { ArtworkFrame, Avatar, CuratedListCard, DiaryRow, SectionHeading, Tabs } from '@consumit/ui'
+import { ArtworkFrame, Avatar, PosterStack, SectionHeading } from '@consumit/ui'
 
 import { BannerEditor } from './banner-editor'
-import { FollowButton } from './follow-button'
 import { FavoritesShelf } from './favorites-shelf'
 import { EditBannerButton, ProfileEditProvider } from './profile-edit'
+import { ProfileSectionNavigation, type ProfileSectionId } from './profile-section-navigation'
 import { ShareProfile } from './share-profile'
 import { FilScreenShell } from '../shared'
+import { TitleCard } from '../shared/title-card'
 
 import { memberAvatarSrc } from '@/lib/avatar'
 
@@ -20,122 +21,235 @@ function formatDiaryDate(isoDate: string) {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
 }
 
-function formatReviewDate(isoDate: string) {
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function formatMonthKey(isoDate: string) {
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+function diaryEpisodeLabel(entry: MemberProfileData['diary'][number]) {
+  if (entry.episode === undefined) return ''
+  if (entry.kind === 'series') return `S${String(entry.season ?? 0).padStart(2, '0')} E${String(entry.episode).padStart(2, '0')}`
+  return `Episode ${entry.episode}`
 }
 
 function EmptyState({ children }: { children: string }) {
   return (
-    <div className="rounded-[16px] border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] px-6 py-10 text-sm leading-6 text-[var(--fs-muted)]">
+    <div className="rounded-card border border-dashed border-[var(--fs-field-border)] px-6 py-8 text-sm leading-6 text-[var(--fs-muted)]">
       {children}
     </div>
   )
 }
 
-function HeroStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex min-w-[4.5rem] flex-col gap-1">
-      <dd className="order-1 text-xl font-bold tabular-nums text-white">{value}</dd>
-      <dt className="order-2 text-[11px] font-bold tracking-[0.12em] text-white/60 uppercase">{label}</dt>
-    </div>
+function HeroStat({ href, label, value }: { href?: string; label: string; value: number }) {
+  const content = (
+    <span className="inline-flex min-h-10 items-center gap-1.5 text-xs text-white/75">
+      <span className="font-bold tabular-nums text-white">{value}</span>
+      <span>{label}</span>
+    </span>
   )
+  if (!href) return <div role="listitem">{content}</div>
+  return (
+    <a
+      className="rounded outline-none transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-white"
+      href={href}
+      role="listitem"
+    >
+      {content}
+    </a>
+  )
+}
+
+type ActivityKind = 'watch' | 'review'
+
+type ActivityItem = {
+  date: string | null
+  kind: ActivityKind
+  key: string
+  rewatch?: boolean
+  episodeLabel?: string
+  ref: CatalogRef & { episode?: number | undefined; season?: number | undefined }
 }
 
 /**
- * Compact diary list for the profile right rail: recent watches only, no
- * fabricated activity. Full diary with notes stays in the main column.
+ * Recent member activity is built from stored diary and review records only.
+ * Reviews without a date sort after dated entries.
  */
-function RailDiary({ entries, titleMap }: {
-  entries: MemberProfileData['diary']
+function buildActivity(data: MemberProfileData): ActivityItem[] {
+  const items: ActivityItem[] = [
+    ...data.diary.map((entry) => ({
+      date: entry.watchedOn,
+      kind: 'watch' as const,
+      key: 'watch-' + entry.entryId,
+      rewatch: entry.rewatch,
+      episodeLabel: diaryEpisodeLabel(entry),
+      ref: entry,
+    })),
+    ...data.reviews.map((review) => ({
+      date: review.reviewedOn,
+      kind: 'review' as const,
+      key: 'review-' + review.reviewId,
+      ref: review,
+    })),
+  ]
+  return items.sort((a, b) => {
+    if (a.date && b.date) return b.date.localeCompare(a.date)
+    if (a.date) return -1
+    if (b.date) return 1
+    return 0
+  })
+}
+
+function ActivityFeed({ items, titleMap }: {
+  items: readonly ActivityItem[]
   titleMap: Map<string, CatalogTitleSummary>
 }) {
-  if (entries.length === 0) {
-    return (
-      <section aria-labelledby="rail-diary-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-diary>
-        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-diary-heading">Diary</h2>
-        <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">No diary entries yet. Log a watch to keep its date here.</p>
-      </section>
-    )
-  }
-
-  const recent = entries.slice(0, 6)
-
   return (
-    <section aria-labelledby="rail-diary-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-diary>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-diary-heading">Diary</h2>
-        <a className="min-h-11 inline-flex items-center rounded text-xs font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#diary">
-          View all
-        </a>
-      </div>
-      <ol className="mt-3 space-y-0.5">
-        {recent.map((entry) => {
-          const title = titleMap.get(refKey(entry))
-          const label = title?.title ?? `Movie #${entry.id}`
-          return (
-            <li key={entry.entryId}>
-              <a
-                className="grid min-h-11 grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 rounded-lg px-1 outline-none transition-colors hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none"
-                href={titleHref(entry)}
-              >
-                <span className="text-center text-[10px] font-bold uppercase tracking-wide text-[var(--fs-muted)] tabular-nums">
-                  {formatDiaryDate(entry.watchedOn).split(' ')[0]}
-                  <span className="mt-0.5 block text-[9px] uppercase">{formatDiaryDate(entry.watchedOn).split(' ')[1] ?? ''}</span>
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-bold text-[var(--fs-ink)]">{label}</span>
-                  <span className="mt-0.5 block text-[10px] text-[var(--fs-muted)]">{entry.rewatch ? 'Rewatched' : 'Watched'}</span>
-                </span>
-              </a>
-            </li>
-          )
-        })}
-      </ol>
-    </section>
-  )
-}
-
-function RailLists({ lists, name }: { lists: MemberProfileData['lists']; name: string }) {
-  if (lists.length === 0) {
-    return (
-      <section aria-labelledby="rail-lists-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-lists>
-        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-lists-heading">Recent lists</h2>
-        <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">No lists yet.</p>
-      </section>
-    )
-  }
-
-  const recent = lists.slice(0, 2)
-
-  return (
-    <section aria-labelledby="rail-lists-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:p-5" data-consumit-profile-rail-lists>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-bold text-[var(--fs-ink)]" id="rail-lists-heading">Recent lists</h2>
-        <a className="min-h-11 inline-flex items-center rounded text-xs font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#lists">
-          View all
-        </a>
-      </div>
-      <div className="mt-3 grid gap-3">
-        {recent.map((list) => (
-          <CuratedListCard
-            artworkSources={[]}
-            curator={name}
-            href={`/lists/${list.slug}`}
-            key={list.id}
-            meta={`${list.itemCount} titles`}
-            title={list.name}
+    <ol className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4" data-consumit-profile-activity>
+      {items.map((item) => {
+        const title = titleMap.get(refKey(item.ref))
+        const label = title?.title ?? (kindLabel(item.ref.kind) + ' #' + item.ref.id)
+        const action = item.kind === 'review' ? 'Reviewed' : item.rewatch ? 'Rewatched' : 'Watched'
+        const destination = item.kind === 'watch' ? diaryEntryHref(item.ref) : titleHref(item.ref)
+        const cardTitle = title ?? { id: item.ref.id, kind: item.ref.kind, title: label, year: null, posterUrl: null, tmdbRating: null }
+        return (
+          <TitleCard
+            className="min-w-0"
+            href={destination}
+            key={item.key}
+            meta={[title?.year, kindLabel(item.ref.kind)].filter(Boolean).join(' · ')}
+            rating={null}
+            signal={(
+              <div className="flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-[var(--fs-accent)]">
+                    {item.kind === 'review' ? <Pencil aria-hidden="true" className="size-3.5 shrink-0" /> : item.rewatch ? <Repeat2 aria-hidden="true" className="size-3.5 shrink-0" /> : <Eye aria-hidden="true" className="size-3.5 shrink-0" />}
+                    <span className="truncate">{action}</span>
+                  </span>
+                  {item.date ? (
+                    <time className="shrink-0 text-[var(--fs-muted)]" dateTime={item.date}>
+                      {formatDiaryDate(item.date)}
+                    </time>
+                  ) : null}
+                  {item.episodeLabel ? <span className="truncate text-[var(--fs-muted)]">{item.episodeLabel}</span> : null}
+              </div>
+            )}
+            title={cardTitle}
+            titleHref={destination}
           />
-        ))}
-      </div>
+        )
+      })}
+    </ol>
+  )
+}
+
+function ProfileCollectionLink({ href, children }: { href: string; children: string }) {
+  return (
+    <Link className="inline-flex min-h-10 items-center gap-1 rounded-control text-xs text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={href}>
+      {children}<ArrowUpRight aria-hidden="true" className="size-3.5" />
+    </Link>
+  )
+}
+
+function SavedTitlesPreview({ preview, titleMap, username }: {
+  preview: { hasMore: boolean; items: CatalogRef[] } | { unavailable: true }
+  titleMap: Map<string, CatalogTitleSummary>
+  username: string
+}) {
+  return (
+    <section aria-labelledby="profile-saved-heading" data-consumit-private-saved-preview>
+      <SectionHeading action={<ProfileCollectionLink href={`/profile/${encodeURIComponent(username)}/watchlist`}>View all</ProfileCollectionLink>} id="profile-saved-heading" title="Watchlist" variant="compact" />
+      {'unavailable' in preview ? (
+        <p className="mt-4 text-xs leading-5 text-[var(--fs-muted)]" role="status">Your saved shelf is temporarily unavailable. Open your library to try again.</p>
+      ) : preview.items.length === 0 ? (
+        <div className="mt-4 flex items-center gap-3 rounded-control border border-dashed border-[var(--fs-field-border)] px-3 py-4">
+          <Bookmark aria-hidden="true" className="size-5 shrink-0 text-[var(--fs-muted)]" />
+          <p className="text-xs leading-5 text-[var(--fs-muted)]">Keep a title for later and it will be waiting here.</p>
+        </div>
+      ) : (
+        <>
+          <PosterStack className="mt-5" linkComponent={Link} items={preview.items.slice(0, 5).map((ref) => {
+              const title = titleMap.get(refKey(ref))
+              const label = title?.title ?? `${kindLabel(ref.kind)} #${ref.id}`
+              return { key: refKey(ref), href: titleHref(ref), label, src: title?.posterUrl ?? undefined }
+            })} />
+          <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">Latest {Math.min(preview.items.length, 5)} saved title{preview.items.length === 1 ? '' : 's'}{preview.hasMore || preview.items.length > 5 ? ' · more in your Watchlist' : ''}</p>
+        </>
+      )}
     </section>
   )
 }
 
-export function ProfileScreen({ catalogUnavailable = false, data, owner = false, titles }: { catalogUnavailable?: boolean; data: MemberProfileData; owner?: boolean; titles: readonly CatalogTitleSummary[] }) {
+function DiaryPreview({ data, titleMap }: {
+  data: MemberProfileData
+  titleMap: Map<string, CatalogTitleSummary>
+}) {
+  const entries = data.diary.slice(0, 5)
+  return (
+    <section aria-labelledby="profile-diary-preview-heading" data-consumit-diary-preview>
+      <SectionHeading action={<ProfileCollectionLink href={`/profile/${encodeURIComponent(data.profile.username)}/diary`}>View all</ProfileCollectionLink>} id="profile-diary-preview-heading" title="Diary" variant="compact" />
+      {entries.length === 0 ? (
+        <p className="mt-4 rounded-control border border-dashed border-[var(--fs-field-border)] px-3 py-4 text-xs leading-5 text-[var(--fs-muted)]">Watched stories will find a place here once the diary begins.</p>
+      ) : (
+        <ol className="mt-4 space-y-1">
+          {entries.map((entry) => {
+            const title = titleMap.get(refKey(entry))
+            const label = title?.title ?? `${kindLabel(entry.kind)} #${entry.id}`
+            return (
+              <li className="grid grid-cols-[2.5rem_minmax(0,1fr)] gap-3 border-t border-[var(--fs-line)] py-2.5 first:border-t-0 first:pt-0" key={entry.entryId}>
+                <time className="pt-0.5 text-center text-xs font-bold tracking-wide text-[var(--fs-muted)] uppercase" dateTime={entry.watchedOn}>
+                  {formatDiaryDate(entry.watchedOn)}
+                </time>
+                <div className="min-w-0">
+                  <Link className="block truncate text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={diaryEntryHref(entry)}>{label}</Link>
+                  <p className="mt-1 truncate text-xs text-[var(--fs-muted)]">{[entry.rewatch ? 'Rewatched' : 'Watched', diaryEpisodeLabel(entry)].filter(Boolean).join(' · ')}</p>
+                </div>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {entries.length < data.statistics.diaryEntries ? <p className="mt-2 text-xs text-[var(--fs-muted)]">Latest {entries.length} of {data.statistics.diaryEntries} diary entries</p> : null}
+    </section>
+  )
+}
+
+function RecentListPreview({ data, listPosters }: {
+  data: MemberProfileData
+  listPosters: Readonly<Record<string, readonly (string | undefined)[]>>
+}) {
+  const lists = data.lists.slice(0, 2)
+  return (
+    <section aria-labelledby="profile-lists-preview-heading" data-consumit-recent-lists-preview>
+      <SectionHeading action={<ProfileCollectionLink href={`/profile/${encodeURIComponent(data.profile.username)}/lists`}>View all</ProfileCollectionLink>} id="profile-lists-preview-heading" title="Recent lists" variant="compact" />
+      {lists.length === 0 ? (
+        <p className="mt-4 rounded-control border border-dashed border-[var(--fs-field-border)] px-3 py-4 text-xs leading-5 text-[var(--fs-muted)]">No lists here yet. A good collection always starts with one title.</p>
+      ) : (
+        <ul className="mt-4 space-y-4">
+          {lists.map((list) => {
+            const posters = listPosters[list.slug] ?? []
+            return (
+              <li key={list.id}>
+                <Link className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/lists/${list.slug}`}>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold text-[var(--fs-ink)] transition-colors group-hover:text-[var(--fs-accent)]">{list.name}</span>
+                    <span className="mt-1 block text-xs text-[var(--fs-muted)]">{list.itemCount} {list.itemCount === 1 ? 'title' : 'titles'}{list.visibility === 'private' ? ' · private' : ''}</span>
+                  </span>
+                  <PosterStack aria-hidden="true" className="w-28" items={posters.map((src, index) => ({ key: String(index), label: '', src }))} />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {data.lists.length > lists.length ? <p className="mt-3 text-xs text-[var(--fs-muted)]">Latest {lists.length} of {data.statistics.lists} lists</p> : null}
+    </section>
+  )
+}
+
+function RatingBar({ count, owner, username, value, tallest }: { count: number; owner: boolean; username: string; value: number; tallest: number }) {
+  const label = `${count} ${count === 1 ? 'title' : 'titles'} rated ${value} out of 10`
+  const bar = <span aria-hidden="true" className={`block w-full rounded-t-[3px] transition-[height,background-color] duration-200 motion-reduce:transition-none ${owner && count > 0 ? 'bg-[var(--fs-secondary)] group-hover:bg-[var(--fs-accent)] group-focus-visible:bg-[var(--fs-accent)]' : 'bg-[var(--fs-hover)]'}`} style={{ height: count === 0 ? '3px' : Math.max(6, (count / tallest) * 72) + 'px' }} />
+  if (owner && count > 0) {
+    return <Link aria-label={`Show ${label}`} className="group flex h-full min-w-0 flex-1 items-end rounded-t-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/profile/${encodeURIComponent(username)}/films?rating=${value}`} title={label}>{bar}</Link>
+  }
+  return <span aria-label={label} className="flex h-full min-w-0 flex-1 items-end" role="img" title={label}>{bar}</span>
+}
+
+export function ProfileScreen({ catalogUnavailable = false, data, listPosters = {}, owner = false, savedPreview, titles }: { catalogUnavailable?: boolean; data: MemberProfileData; listPosters?: Readonly<Record<string, readonly (string | undefined)[]>>; owner?: boolean; savedPreview?: { hasMore: boolean; items: CatalogRef[] } | { unavailable: true }; titles: readonly CatalogTitleSummary[] }) {
   const titleMap = new Map(titles.map((title) => [refKey(title), title]))
   const name = data.profile.displayName ?? data.profile.username
   const favoriteTitles = data.favorites.map((favorite) => titleMap.get(refKey(favorite))).filter((title): title is CatalogTitleSummary => Boolean(title))
@@ -146,73 +260,60 @@ export function ProfileScreen({ catalogUnavailable = false, data, owner = false,
   const genreCounts = new Map<string, number>()
   for (const title of favoriteTitles) for (const genre of title.genreNames) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1)
   const favoriteGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+  const ratingDistribution = data.ratingDistribution ?? []
+  const ratingCount = ratingDistribution.reduce((total, rating) => total + rating.count, 0)
+  const tallestRatingBar = Math.max(1, ...ratingDistribution.map((rating) => rating.count))
   const meta = [`@${data.profile.username}`, data.profile.location ?? null, `Joined ${new Date(data.profile.createdAt).getUTCFullYear()}`].filter(Boolean).join(' · ')
-  const diaryByMonth = new Map<string, typeof data.diary>()
-  for (const entry of data.diary) {
-    const key = formatMonthKey(entry.watchedOn)
-    const bucket = diaryByMonth.get(key)
-    if (bucket) bucket.push(entry)
-    else diaryByMonth.set(key, [entry])
+  const activity = buildActivity(data)
+  const sectionCounts: Partial<Record<ProfileSectionId, number>> = {
+    diary: data.statistics.diaryEntries,
+    films: data.statistics.watched,
+    lists: data.statistics.lists,
+    reviews: data.statistics.reviews,
   }
 
   return (
     <FilScreenShell pageHeading={undefined}>
       <ProfileEditProvider>
-        <main className="mx-auto w-full max-w-[90rem]" data-consumit-owner-profile={owner || undefined} data-consumit-public-profile={!owner || undefined}>
-          <h1 className="sr-only">{owner ? 'Your profile' : `${name}'s public profile`}</h1>
-
-          {/* Cinematic identity hero — FilScreen title-hero language, Letterboxd member facts. */}
-          <header
-            className="relative isolate overflow-hidden rounded-2xl border border-[var(--fs-line)] bg-[#0b0b0e] text-white shadow-2xl"
-            data-consumit-title-masthead
-          >
+        <main className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-owner-profile={owner || undefined} data-consumit-public-profile={!owner || undefined}>
+          <header className="relative isolate overflow-hidden rounded-card border border-white/10 bg-[#09090b] text-white" data-consumit-profile-masthead>
             {backdropUrl ? (
-              <Image
-                alt=""
-                className="object-cover"
-                fill
-                priority
-                sizes="(max-width: 1280px) 100vw, 1400px"
-                src={backdropUrl}
-              />
+              <Image alt="" className="object-cover" fill priority sizes="(max-width: 1280px) 100vw, 1400px" src={backdropUrl} />
             ) : (
               <div
                 aria-hidden="true"
                 className="absolute inset-0"
-                style={{ background: 'radial-gradient(120% 90% at 78% 8%, #f7b267 0%, #d97b3f 28%, #7a3a22 55%, #2a1a12 100%)' }}
+                style={{ background: 'radial-gradient(120% 90% at 78% 8%, var(--consumit-surface-raised) 0%, var(--consumit-surface) 34%, var(--consumit-nav) 66%, var(--consumit-canvas) 100%)' }}
               />
             )}
-            <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.18)_100%)]" />
-            <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(11,11,14,0.98)_0%,rgba(11,11,14,0.4)_40%,transparent_100%)]" />
+            <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(90deg,rgba(9,9,11,0.96)_0%,rgba(9,9,11,0.72)_52%,rgba(9,9,11,0.18)_100%)]" />
+            <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(9,9,11,0.98)_0%,rgba(9,9,11,0.36)_46%,transparent_100%)]" />
 
-            <div className="relative flex min-h-[420px] flex-col justify-end gap-8 p-6 sm:p-10 lg:p-12">
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-end">
+            <div className="relative flex min-h-[310px] flex-col justify-end gap-5 p-5 sm:min-h-[350px] sm:p-7 lg:p-8">
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:gap-5">
                   <Avatar
-                    className="size-24 shrink-0 ring-2 ring-white/25 lg:size-32 lg:text-2xl"
+                    className="size-20 shrink-0 ring-2 ring-white/25 sm:size-24 lg:size-28 lg:text-2xl"
                     decorative={false}
-                    imageAlt={`${name} avatar`}
+                    imageAlt={name + ' avatar'}
                     name={name}
                     size="xl"
                     src={memberAvatarSrc(data.profile.avatarUrl, data.profile.username) ?? undefined}
                     treatment={data.profile.avatarStyle}
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-bold tracking-[0.18em] text-white/60 uppercase">{owner ? 'Your cinema' : 'Member profile'}</p>
-                    <p className="mt-2 font-display text-[clamp(2.25rem,4.5vw,3.75rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">
-                      {name}
-                    </p>
-                    <p className="mt-3 text-xs font-bold text-white/70">{meta}</p>
-                    {data.profile.bio ? (
-                      <p className="mt-4 max-w-[62ch] text-sm leading-6 text-white/85">{data.profile.bio}</p>
-                    ) : null}
+                    <h1 className="font-display text-[clamp(2.4rem,5vw,4.5rem)] leading-[0.94] font-normal tracking-[-0.025em] text-white">{name}</h1>
+                    <p className="mt-3 text-xs font-medium text-white/75">{meta}</p>
+                    {data.profile.bio ? <p className="mt-3 max-w-[62ch] text-sm leading-6 text-white/85">{data.profile.bio}</p> : null}
                   </div>
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-3">
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:pb-1">
+                  <ShareProfile username={data.profile.username} variant="inline" />
                   {owner ? (
                     <>
                       <Link
-                        className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[#f4f0e8] px-5 text-sm font-bold text-[#09090b] shadow-md transition-all hover:bg-white active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-control bg-[var(--fs-accent)] px-5 text-sm font-bold text-[var(--fs-on-accent)] transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none"
                         href="/settings"
                       >
                         <Pencil aria-hidden="true" className="size-4" />
@@ -220,186 +321,126 @@ export function ProfileScreen({ catalogUnavailable = false, data, owner = false,
                       </Link>
                       <EditBannerButton />
                     </>
-                  ) : (
-                    <FollowButton username={data.profile.username} />
-                  )}
+                  ) : null}
                 </div>
               </div>
 
-              <dl className="flex flex-wrap gap-x-8 gap-y-4 border-t border-white/15 pt-6">
-                <HeroStat label="watched" value={data.statistics.watched} />
-                <HeroStat label="diary" value={data.statistics.diaryEntries} />
-                <HeroStat label="reviews" value={data.statistics.reviews} />
-                <HeroStat label="lists" value={data.statistics.lists} />
-                <HeroStat label="followers" value={data.social.followers} />
-                <HeroStat label="following" value={data.social.following} />
-              </dl>
+              <nav aria-label={name + ' profile statistics'} className="flex flex-wrap items-center gap-x-5 gap-y-0 border-t border-white/15 pt-3 sm:gap-x-7">
+                <HeroStat href={'/profile/' + encodeURIComponent(data.profile.username) + '/films'} label="watched" value={data.statistics.watched} />
+                <HeroStat href={'/profile/' + encodeURIComponent(data.profile.username) + '/diary'} label="diary" value={data.statistics.diaryEntries} />
+                <HeroStat href={'/profile/' + encodeURIComponent(data.profile.username) + '/reviews'} label="reviews" value={data.statistics.reviews} />
+                <HeroStat href={'/profile/' + encodeURIComponent(data.profile.username) + '/lists'} label="lists" value={data.statistics.lists} />
+              </nav>
             </div>
           </header>
 
           {owner ? <BannerEditor currentBannerUrl={data.profile.bannerUrl} /> : null}
 
-          <div className="mt-8 px-1 sm:px-3 lg:px-4">
-            <Tabs
-              activeValue="overview"
-              aria-label={`${name} profile sections`}
-              items={[
-                { href: '#overview', label: 'Overview', value: 'overview' },
-                { href: '#favorites', label: 'Favorites', value: 'favorites' },
-                { href: '#diary', label: 'Diary', value: 'diary' },
-                { href: '#reviews', label: 'Reviews', value: 'reviews' },
-                { href: '#lists', label: 'Lists', value: 'lists' },
-              ]}
-            />
+          <div className="mt-5 sm:mt-6">
+            <ProfileSectionNavigation counts={sectionCounts} name={name} owner={owner} username={data.profile.username} />
 
             {catalogUnavailable ? (
-              <p className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 text-xs leading-5 text-[var(--fs-muted)]" role="status">
-                Your profile is available, but TMDB artwork and title details could not load.
+              <p className="mt-5 border-y border-[var(--fs-line)] py-3 text-xs leading-5 text-[var(--fs-muted)]" role="status">
+                The profile is here, but catalog artwork and title details could not load.
               </p>
             ) : null}
 
-            {/* Main column + right rail (Share / Diary / Lists), matching the
-                reference profile composition without fabricating activity. */}
-            <div className="mt-6 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)] lg:items-start xl:gap-10">
-              <div className="min-w-0">
-                <section className="py-6 sm:py-8" id="overview" aria-labelledby="favorites-heading">
-                  <div id="favorites" className="scroll-mt-6">
+            <section className="py-7 sm:py-9" id="overview" aria-label="Profile overview">
+              <div className="grid min-w-0 items-start gap-9 lg:grid-cols-[minmax(0,1.65fr)_minmax(17rem,0.78fr)] lg:gap-12 xl:gap-16">
+                <div className="min-w-0 space-y-10 sm:space-y-12">
+                  <section className="min-w-0 scroll-mt-8" id="favorites" aria-labelledby="favorites-heading">
                     <SectionHeading
-                      description={owner ? 'Your six defining favorites.' : `The stories that stay with ${name}.`}
+                      description={owner ? 'Four frames for the stories you carry with you.' : 'Four stories that stay with ' + name + '.'}
                       id="favorites-heading"
-                      title="Favorites"
+                      title="Favorite titles"
                     />
                     {data.favorites.length === 0 && !owner ? (
-                      <div className="mt-8">
-                        <EmptyState>This member has not picked favorites yet.</EmptyState>
-                      </div>
+                      <div className="mt-6"><EmptyState>No Favorite titles yet.</EmptyState></div>
                     ) : (
-                      <FavoritesShelf
-                        favorites={data.favorites}
-                        key={data.favorites.map(refKey).join('|')}
-                        owner={owner}
-                        titles={titles}
-                      />
+                      <FavoritesShelf favorites={data.favorites} key={data.favorites.map(refKey).join('|')} owner={owner} titles={titles} />
                     )}
-                  </div>
+                  </section>
+
+                  <section className="min-w-0 scroll-mt-8" id="activity" aria-labelledby="activity-heading">
+                    <SectionHeading
+                      action={<ProfileCollectionLink href={'/profile/' + encodeURIComponent(data.profile.username) + '/activity'}>All activity</ProfileCollectionLink>}
+                      id="activity-heading"
+                      title="Recent activity"
+                    />
+                    {activity.length === 0 ? (
+                      <div className="mt-5"><EmptyState>No watches or reviews yet. Your recent activity will appear here.</EmptyState></div>
+                    ) : (
+                      <>
+                        <div className="mt-4"><ActivityFeed items={activity.slice(0, 4)} titleMap={titleMap} /></div>
+                      </>
+                    )}
+                  </section>
+
+                  {data.reviews.length > 0 ? (
+                    <section className="min-w-0 border-t border-[var(--fs-line)] pt-6" aria-labelledby="recent-reviews-heading">
+                      <SectionHeading
+                        action={<ProfileCollectionLink href={'/profile/' + encodeURIComponent(data.profile.username) + '/reviews'}>Read all</ProfileCollectionLink>}
+                        description="Notes left behind for stories that lingered."
+                        id="recent-reviews-heading"
+                        title="Recent reviews"
+                      />
+                      <ul className="mt-5 divide-y divide-[var(--fs-line)] border-y border-[var(--fs-line)]">
+                        {data.reviews.slice(0, 2).map((review) => {
+                          const title = titleMap.get(refKey(review))
+                          const label = title?.title ?? (kindLabel(review.kind) + ' #' + review.id)
+                          return (
+                            <li className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] gap-4 py-4 sm:grid-cols-[4rem_minmax(0,1fr)]" key={review.reviewId}>
+                              <Link className="block rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={titleHref(review)}>
+                                <ArtworkFrame alt={label + ' poster'} ratio="portrait" src={title?.posterUrl ?? undefined} />
+                              </Link>
+                              <article className="min-w-0">
+                                <Link className="font-display text-xl leading-tight text-[var(--fs-ink)] outline-none hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={titleHref(review)}>{label}</Link>
+                                <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-[var(--fs-secondary)]">{review.body}</p>
+                              </article>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </section>
+                  ) : null}
+                </div>
+
+                <aside aria-label={name + ' film journal highlights'} className="min-w-0 space-y-7 lg:pt-1">
+                  {owner && savedPreview ? <SavedTitlesPreview preview={savedPreview} titleMap={titleMap} username={data.profile.username} /> : null}
+                  <DiaryPreview data={data} titleMap={titleMap} />
+                  <RecentListPreview data={data} listPosters={listPosters} />
 
                   {favoriteGenres.length > 0 ? (
-                    <div className="mt-8 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6" aria-labelledby="taste-portrait-heading">
-                      <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="taste-portrait-heading">In the favorites</h2>
-                      <p className="mt-1 text-xs text-[var(--fs-muted)]">Genres across {favoriteTitles.length} selected {favoriteTitles.length === 1 ? 'title' : 'titles'}.</p>
+                    <section aria-labelledby="taste-portrait-heading">
+                      <SectionHeading id="taste-portrait-heading" title="Taste from favorites" variant="compact" />
+                      <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">
+                        Genres across {favoriteTitles.length} selected {favoriteTitles.length === 1 ? 'title' : 'titles'}.
+                      </p>
                       <ul className="mt-4 flex flex-wrap gap-2">
                         {favoriteGenres.map(([genre, count]) => (
-                          <li
-                            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-4 text-xs font-bold text-[var(--fs-ink)]"
-                            key={genre}
-                          >
-                            {genre}
-                            <span className="font-normal text-[var(--fs-muted)] tabular-nums">{count} of {favoriteTitles.length}</span>
+                          <li className="inline-flex min-h-9 items-center gap-2 rounded-control border border-[var(--fs-field-border)] px-3 text-xs font-bold text-[var(--fs-ink)]" key={genre}>
+                            {genre}<span className="font-normal tabular-nums text-[var(--fs-muted)]">{count}/{favoriteTitles.length}</span>
                           </li>
                         ))}
                       </ul>
-                    </div>
+                    </section>
                   ) : null}
-                </section>
 
-                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="diary" aria-labelledby="diary-heading">
-                  <SectionHeading id="diary-heading" title="Diary" />
-                  {data.diary.length === 0 ? (
-                    <div className="mt-6"><EmptyState>No diary entries yet. Log a watch to keep its date here.</EmptyState></div>
-                  ) : (
-                    <div className="mt-6 space-y-8">
-                      {[...diaryByMonth.entries()].map(([month, entries]) => (
-                        <div key={month}>
-                          <h3 className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--fs-muted)]">{month}</h3>
-                          <div className="max-w-5xl">
-                            {entries.map((entry) => {
-                              const title = titleMap.get(refKey(entry))
-                              return (
-                                <DiaryRow
-                                  artworkSrc={title?.posterUrl ?? undefined}
-                                  date={formatDiaryDate(entry.watchedOn)}
-                                  detail={entry.rewatch ? 'Rewatched' : 'Watched'}
-                                  href={titleHref(entry)}
-                                  key={entry.entryId}
-                                  title={title?.title ?? `Movie #${entry.id}`}
-                                />
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="reviews" aria-labelledby="reviews-heading">
-                  <SectionHeading id="reviews-heading" title="Reviews" />
-                  {data.reviews.length === 0 ? (
-                    <div className="mt-8 max-w-5xl"><EmptyState>No reviews published yet.</EmptyState></div>
-                  ) : (
-                    <div className="mt-8 grid gap-4 xl:grid-cols-2">
-                      {data.reviews.map((review) => {
-                        const title = titleMap.get(refKey(review))
-                        const label = title?.title ?? `Movie #${review.id}`
-                        return (
-                          <article
-                            className="group grid min-w-0 grid-cols-[96px_minmax(0,1fr)] overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none sm:grid-cols-[128px_minmax(0,1fr)]"
-                            key={review.reviewId}
-                          >
-                            <ArtworkFrame
-                              alt={`${label} poster`}
-                              className="h-full rounded-none border-0"
-                              ratio="portrait"
-                              src={title?.posterUrl ?? undefined}
-                            />
-                            <div className="min-w-0 p-4 sm:p-5">
-                              <Link
-                                className="font-display text-xl leading-tight text-[var(--fs-ink)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:text-2xl"
-                                href={titleHref(review)}
-                              >
-                                {label}
-                              </Link>
-                              {review.reviewedOn ? (
-                                <p className="mt-1.5 text-xs text-[var(--fs-muted)]">Reviewed {formatReviewDate(review.reviewedOn)}</p>
-                              ) : null}
-                              <p className="mt-3 line-clamp-6 text-sm leading-6 whitespace-pre-wrap text-[var(--fs-secondary)]">
-                                {review.body}
-                              </p>
-                            </div>
-                          </article>
-                        )
-                      })}
-                    </div>
-                  )}
-                </section>
-
-                <section className="border-t border-[var(--fs-line)] py-10 sm:py-12" id="lists" aria-labelledby="lists-heading">
-                  <SectionHeading id="lists-heading" title={`${name}'s lists`} />
-                  {data.lists.length === 0 ? (
-                    <div className="mt-8"><EmptyState>No lists yet. Imported lists remain private until this member publishes them.</EmptyState></div>
-                  ) : (
-                    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {data.lists.map((list) => (
-                        <CuratedListCard
-                          artworkSources={[]}
-                          curator={name}
-                          href={`/lists/${list.slug}`}
-                          key={list.id}
-                          meta={`${list.itemCount} titles`}
-                          title={list.name}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </section>
+                  {ratingCount > 0 ? (
+                    <section aria-labelledby="profile-ratings-heading">
+                      <SectionHeading action={<span className="inline-block pt-2 text-xs tabular-nums text-[var(--fs-muted)]">{ratingCount}</span>} id="profile-ratings-heading" title="Ratings" variant="compact" />
+                      <div aria-label={'Distribution of ' + ratingCount + ' ratings'} className="mt-5 flex h-20 items-end gap-1" role="group">
+                        {ratingDistribution.map(({ count, value }) => (
+                          <RatingBar key={value} count={count} owner={owner} username={data.profile.username} value={value} tallest={tallestRatingBar} />
+                        ))}
+                      </div>
+                      <div aria-hidden="true" className="mt-2 flex justify-between text-xs font-bold tabular-nums text-[var(--fs-muted)]"><span>1</span><span>10</span></div>
+                      <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">{owner ? 'Select a bar to see titles at that rating. These ratings are only visible to you.' : 'Only grouped totals appear here. Individual title ratings stay private.'}</p>
+                    </section>
+                  ) : null}
+                </aside>
               </div>
-
-              <aside aria-label={`${name} profile summary`} className="flex flex-col gap-4 lg:sticky lg:top-6 lg:gap-5" data-consumit-profile-rail>
-                <ShareProfile username={data.profile.username} />
-                <RailDiary entries={data.diary} titleMap={titleMap} />
-                <RailLists lists={data.lists} name={name} />
-              </aside>
-            </div>
+            </section>
           </div>
         </main>
       </ProfileEditProvider>

@@ -26,7 +26,7 @@ import {
 
 import { FilScreenShell } from '../shared'
 import { useSession } from '../session/session'
-import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, invalidateMemberLibraryCache, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
+import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
 
 type ToggleKey = 'autoplay' | 'releases' | 'spoilers' | 'subtitles'
@@ -120,7 +120,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
     setAccountError(null)
     try {
       await logoutMember()
-      invalidateMemberLibraryCache()
       session.clearMember()
       router.push('/sign-in')
       router.refresh()
@@ -199,7 +198,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
             <aside className="hidden rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] p-5 lg:block">
               <h2 className="text-sm font-bold text-[var(--fs-ink)]">Need a hand?</h2>
               <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">Playback and account support are kept separate from your social activity.</p>
-              <a className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[var(--fs-accent)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="#support">Open help center <ExternalLink aria-hidden="true" className="size-4" /></a>
+              <Link className="mt-4 inline-flex min-h-11 items-center gap-2 text-xs font-bold text-[var(--fs-accent)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/help">Open help center <ExternalLink aria-hidden="true" className="size-4" /></Link>
             </aside>
           </div>
 
@@ -339,11 +338,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               title="Notifications"
             >
               <PreferenceRow control={<Toggle checked={values.releases} label="New episode notifications" onCheckedChange={() => toggle('releases')} />} description="Hear when a saved series has a new available episode." label="New episodes" />
-              <PreferenceRow
-                control={<SegmentedControl className="w-48" defaultValue="daily" legend="Circle activity summary" name="circle-digest" options={[{ label: 'Daily', value: 'daily' }, { label: 'Off', value: 'off' }]} />}
-                description="A quiet summary of reviews and list updates from people you follow."
-                label="Circle digest"
-              />
             </SettingsSection>
 
             <SettingsSection
@@ -375,7 +369,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
             <section className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6" id="support">
               <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]">Something not behaving?</h2>
               <p className="mt-3 max-w-[62ch] text-sm leading-6 text-[var(--fs-muted)]">Report playback or account trouble without exposing passwords, payment details, or private browsing data.</p>
-              <Button className="mt-6" variant="secondary">Report an issue</Button>
+              <Link className="mt-6 inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange" href="/report-issue">Report an issue</Link>
             </section>
           </div>
         </div>

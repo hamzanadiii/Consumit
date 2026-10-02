@@ -80,12 +80,12 @@ describe('filscreen live home', () => {
     )
   })
 
-  it('keeps circle activity honest until the social slice lands', () => {
+  it('keeps the home surface personal with no social feed', () => {
     render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
 
-    expect(screen.getByRole('heading', { name: 'Circle activity' })).toBeInTheDocument()
-    expect(screen.getByText(/no circle activity yet/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Find members' })).toHaveAttribute('href', '/friends')
+    expect(screen.queryByRole('heading', { name: 'Circle activity' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Find members' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'View all' })).not.toBeInTheDocument()
   })
 
   it('credits TMDB with a path to catalog credits', () => {
@@ -107,9 +107,10 @@ describe('filscreen live home', () => {
     mockPathname = '/search'
     render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
 
-    expect(screen.getByRole('link', { name: 'Categories' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'Categories' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Search titles' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('href', '/library#history')
+    expect(screen.queryByRole('link', { name: 'History' })).not.toBeInTheDocument()
   })
 
   it('renders dark by default and persists the member theme choice', async () => {

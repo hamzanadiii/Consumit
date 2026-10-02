@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
       disallow: [
         '/watch/',
         '/library',
-        '/friends',
+        '/watchlist',
         '/profile/',
         '/settings',
         '/sign-in',

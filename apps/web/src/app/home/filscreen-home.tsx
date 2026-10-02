@@ -2,7 +2,6 @@
 
 import type { AnimeTitleSummary, CatalogTitleSummary } from '@consumit/contracts'
 import { Clock, Flame } from 'lucide-react'
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 import type { HeroDetail } from '../catalog/catalog-ui'
@@ -128,16 +127,6 @@ export function FilScreenHome({
       ) : null}
 
       {serviceRail}
-
-      <section aria-labelledby="filscreen-circle-title" className="mt-8">
-        <h2 className="font-display text-2xl tracking-[-0.02em]" id="filscreen-circle-title">Circle activity</h2>
-        <div className="mt-3 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-          <p className="text-sm leading-6 text-[var(--fs-secondary)]">No circle activity yet. Follow members to see what they are watching.</p>
-          <Link className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/friends">
-            Find members
-          </Link>
-        </div>
-      </section>
 
       <p className="mt-6 flex items-center gap-2 text-xs text-[var(--fs-muted)]">
         <Clock aria-hidden="true" className="size-3.5" />

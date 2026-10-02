@@ -238,17 +238,14 @@ describe('title reviews', () => {
     expect(mocks.listTitleReviews).toHaveBeenLastCalledWith({ id: 693134, kind: 'movie' }, 1, 'popular', 'all')
   })
 
-  it('filters reviews to the member’s circle on the friends tab', async () => {
-    const user = userEvent.setup()
+  it('keeps review tabs personal with no friends filter', async () => {
     mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({ ...EMPTY_PAGE })
     render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
 
-    await user.click(await screen.findByRole('button', { name: 'Friends' }))
-
-    expect(await screen.findByText('Friend reviews')).toBeInTheDocument()
-    expect(mocks.listTitleReviews).toHaveBeenLastCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', 'circle')
-    expect(screen.getByText(/No reviews from your circle yet/)).toBeInTheDocument()
+    expect(await screen.findByText('Recent reviews')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Friends' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Friend reviews')).not.toBeInTheDocument()
   })
 
   it('likes a member review optimistically', async () => {

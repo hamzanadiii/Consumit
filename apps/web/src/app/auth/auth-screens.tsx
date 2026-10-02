@@ -119,7 +119,7 @@ export function SignInScreen({ nextPath = '/', titles = [] }: { nextPath?: strin
   }
 
   return (
-    <AuthFrame description="Sign in to continue your library and circle." footer={null} title="Welcome back." titles={titles}>
+    <AuthFrame description="Sign in to continue your personal library." footer={null} title="Welcome back." titles={titles}>
       <form className="flex flex-col gap-5" method="post" onSubmit={submit}>
         <AuthField autoComplete="email" helper="Use the verified email for your account, not your username." id="sign-in-email" label="Email" name="email" required type="email" />
         <div className="space-y-2">

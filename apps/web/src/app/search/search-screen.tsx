@@ -11,14 +11,13 @@ import {
   Button,
   EmptyState,
   FilterChip,
-  MoodSelector,
   SectionHeading,
-  WatchCard,
 } from '@consumit/ui'
 
 import { CatalogGrid, titleMeta } from '../catalog/catalog-ui'
 import { SaveTitleButton } from '../catalog/save-title-button'
 import { FilScreenShell } from '../shared'
+import { TitleCard } from '../shared/title-card'
 
 type SearchScreenProps = {
   /** AniList anime matches. TMDB never serves anime, so these arrive separately. */
@@ -29,33 +28,20 @@ type SearchScreenProps = {
 }
 
 function AnimeSearchCard({ anime }: { anime: AnimeTitleSummary }) {
-  const score = anime.averageScore === null ? undefined : anime.averageScore / 10
   const meta = [anime.seasonYear, 'Anime', anime.genres.slice(0, 2).join(' · ')].filter(Boolean).join(' · ')
   return (
-    <WatchCard
-      artworkSrc={anime.coverImage.url ?? undefined}
-      bookmark={<SaveTitleButton id={anime.anilistId} kind="anime" title={anime.titles.preferred} />}
+    <TitleCard
+      action={<SaveTitleButton id={anime.anilistId} kind="anime" title={anime.titles.preferred} />}
       href={watchHref({ kind: 'anime', id: anime.anilistId })}
-      linkComponent={Link}
       meta={meta}
-      rating={score}
-      title={anime.titles.preferred}
       titleHref={`/anime/${anime.anilistId}`}
+      title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, year: anime.seasonYear, posterUrl: anime.coverImage.url, tmdbRating: anime.averageScore === null ? null : anime.averageScore / 10 }}
     />
   )
 }
 
-const moodOptions = [
-  { label: 'Slow & beautiful', tone: 'orange', value: 'slow' },
-  { label: 'Mess with my head', tone: 'lilac', value: 'strange' },
-  { label: 'Easy comfort', tone: 'lime', value: 'comfort' },
-  { label: 'Laugh with friends', tone: 'orange', value: 'funny' },
-  { label: 'Pure tension', tone: 'rose', value: 'tense' },
-] as const
-
 export function SearchScreen({ animeResults, initialQuery, page, queryTooShort }: SearchScreenProps) {
   const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series' | 'anime'>('all')
-  const [mood, setMood] = useState<string>()
   // TMDB serves movies and series only — anime matches come from AniList.
   const animeItems = animeResults ?? []
   const results = useMemo(() => {
@@ -121,9 +107,9 @@ export function SearchScreen({ animeResults, initialQuery, page, queryTooShort }
           {showAnime ? (
             <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="anime-results" aria-labelledby="anime-results-heading">
               <SectionHeading description={`Anime metadata by AniList · ${animeItems.length} ${animeItems.length === 1 ? 'match' : 'matches'}`} id="anime-results-heading" title="Anime" />
-              <div className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              <ul className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {animeItems.map((anime) => <AnimeSearchCard anime={anime} key={`anime:${anime.anilistId}`} />)}
-              </div>
+              </ul>
             </section>
           ) : activeKind === 'anime' ? (
             <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="anime-results" aria-labelledby="anime-results-heading">
@@ -134,15 +120,6 @@ export function SearchScreen({ animeResults, initialQuery, page, queryTooShort }
             </section>
           ) : null}
 
-          <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="people" aria-labelledby="people-heading"><SectionHeading description="Member discovery arrives with the social slice." id="people-heading" title="People" /><EmptyState description="No member suggestions yet. Consumit does not fabricate profiles, follows, or activity." title="Social discovery is not available" /></section>
-
-          <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" aria-labelledby="mood-heading">
-            <SectionHeading description="Pick a lane and jump back to the results." id="mood-heading" title="What kind of night is it?" />
-            <div className="mt-7 flex flex-col gap-4 xl:flex-row xl:items-start">
-              <MoodSelector className="flex-1" label="Choose tonight’s mood" onValueChange={setMood} options={moodOptions} value={mood} />
-              <a className={`${buttonVariants({ size: 'lg' })} justify-between xl:min-w-[19rem]`} href="#results">Surprise me tonight<ArrowRight aria-hidden="true" /></a>
-            </div>
-          </section>
         </div>
       </main>
     </FilScreenShell>

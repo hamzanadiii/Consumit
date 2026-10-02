@@ -29,7 +29,7 @@ describe('SEO surfaces', () => {
     const disallow = Array.isArray(rules.rules) ? [] : (rules.rules.disallow ?? [])
 
     expect(rules.sitemap).toBe('https://consumit.online/sitemap.xml')
-    for (const path of ['/watch/', '/library', '/friends', '/profile/', '/settings', '/sign-in', '/sign-up', '/onboarding/']) {
+    for (const path of ['/watch/', '/library', '/profile/', '/settings', '/sign-in', '/sign-up', '/onboarding/']) {
       expect(disallow).toContain(path)
     }
 

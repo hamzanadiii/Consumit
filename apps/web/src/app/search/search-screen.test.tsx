@@ -31,11 +31,12 @@ describe('search screen', () => {
     expect(screen.queryByText(/taste match|% match|overlap/i)).not.toBeInTheDocument()
   }, 10_000)
 
-  it('hosts the mood picker relocated from Home', () => {
+  it('keeps search focused on titles without a member discovery section', () => {
     render(<SearchScreen initialQuery="dune" page={page} queryTooShort={false} />)
 
-    expect(screen.getByRole('heading', { name: 'What kind of night is it?' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Surprise me tonight/ })).toHaveAttribute('href', '#results')
+    expect(screen.queryByRole('link', { name: /Discover members/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'People' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'What kind of night is it?' })).not.toBeInTheDocument()
   })
 
   it('routes anime matches to AniList detail pages, never TMDB', async () => {
