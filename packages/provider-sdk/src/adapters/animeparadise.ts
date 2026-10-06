@@ -85,12 +85,11 @@ export function createAnimeParadiseProvider(
   now = Date.now,
   resolveTitleVariants?: AnimeTitleVariantsResolver,
 ) {
-  return adapter('animeparadise', async (input, signal) => {
+  return Object.assign(adapter('animeparadise', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
-    // AnimeParadise is sub-only. Keep the real original-audio track available
-    // when a caller prefers English; the returned source still identifies it
-    // as original, so it is never mislabeled as a dub.
+    // This extraction path supplies original audio only.
+    if (input.audioLanguage.toLowerCase().split('-')[0] !== 'ja') throw new ProviderFailure('empty')
     let title: string
     try {
       title = (await resolveTitle(ref.id, signal)).trim()
@@ -204,5 +203,5 @@ export function createAnimeParadiseProvider(
       ...(skipSegments.length ? { skipSegments } : {}),
     }
     return [source]
-  })
+  }), { audioLanguages: ['ja'] as const })
 }

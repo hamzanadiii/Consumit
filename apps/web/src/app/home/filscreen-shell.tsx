@@ -1,6 +1,6 @@
 'use client'
 
-import { House, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, Shield, Sun, UserRound } from 'lucide-react'
+import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, Shield, Sun } from 'lucide-react'
 import Image from 'next/image'
 import * as NextNav from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -26,6 +26,7 @@ function getNextRouter(): { push: (url: string) => void; refresh: () => void } {
 import { Avatar } from '@consumit/ui'
 
 import { FilScreenSearchOverlay } from './filscreen-search-overlay'
+import { FilScreenFooter } from './filscreen-footer'
 import { logoutMember } from '@/lib/identity-browser'
 import { memberAvatarSrc } from '@/lib/avatar'
 import { useSession } from '../session/session'
@@ -45,6 +46,14 @@ const SIDEBAR_ROW_CLASS =
 
 const SIDEBAR_ICON_CLASS =
   'grid place-items-center text-[var(--fs-muted)] transition-all duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none motion-reduce:transform-none'
+
+const MEMBER_ARCHIVES = [
+  { section: 'watchlist', label: 'Watchlist', icon: Bookmark },
+  { section: 'likes', label: 'Likes', icon: Heart },
+  { section: 'films', label: 'Watched', icon: Clapperboard },
+  { section: 'history', label: 'History', icon: History },
+  { section: 'lists', label: 'Lists', icon: ListVideo },
+] as const
 
 function SidebarRowLabel({
   children,
@@ -241,7 +250,10 @@ export function FilScreenShell({
           </div>
           <nav aria-label="Main navigation" className={sidebarOpen ? 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0' : 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3'} data-scrollrow key={sidebarOpen ? 'main-open' : 'main-collapsed'}>
             <SidebarLink active={pathname === '/'} delay={0} href="/" icon={<House aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Home" />
-            {memberProfileRoot ? <SidebarLink active={pathname === memberProfileRoot || pathname.startsWith(`${memberProfileRoot}/`)} delay={100} href={memberProfileRoot} icon={<UserRound aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Profile" /> : null}
+            {MEMBER_ARCHIVES.map(({ section, label, icon: Icon }, index) => {
+              const href = memberProfileRoot ? `${memberProfileRoot}/${section}` : `/library?section=${section}`
+              return <SidebarLink active={pathname === href || pathname.startsWith(`${href}/`)} delay={(index + 1) * 50} href={href} icon={<Icon aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} key={section} label={label} />
+            })}
           </nav>
           <nav aria-label="Account" className={sidebarOpen ? 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0 lg:mt-auto' : 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:mt-auto lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3 lg:[&>button]:justify-center lg:[&>button]:px-3'} data-scrollrow key={sidebarOpen ? 'account-open' : 'account-collapsed'}>
             <button
@@ -277,105 +289,98 @@ export function FilScreenShell({
           </nav>
         </aside>
 
-        <div className="min-w-0 p-5 sm:p-6 lg:p-8">
-          {signOutError ? <p className="mb-5 text-sm text-[var(--fs-danger)]" role="alert">{signOutError}</p> : null}
-          <div className="mb-5 flex flex-wrap items-center gap-3">
-            {!sidebarOpen ? (
+        <div className="flex min-w-0 flex-col">
+          <div className="min-w-0 flex-1 p-5 sm:p-6 lg:p-8">
+            {signOutError ? <p className="mb-5 text-sm text-[var(--fs-danger)]" role="alert">{signOutError}</p> : null}
+            <div className="mb-5 flex flex-wrap items-center gap-3">
+              {!sidebarOpen ? (
+                <button
+                  ref={showSidebarRef}
+                  aria-controls="filscreen-sidebar"
+                  aria-expanded="false"
+                  aria-label="Show sidebar"
+                  className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:text-[var(--fs-accent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
+                  onClick={toggleSidebar}
+                  type="button"
+                >
+                  <PanelLeftOpen aria-hidden="true" className="size-[18px]" />
+                </button>
+              ) : null}
+              <nav aria-label="Catalog kinds" className="order-2 flex min-w-0 basis-full gap-2 overflow-x-auto border-b border-[var(--fs-line)] pb-2 sm:order-none sm:flex-1 sm:basis-auto sm:border-0 sm:pb-1" data-scrollrow>
+                <Link
+                  {...(isNew ? { 'aria-current': 'page' } : {})}
+                  className={
+                    isNew
+                      ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                      : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                  }
+                  href="/"
+                >
+                  New
+                </Link>
+                <Link
+                  {...(isSeries ? { 'aria-current': 'page' } : {})}
+                  className={
+                    isSeries
+                      ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                      : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                  }
+                  href="/series"
+                >
+                  Series
+                </Link>
+                <Link
+                  {...(isMovies ? { 'aria-current': 'page' } : {})}
+                  className={
+                    isMovies
+                      ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                      : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                  }
+                  href="/movies"
+                >
+                  Movies
+                </Link>
+                <Link
+                  {...(isAnime ? { 'aria-current': 'page' } : {})}
+                  className={
+                    isAnime
+                      ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                      : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+                  }
+                  href="/anime"
+                >
+                  Anime
+                </Link>
+              </nav>
               <button
-                ref={showSidebarRef}
-                aria-controls="filscreen-sidebar"
-                aria-expanded="false"
-                aria-label="Show sidebar"
-                className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:text-[var(--fs-accent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
-                onClick={toggleSidebar}
+                aria-expanded={searchOpen}
+                aria-haspopup="dialog"
+                aria-label="Search titles"
+                className="group flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-4 text-left text-sm outline-none transition-all duration-200 ease-out hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none sm:w-64 sm:flex-none"
+                onClick={() => setSearchOpen(true)}
+                ref={searchTriggerRef}
                 type="button"
               >
-                <PanelLeftOpen aria-hidden="true" className="size-[18px]" />
+                <Search aria-hidden="true" className="size-4 shrink-0 text-[var(--fs-muted)] transition-colors group-hover:text-[var(--fs-accent)]" />
+                <span className="flex-1 truncate text-[var(--fs-muted)] group-hover:text-[var(--fs-secondary)]">Search</span>
+                <kbd aria-hidden="true" className="hidden shrink-0 rounded-md border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--fs-muted)] sm:inline-block">⌘K</kbd>
               </button>
-            ) : null}
-            <nav aria-label="Catalog kinds" className="order-2 flex min-w-0 basis-full gap-2 overflow-x-auto border-b border-[var(--fs-line)] pb-2 sm:order-none sm:flex-1 sm:basis-auto sm:border-0 sm:pb-1" data-scrollrow>
-              <Link
-                {...(isNew ? { 'aria-current': 'page' } : {})}
-                className={
-                  isNew
-                    ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                    : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                }
-                href="/"
-              >
-                New
-              </Link>
-              <Link
-                {...(isSeries ? { 'aria-current': 'page' } : {})}
-                className={
-                  isSeries
-                    ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                    : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                }
-                href="/series"
-              >
-                Series
-              </Link>
-              <Link
-                {...(isMovies ? { 'aria-current': 'page' } : {})}
-                className={
-                  isMovies
-                    ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                    : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                }
-                href="/movies"
-              >
-                Movies
-              </Link>
-              <Link
-                {...(isAnime ? { 'aria-current': 'page' } : {})}
-                className={
-                  isAnime
-                    ? 'inline-flex min-h-11 shrink-0 items-center rounded-control bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                    : 'inline-flex min-h-11 shrink-0 items-center rounded-control px-4 text-sm text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-                }
-                href="/anime"
-              >
-                Anime
-              </Link>
-            </nav>
-            <button
-              aria-expanded={searchOpen}
-              aria-haspopup="dialog"
-              aria-label="Search titles"
-              className="group flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-4 text-left text-sm outline-none transition-all duration-200 ease-out hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none sm:w-64 sm:flex-none"
-              onClick={() => setSearchOpen(true)}
-              ref={searchTriggerRef}
-              type="button"
-            >
-              <Search aria-hidden="true" className="size-4 shrink-0 text-[var(--fs-muted)] transition-colors group-hover:text-[var(--fs-accent)]" />
-              <span className="flex-1 truncate text-[var(--fs-muted)] group-hover:text-[var(--fs-secondary)]">Search</span>
-              <kbd aria-hidden="true" className="hidden shrink-0 rounded-md border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--fs-muted)] sm:inline-block">⌘K</kbd>
-            </button>
-            {member ? (
-              <Link aria-label={`Your library, signed in as ${member.username}`} className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/profile/${member.username}`}>
-                <Avatar className="size-11" name={member.displayName ?? member.username} size="md" src={avatarSrc ?? undefined} treatment={member.avatarStyle} />
-              </Link>
-            ) : null}
+              {member ? (
+                <Link aria-label={`Your library, signed in as ${member.username}`} className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/profile/${member.username}`}>
+                  <Avatar className="size-11" name={member.displayName ?? member.username} size="md" src={avatarSrc ?? undefined} treatment={member.avatarStyle} />
+                </Link>
+              ) : (
+                <Link aria-label="Guest profile" title="Guest profile" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/library?section=profile">
+                  <Avatar className="size-11" name="Guest" size="md" treatment="noir" />
+                </Link>
+              )}
+            </div>
+
+            {children}
           </div>
 
-          {children}
+          <FilScreenFooter />
         </div>
-
-        <footer className="col-span-full flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--fs-line)] px-5 py-4 text-xs text-[var(--fs-muted)] sm:px-6 lg:px-8">
-          <span>© 2026 Consumit</span>
-          <span aria-hidden="true">·</span>
-          <span>Movie and series metadata by <a className="font-bold text-[var(--fs-accent)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="https://www.themoviedb.org" rel="noreferrer" target="_blank">TMDB</a></span>
-          <span aria-hidden="true">·</span>
-          <span>Anime metadata by <a className="font-bold text-[var(--fs-accent)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="https://anilist.co" rel="noreferrer" target="_blank">AniList</a></span>
-          <span aria-hidden="true">·</span>
-          <Link className="rounded font-bold text-[var(--fs-accent)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/about#catalog-credit">
-            Catalog credits
-          </Link>
-          <Link className="rounded outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:ml-auto" href="/about">
-            About
-          </Link>
-        </footer>
       </div>
       {searchOpen ? <FilScreenSearchOverlay onClose={closeSearch} open /> : null}
     </div>

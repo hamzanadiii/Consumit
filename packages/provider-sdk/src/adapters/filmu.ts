@@ -7,14 +7,21 @@ const apiOrigin = 'https://api.filmu.in'
 const metaOrigin = 'https://embed.filmu.in'
 const apiKey = 'c2bee5b74986ab27aa92f3056f1b1732775e7b12022cab6b5267ad26bc9f65f1'
 
-// FilmU multi-extractor API: IMDb identity (resolver first, META endpoint
-// fallback), then Ainary/Videasy/NoTorrent scrapes in parallel. Only
-// shape-direct https media crosses into playback — Ainary (*.boundescous.site)
-// serves CORS-open HLS in 1080p/720p/480p; relay/embed shapes never survive.
-// Time-bound URLs resolve fresh per attempt; the session refresh path
-// re-mints them mid-watch. Every job is individually bounded.
+// FilmU two-chain API (ports PROVE providers/filmu/filmu.ts, verified 2026-10-05):
+//   A. PRIMARY (browser-direct): embed.filmu.in/api/singularity-movie?id={tmdb}
+//      or /api/singularity-tv?tmdb={id}&s={season}&e={episode} with
+//      Origin: https://embed.filmu.in (bare fetches 403). Stream hosts
+//      (img.rousav.tech / img.animecurx.tech) serve master + variants +
+//      segments with ACAO:* to any Origin, so no proxy is needed.
+//   B. FALLBACK: api.filmu.in/scrape/{Ainary|Videasy|NoTorrent}/... with the
+//      public x-api-key plus first-party filmu.in Referer/Origin (key alone
+//      intermittently 401s). Only shape-direct https media crosses into
+//      playback; relay/embed shapes never survive. Time-bound URLs resolve
+//      fresh per attempt; the session refresh path re-mints them mid-watch.
+//      Every job is individually bounded.
 const EXTRACTORS = ['Ainary', 'Videasy', 'NoTorrent'] as const
 const JOB_TIMEOUT_MS = 3500
+const SINGULARITY_TIMEOUT_MS = 8000
 
 const metaSchema = z.object({
   external_ids: z.object({ imdb_id: z.string().regex(/^tt\d{5,12}$/).nullish() }).optional(),
@@ -23,6 +30,14 @@ const metaSchema = z.object({
   name: z.string().max(300).optional(),
   release_date: z.string().max(10).optional(),
   first_air_date: z.string().max(10).optional(),
+})
+
+const singularitySchema = z.object({
+  sources: z.array(z.object({
+    url: z.string().max(4096),
+    quality: z.string().max(32).optional(),
+    type: z.string().max(16).optional(),
+  }).passthrough()).optional(),
 })
 
 const scrapeSchema = z.object({
@@ -88,6 +103,57 @@ export function createFilmuProvider(
     const season = ref.season ?? 1
     const episode = ref.episode ?? 1
 
+    // Primary: singularity same-origin API. Its hosts are CORS-open, so the
+    // browser fetches bare and no relay grant is needed. An empty lane falls
+    // through to the extractor fallback below.
+    const primary = await (async () => {
+      const op = bounded(signal, SINGULARITY_TIMEOUT_MS)
+      try {
+        const qs = isTv ? `?tmdb=${ref.id}&s=${season}&e=${episode}` : `?id=${ref.id}`
+        const response = await document(http, `${metaOrigin}/api/singularity-${isTv ? 'tv' : 'movie'}${qs}`, op.signal, {
+          'user-agent': userAgent,
+          accept: 'application/json',
+          origin: metaOrigin,
+          referer: `${metaOrigin}/`,
+        })
+        const data = singularitySchema.parse(JSON.parse(response.text))
+        const sources: ProviderSource[] = []
+        const seen = new Set<string>()
+        for (const item of data.sources ?? []) {
+          if (!isDirectCandidate(item.url) || seen.has(item.url)) continue
+          const type = classifyType(item.url)
+          if (!type) continue
+          let expiresAt: string
+          try {
+            expiresAt = accessDeadline(item.url, now())
+          } catch {
+            continue
+          }
+          seen.add(item.url)
+          // The upstream quality label names the rendition family; the master
+          // playlist declares the actual variant heights, so no height is
+          // claimed here and ranking stays honest against measured sources.
+          sources.push({
+            key: `${id}:singularity:${sources.length}`,
+            url: item.url,
+            type,
+            qualityHint: String(item.quality || 'Auto').slice(0, 24) || 'Auto',
+            expiresAt,
+            language: 'original',
+            headers: {},
+            subtitles: [],
+          })
+          if (sources.length >= 8) break
+        }
+        return sources.length ? sources : null
+      } catch {
+        return null
+      } finally {
+        op.cleanup()
+      }
+    })()
+    if (primary) return primary
+
     // TMDB supplies the canonical IMDb identity, while FilmU's own metadata
     // endpoint supplies the title and year its extractors use for matching.
     // Fetch both together: skipping FilmU metadata when TMDB already has an
@@ -126,6 +192,8 @@ export function createFilmuProvider(
           'user-agent': userAgent,
           accept: 'application/json',
           'x-api-key': apiKey,
+          referer: 'https://filmu.in/',
+          origin: 'https://filmu.in',
         })
         return scrapeSchema.parse(JSON.parse(response.text))
       } catch {

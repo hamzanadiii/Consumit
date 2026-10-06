@@ -1,22 +1,17 @@
 import type {
   CatalogRef,
-  CircleActivityCursor,
-  CircleActivityPage,
   CreateMemberListRequest,
   CreateDiaryEntryRequest,
   CreateReviewRequest,
   DiaryEntry,
-  FollowStatus,
   MemberLibraryCollection,
   MemberLibraryCollectionPage,
   MemberLibrarySnapshot,
   MemberListDetail,
-  MemberListCard,
   MemberProfileData,
   MemberProfileArchiveCursor,
   MemberProfileArchiveKind,
   MemberProfileArchivePage,
-  MemberSuggestion,
   MemberRating,
   MemberRatingPage,
   MemberReview,
@@ -25,9 +20,7 @@ import type {
   PlaybackProgress,
   ProgressRef,
   ProgressWriteRequest,
-  ReviewLike,
   TitleReviewsPage,
-  TitleReviewAudience,
   TitleReviewSort,
   UpdateDiaryEntryRequest,
   UpdateMemberListRequest,
@@ -39,9 +32,7 @@ import type {
 export interface MemberData {
   createDiaryEntry(memberId: string, input: CreateDiaryEntryRequest): Promise<DiaryEntry>
   createReview(memberId: string, input: CreateReviewRequest): Promise<MemberReview>
-  
-  
-  
+
   libraryPage(memberId: string, collection: MemberLibraryCollection, cursor: string | undefined, limit: number): Promise<MemberLibraryCollectionPage>
   librarySnapshot(memberId: string): Promise<MemberLibrarySnapshot>
   like(memberId: string, ref: CatalogRef): Promise<MemberTitleRecord | null>

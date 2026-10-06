@@ -7,8 +7,6 @@ import {
   apiErrorResponseSchema,
   avatarUrlSchema,
   bannerUrlSchema,
-  followStateSchema,
-  followStatusSchema,
   diaryRefSchema,
   loginRequestSchema,
   playbackProgressSchema,
@@ -104,8 +102,8 @@ describe('catalog contracts', () => {
   })
 
   it('validates editable profiles and username availability', () => {
-    expect(updateProfileRequestSchema.parse({ avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: '  Films, quietly.  ', displayName: ' Hamza ', location: ' Rabat ', username: 'HAMZA_8', visibility: 'public' })).toEqual({
-      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', location: 'Rabat', username: 'hamza_8', visibility: 'public',
+    expect(updateProfileRequestSchema.parse({ avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: '  Films, quietly.  ', displayName: ' Hamza ', location: ' Rabat ', username: 'HAMZA_8', visibility: 'private' })).toEqual({
+      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', location: 'Rabat', username: 'hamza_8', visibility: 'private',
     })
     expect(updateProfileRequestSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false)
     expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, location: null, nextUsernameChangeAt: null, username: 'hamza_8', usernameChangedAt: null, visibility: 'private' }).success).toBe(true)
@@ -129,7 +127,7 @@ describe('catalog contracts', () => {
     expect(updateDiaryEntryRequestSchema.safeParse({}).success).toBe(false)
     expect(updateMemberReviewRequestSchema.parse({ body: '  Newly written.  ', reviewedOn: null })).toEqual({ body: 'Newly written.', reviewedOn: null })
     expect(updateMemberReviewRequestSchema.safeParse({ tags: [''] }).success).toBe(false)
-    expect(updateMemberListRequestSchema.parse({ description: null, name: '  Night films  ', visibility: 'public' })).toEqual({ description: null, name: 'Night films', visibility: 'public' })
+    expect(updateMemberListRequestSchema.parse({ description: null, name: '  Night films  ', visibility: 'private' })).toEqual({ description: null, name: 'Night films', visibility: 'private' })
     expect(updateMemberListRequestSchema.safeParse({}).success).toBe(false)
   })
 
@@ -148,25 +146,21 @@ describe('catalog contracts', () => {
     expect(setRatingRequestSchema.safeParse({ id: 693134, kind: 'movie', value: 4.5 }).success).toBe(false)
   })
 
-  it('pages public title reviews with author identity and optional ratings', () => {
+  it('pages private title reviews without social engagement fields', () => {
     const author = { avatarStyle: 'dusk', avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }
     expect(titleReviewSchema.safeParse({ author, body: 'A patient masterpiece.', liked: false, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }).success).toBe(true)
     expect(titleReviewSchema.safeParse({ author, body: 'No stars attached.', liked: true, likesCount: 1, rating: null, reviewId: 'review-2', reviewedOn: null }).success).toBe(true)
     expect(titleReviewSchema.safeParse({ author, body: 'Too many stars.', liked: false, likesCount: 0, rating: 11, reviewId: 'review-3', reviewedOn: null }).success).toBe(false)
-    expect(titleReviewSchema.safeParse({ author, body: 'Missing like state.', rating: null, reviewId: 'review-4', reviewedOn: null }).success).toBe(false)
+    expect(titleReviewSchema.safeParse({ author, body: 'No engagement fields.', rating: null, reviewId: 'review-4', reviewedOn: null }).success).toBe(true)
     expect(titleReviewsPageSchema.safeParse({ items: [], page: 1, totalPages: 0, totalResults: 0 }).success).toBe(true)
-    expect(titleReviewsQuerySchema.parse({})).toEqual({ audience: 'all', page: 1, sort: 'recent' })
-    expect(titleReviewsQuerySchema.parse({ page: '2', sort: 'popular' })).toEqual({ audience: 'all', page: 2, sort: 'popular' })
-    expect(titleReviewsQuerySchema.parse({ audience: 'circle' })).toMatchObject({ audience: 'circle' })
+    expect(titleReviewsQuerySchema.parse({})).toEqual({ page: 1, sort: 'recent' })
+    expect(titleReviewsQuerySchema.parse({ page: '2' })).toEqual({ page: 2, sort: 'recent' })
+    expect(titleReviewsQuerySchema.safeParse({ sort: 'popular' }).success).toBe(false)
+    expect(titleReviewsQuerySchema.parse({ audience: 'circle' })).toEqual({ page: 1, sort: 'recent' })
     expect(titleReviewsQuerySchema.safeParse({ page: 0 }).success).toBe(false)
     expect(titleReviewsQuerySchema.safeParse({ sort: 'top' }).success).toBe(false)
-    expect(titleReviewsQuerySchema.safeParse({ audience: 'everyone' }).success).toBe(false)
-  })
-
-  it('tracks circle follows with honest counts', () => {
-    expect(followStateSchema.parse({ following: true })).toEqual({ following: true })
-    expect(followStatusSchema.parse({ followers: 4, following: true })).toEqual({ followers: 4, following: true })
-    expect(followStatusSchema.safeParse({ followers: -1, following: false }).success).toBe(false)
+    expect(updateProfileRequestSchema.safeParse({ visibility: 'public' }).success).toBe(false)
+    expect(updateMemberListRequestSchema.safeParse({ visibility: 'public' }).success).toBe(false)
   })
 
   it('bounds playback progress writes to sane ranges', () => {    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })

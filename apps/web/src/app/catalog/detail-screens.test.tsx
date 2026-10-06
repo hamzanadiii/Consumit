@@ -38,6 +38,14 @@ describe('anime detection and cross-link', () => {
 })
 
 describe('series season selection', () => {
+  it('continues the last watched series episode instead of starting episode one', async () => {
+    const ref = { kind: 'series', id: seriesDetail.id, season: 1, episode: 3 }
+    localStorage.setItem(`consumit.progress:guest:series:${seriesDetail.id}:1:3`, JSON.stringify({ ...ref, positionSeconds: 450, durationSeconds: 3000, completed: false, updatedAt: '2026-10-03T00:00:00.000Z' }))
+    try {
+      render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} />)
+      expect(await screen.findByRole('link', { name: 'Continue watching' })).toHaveAttribute('href', `/watch/series/${seriesDetail.id}?season=1&episode=3`)
+    } finally { localStorage.clear() }
+  })
   it('keeps computed taste and numeric scores out of title details', () => {
     render(<TitleDetailScreen detail={movieDetail} />)
 

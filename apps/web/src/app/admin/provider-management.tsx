@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { providerRoleSchema, providerDeliveryModeSchema } from '@consumit/contracts'
 import { Button, EmptyState, Input, LoadingState, SectionHeading, Select } from '@consumit/ui'
 import { deleteProvider, getProviderConfig, listProviders, resetProviderConfig, restoreProvider, updateProviderConfig, type AdminProvider, type ProviderOverridePatch, type ProviderReadinessSummary } from '@/lib/admin-browser'
 import { ProviderControlSummary, ProviderOrderEditor } from './admin-screen'
@@ -57,7 +58,7 @@ export function ProvidersTab() {
   }
   const visible = providers.filter((p) => (status === 'deleted' ? p.removed : !p.removed && (status === 'active' || (status === 'enabled' ? p.enabled : !p.enabled)))
     && (kind === 'all' || p.mediaKinds.includes(kind)) && `${p.id} ${p.upstreamGroup} ${p.regions.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()))
-  const orderSignature = providers.filter((p) => !p.removed).map((p) => p.id).join('|')
+  const orderSignature = providers.filter((p) => !p.removed).map((p) => `${p.id}:${p.role ?? 'video'}`).join('|')
 
   if (loading) return <LoadingState title="Loading providers" rows={4} />
   return <div className="space-y-6">
@@ -71,13 +72,15 @@ export function ProvidersTab() {
       <Select label="Provider status" onValueChange={setStatus} options={[{ value: 'active', label: 'Configured' }, { value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }, { value: 'deleted', label: 'Deleted' }]} value={status} />
     </div>
     <p className="text-sm text-muted" role="status">{visible.length} providers shown{Object.keys(drafts).length ? ` · ${Object.keys(drafts).length} unsaved changes` : ''}</p>
-    {visible.length === 0 ? <EmptyState title="No matching providers." description="Change the filters or refresh the fleet." /> : <div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[1000px] text-left text-sm"><caption className="sr-only">Provider settings and deletion controls</caption><thead><tr className="border-b border-border text-xs text-muted">{['Provider', 'Enabled', 'Regions', 'Requests / min', 'Concurrent', 'Actions'].map((heading) => <th className="px-3 py-4" key={heading} scope="col">{heading}</th>)}</tr></thead><tbody>{visible.map((p) => {
+    {visible.length === 0 ? <EmptyState title="No matching providers." description="Change the filters or refresh the fleet." /> : <div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[1140px] text-left text-sm"><caption className="sr-only">Provider settings and deletion controls</caption><thead><tr className="border-b border-border text-xs text-muted">{['Provider', 'Enabled', 'Role', 'Video delivery', 'Regions', 'Requests / min', 'Concurrent', 'Actions'].map((heading) => <th className="px-3 py-4" key={heading} scope="col">{heading}</th>)}</tr></thead><tbody>{visible.map((p) => {
       const eff = { ...p, ...drafts[p.id] }
       const hasOverride = Object.keys(overrides[p.id] ?? {}).some((key) => key !== 'order' && key !== 'removed')
       const disabled = saving !== null || Boolean(p.removed)
       return <tr className="border-b border-border/50 last:border-0" key={p.id}>
         <th className="px-3 py-4 text-left font-normal" scope="row"><span className="font-mono text-xs text-ink">{p.id}</span><span className="mt-1 block text-xs text-muted">{p.mediaKinds.join(' · ')}{p.removed ? ' · Deleted' : ''}</span></th>
-        <td className="px-3 py-4"><Button aria-label={`${eff.enabled ? 'Disable' : 'Enable'} ${p.id}`} aria-pressed={eff.enabled} disabled={disabled} onClick={() => patch(p.id, { enabled: !eff.enabled })} size="sm" variant={eff.enabled ? 'secondary' : 'ghost'}>{eff.enabled ? 'On' : 'Off'}</Button></td>
+        <td className="px-3 py-4"><Button aria-label={`${eff.enabled ? 'Disable' : 'Enable'} ${p.id}`} aria-pressed={eff.enabled} disabled={disabled} onClick={() => patch(p.id, { enabled: !eff.enabled })} size="sm" variant={eff.enabled ? 'secondary' : 'ghost'}>{eff.enabled ? 'On' : 'Off'}</Button>{drafts[p.id] && <span className="mt-2 block text-xs text-orange">Save to apply</span>}</td>
+        <td className="px-3 py-4"><select aria-label={`Role for ${p.id}`} className="h-11 w-44 rounded-control border border-control-outline bg-field px-3 text-sm font-bold text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange disabled:opacity-40" disabled={disabled} value={eff.role ?? 'video'} onChange={(event) => patch(p.id, { role: providerRoleSchema.parse(event.target.value) })}><option value="video">Video source</option><option value="audio">Audio source</option><option value="both">Both</option></select><p className="mt-2 max-w-52 text-xs leading-5 text-muted">Separate audio: unverified · Untested{p.audioCapabilities?.languages.length ? ` · Declared audio: ${p.audioCapabilities.languages.join(', ')}` : ''}</p></td>
+        <td className="px-3 py-4"><select aria-label={`Video delivery for ${p.id}`} className="h-11 w-32 rounded-control border border-control-outline bg-field px-3 text-sm font-bold text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange disabled:opacity-40" disabled={disabled || eff.role === 'audio'} value={eff.deliveryMode ?? 'direct'} onChange={(event) => patch(p.id, { deliveryMode: providerDeliveryModeSchema.parse(event.target.value) })}>{['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'].includes(p.id) ? <option value="embed">Embed</option> : <><option value="direct">Direct</option><option value="relay">Proxy</option></>}</select><p className={`mt-2 max-w-40 text-xs leading-5 ${eff.deliveryMode === 'relay' && !p.proxyApproved ? 'text-orange' : 'text-muted'}`}>{eff.role === 'audio' ? 'Audio stays direct' : eff.deliveryMode === 'relay' ? p.proxyApproved ? 'API hosts configured' : 'Awaiting Worker approval' : eff.deliveryMode === 'embed' ? 'External player' : 'Browser direct'}</p></td>
         <td className="px-3 py-4"><Input aria-label={`Regions for ${p.id}`} className="min-w-28" defaultValue={eff.regions.join(', ')} disabled={disabled} key={`${p.id}:${eff.regions.join(',')}`} onBlur={(event) => {
           const regions = event.target.value.split(',').map((value) => value.trim().toUpperCase())
           if (!regions.length || new Set(regions).size !== regions.length || regions.some((value) => !/^[A-Z]{2}$/.test(value) || !(p.configuredRegions ?? p.regions).includes(value))) { setError(`${p.id}: choose distinct configured regions: ${(p.configuredRegions ?? p.regions).join(', ')}.`); return }
@@ -101,7 +104,7 @@ export function ProvidersTab() {
         </div>{confirmDelete === p.id && <div className="mt-3 space-y-3"><p className="max-w-64 text-sm text-copy">Delete {p.id} from playback? Saved progress stays available. You can restore this provider later.</p><div className="flex gap-2"><Button disabled={saving !== null} loading={saving === p.id} onClick={() => void run(p, 'delete')} size="sm" variant="danger">Confirm deletion</Button><Button disabled={saving !== null} onClick={() => setConfirmDelete(null)} size="sm" variant="ghost">Cancel</Button></div></div>}</td>
       </tr>
     })}</tbody></table></div>}
-    <p className="max-w-[75ch] text-sm leading-6 text-muted">Every provider delivers media directly to the player. Reset settings restores configuration defaults and may enable a provider again.</p>
-    <ProviderOrderEditor key={orderSignature} providers={providers.filter((p) => !p.removed)} />
+    <p className="max-w-[75ch] text-sm leading-6 text-muted">Direct sends video from the provider to the browser. Proxy uses the approved Worker; an unapproved Proxy row stays out of playback until its provider and exact media hosts are registered. Save applies the delivery choice to new attempts without restarting the API. Added audio stays direct. Video source and Both supply the main stream; Audio source excludes a provider from video playback. Assigning a role does not verify recording compatibility. Reset settings restores configuration defaults and may enable a provider again.</p>
+    <ProviderOrderEditor key={orderSignature} providers={providers.filter((p) => !p.removed && p.role !== 'audio')} />
   </div>
 }

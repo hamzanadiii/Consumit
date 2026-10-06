@@ -15,6 +15,22 @@ function engine(): MediaEngine {
 afterEach(() => { vi.useRealTimers(); localStorage.clear() })
 
 describe('next playback controller', () => {
+  it('bounds a seek that never receives media while preserving the destination', async () => {
+    vi.useFakeTimers()
+    const video = videoElement(), fatal = vi.fn()
+    Object.defineProperty(video, 'paused', { configurable: true, value: false })
+    Object.defineProperty(video, 'seeking', { configurable: true, value: true })
+    const controller = createPlaybackControllerNext(video, { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source)
+    video.dispatchEvent(new Event('playing'))
+    video.currentTime = 42
+    video.dispatchEvent(new Event('seeking'))
+    video.dispatchEvent(new Event('waiting'))
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(fatal).toHaveBeenCalledExactlyOnceWith('network', 'timeout')
+    expect(video.currentTime).toBe(42)
+    controller.destroy()
+  })
   it('preserves the selected playback rate across a source replacement', async () => {
     const video = videoElement()
     const adapter = engine()

@@ -27,9 +27,13 @@ const accepted = acceptedResponseSchema.parse({
   message: 'If the address can continue, an email is on its way.',
   status: 'accepted',
 })
-const credentialLimit = { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }
-const codeRequestLimit = { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }
-const codeConfirmLimit = { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }
+// Credentials and challenge attempts are not authenticated by the incoming
+// cookie. Use the trusted client address so arbitrary cookies cannot create
+// fresh buckets for brute-force attempts or email delivery.
+const credentialKey = (request: FastifyRequest) => request.ip
+const credentialLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 10, timeWindow: '15 minutes' } } }
+const codeRequestLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 20, timeWindow: '1 hour' } } }
+const codeConfirmLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 30, timeWindow: '1 hour' } } }
 
 function parse<T>(schema: ZodType<T>, value: unknown, message: string): T {
   const result = schema.safeParse(value)

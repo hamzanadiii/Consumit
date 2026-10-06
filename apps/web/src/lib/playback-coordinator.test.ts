@@ -13,6 +13,32 @@ function fixture(refresh: PlaybackSession, fallback: PlaybackSession) {
 }
 
 describe('shared playback coordinator', () => {
+  it('sends the latest semantic preferences on both recovery and manual switches', async () => {
+    const transport: PlaybackTransport = { resolve: vi.fn(async () => session), providers: vi.fn(async () => []), recover: vi.fn(async () => session), switch: vi.fn(async () => session) }
+    const coordinator = createPlaybackCoordinator(transport)
+    coordinator.setPreferences({ qualityHeight: 1080, audioLanguage: 'fr' })
+    await coordinator.recover(session, 'media', signal)
+    expect(transport.recover).toHaveBeenCalledWith(session, 'fallback', expect.objectContaining({ preferences: { qualityHeight: 1080, audioLanguage: 'fr' } }), signal)
+    await coordinator.switch(session, 'backup', signal)
+    expect(transport.switch).toHaveBeenCalledWith(session, 'backup', signal, { qualityHeight: 1080, audioLanguage: 'fr' })
+    coordinator.setPreferences({ qualityHeight: null })
+    await coordinator.recover(session, 'media', signal)
+    expect(transport.recover).toHaveBeenLastCalledWith(session, 'fallback', expect.objectContaining({ preferences: { qualityHeight: null, audioLanguage: 'fr' } }), signal)
+  })
+  it.each(['manifest', 'cors'] as const)('switches past a browser-unusable manifest (%s) without renewing its URL', async (failure) => {
+    const backup = { ...session, source: { ...source, providerId: 'backup', src: 'https://media.example/backup.m3u8' } }
+    const rotated = { ...session, source: { ...source, src: 'https://media.example/a.m3u8?token=renewed' } }
+    const { coordinator, recover } = fixture(rotated, backup)
+    expect(await coordinator.recover(session, 'network', signal, failure)).toEqual(backup)
+    expect(recover.mock.calls.map(call => call[1])).toEqual(['fallback'])
+  })
+  it('switches past a timed-out CDN without requesting another lease on it', async () => {
+    const backup = { ...session, source: { ...source, providerId: 'backup', src: 'https://media.example/backup.m3u8' } }
+    const { coordinator, recover } = fixture(session, backup)
+    expect(await coordinator.recover(session, 'network', signal, 'timeout')).toEqual(backup)
+    expect(recover.mock.calls.map(call => call[1])).toEqual(['fallback'])
+    expect(recover.mock.calls[0]?.[2]).toMatchObject({ reason: 'network', deliveryFailure: 'timeout' })
+  })
   it('falls back immediately when direct media is blocked by required headers', async () => {
     const { coordinator, recover } = fixture(session, session)
     await coordinator.recover(session, 'network', signal, 'headers')
@@ -101,6 +127,21 @@ describe('shared playback coordinator', () => {
       expect(vi.getTimerCount()).toBe(1)
       cancel()
       expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+  it('reserves a minute for relay renewal while direct retains its fifteen-second lead', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+      const relay = vi.fn(); const direct = vi.fn()
+      const expiry = new Date(Date.now() + 120000).toISOString()
+      const cancelRelay = scheduleSourceRefresh(expiry, relay, Date.now, 60000)
+      const cancelDirect = scheduleSourceRefresh(expiry, direct)
+      vi.advanceTimersByTime(60000)
+      expect(relay).toHaveBeenCalledTimes(1); expect(direct).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(45000)
+      expect(direct).toHaveBeenCalledTimes(1)
+      cancelRelay(); cancelDirect()
     } finally { vi.useRealTimers() }
   })
 })

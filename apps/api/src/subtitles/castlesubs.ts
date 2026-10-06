@@ -1,6 +1,6 @@
 import { createDecipheriv } from 'node:crypto'
 import type { SubtitleHttp } from './http.ts'
-import { normLang } from './lang.ts'
+import { knownLang, normLang } from './lang.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
 
 // CastleSubs harvester ported from PROVE — the same chain as the Castle
@@ -177,13 +177,12 @@ export function createCastleSubsProvider(http: SubtitleHttp): SubtitleSearchProv
             // Upstream labels are unreliable ([ar] Albanian for Arabic.vtt):
             // derive the language from the file name when it names one.
             const fileLang = url.match(/\/([A-Za-z]+)\.(vtt|srt)(\?|#|$)/)?.[1] || ''
-            const lang = /^[a-z]{2,3}$/.test(fileLang)
-              ? fileLang.toLowerCase()
-              : normLang(String(sub?.abbreviate || sub?.language || sub?.title || 'en'))
+            const filenameLanguage = knownLang(fileLang)
+            const lang = filenameLanguage ?? normLang(String(sub?.abbreviate || sub?.language || sub?.title || 'en'))
             out.push({
               url,
               lang,
-              label: (fileLang || String(sub?.title || sub?.abbreviate || 'subtitle')).slice(0, 64),
+              label: (filenameLanguage ? fileLang : String(sub?.title || sub?.abbreviate || 'subtitle')).slice(0, 64),
               format: /\.vtt(\?|#|$)/i.test(url) ? 'vtt' : /\.srt(\?|#|$)/i.test(url) ? 'srt' : 'srt',
               provider: 'castlesubs',
               headers: {

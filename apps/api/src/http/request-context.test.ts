@@ -43,4 +43,10 @@ describe('request context', () => {
       ]),
     )
   })
+  it('removes signed playlist query capabilities from request logs', () => {
+    const serialize = loggerOptions().serializers.req
+    const result = serialize({ method: 'GET', url: '/v1/playback/relay-manifest?grant=private-capability', id: 'request-1' })
+    expect(result).toMatchObject({ method: 'GET', url: '/v1/playback/relay-manifest', id: 'request-1' })
+    expect(JSON.stringify(result)).not.toContain('private-capability')
+  })
 })

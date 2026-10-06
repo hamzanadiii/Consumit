@@ -6,6 +6,8 @@ import type {
   AnimeSearchResult,
   AnimeBatch,
   AnimeSeason,
+  AnimeBrowseQuery,
+  AnimeBrowseSort,
 } from '@consumit/contracts'
 import { AnilistClientError, createAnilistClient, type AnilistClient } from './client.ts'
 import { AnimeError } from '../../anime/errors.ts'
@@ -13,6 +15,7 @@ import { searchQuery } from './queries/search.ts'
 import { detailsQuery } from './queries/details.ts'
 import { trendingQuery } from './queries/trending.ts'
 import { seasonalQuery } from './queries/seasonal.ts'
+import { browseQuery } from './queries/browse.ts'
 import { relationsQuery } from './queries/relations.ts'
 import { airingScheduleQuery } from './queries/airing.ts'
 import {
@@ -28,6 +31,7 @@ export type AnimeCatalog = {
   title(anilistId: number): Promise<AnimeTitleDetail>
   trending(page?: number, perPage?: number): Promise<AnimePage>
   seasonal(season: AnimeSeason, year: number, page?: number, perPage?: number): Promise<AnimePage>
+  browse(query: AnimeBrowseQuery, perPage?: number): Promise<AnimePage>
   relations(anilistId: number): Promise<AnimeFranchise>
   airingSchedule(anilistId: number, page?: number, perPage?: number): Promise<AnimeAiringSchedule>
   batch(anilistIds: number[]): Promise<AnimeBatch>
@@ -135,6 +139,39 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
       return {
         items,
         page,
+        totalPages: data.Page.pageInfo.lastPage,
+        totalResults: data.Page.pageInfo.total,
+      }
+    },
+
+    async browse(query, perPage = 20) {
+      const sort: Record<AnimeBrowseSort, string> = {
+        popular: 'POPULARITY_DESC',
+        'top-rated': 'SCORE_DESC',
+        new: 'START_DATE_DESC',
+        old: 'START_DATE',
+      }
+      // Absent filters are omitted, never sent as null: AniList intersects
+      // an explicit null genre/format with the remaining filters to empty.
+      const data = await queryAnime<AnilistPageResponse>(
+        browseQuery,
+        {
+          sort: [sort[query.sort]],
+          ...(query.genre ? { genre: query.genre } : {}),
+          ...(query.year !== undefined ? { seasonYear: query.year } : {}),
+          ...(query.format ? { format: query.format } : {}),
+          page: query.page,
+          perPage,
+        },
+        `browse:${query.sort}:${query.genre ?? ''}:${query.year ?? ''}:${query.format ?? ''}:${query.page}`,
+        'browse',
+      )
+      const items = data.Page.media
+        .filter((raw) => !isAdultMedia(raw as { isAdult?: boolean | null }))
+        .map((raw) => mapTitleSummary(raw as Parameters<typeof mapTitleSummary>[0]))
+      return {
+        items,
+        page: query.page,
         totalPages: data.Page.pageInfo.lastPage,
         totalResults: data.Page.pageInfo.total,
       }

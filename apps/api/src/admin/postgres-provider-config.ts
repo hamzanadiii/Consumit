@@ -1,10 +1,14 @@
 import type { PrismaClient } from '../../generated/prisma/client.js'
 import { z } from 'zod'
+import { providerRoleSchema, providerDeliveryModeSchema } from '@consumit/contracts'
 import type { ProviderConfigStore, ProviderKind, ProviderOverridePatch, ProviderOverrides } from './provider-config.ts'
 
 const storedOverride = z.object({
   removed: z.boolean().optional(),
   enabled: z.boolean().optional(),
+  role: providerRoleSchema.optional(),
+  // Retired values such as proxy-required do not become a new route policy.
+  deliveryMode: providerDeliveryModeSchema.optional().catch(undefined),
   priority: z.int().min(0).max(100).optional(),
   order: z.strictObject({ movie: z.int().min(0).max(63).optional(), series: z.int().min(0).max(63).optional(), anime: z.int().min(0).max(63).optional() }).optional(),
   regions: z.array(z.string().regex(/^[A-Z]{2}$/)).max(16).optional(),

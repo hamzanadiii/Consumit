@@ -1,0 +1,358 @@
+{
+  "before": {
+    "validatedSources": 0,
+    "settings": {
+      "removed": true,
+      "enabled": false
+    },
+    "manualSwitchStatus": 400,
+    "configuredCandidates": 3
+  },
+  "live": [
+    {
+      "stage": "configured-adapter",
+      "ok": true,
+      "sources": [
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 1080,
+          "qualityGroup": "lookmovie"
+        },
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 720,
+          "qualityGroup": "lookmovie"
+        },
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 480,
+          "qualityGroup": "lookmovie"
+        }
+      ],
+      "validated": 3
+    },
+    {
+      "stage": "fetch-document",
+      "host": "lmscript.xyz",
+      "path": "/v1/movies",
+      "status": 200
+    },
+    {
+      "stage": "fetch-document",
+      "host": "lmscript.xyz",
+      "path": "/v1/movies/view",
+      "status": 200
+    },
+    {
+      "stage": "native-fetch-adapter",
+      "ok": true,
+      "sources": [
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 1080
+        },
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 720
+        },
+        {
+          "host": "srv315.excentionses.cyou",
+          "height": 480
+        }
+      ]
+    },
+    {
+      "stage": "reference-media",
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 33448,
+      "playlist": true
+    },
+    {
+      "stage": "reference-media",
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 3122680,
+      "playlist": false
+    },
+    {
+      "stage": "resolve",
+      "status": 200,
+      "source": {
+        "provider": "vixsrc",
+        "host": "vixsrc.to"
+      }
+    },
+    {
+      "stage": "providers",
+      "status": 200,
+      "providers": [
+        "lookmovie"
+      ]
+    },
+    {
+      "stage": "resolve",
+      "status": 200,
+      "source": {
+        "provider": "vixsrc",
+        "host": "vixsrc.to"
+      }
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "1080p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 1080,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 33448,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 1080,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 3122680,
+      "playlist": false
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "720p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 720,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 33448,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 720,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 1537464,
+      "playlist": false
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "480p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 480,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 33448,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 550,
+      "quality": 480,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 848632,
+      "playlist": false
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "1080p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 1080,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 35669,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 1080,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 2842936,
+      "playlist": false
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "720p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 720,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 35669,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 720,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 1805176,
+      "playlist": false
+    },
+    {
+      "stage": "switch",
+      "status": 200,
+      "source": {
+        "provider": "lookmovie",
+        "host": "srv315.excentionses.cyou",
+        "quality": "480p",
+        "qualities": [
+          1080,
+          720,
+          480
+        ]
+      }
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 480,
+      "depth": 0,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 35669,
+      "playlist": true
+    },
+    {
+      "stage": "consumit-media",
+      "movie": 27205,
+      "quality": 480,
+      "depth": 1,
+      "host": "srv315.excentionses.cyou",
+      "status": 200,
+      "cors": "*",
+      "bytes": 950904,
+      "playlist": false
+    }
+  ],
+  "browser": {
+    "switches": [
+      {
+        "provider": "lookmovie",
+        "quality": "1080p",
+        "heights": [
+          1080,
+          720,
+          480
+        ]
+      },
+      {
+        "provider": "lookmovie",
+        "quality": "720p",
+        "heights": [
+          1080,
+          720,
+          480
+        ]
+      }
+    ],
+    "errors": [],
+    "serverRows": 1,
+    "qualityChoices": [
+      "1080p",
+      "720p",
+      "480p"
+    ],
+    "decoded": {
+      "width": 1282,
+      "height": 534,
+      "position": 42.003267,
+      "playing": true,
+      "frames": 50
+    }
+  }
+}

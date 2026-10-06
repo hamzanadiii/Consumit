@@ -21,6 +21,8 @@ export type DirectMediaSource = {
   type: DirectMediaType
   /** Authorized https URL. Never a provider page, embed, or shortcut. */
   src: string
+  /** Internal live lease seam for buffered relay HLS. Never sent to providers. */
+  relayLease?: (() => { src: string } | undefined) | undefined
   /** Optional caller hint, e.g. "4K", shown in the top meta line. */
   qualityHint?: string | undefined
   /** Opening/ending ranges in seconds for the skip control. */
@@ -34,7 +36,7 @@ export type ChapterCue = {
 
 export function isSafeMediaUrl(url: string): boolean {
   if (/^\/v1\/playback\/media\/[a-f0-9]{8}-[a-f0-9-]{27}$/.test(url)) return true
-  if (!url || url.length > 2048) return false
+  if (!url || url.length > 4096) return false
   const trimmed = url.trim()
   if (trimmed !== url) return false
   let parsed: URL
@@ -43,6 +45,13 @@ export function isSafeMediaUrl(url: string): boolean {
   } catch {
     return false
   }
+  // First-party control playlists contain authenticated capabilities, never
+  // caller-selected destinations. Local HTTP is confined to this exact route.
+  if (typeof window !== 'undefined' && parsed.origin === window.location.origin
+    && ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password && !parsed.hash
+    && parsed.pathname === '/v1/playback/relay-manifest' && [...parsed.searchParams].length === 1
+    && /^[A-Za-z0-9_-]{29,3600}$/.test(parsed.searchParams.get('grant') ?? '')) return true
+  if (url.length > 2048) return false
   // Controlled browser fixture only; production still requires HTTPS media.
   // The explicit public flag is set only when building the production-like fixture harness.
   const fixtureOrigin = (process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_PLAYBACK_FIXTURE === '1')

@@ -1,9 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, progressKey, readPlaybackProgress, writePlaybackProgress } from './playback-progress'
+import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, progressKey, readPlaybackProgress, readTitleProgress, writePlaybackProgress } from './playback-progress'
 
 const ref = { kind: 'series' as const, id: 7, season: 2, episode: 3 }
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals() })
 describe('canonical playback progress', () => {
+  it('finds account progress on a new device without using guest history', async () => {
+    localStorage.setItem(progressKey(ref), JSON.stringify({ ...ref, positionSeconds: 200, updatedAt: '2026-10-04T00:00:00.000Z' }))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ...ref, episode: 5, positionSeconds: 300, durationSeconds: 900, completed: false, updatedAt: '2026-10-03T00:00:00.000Z' }))))
+    expect(await readTitleProgress({ kind: 'series', id: 7 }, new AbortController().signal, 'member')).toMatchObject({ episode: 5, positionSeconds: 300 })
+  })
+  it('resumes only this identity and title, selecting the most recently updated episode', async () => {
+    const record = { ...ref, positionSeconds: 120, durationSeconds: 900, completed: false, updatedAt: '2026-10-02T00:00:00.000Z' }
+    localStorage.setItem(progressKey(ref), JSON.stringify(record))
+    localStorage.setItem(progressKey({ ...ref, episode: 4 }), JSON.stringify({ ...record, episode: 4, updatedAt: '2026-10-03T00:00:00.000Z' }))
+    localStorage.setItem(progressKey(ref, 'other-member'), JSON.stringify({ ...record, updatedAt: '2026-10-04T00:00:00.000Z' }))
+    expect(await readTitleProgress({ kind: 'series', id: 7 }, new AbortController().signal)).toMatchObject({ episode: 4 })
+    expect(await readTitleProgress({ kind: 'anime', id: 7 }, new AbortController().signal)).toBeNull()
+  })
+  it('uses synced account progress without leaking another title and retains newer offline writes', async () => {
+    const local = { ...ref, positionSeconds: 120, durationSeconds: 900, completed: false, updatedAt: '2026-10-03T00:00:00.000Z' }
+    localStorage.setItem(progressKey(ref, 'member'), JSON.stringify(local))
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ...local, episode: 4, updatedAt: '2026-10-02T00:00:00.000Z' })))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await readTitleProgress({ kind: 'series', id: 7 }, new AbortController().signal, 'member')).toMatchObject({ episode: 3 })
+    expect(fetchMock).toHaveBeenCalledWith('/v1/progress/series/7', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }))
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ...local, id: 8, updatedAt: '2026-10-04T00:00:00.000Z' })))
+    expect(await readTitleProgress({ kind: 'series', id: 7 }, new AbortController().signal, 'member')).toMatchObject({ id: 7 })
+    fetchMock.mockRejectedValueOnce(new Error('offline'))
+    expect(await readTitleProgress({ kind: 'series', id: 7 }, new AbortController().signal, 'member')).toMatchObject({ episode: 3 })
+  })
   it('keeps guest, member, and episode records separate without provider identity', async () => {
     await writePlaybackProgress(ref, 35, 90, false)
     expect(await readPlaybackProgress(ref, new AbortController().signal)).toBe(35)

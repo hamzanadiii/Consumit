@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import { playbackRefSchema, type PlaybackRef } from '@consumit/contracts'
+import { playbackRefSchema, providerRoleSchema, providerDeliveryModeSchema, type PlaybackRef } from '@consumit/contracts'
 
 import type { ApiEnv } from '../config/env.ts'
 import { isAllowedOrigin } from '../http/csrf.ts'
@@ -10,12 +10,15 @@ import type { IdentityRepository } from '../identity/repository.ts'
 import { sessionCookieName } from '../identity/session.ts'
 import type { ProbeStatus } from '../playback/probe.ts'
 import type { PlaybackStore } from '../playback/state.ts'
-import { validatedSources, type ProviderRegistration } from '@consumit/provider-sdk'
+import { validatedSources, suppliesVideo, type ProviderRegistration } from '@consumit/provider-sdk'
 import type { Playback } from '../playback/playback.ts'
 import type { SubtitleService } from '../subtitles/subtitles.ts'
 import type { ProviderConfigStore } from './provider-config.ts'
 import { applyOrdersInPlace, applyOverridesInPlace, configuredProviderRegions, isProviderRemoved, orderedProviderIds, providerKinds, type ProviderKind, type ProviderOverridePatch } from './provider-config.ts'
 import { aggregateProviderMetrics, readProviderAlerts, readProviderMetrics, type MetricsSnapshot } from './provider-metrics.ts'
+import { registerProviderInspection } from './inspection.ts'
+import { createMemoryPlaybackStore } from '../playback/state.ts'
+import { createPlaybackRelay } from '../playback/relay.ts'
 
 function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, fields: (keyof T)[]): T {
   const body = request.body as Record<string, unknown> | undefined
@@ -28,17 +31,21 @@ function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, f
 
 export function registerAdminRoutes(
   app: FastifyInstance,
-  deps: { env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; providerOrders?: Record<ProviderKind, string[]> | undefined; playbackStore?: PlaybackStore | undefined; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => Promise<ProbeStatus> | ProbeStatus) | undefined },
+  deps: { env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; scoutCatalog?: (() => readonly ProviderRegistration[]) | undefined; scoutRecipes?: readonly { id: string }[] | undefined; providerOrders?: Record<ProviderKind, string[]> | undefined; playbackStore?: PlaybackStore | undefined; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => Promise<ProbeStatus> | ProbeStatus) | undefined },
 ) {
   const { env, identity, repository, providers = [], providerOrders, playbackStore, playback, subtitles, providerConfig, probeStatus } = deps
   const cookieName = sessionCookieName(env)
-  let metricsCache: { at: number; data: MetricsSnapshot } | null = null
+  let metricsCache: { at: number; data: MetricsSnapshot | null } | null = null
+  let metricsPending: Promise<MetricsSnapshot | null> | null = null
   async function metricsSnapshot(): Promise<MetricsSnapshot | null> {
     if (!env.adminMetricsUrl) return null
-    try {
-      if (!metricsCache || Date.now() - metricsCache.at > 15_000) metricsCache = { at: Date.now(), data: await readProviderMetrics(env.adminMetricsUrl) }
-      return metricsCache.data
-    } catch { return null }
+    if (metricsCache && Date.now() - metricsCache.at < 15_000) return metricsCache.data
+    // Health and metrics panels load together. Share their bounded query batch,
+    // including a short negative cache when the optional collector is offline.
+    metricsPending ??= readProviderMetrics(env.adminMetricsUrl).catch(() => null).then(data => {
+      metricsCache = { at: Date.now(), data }; return data
+    }).finally(() => { metricsPending = null })
+    return metricsPending
   }
 
   function guardMutation(request: FastifyRequest) {
@@ -57,6 +64,10 @@ export function registerAdminRoutes(
     if (member.role !== 'admin') throw new ApiError('FORBIDDEN', 'Admin access required.')
     return member
   }
+
+  registerProviderInspection(app, { authorize: requireAdmin, guard: guardMutation, providers,
+    catalog: deps.scoutCatalog, recipes: deps.scoutRecipes, store: playbackStore ?? createMemoryPlaybackStore(), region: env.tmdbRegion, origin: env.appOrigin,
+    relay: env.playback?.relay ? createPlaybackRelay(env.playback.relay) : undefined })
 
   // --- Provider management ---
 
@@ -102,6 +113,10 @@ export function registerAdminRoutes(
         id: p.adapter.id,
         removed: isProviderRemoved(p),
         enabled: p.enabled,
+        role: p.role ?? 'video',
+        deliveryMode: p.deliveryMode ?? 'direct',
+        proxyApproved: Boolean(env.playback?.relay?.providers[p.adapter.id]?.length),
+        audioCapabilities: { separateAudio: 'unverified', languages: [...p.adapter.audioLanguages ?? []], health: 'untested' },
         regions: [...p.approvedRegions],
         configuredRegions: [...configuredProviderRegions(p)],
         mediaHosts: [...p.mediaHosts],
@@ -124,7 +139,7 @@ export function registerAdminRoutes(
     for (const kind of kinds) {
       const circuits = playback?.providerStatus?.(kind) ?? []
       result[kind] = providers
-        .filter((p) => !isProviderRemoved(p) && p.mediaKinds.includes(kind))
+        .filter((p) => !isProviderRemoved(p) && suppliesVideo(p) && p.mediaKinds.includes(kind))
         .flatMap((p) => [...new Set(p.approvedRegions)].map((region) => {
           const probe = probed[`${p.adapter.id}:${kind}:${region}`] ?? null
           const current = circuits.find((entry) => entry.id === p.adapter.id)
@@ -161,6 +176,7 @@ export function registerAdminRoutes(
     const { id } = request.params as { id: string }
     const provider = providers.find((entry) => entry.adapter.id === id && !isProviderRemoved(entry))
     if (!provider) throw new ApiError('NOT_FOUND', 'Provider not found.')
+    if (!suppliesVideo(provider)) throw new ApiError('BAD_REQUEST', 'This provider is assigned to audio. Separate audio verification is not available yet.')
     const body = request.body as { region?: unknown; kind?: unknown } | undefined
     const requestedRegion = body?.region ?? env.tmdbRegion
     if (typeof requestedRegion !== 'string' || !/^[A-Z]{2}$/.test(requestedRegion) || !provider.approvedRegions.includes(requestedRegion)) throw new ApiError('BAD_REQUEST', 'Choose a configured provider region.')
@@ -213,6 +229,7 @@ export function registerAdminRoutes(
     if (body.audioLanguage && !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/.test(body.audioLanguage)) throw new ApiError('BAD_REQUEST', 'Choose a valid audio language.')
     const provider = providers.find((p) => p.adapter.id === body.providerId && !isProviderRemoved(p))
     if (!provider) throw new ApiError('BAD_REQUEST', `Provider "${body.providerId}" not found.`)
+    if (!suppliesVideo(provider)) throw new ApiError('BAD_REQUEST', 'This provider is assigned to audio. Separate audio verification is not available yet.')
     if (!provider.mediaKinds.includes(parsedRef.data.kind)) throw new ApiError('BAD_REQUEST', 'Provider does not serve this title kind.')
     if (playbackStore && !await playbackStore.claim(`admin-test:${body.providerId}`, randomUUID(), 15)) throw new ApiError('CONFLICT', 'Please wait before testing this provider again.', { retryable: true })
     const controller = new AbortController()
@@ -272,7 +289,7 @@ export function registerAdminRoutes(
       const { kind } = request.params as { kind: ProviderKind }
       if (!providerKinds.includes(kind)) throw new ApiError('BAD_REQUEST', 'Choose Movies, Series, or Anime.')
       const body = request.body as { providerIds?: unknown; revision?: unknown } | undefined
-      const expected = providers.filter((provider) => !isProviderRemoved(provider) && provider.mediaKinds.includes(kind)).map((provider) => provider.adapter.id)
+      const expected = providers.filter((provider) => !isProviderRemoved(provider) && suppliesVideo(provider) && provider.mediaKinds.includes(kind)).map((provider) => provider.adapter.id)
       if (!Array.isArray(body?.providerIds) || body.providerIds.length !== expected.length || new Set(body.providerIds).size !== expected.length || !body.providerIds.every((id) => typeof id === 'string' && expected.includes(id))) throw new ApiError('BAD_REQUEST', 'Send each configured provider for this kind exactly once.')
       if (!Number.isInteger(body.revision) || (body.revision as number) < 0) throw new ApiError('BAD_REQUEST', 'Provide the current order revision.')
       if (!providerConfig.setOrder) throw new ApiError('PLAYBACK_UNAVAILABLE', 'Provider ordering is unavailable.')
@@ -308,8 +325,22 @@ export function registerAdminRoutes(
       const provider = providers.find((provider) => provider.adapter.id === id && !isProviderRemoved(provider))
       if (!id || !provider) throw new ApiError('BAD_REQUEST', 'Choose a configured provider. Restore a removed provider before editing it.')
       const body = request.body as Record<string, unknown> ?? {}
-      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((field) => !['enabled', 'priority', 'regions', 'requestsPerMinute', 'concurrency'].includes(field))) throw new ApiError('BAD_REQUEST', 'Provide supported provider settings only.')
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((field) => !['enabled', 'role', 'deliveryMode', 'priority', 'regions', 'requestsPerMinute', 'concurrency'].includes(field))) throw new ApiError('BAD_REQUEST', 'Provide supported provider settings only.')
       const patch: ProviderOverridePatch = {}
+      if ('deliveryMode' in body) {
+        const parsed = providerDeliveryModeSchema.safeParse(body.deliveryMode)
+        if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose Direct, Proxy or Embed video delivery.')
+        // Classification never grants hosts or activates the Worker. An
+        // unapproved proxy row is excluded from playback by the relay gate.
+        const frame = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'].includes(provider.adapter.id)
+        if (frame !== (parsed.data === 'embed')) throw new ApiError('BAD_REQUEST', 'Embed delivery belongs to frame providers; media providers use Direct or Proxy.')
+        patch.deliveryMode = parsed.data
+      }
+      if ('role' in body) {
+        const parsed = providerRoleSchema.safeParse(body.role)
+        if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose Video source, Audio source, or Both.')
+        patch.role = parsed.data
+      }
       if ('enabled' in body) {
         if (typeof body.enabled !== 'boolean') throw new ApiError('BAD_REQUEST', 'Enabled must be true or false.')
         patch.enabled = body.enabled

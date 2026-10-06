@@ -5,11 +5,11 @@ import Link from 'next/link'
 import { OrderedTitleRow, SectionHeading, Tabs, buttonVariants } from '@consumit/ui'
 
 import { FilScreenShell } from '../shared'
-import { ListEditor, SaveListButton } from './list-actions'
+import { ListEditor } from './list-actions'
 
 function key(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
 
-export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavailable = false, data, signedIn, titles }: {
+export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavailable = false, data, titles }: {
   catalogDetailsLimited?: boolean
   catalogUnavailable?: boolean
   data: MemberListDetail
@@ -27,7 +27,6 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
               <h1 className="mt-4 max-w-[12ch] text-balance font-display text-5xl leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-[5rem]">{data.list.name}</h1>
               {data.list.description ? <p className="mt-6 max-w-[58ch] whitespace-pre-wrap text-sm leading-7 text-copy">{data.list.description}</p> : null}
               <p className="mt-7 text-sm text-muted">By <Link className="font-bold text-ink hover:text-orange" href={`/profile/${data.owner.username}`}>{data.owner.displayName ?? data.owner.username}</Link> · {data.items.length} {data.items.length === 1 ? 'title' : 'titles'}</p>
-              {signedIn && !data.viewerIsOwner ? <div className="mt-5"><SaveListButton key={`${data.list.slug}:${data.savedByViewer}`} initialSaved={data.savedByViewer} slug={data.list.slug} title={data.list.name} /></div> : null}
             </div>
             <div aria-hidden="true" className="relative mx-auto h-72 w-full max-w-2xl sm:h-96">
               {data.items.slice(0, 4).map((item, index) => {
@@ -46,7 +45,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
           <section className="py-14 sm:py-16 lg:py-20" id="titles" aria-labelledby="list-titles-heading">
             {data.viewerIsOwner ? (
               <>
-                <SectionHeading description="Edit details, choose visibility, add titles, and set their order." id="list-titles-heading" title="Your list" />
+                <SectionHeading description="Edit details, add titles, and set their order." id="list-titles-heading" title="Your list" />
                 <div className="mt-8"><ListEditor data={data} titles={titles} /></div>
               </>
             ) : (
@@ -62,7 +61,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
 
           <section className="border-t border-border py-14" id="about" aria-labelledby="list-about-heading">
             <SectionHeading id="list-about-heading" title="About this list" />
-            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. The owner controls whether this list is private or available to everyone.</p>
+            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. This list is private and only available to its owner.</p>
           </section>
         </div>
       </main>

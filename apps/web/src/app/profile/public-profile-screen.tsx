@@ -9,8 +9,8 @@ import { BannerEditor } from './banner-editor'
 import { FavoritesShelf } from './favorites-shelf'
 import { EditBannerButton, ProfileEditProvider } from './profile-edit'
 import { ProfileSectionNavigation, type ProfileSectionId } from './profile-section-navigation'
-import { ShareProfile } from './share-profile'
 import { FilScreenShell } from '../shared'
+import { AdPlaceholder } from '../shared/ad-placeholder'
 import { TitleCard } from '../shared/title-card'
 
 import { memberAvatarSrc } from '@/lib/avatar'
@@ -309,7 +309,6 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:pb-1">
-                  <ShareProfile username={data.profile.username} variant="inline" />
                   {owner ? (
                     <>
                       <Link
@@ -405,7 +404,8 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                   ) : null}
                 </div>
 
-                <aside aria-label={name + ' film journal highlights'} className="min-w-0 space-y-7 lg:pt-1">
+                <aside aria-label={name + ' profile highlights'} className="min-w-0 space-y-7 lg:pt-1">
+                  {owner ? <AdPlaceholder placement="profile" position="early" shape="rectangle" /> : null}
                   {owner && savedPreview ? <SavedTitlesPreview preview={savedPreview} titleMap={titleMap} username={data.profile.username} /> : null}
                   <DiaryPreview data={data} titleMap={titleMap} />
                   <RecentListPreview data={data} listPosters={listPosters} />

@@ -7,6 +7,15 @@ describe('media-source seam', () => {
     expect(isSafeMediaUrl('https://cdn.consumit.example/movie/1080p.m3u8')).toBe(true)
   })
 
+  it('accepts only the exact same-origin signed playlist route on a local app', () => {
+    const control = `${window.location.origin}/v1/playback/relay-manifest?grant=${'a'.repeat(600)}`
+    expect(isSafeMediaUrl(control)).toBe(true)
+    expect(isSafeMediaUrl(control.replace(window.location.origin, 'http://other.example'))).toBe(false)
+    expect(isSafeMediaUrl(control + '&url=https://other.example')).toBe(false)
+    expect(isSafeMediaUrl(control + '#fragment')).toBe(false)
+    expect(isSafeMediaUrl(control.replace('/relay-manifest', '/another-route'))).toBe(false)
+  })
+
   it('rejects hostile playback URLs', () => {
     expect(isSafeMediaUrl('http://cdn.consumit.example/movie.mp4')).toBe(false)
     expect(isSafeMediaUrl('javascript:alert(1)')).toBe(false)

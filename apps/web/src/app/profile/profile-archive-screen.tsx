@@ -287,7 +287,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
   const archiveTitles: Record<Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history'>, { description: string; heading: string }> = {
     activity: { description: selectedTag ? `Activity tagged “${selectedTag}”.` : 'A running log of watches and reviews, in the order they happened.', heading: selectedTag ? `Activity · #${selectedTag}` : 'Activity' },
     films: selectedRating === undefined
-      ? { description: 'The titles marked watched, gathered into one filmography.', heading: 'Films' }
+      ? { description: 'The titles marked watched, gathered into one collection.', heading: 'Watched' }
       : selectedRating === 'none'
         ? { description: 'Watched titles without a personal score from your viewing journal.', heading: 'Not rated' }
         : { description: `Titles you rated ${selectedRating} out of 10. Your title ratings remain private.`, heading: `Rated ${selectedRating}/10` },
@@ -310,7 +310,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="max-w-[65ch] text-sm leading-6 text-[var(--fs-muted)]">{descriptor.description}</p>
         <div className="flex items-center gap-4">
-          {totalCount !== null ? <p className="shrink-0 text-sm tabular-nums text-[var(--fs-muted)]">{totalCount} {section === 'films' ? (typeof selectedRating === 'number' ? (totalCount === 1 ? 'rating' : 'ratings') : totalCount === 1 ? 'film' : 'films') : section === 'lists' ? (totalCount === 1 ? 'list' : 'lists') : section === 'reviews' ? (totalCount === 1 ? 'review' : 'reviews') : section === 'diary' ? (totalCount === 1 ? 'entry' : 'entries') : (totalCount === 1 ? 'event' : 'events')}</p> : null}
+          {totalCount !== null ? <p className="shrink-0 text-sm tabular-nums text-[var(--fs-muted)]">{totalCount} {section === 'films' ? (typeof selectedRating === 'number' ? (totalCount === 1 ? 'rating' : 'ratings') : totalCount === 1 ? 'title' : 'titles') : section === 'lists' ? (totalCount === 1 ? 'list' : 'lists') : section === 'reviews' ? (totalCount === 1 ? 'review' : 'reviews') : section === 'diary' ? (totalCount === 1 ? 'entry' : 'entries') : (totalCount === 1 ? 'event' : 'events')}</p> : null}
         </div>
       </div>
       {section === 'activity' || section === 'films' || section === 'likes' || section === 'reviews' || section === 'lists' ? (

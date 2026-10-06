@@ -1,0 +1,71 @@
+{
+  "workload": "100 concurrent identical cold requests; real isolated PostgreSQL, pool max 10; fixture upstream; local warm connection pool",
+  "report": [
+    {
+      "version": "before",
+      "trial": 1,
+      "requests": 100,
+      "persistentReads": 100,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 64.02940000000001,
+      "p50Ms": 61.99599999999998,
+      "p95Ms": 63.21220000000005
+    },
+    {
+      "version": "after",
+      "trial": 1,
+      "requests": 100,
+      "persistentReads": 1,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 9.954200000000014,
+      "p50Ms": 9.329099999999983,
+      "p95Ms": 9.403900000000021
+    },
+    {
+      "version": "after",
+      "trial": 2,
+      "requests": 100,
+      "persistentReads": 1,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 8.027199999999993,
+      "p50Ms": 7.8285000000000196,
+      "p95Ms": 7.8548999999999864
+    },
+    {
+      "version": "before",
+      "trial": 2,
+      "requests": 100,
+      "persistentReads": 100,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 17.72890000000001,
+      "p50Ms": 16.528200000000027,
+      "p95Ms": 17.141999999999996
+    },
+    {
+      "version": "before",
+      "trial": 3,
+      "requests": 100,
+      "persistentReads": 100,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 11.014299999999992,
+      "p50Ms": 10.44889999999998,
+      "p95Ms": 10.874199999999973
+    },
+    {
+      "version": "after",
+      "trial": 3,
+      "requests": 100,
+      "persistentReads": 1,
+      "upstreamLoads": 1,
+      "writes": 1,
+      "totalMs": 7.4792000000000485,
+      "p50Ms": 7.274999999999977,
+      "p95Ms": 7.32080000000002
+    }
+  ]
+}

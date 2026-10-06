@@ -4,11 +4,12 @@ import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary
 import { ArtworkFrame, Button, Select } from '@consumit/ui'
 import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 
 import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { TitleCard } from '../shared/title-card'
+import { AdPlaceholder } from '../shared/ad-placeholder'
 import { useCatalogFeed } from './use-catalog-feed'
 
 function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: CatalogKind }) {
@@ -28,12 +29,12 @@ function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: Cat
           <button aria-label="Scroll featured titles right" className={scrollButtonClass} onClick={() => move(1)} type="button"><ArrowRight aria-hidden="true" className="size-4" /></button>
         </div>
       </div>
-      <ul className="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain py-1 pr-1 pb-3 sm:gap-5" ref={railRef} style={{ scrollbarWidth: 'none' }}>
+      <ul className="flex snap-x snap-mandatory scroll-px-2 gap-4 overflow-x-auto overscroll-x-contain -mx-2 px-2 pt-2 pb-6 sm:gap-5" ref={railRef} style={{ scrollbarWidth: 'none' }}>
         {items.slice(0, 10).map((title) => {
           const rating = title.tmdbRating === null ? null : title.tmdbRating.toFixed(1)
           return (
             <li className="w-[85%] max-w-[26rem] shrink-0 snap-start sm:w-[52%] lg:w-[38%] xl:w-[32%]" key={`${title.kind}:${title.id}`}>
-              <Link aria-label={title.title} className="group block overflow-hidden rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] shadow-sm outline-none transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none" href={titleHref(title)} prefetch={false}>
+              <Link aria-label={title.title} className="group block overflow-hidden rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] shadow-[0_2px_6px_rgba(0,0,0,0.06)] outline-none transition-[transform,border-color,box-shadow] duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] focus-visible:shadow-[0_6px_16px_rgba(0,0,0,0.12)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none" href={titleHref(title)} prefetch={false}>
                 <ArtworkFrame alt="" className="rounded-none border-0" ratio="landscape" src={title.backdropUrl ?? title.posterUrl ?? undefined}>
                   <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
                   <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent opacity-60" />
@@ -73,7 +74,14 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
-        {page?.items.map((title) => <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" key={`${title.kind}:${title.id}`} title={title} />)}
+        {page?.items.map((title, index) => (
+          <Fragment key={`${title.kind}:${title.id}`}>
+            <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" title={title} />
+            {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdPlaceholder placement="catalog" /></li> : null}
+            {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdPlaceholder placement="catalog" /></li> : null}
+            {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdPlaceholder placement="catalog" /></li> : null}
+          </Fragment>
+        ))}
         {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && page?.items.length === 0 ? (
@@ -124,6 +132,7 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
         </div>
       </div>
       <FeaturedRail items={current.items} kind={kind} />
+      {current.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdPlaceholder placement="catalog" position="early" /></div> : null}
       <CatalogFeed initialPage={isDefault ? popular : undefined} key={`${kind}:${feed}:${genre}:${year}`} query={query} reset={reset} />
     </main>
   )

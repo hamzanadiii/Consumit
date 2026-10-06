@@ -1,24 +1,21 @@
 'use client'
 
-import { Activity, CheckCircle, Database, FlaskConical, Globe, Play, Server, Users, XCircle } from 'lucide-react'
-import Link from 'next/link'
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { Activity, CheckCircle, Compass, FlaskConical, Globe, LayoutDashboard, Users, XCircle } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { useCallback, useEffect, useState } from 'react'
 
-import { Button, EmptyState, Input, Label, LoadingState, SectionHeading, SegmentedControl, Select, StatusDot } from '@consumit/ui'
+import { Button, EmptyState, LoadingState, SectionHeading, SegmentedControl, Select, StatusDot } from '@consumit/ui'
 
 import { FilScreenShell } from '../home/filscreen-shell'
 import { useSession } from '../session/session'
-import { checkHealth, getProviderOrder, listMembers, listProviderAlerts, listProviderChanges, listProviderHealth, listProviderMetrics, listProviders, listSubtitleDiagnostics, saveProviderOrder, testSubtitleTitle, resetProviderCircuit, retestProvider, setMemberRole, testProvider, type SubtitleProviderDiagnostic, type AdminMember, type AdminProvider, type HealthResult, type ProviderAlert, type ProviderChange, type ProviderHealthRow, type ProviderKind, type ProviderMetrics, type ProviderReadinessSummary, type ProviderTestResult } from '@/lib/admin-browser'
+import { getProviderOrder, listMembers, listProviderAlerts, listProviderChanges, listProviderHealth, listProviderMetrics, listProviders, listSubtitleDiagnostics, saveProviderOrder, testSubtitleTitle, resetProviderCircuit, retestProvider, setMemberRole, type SubtitleProviderDiagnostic, type AdminMember, type AdminProvider, type ProviderAlert, type ProviderChange, type ProviderHealthRow, type ProviderKind, type ProviderMetrics, type ProviderReadinessSummary } from '@/lib/admin-browser'
 
 import { ProvidersTab } from './provider-management'
+import { OperationsDashboard } from './operations-dashboard'
 
-type Tab = 'overview' | 'operations' | 'providers' | 'lab' | 'members'
+const ProviderBench = dynamic(() => import('./provider-bench').then(module => module.ProviderBench), { loading: () => <LoadingState title="Opening provider bench" rows={3} /> })
 
-function Badge({ ok }: { ok: boolean }) {
-  return ok
-    ? <span className="inline-flex items-center gap-1 text-xs font-bold text-lime"><CheckCircle className="size-3" /> OK</span>
-    : <span className="inline-flex items-center gap-1 text-xs font-bold text-danger"><XCircle className="size-3" /> Error</span>
-}
+type Tab = 'overview' | 'operations' | 'providers' | 'lab' | 'scout' | 'members'
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-card border border-border bg-surface p-4 ${className}`}>{children}</div>
@@ -28,48 +25,9 @@ export function ProviderControlSummary({ readiness }: { readiness: ProviderReadi
   return (
     <section aria-label="Provider controls" className="rounded-card border border-border bg-surface p-4" role="region">
       <p className="text-sm font-semibold text-ink">{readiness.enabledRows} enabled · {readiness.configuredRows} configured</p>
-      <p className="mt-1 text-xs leading-5 text-muted">Use the On control in a row, then Save, to make that provider eligible for playback. Saved changes apply without restarting the API.</p>
+      <p className="mt-1 text-xs leading-5 text-muted">Use the On control in a row, choose its role, then Save. Enabled Video source and Both providers are eligible for playback. Apogee Audio source and Both rows can supply optional added audio; other audio providers remain inactive. Saved changes apply without restarting the API.</p>
       {Boolean(readiness.removedRows) && <p className="mt-1 text-xs text-muted">{readiness.removedRows} deleted · use the Deleted filter to restore a provider.</p>}
     </section>
-  )
-}
-
-// --- Overview Tab ---
-
-function OverviewTab() {
-  const [health, setHealth] = useState<HealthResult | null>(null)
-  const [providers, setProviders] = useState<AdminProvider[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    Promise.all([checkHealth(), listProviders()]).then(([h, p]) => {
-      setHealth(h); setProviders(p.providers); setError(null)
-    }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Control room data could not be loaded.')).finally(() => setLoading(false))
-  }, [])
-
-  if (loading) return <LoadingState title="Checking health" rows={3} />
-
-  return (
-    <div className="space-y-6">
-      <SectionHeading title="At a glance." description="API, store, and the loaded fleet." />
-      {error && <p className="text-sm text-danger" role="alert">{error} Refresh this page to retry.</p>}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Card>
-          <div className="flex items-center gap-2 text-sm font-bold text-ink"><Server className="size-4" /> API</div>
-          <div className="mt-2"><Badge ok={health?.api === 'ok'} /></div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-2 text-sm font-bold text-ink"><Database className="size-4" /> Store</div>
-          <div className="mt-2"><Badge ok={health?.store === 'ok'} /></div>
-        </Card>
-      </div>
-      <Card>
-        <h3 className="text-sm font-bold text-ink">Providers Loaded</h3>
-        <p className="mt-2 text-2xl font-bold text-orange">{providers.length}</p>
-        <p className="text-xs text-muted">Configured adapters, including those turned off in Admin</p>
-      </Card>
-    </div>
   )
 }
 
@@ -150,7 +108,7 @@ function OperationsTab() {
         buffers: total.buffers + value.buffers, directSelections: total.directSelections + value.directSelections,
       }), { starts: 0, playbackFailures: 0, buffers: 0, directSelections: 0 })
       const browserTiming = browserTrends.filter(([, value]) => value.startupP50Ms !== undefined || value.stallP50Ms !== undefined)
-      return <tr key={`${row.id}:${row.region}`} className="border-b border-border/50 last:border-0"><td className="p-3 font-mono text-xs text-ink">{row.id}<span className="block font-sans text-muted">{row.region} · {kind}</span></td><td className="p-3"><StatusDot label={row.status} tone={row.status === 'healthy' ? 'lime' : row.status === 'down' ? 'danger' : 'neutral'} /></td><td className="p-3 text-xs text-muted">{row.probe ? `${row.probe.ok ? 'Resolved' : row.probe.code ?? 'Failed'} · ${row.probe.ms}ms · ${probeAge}m ago` : 'No probe yet'}</td><td className="p-3 text-xs text-muted">{metricsAvailable ? browserTrends.length ? `${Math.round(trend.starts)} starts · ${Math.round(trend.playbackFailures)} failures · ${Math.round(trend.buffers)} stalls` : 'No recent plays' : 'Unavailable'}{browserTiming.map(([key, value]) => { const browser = key.slice(prefix.length); const startup = value.startupP50Ms !== undefined ? `start p50/p95/p99 ${Math.round(value.startupP50Ms)}/${Math.round(value.startupP95Ms ?? 0)}/${Math.round(value.startupP99Ms ?? 0)}ms` : ''; const stalls = value.stallP50Ms !== undefined ? `stall p50/p95/p99 ${Math.round(value.stallP50Ms)}/${Math.round(value.stallP95Ms ?? 0)}/${Math.round(value.stallP99Ms ?? 0)}ms` : ''; return <span className="block" key={key}>{browser}: {[startup, stalls].filter(Boolean).join(' · ')}</span> })}</td><td className="p-3 text-xs text-muted">{row.circuit?.openUntil && row.circuit.openUntil > (updatedAt ?? 0) ? `Cooling until ${date(row.circuit.openUntil)}` : row.circuit && row.circuit.failures + row.circuit.playbackFailures > 0 ? `${row.circuit.failures} resolve · ${row.circuit.playbackFailures} playback failures` : 'Closed'}</td><td className="p-3 text-xs text-muted">{provider ? 'Direct' : 'Unknown'}{browserTrends.length > 0 && <span className="block">{Math.round(trend.directSelections)} selections</span>}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" size="sm" disabled={working !== null} onClick={() => void run(row.id, row.region, 'retest')}>Retest</Button><Button variant="ghost" size="sm" disabled={working !== null || !row.circuit || row.circuit.failures + row.circuit.playbackFailures === 0} onClick={() => void run(row.id, row.region, 'reset')}>Reset circuit</Button></div></td></tr>
+      return <tr key={`${row.id}:${row.region}`} className="border-b border-border/50 last:border-0"><td className="p-3 font-mono text-xs text-ink">{row.id}<span className="block font-sans text-muted">{row.region} · {kind}</span></td><td className="p-3"><StatusDot label={row.status} tone={row.status === 'healthy' ? 'lime' : row.status === 'down' ? 'danger' : 'neutral'} /></td><td className="p-3 text-xs text-muted">{row.probe ? `${row.probe.ok ? 'Resolved' : row.probe.code ?? 'Failed'} · ${row.probe.ms}ms · ${probeAge}m ago` : 'No probe yet'}</td><td className="p-3 text-xs text-muted">{metricsAvailable ? browserTrends.length ? `${Math.round(trend.starts)} starts · ${Math.round(trend.playbackFailures)} failures · ${Math.round(trend.buffers)} stalls` : 'No recent plays' : 'Unavailable'}{browserTiming.map(([key, value]) => { const browser = key.slice(prefix.length); const startup = value.startupP50Ms !== undefined ? `start p50/p95/p99 ${Math.round(value.startupP50Ms)}/${Math.round(value.startupP95Ms ?? 0)}/${Math.round(value.startupP99Ms ?? 0)}ms` : ''; const stalls = value.stallP50Ms !== undefined ? `stall p50/p95/p99 ${Math.round(value.stallP50Ms)}/${Math.round(value.stallP95Ms ?? 0)}/${Math.round(value.stallP99Ms ?? 0)}ms` : ''; return <span className="block" key={key}>{browser}: {[startup, stalls].filter(Boolean).join(' · ')}</span> })}</td><td className="p-3 text-xs text-muted">{row.circuit?.openUntil && row.circuit.openUntil > (updatedAt ?? 0) ? `Cooling until ${date(row.circuit.openUntil)}` : row.circuit && row.circuit.failures + row.circuit.playbackFailures > 0 ? `${row.circuit.failures} resolve · ${row.circuit.playbackFailures} playback failures` : 'Closed'}</td><td className="p-3 text-xs text-muted">{provider ? provider.deliveryMode === 'relay' ? 'Proxy' : provider.deliveryMode === 'embed' ? 'Embed' : 'Direct' : 'Unknown'}{browserTrends.length > 0 && <span className="block">{Math.round(trend.directSelections)} selections</span>}</td><td className="p-3"><div className="flex gap-2"><Button variant="secondary" size="sm" disabled={working !== null} onClick={() => void run(row.id, row.region, 'retest')}>Retest</Button><Button variant="ghost" size="sm" disabled={working !== null || !row.circuit || row.circuit.failures + row.circuit.playbackFailures === 0} onClick={() => void run(row.id, row.region, 'reset')}>Reset circuit</Button></div></td></tr>
     })}</tbody></table></div>}
     {changes.length > 0 && <section aria-labelledby="provider-changes-heading" className="space-y-2"><h3 id="provider-changes-heading" className="text-sm font-bold text-ink">Recent configuration changes</h3><ul className="divide-y divide-border rounded-card border border-border bg-surface px-4">{changes.slice(0, 10).map((change, index) => <li key={`${change.createdAt}:${change.providerId}:${index}`} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs"><span className="font-mono text-ink">{change.providerId}</span><span className="text-muted">{change.after ? `${change.after.removed ? 'Deleted' : change.before?.removed ? 'Restored (disabled)' : change.after.enabled === false ? 'Disabled' : change.after.order ? 'Order updated' : 'Settings updated'}` : 'Override reset'} by {change.actorId}</span><time className="text-faint" dateTime={change.createdAt}>{new Date(change.createdAt).toLocaleString('en-US', { timeZone: 'UTC' })}</time></li>)}</ul></section>}
     <section aria-labelledby="subtitle-operations-heading" className="space-y-3">
@@ -196,7 +154,7 @@ export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] 
   }
   return <Card>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h3 className="text-sm font-bold text-ink">Playback attempt order</h3><p className="mt-1 text-xs text-muted">Providers are tried in your saved order. Unavailable providers are skipped.</p></div>
+      <div><h3 className="text-sm font-bold text-ink">Playback attempt order</h3><p className="mt-1 text-xs text-muted">Saved settings are shown below. Direct providers run first, then Proxy providers in their saved order. Unavailable providers are skipped.</p></div>
       <Select label="Title kind" value={kind} options={[{ label: 'Movies', value: 'movie' }, { label: 'Series', value: 'series' }, { label: 'Anime', value: 'anime' }]} onValueChange={(value) => { setBusy(true); setKind(value as ProviderKind) }} />
     </div>
     {error && <p className="mt-3 text-xs text-danger" role="alert">{error}</p>}
@@ -204,7 +162,7 @@ export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] 
       {ids.map((id, index) => {
         const provider = providers.find((entry) => entry.id === id)
         return <li key={id} draggable={!busy} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from)) move(from, index) }} className="flex items-center gap-2 rounded-control border border-border bg-field px-3 py-2 text-xs">
-          <span className="w-5 tabular-nums text-muted">{index + 1}</span><span className="min-w-0 flex-1 truncate font-mono text-ink">{id}</span><span className="text-muted">{provider?.enabled ? 'Direct' : 'Disabled'}</span>
+          <span className="w-5 tabular-nums text-muted">{index + 1}</span><span className="min-w-0 flex-1 truncate font-mono text-ink">{id}</span><span className="text-muted">{provider?.enabled ? provider.deliveryMode === 'relay' ? 'Proxy' : provider.deliveryMode === 'embed' ? 'Embed' : 'Direct' : 'Disabled'}</span>
           <button type="button" aria-label={`Move ${id} up`} disabled={busy || index === 0} onClick={() => move(index, index - 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↑</button>
           <button type="button" aria-label={`Move ${id} down`} disabled={busy || index === ids.length - 1} onClick={() => move(index, index + 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↓</button>
         </li>
@@ -212,233 +170,6 @@ export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] 
     </ol>
     <div className="mt-3 flex items-center gap-2"><Button variant="accent" size="sm" disabled={busy || ids.join('|') === saved.join('|')} onClick={() => void saveOrder()}>Save order</Button><Button variant="ghost" size="sm" disabled={busy || ids.join('|') === saved.join('|')} onClick={() => setIds(saved)}>Discard</Button></div>
   </Card>
-}
-
-// --- Provider Lab ---
-
-type LabKind = 'movie' | 'series' | 'anime'
-type LabRow = { id: string; status: 'running' | 'ok' | 'fail'; ms?: number | undefined; result?: ProviderTestResult | undefined }
-
-function LabTab() {
-  const [providers, setProviders] = useState<AdminProvider[]>([])
-  const [loading, setLoading] = useState(true)
-  const [kind, setKind] = useState<LabKind>('movie')
-  const [titleId, setTitleId] = useState('969681')
-  const [season, setSeason] = useState('1')
-  const [episode, setEpisode] = useState('1')
-  const [audio, setAudio] = useState('en')
-  const [scope, setScope] = useState('enabled')
-  const [formError, setFormError] = useState<string | null>(null)
-  const [running, setRunning] = useState(false)
-  const [rows, setRows] = useState<LabRow[]>([])
-  const [ranRef, setRanRef] = useState<{ kind: LabKind; id: number; season?: number; episode?: number } | null>(null)
-  const seqRef = useRef(0)
-  const abortRef = useRef<AbortController | null>(null)
-  useEffect(() => () => { seqRef.current++; abortRef.current?.abort() }, [])
-
-  const refresh = useCallback(() => {
-    listProviders().then((result) => { setProviders(result.providers); setLoading(false) }).catch(() => setLoading(false))
-  }, [])
-  useEffect(() => { refresh() }, [refresh])
-
-  function buildRef(): { kind: LabKind; id: number; season?: number; episode?: number } | null {
-    const id = Number(titleId)
-    if (!Number.isSafeInteger(id) || id <= 0) { setFormError('Enter a valid catalog ID.'); return null }
-    if (kind === 'movie') return { kind, id }
-    const ep = Number(episode)
-    if (!Number.isSafeInteger(ep) || ep <= 0) { setFormError('Enter a valid episode number.'); return null }
-    if (kind === 'anime') return { kind, id, episode: ep }
-    const sn = Number(season)
-    if (!Number.isSafeInteger(sn) || sn <= 0) { setFormError('Enter a valid season number.'); return null }
-    return { kind, id, season: sn, episode: ep }
-  }
-
-  async function run(e: FormEvent) {
-    e.preventDefault()
-    if (running) return
-    const ref = buildRef()
-    if (!ref) return
-    setFormError(null)
-    const targets = (scope === 'all' ? [...providers] : scope === 'enabled' ? providers.filter((p) => p.enabled) : providers.filter((p) => p.id === scope))
-      .filter((p) => !p.removed && p.mediaKinds.includes(kind))
-      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-    if (targets.length === 0) { setFormError('No provider in scope.'); return }
-    const seq = ++seqRef.current
-    const controller = new AbortController()
-    abortRef.current = controller
-    setRunning(true)
-    setRanRef(ref)
-    setRows(targets.map((p) => ({ id: p.id, status: 'running' as const })))
-    for (const p of targets) {
-      const started = performance.now()
-      const ms = () => Math.round(performance.now() - started)
-      try {
-        const result = await testProvider(p.id, ref, audio.trim() || undefined, controller.signal)
-        if (seqRef.current !== seq) return
-        setRows((prev) => prev.map((r) => r.id === p.id ? { ...r, status: result.ok ? 'ok' as const : 'fail' as const, ms: ms(), result } : r))
-      } catch (err) {
-        if (seqRef.current !== seq) return
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        setRows((prev) => prev.map((r) => r.id === p.id
-          ? { ...r, status: 'fail' as const, ms: ms(), result: { providerId: p.id, ok: false, code: 'error', error: message } }
-          : r))
-      }
-    }
-    if (seqRef.current === seq) { setRunning(false); abortRef.current = null }
-  }
-
-  function stop() {
-    seqRef.current++
-    abortRef.current?.abort()
-    abortRef.current = null
-    setRunning(false)
-    setRows((current) => current.map((row) => row.status === 'running' ? { ...row, status: 'fail', result: { providerId: row.id, ok: false, code: 'stopped' } } : row))
-  }
-
-  const answered = rows.filter((r) => r.status === 'ok').length
-  const sourceTotal = rows.reduce((sum, r) => sum + (r.result?.ok ? r.result.sourceCount ?? 0 : 0), 0)
-
-  // Play a result through the real Watch flow, pinned to that provider:
-  // resolve lands normally, then Watch switches once to the pinned source.
-  function playHref(providerId: string): string | null {
-    if (!ranRef) return null
-    const pin = `provider=${encodeURIComponent(providerId)}`
-    if (ranRef.kind === 'movie') return `/watch/movie/${ranRef.id}?${pin}`
-    if (ranRef.kind === 'series' && ranRef.season && ranRef.episode) {
-      return `/watch/series/${ranRef.id}?season=${ranRef.season}&episode=${ranRef.episode}&${pin}`
-    }
-    if (ranRef.kind === 'anime' && ranRef.episode) return `/watch/anime/${ranRef.id}?episode=${ranRef.episode}&${pin}`
-    return null
-  }
-
-  if (loading) return <LoadingState title="Loading providers" rows={4} />
-
-  return (
-    <div className="space-y-6">
-      <SectionHeading
-        title="Provider lab."
-        description="Resolve one title across the fleet. Results show validated source metadata; open the real player to verify playback."
-      />
-      <Card>
-        <form className="flex flex-wrap items-end gap-4" onSubmit={run}>
-          <SegmentedControl
-            legend="Title kind"
-            name="lab-kind"
-            onValueChange={(v) => setKind(v as LabKind)}
-            options={[{ value: 'movie', label: 'Movie' }, { value: 'series', label: 'Series' }, { value: 'anime', label: 'Anime' }]}
-            value={kind}
-          />
-          <div>
-            <Label className="text-xs" htmlFor="lab-scope">Provider scope</Label>
-            <Select
-              id="lab-scope"
-              label="Provider scope"
-              hideLabel
-              onValueChange={setScope}
-              options={[{ value: 'enabled', label: 'Enabled providers' }, { value: 'all', label: 'Every configured provider' }, ...providers.filter((p) => !p.removed && p.mediaKinds.includes(kind)).map((p) => ({ value: p.id, label: p.id }))]}
-              value={scope}
-            />
-          </div>
-          <div>
-            <Label className="text-xs" htmlFor="lab-id">{kind === 'anime' ? 'AniList ID' : 'TMDB ID'}</Label>
-            <Input className="mt-1 w-32" id="lab-id" inputMode="numeric" onChange={(e) => setTitleId(e.target.value)} placeholder="969681" value={titleId} />
-          </div>
-          {kind === 'series' && (
-            <div>
-              <Label className="text-xs" htmlFor="lab-season">Season</Label>
-              <Input className="mt-1 w-20" id="lab-season" inputMode="numeric" onChange={(e) => setSeason(e.target.value)} value={season} />
-            </div>
-          )}
-          {kind !== 'movie' && (
-            <div>
-              <Label className="text-xs" htmlFor="lab-episode">Episode</Label>
-              <Input className="mt-1 w-20" id="lab-episode" inputMode="numeric" onChange={(e) => setEpisode(e.target.value)} value={episode} />
-            </div>
-          )}
-          <div>
-            <Label className="text-xs" htmlFor="lab-audio">Audio</Label>
-            <Input className="mt-1 w-20" id="lab-audio" maxLength={8} onChange={(e) => setAudio(e.target.value)} value={audio} />
-          </div>
-          <Button variant="accent" size="sm" type="submit" loading={running}>
-            <Play className="size-3" /> Run
-          </Button>
-          {running && <Button onClick={stop} size="sm" type="button" variant="secondary">Stop</Button>}
-        </form>
-        {formError && <p className="mt-3 text-xs text-danger" role="alert">{formError}</p>}
-      </Card>
-
-      {rows.length === 0 ? (
-        <EmptyState
-          title="Name a title to probe the fleet."
-          description="Run one title across every provider. Each row reports validated sources and latency."
-          icon={<FlaskConical className="size-5" />}
-        />
-      ) : (
-        <Card>
-          <p className="text-xs text-muted" role="status">
-            {running ? 'Probing…' : `${answered} of ${rows.length} answered · ${sourceTotal} source(s)`}
-          </p>
-          <ul className="mt-3 space-y-2">
-            {rows.map((row) => {
-              const provider = providers.find((p) => p.id === row.id)
-              return (
-                <li key={row.id} className="rounded-control border border-border bg-field px-3 py-2.5">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <StatusDot
-                      tone={row.status === 'ok' ? 'lime' : row.status === 'fail' ? 'danger' : 'neutral'}
-                      label={row.status === 'ok'
-                        ? `${row.result?.sourceCount ?? 0} source(s)${row.ms !== undefined ? ` · ${row.ms}ms` : ''}`
-                        : row.status === 'fail'
-                          ? row.result?.code ?? 'failed'
-                          : 'Probing…'}
-                    />
-                    <span className="font-mono text-sm font-bold text-ink">{row.id}</span>
-                    {provider?.mediaKinds.map((k) => (
-                      <span key={k} className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold ${k === 'anime' ? 'bg-orange/10 text-orange' : 'bg-sky/10 text-sky'}`}>
-                        {k}
-                      </span>
-                    ))}
-                    <span className="ml-auto flex items-center gap-2">
-                      {row.result && !row.result.ok && row.result.error && (
-                        <span className="max-w-64 truncate text-xs text-danger" title={row.result.error}>{row.result.error}</span>
-                      )}
-                      {row.status === 'ok' && provider?.enabled && playHref(row.id) && (
-                        <Link
-                          className="inline-flex h-9 items-center gap-1.5 rounded-control bg-ink px-3 text-[0.8125rem] font-medium text-canvas transition-colors hover:bg-white"
-                          href={playHref(row.id)!}
-                          target="_blank"
-                          title={`Play this title pinned to ${row.id}`}
-                        >
-                          <Play className="size-3" /> Play
-                        </Link>
-                      )}
-                    </span>
-                  </div>
-                  {row.result?.ok && row.result.sources && row.result.sources.length > 0 && (
-                    <details className="mt-2 text-xs">
-                      <summary className="cursor-pointer text-muted hover:text-ink">Sources ({row.result.sources.length})</summary>
-                      <ul className="mt-2 space-y-1.5">
-                        {row.result.sources.map((s, i) => (
-                          <li key={i} className="rounded-micro border border-border/50 px-2 py-1.5">
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted">
-                              <span className="font-mono text-ink">{s.key}</span>
-                              <span>{s.type}</span>
-                              <span>{s.language}</span>
-                              {s.qualityHint && <span className="text-orange">{s.qualityHint}</span>}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
-      )}
-    </div>
-  )
 }
 
 // --- Members Tab ---
@@ -524,35 +255,48 @@ function MembersTab() {
 // --- Main Admin Screen ---
 
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: 'overview', label: 'Overview', icon: <Activity className="size-4" /> },
-  { key: 'operations', label: 'Operations', icon: <Activity className="size-4" /> },
+  { key: 'overview', label: 'Dashboard', icon: <LayoutDashboard className="size-4" /> },
   { key: 'providers', label: 'Providers', icon: <Globe className="size-4" /> },
-  { key: 'lab', label: 'Lab', icon: <FlaskConical className="size-4" /> },
-  { key: 'members', label: 'Members', icon: <Users className="size-4" /> },
+  { key: 'lab', label: 'Playback debug', icon: <FlaskConical className="size-4" /> },
+  { key: 'scout', label: 'Provider scout', icon: <Compass className="size-4" /> },
+  { key: 'operations', label: 'Diagnostics', icon: <Activity className="size-4" /> },
+  { key: 'members', label: 'Access', icon: <Users className="size-4" /> },
 ]
 
 export function AdminScreen() {
   const [tab, setTab] = useState<Tab>('overview')
+  const [visited, setVisited] = useState<Tab[]>(['overview'])
+  const [debugTarget, setDebugTarget] = useState<{ id: string; kind: ProviderKind; version: number } | undefined>(undefined)
+  const navigate = useCallback((next: Tab) => {
+    setTab(next); setVisited(current => current.includes(next) ? current : [...current, next])
+    window.history.replaceState(window.history.state, '', `#${next}`)
+  }, [])
+  useEffect(() => {
+    const open = () => { const hash = window.location.hash.slice(1); if (tabs.some(entry => entry.key === hash)) navigate(hash as Tab) }
+    const initial = setTimeout(open, 0); window.addEventListener('hashchange', open)
+    return () => { clearTimeout(initial); window.removeEventListener('hashchange', open) }
+  }, [navigate])
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto max-w-6xl">
-        <div className="mb-6">
+      <main className="mx-auto w-full min-w-0 max-w-[1600px]">
+        <div className="mb-6 border-b border-border pb-6">
           <h1 className="font-display text-4xl tracking-[-0.02em] text-ink">Control room<span className="text-orange">.</span></h1>
-          <p className="mt-2 max-w-[62ch] text-sm leading-6 text-muted">Probe providers, tune the fleet, and manage access.</p>
+          <p className="mt-2 max-w-[70ch] text-sm leading-6 text-muted">Playback evidence, provider controls, and the next reliable source.</p>
         </div>
 
-        <nav className="mb-8 flex gap-1 overflow-x-auto border-b border-border" aria-label="Admin sections">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[172px_minmax(0,1fr)]">
+        <nav className="flex content-start gap-1 overflow-x-auto border-b border-border xl:block xl:border-b-0 xl:border-r xl:pr-4" aria-label="Admin sections">
           {tabs.map((t) => (
             <button
               aria-current={tab === t.key ? 'page' : undefined}
               key={t.key}
-              className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-bold transition-colors ${
+              className={`flex shrink-0 items-center gap-2 rounded-control px-3 py-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange xl:mb-1 xl:w-full ${
                 tab === t.key
-                  ? 'border-orange text-orange'
-                  : 'border-transparent text-muted hover:text-ink'
+                  ? 'bg-orange/10 text-orange'
+                  : 'text-muted hover:bg-surface hover:text-ink'
               }`}
-              onClick={() => setTab(t.key)}
+              onClick={() => navigate(t.key)}
               type="button"
             >
               {t.icon}
@@ -561,11 +305,15 @@ export function AdminScreen() {
           ))}
         </nav>
 
-        {tab === 'overview' && <OverviewTab />}
+        <div className="min-w-0">
+        <div hidden={tab !== 'overview'}><OperationsDashboard active={tab === 'overview'} onNavigate={navigate} onDebug={(id, kind) => { setDebugTarget({ id, kind, version: Date.now() }); navigate('lab') }} /></div>
         {tab === 'operations' && <OperationsTab />}
-        {tab === 'providers' && <ProvidersTab />}
-        {tab === 'lab' && <LabTab />}
+        {visited.includes('providers') && <div hidden={tab !== 'providers'}><ProvidersTab /></div>}
+        {visited.includes('lab') && <div hidden={tab !== 'lab'}><ProviderBench mode="configured" active={tab === 'lab'} target={debugTarget} onManage={() => navigate('providers')} /></div>}
+        {visited.includes('scout') && <div hidden={tab !== 'scout'}><ProviderBench mode="scout" active={tab === 'scout'} onManage={() => navigate('providers')} /></div>}
         {tab === 'members' && <MembersTab />}
+        </div>
+        </div>
       </main>
     </FilScreenShell>
   )

@@ -2,7 +2,9 @@
 
 This audit covers the web application, Fastify API, contracts, shared UI, provider SDK, persistence, and deployment configuration. Findings below are grounded in code or a reproducing check. The fixes in this change address the urgent trust-boundary and broken-gate findings; the remaining items need separate, measured slices.
 
-Current product status (2026-10-01): browser-direct playback is the only delivery path under ADR 0003. The retired media relay and its rollout checks are removed. Public embeds remain deferred. Earlier evidence below describes the historical non-relay checks.
+Current review (2026-10-03): [the project quality review](./audits/project-quality-2026-10-03.md) records current findings and verification. Direct-first playback can enter an explicitly approved Worker relay tier under [ADR 0005](./adr/0005-direct-first-worker-relay.md), which supersedes ADR 0003's direct-only restriction. Public embeds remain deferred; social surfaces are retired from the active personal product.
+
+Historical product status (2026-10-01): browser-direct playback was the only delivery path under ADR 0003. That delivery restriction is superseded; retain the evidence below as historical verification.
 
 Previous product status (2026-09-29): public player embeds and `/v1/embed` routes are deferred and unmounted. The embed findings below record the earlier implementation state and do not indicate that those routes are currently available.
 

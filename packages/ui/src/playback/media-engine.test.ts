@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { attachMediaEngine } from './media-engine'
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
+const startLoad = vi.hoisted(() => vi.fn())
 vi.mock('hls.js', () => ({
   default: class {
     static isSupported = () => true
@@ -17,7 +18,7 @@ vi.mock('hls.js', () => ({
     loadSource() {}
     attachMedia() {}
     destroy() {}
-    startLoad = vi.fn()
+    startLoad = startLoad
     recoverMediaError = vi.fn()
   },
 }))
@@ -41,6 +42,15 @@ describe('media engine native teardown', () => {
 })
 
 describe('media engine hls errors', () => {
+  it('retries loading at the requested seek destination instead of the last decoded frame', async () => {
+    startLoad.mockClear()
+    const video = document.createElement('video')
+    video.currentTime = 600
+    const engine = await attachMediaEngine(video, source, { tracks: vi.fn(), fatal: vi.fn() })
+    expect(engine.recover()).toBe(true)
+    expect(startLoad).toHaveBeenCalledWith(600)
+    engine.destroy()
+  })
   it('maps a fatal 410 segment error to gone and declines in-place recovery', async () => {
     handlers.clear()
     const video = document.createElement('video')

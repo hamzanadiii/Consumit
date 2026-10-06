@@ -1,13 +1,113 @@
 import { Readable } from 'node:stream'
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { configuredProviders } from './configured-providers.ts'
 import { createPlayback } from './playback.ts'
 import { createMemoryPlaybackStore } from './state.ts'
 import type { MediaTransport } from './transport.ts'
+import { allowedMediaUrl } from '@consumit/provider-sdk'
 
 const configuration = [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to', '*.vix-content.net'], upstreamGroup: 'vixsrc' }]
 
 describe('configured real provider integration', () => {
+  it('keeps LookMovie fixed resolutions in one server and switches through its approved current CDN', async () => {
+    const rows: { id: string; enabled: boolean }[] = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const row = rows.find(row => row.id === 'lookmovie')!
+    const transport = vi.fn<MediaTransport>(async url => {
+      const payload = new URL(url).hostname === 'api.themoviedb.org'
+        ? { title: 'Fight Club', release_date: '1999-10-15' }
+        : new URL(url).pathname.endsWith('/view')
+          ? { streams: Object.fromEntries([1080, 720, 480].map(height => [`${height}p`, `https://srv315.excentionses.cyou/movie/${height}.m3u8`])) }
+          : { items: [{ id_movie: 'fight-club', title: 'Fight Club', year: 1999 }] }
+      return { status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify(payload)]) }
+    })
+    const [provider] = configuredProviders([{ ...row, enabled: true }], { transport, tmdbToken: 'fixture-token' })
+    expect(allowedMediaUrl('https://srv315.excentionses.cyou/movie/1080.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
+    expect(allowedMediaUrl('https://srv315.tormisted.cyou/movie/720.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
+    for (const host of ['excentionses.cyou', 'evil.excentionses.cyou', 'srv315.excentionses.cyou.evil.example', 'srv315.unrelated.cyou']) {
+      expect(allowedMediaUrl(`https://${host}/movie.m3u8`, provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(false)
+    }
+    const playback = createPlayback({ providers: [provider!], store: createMemoryPlaybackStore(), region: 'US' })
+    const input = { ref: { kind: 'movie' as const, id: 550 }, audioLanguage: 'en', capabilities: { hls: true, native: true, dash: true, nativeHls: false } }
+    const signal = new AbortController().signal
+    expect((await playback.listProviders(input, signal)).map(p => p.id)).toEqual(['lookmovie'])
+    const session = await playback.resolve('guest', input, signal)
+    expect(session.source).toMatchObject({ providerId: 'lookmovie', delivery: 'direct', qualityHint: '1080p', qualityHeights: [1080, 720, 480] })
+    expect(session.source).not.toHaveProperty('qualitySources')
+    for (const height of [720, 480, 1080]) {
+      const switched = await playback.switchProvider('guest', session.id, 'lookmovie', signal, { qualityHeight: height })
+      expect(switched.source).toMatchObject({ providerId: 'lookmovie', qualityHint: `${height}p`, qualityHeights: [1080, 720, 480] })
+      expect(switched.id).toBe(session.id)
+      expect(switched.source.src).toContain(`/${height}.m3u8`)
+    }
+  })
+  it('registers the requested PROVE relay roster with independent anime, movie and TV namespaces', async () => {
+    const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const providers = configuredProviders(raw, { tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
+    const animeIds = ['megavid', '9anime', 'anixo', 'zoko', 'aniwave']
+    const movieIds = ['bingebangymovies', 'stormboron', 'zeta', 'rivenebula', 'rivezephyr', 'wecollege-miami', 'wecollege-boise']
+    for (const id of [...animeIds, ...movieIds]) {
+      const provider = providers.find(row => row.adapter.id === id)
+      expect(provider).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: animeIds.includes(id) ? ['anime'] : ['movie', 'series'] })
+    }
+    expect(providers.find(row => row.adapter.id === 'vixsrc')?.deliveryMode).toBe('direct')
+    expect(providers.find(row => row.adapter.id === '9anime')?.mediaHosts).not.toContain('ru-ri-cdn3.echovideo.to')
+    expect(providers.find(row => row.adapter.id === 'zoko')?.mediaHosts).toContain('hls1.drama1.cfd')
+  })
+  it('registers Evion for TV video and keeps Apogee audio out of video attempts', async () => {
+    const evion = { id: 'evion', adapter: 'evion', regions: ['US'], mediaHosts: ['img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['series'], role: 'video' }
+    const apogee = { ...evion, id: 'riveapogee', adapter: 'riveapogee', mediaKinds: ['movie', 'series'], role: 'audio' }
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from(['{}']) }))
+    const providers = configuredProviders([evion, apogee], { transport })
+    expect(providers.map(p => ({ id: p.adapter.id, role: p.role, kinds: p.mediaKinds }))).toEqual([{ id: 'evion', role: 'video', kinds: ['series'] }, { id: 'riveapogee', role: 'audio', kinds: ['movie', 'series'] }])
+    const playback = createPlayback({ providers, store: createMemoryPlaybackStore(), region: 'US' })
+    const input = { ref: { kind: 'movie' as const, id: 550 }, audioLanguage: 'en', capabilities: { hls: true, native: true, dash: true, nativeHls: false } }
+    expect(await playback.listProviders(input, new AbortController().signal)).toEqual([])
+    expect((await playback.listProviders({ ...input, ref: { kind: 'series', id: 1399, season: 1, episode: 1 } }, new AbortController().signal)).map(p => p.id)).toEqual(['evion'])
+    expect(await providers[0]!.adapter.resolve({ ...input, region: 'US' }, new AbortController().signal)).toMatchObject({ ok: false })
+    expect(transport).not.toHaveBeenCalled()
+    expect(() => configuredProviders([{ ...evion, mediaKinds: ['movie', 'series'] }])).toThrow('series-only')
+  })
+  it('allows Apogee movie and TV video plus separate audio through the Both role', async () => {
+    const row = { id: 'riveapogee', adapter: 'riveapogee', regions: ['US'], mediaHosts: ['img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['movie', 'series'] }
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify({ data: { sources: [{ url: 'https://img.animecurx.tech/master.m3u8', format: 'hls' }] } })]) }))
+    const [video] = configuredProviders([{ ...row, role: 'both' }], { transport })
+    expect(video?.mediaKinds).toEqual(['movie', 'series'])
+    expect(video?.role).toBe('both')
+    expect(video?.adapter.separateAudio).toEqual({ label: 'Apogee' })
+    const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
+    expect(await video!.adapter.resolve(input, new AbortController().signal)).toMatchObject({ ok: true })
+    expect(transport.mock.calls[0]?.[0]).toBe('https://scrapper.rivestream.app/api/provider?provider=apogee&id=550')
+    const playback = createPlayback({ providers: [video!], store: createMemoryPlaybackStore(), region: 'US' })
+    expect((await playback.listProviders({ ...input, capabilities: { hls: true, native: true, dash: true, nativeHls: false } }, new AbortController().signal)).map(p => p.id)).toEqual(['riveapogee'])
+  })
+  it('defaults to video and validates all configured roles', () => {
+    expect(configuredProviders(configuration)[0]?.role).toBe('video')
+    expect(configuredProviders([{ ...configuration[0], role: 'audio' }])[0]?.role).toBe('audio')
+    expect(configuredProviders([{ ...configuration[0], role: 'both' }])[0]?.role).toBe('both')
+    expect(() => configuredProviders([{ ...configuration[0], role: 'verified' }])).toThrow()
+  })
+  it('registers Recloud as AniList-native anime SUB/DUB without a title resolver', () => {
+    const row = { id: 'recloud', adapter: 'recloud', regions: ['US'], mediaHosts: ['cdn.4animo.xyz'], upstreamGroup: 'recloud', mediaKinds: ['anime'] }
+    const [provider] = configuredProviders([row])
+    expect(provider?.adapter.id).toBe('recloud')
+    expect(provider?.mediaKinds).toEqual(['anime'])
+    expect(provider?.adapter.audioLanguages).toEqual(['ja', 'en'])
+    expect(() => configuredProviders([{ ...row, mediaKinds: ['anime', 'movie'] }])).toThrow('anime-only')
+    expect(() => configuredProviders([{ ...row, id: 'recloud-unknown' }])).toThrow('anime-only')
+  })
+  it('registers CineJoy for both kinds and Apogee for exact series episodes', async () => {
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify({ data: { sources: [{ url: 'https://img.animecurx.tech/series/master.m3u8', format: 'hls' }] } })]) }))
+    const registrations = configuredProviders([
+      { id: 'cinejoylisbon', adapter: 'cinejoylisbon', regions: ['US'], mediaHosts: ['api.wing.st', '*.cheaptruckrepairs.cc'], upstreamGroup: 'cinejoylisbon', mediaKinds: ['movie', 'series'] },
+      { id: 'riveapogee', adapter: 'riveapogee', regions: ['US'], mediaHosts: ['img.rousav.tech', 'img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['movie', 'series'] },
+    ], { tmdbToken: 'fixture-token', transport })
+    expect(registrations.map(provider => ({ id: provider.adapter.id, kinds: provider.mediaKinds }))).toEqual([
+      { id: 'cinejoylisbon', kinds: ['movie', 'series'] }, { id: 'riveapogee', kinds: ['movie', 'series'] },
+    ])
+    expect(await registrations[1]!.adapter.resolve({ ref: { kind: 'series', id: 1399, season: 3, episode: 4 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)).toMatchObject({ ok: true, sources: [{ url: 'https://img.animecurx.tech/series/master.m3u8', type: 'hls' }] })
+    expect(transport.mock.calls[0]?.[0]).toBe('https://scrapper.rivestream.app/api/provider?provider=apogee&id=1399&season=3&episode=4')
+  })
   it('connects canonical resolution and renews direct access', async () => {
     let token = 0
     const transport = vi.fn<MediaTransport>(async (url) => {

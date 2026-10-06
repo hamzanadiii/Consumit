@@ -116,7 +116,7 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
   return Object.assign(adapter('kyren', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
-    const dub = input.audioLanguage === 'en'
+    const dub = input.audioLanguage.toLowerCase().split('-')[0] === 'en'
     const lang = dub ? 'dub' : 'sub'
     let title: string
     try {
@@ -143,6 +143,12 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
         const sources: ProviderSource[] = []
         for (const [index, item] of (data.sources ?? []).entries()) {
           if (!item.url.startsWith('https://') || sources.length >= 3) continue
+          // Do not label a returned sub fallback as English just because the
+          // request asked for dub. Preserve the upstream variant evidence.
+          const reported = item.language?.trim().toLowerCase().split('-')[0]
+          if (reported && !(dub
+            ? ['en', 'eng', 'english', 'dub', 'dubbed']
+            : ['ja', 'jpn', 'japanese', 'original', 'sub', 'subbed']).includes(reported)) continue
           const type = classifyType(item.url)
           if (!type) continue
           let expiresAt: string
@@ -194,5 +200,5 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
       if (await segmentsServe(sources, signal)) return sources.slice(0, 3)
     }
     throw new ProviderFailure('empty')
-  }), { id })
+  }), { id, audioLanguages: ['ja', 'en'] as const })
 }

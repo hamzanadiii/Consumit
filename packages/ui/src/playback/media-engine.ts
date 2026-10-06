@@ -1,6 +1,7 @@
 import { audioTrackLabel, canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUrl, type DirectMediaSource } from './media-source'
+import { RelayLeaseRouter, relayLeaseLoader } from './relay-lease'
 
-export type MediaOption = { value: string; label: string; language?: string | undefined }
+export type MediaOption = { value: string; label: string; language?: string | undefined; height?: number | undefined }
 export type EngineTracks = { qualities: MediaOption[]; audio: MediaOption[]; subtitles: MediaOption[] }
 export type MediaEngine = {
   destroy(): void
@@ -56,7 +57,13 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     if (!Hls || !Hls.isSupported()) throw new Error('HLS playback is unavailable on this browser.')
     // Direct CDN media must stay credential-free so wildcard CORS remains
     // valid and no member cookies can cross the provider boundary.
-    const hls = new Hls({ enableWorker: true, backBufferLength: 30, maxBufferLength: 30, capLevelToPlayerSize: true, renderTextTracksNatively: true })
+    // Keep the stable XHR loader: progressive FetchLoader cancellation leaked
+    // AbortError rejections during recovery in the deployed browser. Retain a
+    // minute of forward reserve and the existing adaptive/device quality limits.
+    const lease = source.relayLease ? new RelayLeaseRouter(source.src, source.relayLease) : undefined
+    const hls = new Hls({ enableWorker: true, progressive: false, backBufferLength: 30, maxBufferLength: 60, capLevelToPlayerSize: true, renderTextTracksNatively: true,
+      ...(lease ? { loader: relayLeaseLoader(Hls.DefaultConfig.loader, lease) } : {}),
+    })
     let lastError: EngineFailure = 'network'
     let lastDeliveryFailure: EngineDeliveryFailure | undefined
     const publish = () => {
@@ -73,7 +80,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         /* Auto cap is a preference, never a crash */
       }
       events.tracks({
-      qualities: [...auto, ...hls.levels.map((level, index) => ({ value: String(index), label: level.height ? `${level.height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps` }))],
+      qualities: [...auto, ...hls.levels.map((level, index) => ({ value: String(index), label: level.height ? `${level.height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps`, height: level.height || undefined }))],
       audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: audioTrackLabel({ name: track.name, lang: track.lang, isDefault: track.default }, index), language: track.lang })),
       subtitles: hls.subtitleTracks.map((track, index) => ({ value: String(index), label: track.name || track.lang || `Subtitles ${index + 1}`, language: track.lang })),
       })
@@ -119,16 +126,18 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         // Gone sources never recover in place; report false so the controller
         // skips its retry wait and asks the application to switch sources.
         if (lastError === 'gone' || lastError === 'expired' || lastDeliveryFailure === 'headers') return false
-        if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(); return true
+        // The default startLoad position can rewind to the last decoded frame
+        // when a seek is waiting for bytes. Retry the element's destination.
+        if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(video.currentTime); return true
       },
-      destroy() { hls.destroy(); video.removeAttribute('src'); video.load() },
+      destroy() { lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
     }
   }
   const dash = await import('dashjs')
   signal?.throwIfAborted()
   const player = dash.MediaPlayer().create()
   const publish = () => events.tracks({
-    qualities: [...auto, ...player.getRepresentationsByType('video').map((track) => ({ value: track.id, label: track.height ? `${track.height}p` : 'Video' }))],
+    qualities: [...auto, ...player.getRepresentationsByType('video').map((track) => ({ value: track.id, label: track.height ? `${track.height}p` : 'Video', height: track.height || undefined }))],
     audio: player.getTracksFor('audio').map((track, index) => ({ value: String(index), label: track.lang || `Audio ${index + 1}`, language: track.lang ?? undefined })),
     subtitles: player.getTracksFor('text').map((track, index) => ({ value: String(index), label: track.lang || `Subtitles ${index + 1}`, language: track.lang ?? undefined })),
   })

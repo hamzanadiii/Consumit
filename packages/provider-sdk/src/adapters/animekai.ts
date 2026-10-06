@@ -253,10 +253,10 @@ async function postJson(http: ProviderHttp, path: string, body: unknown, referer
 }
 
 export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTitleResolver, now = Date.now) {
-  return adapter('animekai', async (input, signal) => {
+  return Object.assign(adapter('animekai', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
-    const wanted: 'sub' | 'dub' = input.audioLanguage === 'en' ? 'dub' : 'sub'
+    const wanted: 'sub' | 'dub' = input.audioLanguage.toLowerCase().split('-')[0] === 'en' ? 'dub' : 'sub'
     let title: string
     try {
       title = (await resolveTitle(ref.id, signal)).trim()
@@ -293,7 +293,7 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
       }
     }
 
-    // Episode page -> mfw09 server for the requested audio, dub falls back to sub.
+    // Only the requested audio variant may cross the adapter boundary.
     let pick: ServerPick
     let usedAudio: 'sub' | 'dub'
     {
@@ -306,13 +306,9 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
         const servers = parseServers(response.text)
         if (!servers.length) throw new ProviderFailure('empty')
         const direct = servers.find((server) => server.media === wanted && server.host === 'mfw09.org')
-        const fallback = servers.find((server) => server.media !== wanted && server.host === 'mfw09.org')
         if (direct) {
           pick = direct
           usedAudio = wanted
-        } else if (fallback) {
-          pick = fallback
-          usedAudio = fallback.media
         } else {
           throw new ProviderFailure('empty')
         }
@@ -398,5 +394,5 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
       subtitles,
     }
     return [source]
-  })
+  }), { audioLanguages: ['ja', 'en'] as const })
 }

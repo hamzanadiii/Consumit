@@ -48,6 +48,41 @@ describe('AniList adult exclusion', () => {
     expect((await seasonal.seasonal('SPRING', 2024)).items.map((item) => item.anilistId)).toEqual([3])
   })
 
+  it('browses with AniList sorts and filters while excluding adults', async () => {
+    let seen: Record<string, unknown> = {}
+    const capturing = {
+      query: async (_query: string, variables?: Record<string, unknown>) => {
+        seen = variables ?? {}
+        return pageOf([media(1, 'Clean'), media(2, 'Adult', true)])
+      },
+    } as unknown as AnilistClient
+    const catalog = createAnilistCatalog(capturing)
+    for (const [sort, anilist] of [['popular', 'POPULARITY_DESC'], ['top-rated', 'SCORE_DESC'], ['new', 'START_DATE_DESC'], ['old', 'START_DATE']] as const) {
+      const result = await catalog.browse({ sort, genre: 'Action', year: 2024, format: 'TV', page: 2 })
+      expect(seen).toMatchObject({ sort: [anilist], genre: 'Action', seasonYear: 2024, format: 'TV', page: 2, perPage: 20 })
+      expect(result.items.map((item) => item.anilistId)).toEqual([1])
+      expect(result.page).toBe(2)
+    }
+  })
+
+  it('omits absent browse filters instead of sending nulls', async () => {
+    let seen: Record<string, unknown> = {}
+    const capturing = {
+      query: async (_query: string, variables?: Record<string, unknown>) => {
+        seen = variables ?? {}
+        return pageOf([media(1, 'Clean')])
+      },
+    } as unknown as AnilistClient
+    const catalog = createAnilistCatalog(capturing)
+    // AniList intersects an explicit null genre/format with the remaining
+    // filters to an empty page; omission keeps unfiltered dimensions open.
+    await catalog.browse({ sort: 'popular', page: 1 })
+    expect(seen).toEqual({ sort: ['POPULARITY_DESC'], page: 1, perPage: 20 })
+    expect('genre' in seen).toBe(false)
+    expect('seasonYear' in seen).toBe(false)
+    expect('format' in seen).toBe(false)
+  })
+
   it('reports adult titles as not found instead of serving them', async () => {
     const catalog = createAnilistCatalog(stubClient({ Media: media(2, 'Adult', true) }))
     await expect(catalog.title(2)).rejects.toMatchObject({ code: 'ANIME_NOT_FOUND' })

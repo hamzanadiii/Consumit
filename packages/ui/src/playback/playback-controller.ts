@@ -1,9 +1,13 @@
 import { attachMediaEngine, type EngineFailure, type EngineDeliveryFailure, type EngineTracks, type MediaEngine, type MediaOption } from './media-engine'
 import { isSafeMediaUrl, type DirectMediaSource } from './media-source'
+import { createQualityPreference, mediaPreferences, preferredAudioOption, type MediaPreferences } from './media-preferences'
 
 export type PlaybackPhase = 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'switching' | 'ended' | 'failed'
 export type ControllerSnapshot = EngineTracks & {
   phase: PlaybackPhase; needsGesture: boolean; quality: string; audioTrack: string; subtitleTrack: string
+  preferences?: MediaPreferences | undefined
+  qualityNotice?: string | undefined
+  audioNotice?: string | undefined
 }
 export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' | 'error' | 'ended'; position: number; elapsedMs?: number }
 
@@ -91,6 +95,8 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   }
   let subtitlePreference = 'en'
   let audioPreference = 'original'
+  const qualityPreference = createQualityPreference()
+  let fixedQualityHint: string | undefined
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Storage is optional. */ }
   try { audioPreference = localStorage.getItem('consumit.player.audio-language') ?? 'original' } catch { /* Storage is optional. */ }
   let preferredPlaybackRate = video.playbackRate
@@ -133,7 +139,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   function watchForStall() {
     clearTimeout(recoveryTimer)
     const inspect = () => {
-      if (destroyed || video.paused || video.seeking || snapshot.phase !== 'buffering') return
+      if (destroyed || video.paused || snapshot.phase !== 'buffering') return
       const position = video.currentTime
       if (Number.isFinite(position) && position > lastPlaybackPosition + 0.1) {
         lastPlaybackPosition = position
@@ -196,21 +202,33 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     selectSubtitle(resolvedValue)
   }
   function preferredAudio() {
-    const match = snapshot.audio.find((option) => option.language === audioPreference || option.label.toLowerCase() === audioPreference)
-    if (match) { engine?.audio(match.value); update({ audioTrack: match.value }) }
+    const match = preferredAudioOption(snapshot.audio, audioPreference)
+    if (match) { engine?.audio(match.value); update({ audioTrack: match.value, audioNotice: undefined }) }
+    else update({ audioTrack: '', audioNotice: snapshot.audio.length && audioPreference !== 'original' ? `${audioPreference} audio unavailable on this source. Using default audio.` : undefined })
+  }
+  function preferredQuality() {
+    const selected = qualityPreference.resolve(snapshot.qualities, fixedQualityHint)
+    if (snapshot.quality !== selected.value) engine?.quality(selected.value)
+    update({ quality: selected.value, qualityNotice: selected.notice, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
   }
   function audio(value: string) {
     const option = snapshot.audio.find((entry) => entry.value === value)
     if (!option) return
     audioPreference = option.language || option.label.toLowerCase()
     try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Storage is optional. */ }
-    engine?.audio(value); update({ audioTrack: value })
+    engine?.audio(value); update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
   }
   const listeners: [string, EventListener][] = [
     ['playing', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
     ['pause', () => { if (snapshot.phase !== 'loading' && snapshot.phase !== 'switching') clearTimeout(startupTimer); clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
-    ['waiting', () => { if (!video.paused && !video.seeking && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); lastPlaybackProgressAt = bufferedAt; lastPlaybackPosition = video.currentTime; update({ phase: 'buffering' }); event('buffer-start') } watchForStall() } }],
-    ['seeking', () => clearTimeout(recoveryTimer)],
+    ['waiting', () => { if (!video.paused && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); lastPlaybackProgressAt = bufferedAt; lastPlaybackPosition = video.currentTime; update({ phase: 'buffering' }); event('buffer-start') } watchForStall() } }],
+    ['seeking', () => {
+      clearTimeout(recoveryTimer)
+      if (video.paused || snapshot.phase === 'failed') return
+      lastPlaybackProgressAt = performance.now(); lastPlaybackPosition = video.currentTime
+      if (snapshot.phase !== 'buffering') { bufferedAt = lastPlaybackProgressAt; update({ phase: 'buffering' }); event('buffer-start') }
+      watchForStall()
+    }],
     ['timeupdate', () => { if (video.currentTime > lastPlaybackPosition + 0.1) { lastPlaybackPosition = video.currentTime; lastPlaybackProgressAt = performance.now() } }],
     ['ended', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); update({ phase: 'ended' }); event('ended') }],
     ['error', () => {
@@ -222,6 +240,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
 
   return {
     async load(source: DirectMediaSource, position = 0, shouldPlay = false) {
+      fixedQualityHint = source.qualityHint
       const current = ++generation
       startedAt = performance.now(); firstFrame = false
       lastPlaybackProgressAt = startedAt; lastPlaybackPosition = position
@@ -286,6 +305,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
               if (kept) selectSubtitle(previousSubtitle)
               else preferredSubtitle()
               preferredAudio()
+              preferredQuality()
             }
           },
           fatal(reason, deliveryFailure) { if (current === generation) fatal(reason, deliveryFailure) },
@@ -320,6 +340,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         if (reselected) selectSubtitle(previousSubtitle)
         else preferredSubtitle()
         preferredAudio()
+        preferredQuality()
         // The old source can keep readyState >= 1 briefly after destroy() in
         // WebKit. Seeking against that metadata loses the retained position
         // when the replacement source loads. Only its metadata event may
@@ -333,7 +354,13 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       preferredPlaybackRate = rate
       restorePlaybackRate()
     },
-    quality(value: string) { if (snapshot.qualities.some((option) => option.value === value)) { engine?.quality(value); update({ quality: value }) } },
+    quality(value: string) {
+      const option = snapshot.qualities.find((option) => option.value === value)
+      if (!option) return
+      qualityPreference.choose(option)
+      engine?.quality(value)
+      update({ quality: value, qualityNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+    },
     audio,
     subtitle,
     /** Replace the external caption set without reloading media: late tracks

@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
+  it('keeps relay disabled and requires explicit exact-host permission and complete configuration', () => {
+    expect(loadEnv({ NODE_ENV: 'test' }).playback?.relay).toBeUndefined()
+    expect(() => loadEnv({ PLAYBACK_RELAY_ENABLED: 'true' })).toThrow('Relay requires')
+    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RELAY_ENABLED: 'true', PLAYBACK_RELAY_ORIGIN: 'https://edge.example', PLAYBACK_RELAY_SECRET: 'x'.repeat(48), PLAYBACK_RELAY_PROVIDERS: '{"owned":["media.example"]}' }
+    expect(loadEnv(config).playback?.relay?.providers).toEqual({ owned: ['media.example'] })
+    expect(loadEnv({ ...config, PLAYBACK_RELAY_PROVIDERS: '{}' }).playback?.relay?.providers).toEqual({})
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_PROVIDERS: '{"owned":["*.workers.dev"]}' })).toThrow('exact approved')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_ORIGIN: 'http://edge.example' })).toThrow('HTTPS origin')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_ORIGIN: 'https://edge.example/media' })).toThrow('HTTPS origin')
+  })
   it('keeps playback state separate and requires a media config', () => {
     expect(loadEnv({ NODE_ENV: 'test' }).playback?.enabled).toBe(false)
     expect(() => loadEnv({ PLAYBACK_ENABLED: 'true' })).toThrow('Playback requires')

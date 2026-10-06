@@ -10,6 +10,7 @@ import { browserAnimeEpisodes } from '@/lib/anime-browser'
 import { useEpisodeArt, type EpisodeArt } from '../../anime/use-episode-art'
 import { EpisodeRail, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
+import { AdPlaceholder } from '../../shared/ad-placeholder'
 import type { WatchEpisode, WatchTitle } from '../watch-screen'
 
 function toWatchTitle(detail: AnimeTitleDetail): WatchTitle {
@@ -124,6 +125,7 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
       <div className="mx-auto w-full max-w-[100rem] px-3 pt-4 pb-10 sm:px-6 lg:px-8">
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-6">
+            <AdPlaceholder placement="watch" position="early" />
             <WatchPlayback
               audioLanguage={audio === 'dub' ? 'en' : 'ja'}
               episode={toWatchEpisode(detail, episode, currentStream, currentArt)}

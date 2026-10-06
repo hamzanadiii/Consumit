@@ -52,5 +52,13 @@ export function registerRequestContext(app: FastifyInstance) {
 export function loggerOptions() {
   return {
     redact: { paths: REDACTED_PATHS, remove: true },
+    serializers: {
+      req(request: { id?: string; method?: string; url?: string; hostname?: string; ip?: string; socket?: { remotePort?: number | undefined } }) {
+        const url = request.url ?? ''
+        return { id: request.id, method: request.method ?? '',
+          url: url.split('?')[0] === '/v1/playback/relay-manifest' ? '/v1/playback/relay-manifest' : url,
+          hostname: request.hostname ?? '', remoteAddress: request.ip ?? '', remotePort: request.socket?.remotePort ?? 0 }
+      },
+    },
   }
 }

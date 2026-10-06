@@ -29,6 +29,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe('selectHeroSlides', () => {
@@ -71,6 +72,24 @@ describe('filScreen hero rotator', () => {
     fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
     await advanceOneSlide()
     expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
+  })
+
+  it('cancels the animation clock while paused and retains elapsed progress', async () => {
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame')
+    render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
+    fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
+    expect(cancelFrame).toHaveBeenCalled()
+    const framesAtPause = requestFrame.mock.calls.length
+    await advanceOneSlide()
+    expect(requestFrame).toHaveBeenCalledTimes(framesAtPause)
+    fireEvent.mouseLeave(screen.getByRole('region', { name: 'Featured titles' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_032) })
+    expect(screen.getByRole('heading', { name: 'Severance' })).toBeInTheDocument()
+    requestFrame.mockRestore()
+    cancelFrame.mockRestore()
   })
 
   it('selects a title from the dots and keeps the reel flowing', async () => {

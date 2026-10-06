@@ -8,6 +8,7 @@ vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: t
 vi.mock('@/lib/embed-playback-browser', () => ({ resolveEmbedSession: mocks.resolve, recoverEmbedSession: mocks.recover, listEmbedProviders: mocks.providers, switchEmbedSession: mocks.switch }))
 vi.mock('@/lib/subtitles-browser', () => ({ fetchAggregatedSubtitles: mocks.subtitles }))
 vi.mock('@consumit/ui', () => ({
+  readQualityPreference: () => undefined,
   ConsumitPlayer: ({ source, resumeAt, resumePlaying, onSourceError, onTimeUpdate, onPause, onPlay }: {
     source?: { src: string; providerId: string }; resumeAt?: number; resumePlaying?: boolean
     onSourceError?: (reason: 'network') => void; onTimeUpdate?: (event: { currentTarget: { currentTime: number } }) => void

@@ -136,7 +136,7 @@ export function computeSyncDelayMs(cueStartTime: number, clickTime: number, isPl
  */
 export function nativeLanguageName(code: string | undefined, fallback: string): string {
   const clean = (code ?? '').trim()
-  if (!clean) return fallback
+  if (!clean || clean.toLowerCase() === 'und' || clean.toLowerCase() === 'zxx') return fallback
   try {
     const base = clean.split('-')[0]!.toLowerCase()
     const name = new Intl.DisplayNames([base], { type: 'language' }).of(base)
@@ -145,6 +145,28 @@ export function nativeLanguageName(code: string | undefined, fallback: string): 
     /* runtime without full ICU: fall through to the label */
   }
   return fallback
+}
+
+let languageLabels: Set<string> | undefined
+function languageLabelKey(label: string) {
+  return label.normalize('NFKD').replace(/\p{M}/gu, '').trim().toLowerCase()
+}
+
+/** Preserve release names while excluding bare upstream language labels,
+ * including incorrect translations such as Albanian inside Arabic results. */
+export function subtitleLabelDetail(label: string): string | undefined {
+  if (!languageLabels) {
+    languageLabels = new Set<string>()
+    let english: Intl.DisplayNames | undefined
+    try { english = new Intl.DisplayNames(['en'], { type: 'language' }) } catch { /* Keep labels without ICU. */ }
+    for (const code of 'en fr es de it pt ru ar hi ja ko zh nl pl tr uk fa he th vi id ms ro el hu cs da fi no sv bn bg hr sr bs sk sl et lv lt is mk ca eu gl cy ur ta te kn pa mr gu km my tt ug uz yi ig jv lo su xh si ka hy az kk ku ps ne sw tl af sq am ha yo zu eo la mt mn so'.split(' ')) {
+      languageLabels.add(code)
+      languageLabels.add(languageLabelKey(nativeLanguageName(code, code)))
+      const name = english?.of(code)
+      if (name) languageLabels.add(languageLabelKey(name))
+    }
+  }
+  return languageLabels.has(languageLabelKey(label)) ? undefined : label
 }
 
 /**

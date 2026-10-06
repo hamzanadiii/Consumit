@@ -1,4 +1,4 @@
-import type { PersistentCatalogCacheStore } from './cache-store.ts'
+import type { PersistentCatalogCacheEntry, PersistentCatalogCacheStore } from './cache-store.ts'
 
 const MAX_MEMORY_ENTRIES = 500
 const MAX_REFRESH_FAILURES = 500
@@ -25,6 +25,7 @@ type Entry<T> = {
 export class StaleCache {
   readonly #entries = new Map<string, Entry<unknown>>()
   readonly #inFlight = new Map<string, Promise<Entry<unknown>>>()
+  readonly #persistentReads = new Map<string, Promise<PersistentCatalogCacheEntry | null>>()
   readonly #refreshFailures = new Map<string, { attempts: number; retryAt: number }>()
   readonly #now: () => number
   readonly #persistent: PersistentCatalogCacheStore | undefined
@@ -41,13 +42,12 @@ export class StaleCache {
     policy: CachePolicy,
     load: () => Promise<T>,
   ): Promise<CachedValue<T>> {
-    const now = this.#now()
     let existing = this.#entries.get(key) as Entry<T> | undefined
     if (existing) this.#remember(key, existing)
 
     if (!existing && this.#persistent) {
       try {
-        const persisted = await this.#persistent.get(key)
+        const persisted = await this.#readPersistent(key)
         if (persisted) {
           existing = {
             fetchedAt: persisted.fetchedAt,
@@ -62,9 +62,12 @@ export class StaleCache {
       }
     }
 
+    // A database read can outlast a value's remaining freshness window.
+    const now = this.#now()
     if (existing && existing.staleUntil <= now) {
       this.#entries.delete(key)
-      void this.#persistent?.delete(key).catch(this.#onStoreError)
+      // Refresh upserts this row; scheduled expiry cleanup is conditional on
+      // the stored deadline. An unawaited delete could erase a fresh upsert.
       existing = undefined
     }
 
@@ -96,6 +99,19 @@ export class StaleCache {
       await this.#persistent?.delete(key)
     } catch (error) {
       this.#onStoreError(error)
+    }
+  }
+
+  async #readPersistent(key: string): Promise<PersistentCatalogCacheEntry | null> {
+    const active = this.#persistentReads.get(key)
+    if (active) return active
+    if (!this.#persistent) return null
+    const request = this.#persistent.get(key)
+    this.#persistentReads.set(key, request)
+    try {
+      return await request
+    } finally {
+      this.#persistentReads.delete(key)
     }
   }
 

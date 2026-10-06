@@ -33,15 +33,19 @@ const member = {
   username: 'hamzanadi',
 } as const
 
-function renderShell(children = <p>Content</p>) {
+function renderShell(children = <p>Content</p>, pathname = '/') {
   return render(
     <SessionProvider initialMember={{ ...member }} initialStatus="authenticated">
-      <FilScreenShell currentPathname="/">{children}</FilScreenShell>
+      <FilScreenShell currentPathname={pathname}>{children}</FilScreenShell>
     </SessionProvider>,
   )
 }
 
 describe('FilScreenShell', () => {
+  it('keeps Friends, Circle, and Network out of member navigation', () => {
+    renderShell()
+    expect(screen.queryByRole('link', { name: /friends|circle|network/i })).not.toBeInTheDocument()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
@@ -63,11 +67,49 @@ describe('FilScreenShell', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Consumit home' })).toHaveClass('sr-only')
   })
 
-  it('uses Profile as the single member archive destination in the primary navigation', () => {
+  it('links directly to personal archives and keeps profile access through the avatar', () => {
     renderShell()
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
-    expect(within(navigation).getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/profile/hamzanadi')
-    for (const name of ['Watchlist', 'Library', 'Lists', 'History']) expect(within(navigation).queryByRole('link', { name })).not.toBeInTheDocument()
+    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Watched', 'films'], ['History', 'history'], ['Lists', 'lists']] as const) {
+      expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute('href', `/profile/hamzanadi/${section}`)
+    }
+    expect(within(navigation).queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: 'Diary' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Your library, signed in as hamzanadi' })).toHaveAttribute('href', '/profile/hamzanadi')
+  })
+
+  it.each(['/profile/hamzanadi/films', '/profile/hamzanadi/films/ratings/8'])('highlights only Watched at %s', (pathname) => {
+    renderShell(undefined, pathname)
+    const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(within(navigation).getByRole('link', { name: 'Watched' })).toHaveAttribute('aria-current', 'page')
+    expect(within(navigation).getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))).toHaveLength(1)
+  })
+
+  it('keeps archive destinations accessible when collapsed', async () => {
+    const user = userEvent.setup()
+    renderShell(undefined, '/profile/hamzanadi/likes')
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(within(navigation).getByRole('link', { name: 'Likes' })).toHaveAttribute('aria-current', 'page')
+    expect(within(navigation).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
+  })
+
+  it('keeps personal shortcuts and a guest avatar visible while sending guests through authentication', async () => {
+    const user = userEvent.setup()
+    render(<SessionProvider initialStatus="anonymous"><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></SessionProvider>)
+    const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(within(navigation).getAllByRole('link')).toHaveLength(6)
+    expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Watched', 'films'], ['History', 'history'], ['Lists', 'lists']] as const) {
+      expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute('href', `/library?section=${section}`)
+    }
+    const guest = screen.getByRole('link', { name: 'Guest profile' })
+    expect(guest).toHaveAttribute('href', '/library?section=profile')
+    expect(screen.getByRole('button', { name: 'Search titles' }).nextElementSibling).toBe(guest)
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
+    expect(guest).toBeInTheDocument()
   })
 
   it('signs out successfully and clears the session', async () => {

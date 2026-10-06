@@ -9,13 +9,14 @@ import {
   animeSearchResultSchema,
   animeTitleDetailSchema,
   apiErrorResponseSchema,
+  type AnimeBrowseQuery,
   type AnimeSeason,
 } from '@consumit/contracts'
 import { connection } from 'next/server'
 import { cache } from 'react'
 import type { ZodType } from 'zod'
 
-import { publicCatalogFetchOptions } from './public-catalog-cache'
+import { publicCatalogFetchOptions, PUBLIC_CATALOG_REQUEST_TIMEOUT_MS } from './public-catalog-cache'
 
 export class AnimeApiError extends Error {
   readonly code: string
@@ -43,9 +44,9 @@ async function request<T>(path: string, schema: ZodType<T>, renderMode: RenderMo
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
-      ...(renderMode === 'cached-public' ? publicCatalogFetchOptions() : { cache: 'no-store' as const }),
+      ...publicCatalogFetchOptions(),
       headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(6_000),
+      signal: AbortSignal.timeout(PUBLIC_CATALOG_REQUEST_TIMEOUT_MS),
     })
   } catch (cause) {
     throw new AnimeApiError('The Consumit anime catalog could not be reached.', {
@@ -85,6 +86,15 @@ export function getAnimeTrending(page = 1) {
 
 export function getAnimeSeasonal(season: AnimeSeason, year: number, page = 1) {
   return request(`/v1/anime/seasonal/${season}/${year}?page=${page}`, animePageSchema)
+}
+
+/** Server-driven anime discovery for the browse grid. */
+export function getAnimeBrowse(query: AnimeBrowseQuery) {
+  const params = new URLSearchParams({ sort: query.sort, page: String(query.page) })
+  if (query.genre) params.set('genre', query.genre)
+  if (query.year !== undefined) params.set('year', String(query.year))
+  if (query.format) params.set('format', query.format)
+  return request(`/v1/anime/browse?${params}`, animePageSchema)
 }
 
 export const getAnimeTitle = cache((anilistId: number) => (

@@ -18,7 +18,6 @@ import {
   memberReviewSchema,
   memberTitleRecordSchema,
   memberTitleStateSchema,
-  reviewLikeSchema,
   sessionMemberResponseSchema,
   titleReviewsPageSchema,
   updateDiaryEntryRequestSchema,
@@ -46,7 +45,6 @@ import {
   type RecoveryConfirmRequest,
   type RegisterRequest,
   type SafeMember,
-  type TitleReviewAudience,
   type TitleReviewSort,
   type UpdateDiaryEntryRequest,
   type UpdateMemberListContentRequest,
@@ -135,14 +133,7 @@ export const setMemberLiked = async (title: CatalogRef, liked: boolean) => {
 }
 export const createMemberReview = (input: CreateReviewRequest) => request('/v1/me/reviews', { body: body(createReviewRequestSchema.parse(input)), method: 'POST' }, memberReviewSchema)
 export const updateMemberReview = (reviewId: string, changes: UpdateMemberReviewRequest): Promise<void> => request(`/v1/me/reviews/${encodeURIComponent(reviewId)}`, { body: body(updateMemberReviewRequestSchema.parse(changes)), method: 'PATCH' })
-export const listTitleReviews = (title: CatalogRef, page = 1, sort: TitleReviewSort = 'recent', audience: TitleReviewAudience = 'all') => request(`/v1/reviews/${title.kind}/${title.id}?page=${page}&sort=${sort}&audience=${audience}`, { method: 'GET' }, titleReviewsPageSchema)
-export const setReviewLiked = async (reviewId: string, liked: boolean) => {
-  if (!liked) {
-    await request(`/v1/review-likes/${encodeURIComponent(reviewId)}`, { method: 'DELETE' })
-    return null
-  }
-  return request('/v1/review-likes', { body: body({ reviewId }), method: 'PUT' }, reviewLikeSchema)
-}
+export const listTitleReviews = (title: CatalogRef, page = 1, sort: TitleReviewSort = 'recent') => request(`/v1/reviews/${title.kind}/${title.id}?page=${page}&sort=${sort}`, { method: 'GET' }, titleReviewsPageSchema)
 export const createDiaryEntry = (input: CreateDiaryEntryRequest) => request('/v1/me/diary', { body: body(createDiaryEntryRequestSchema.parse(input)), method: 'POST' }, diaryEntrySchema)
 export const updateDiaryEntry = (entryId: string, changes: UpdateDiaryEntryRequest): Promise<void> => request(`/v1/me/diary/${encodeURIComponent(entryId)}`, { body: body(updateDiaryEntryRequestSchema.parse(changes)), method: 'PATCH' })
 export const deleteDiaryEntry = (entryId: string): Promise<void> => request(`/v1/me/diary/${encodeURIComponent(entryId)}`, { method: 'DELETE' })
@@ -173,7 +164,6 @@ export const getMemberListDetail = (slug: string): Promise<MemberListDetail> => 
 export const updateMemberList = (listId: string, changes: UpdateMemberListRequest): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { body: body(updateMemberListRequestSchema.parse(changes)), method: 'PATCH' })
 export const updateMemberListContent = (listId: string, changes: UpdateMemberListContentRequest): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { body: body(updateMemberListContentRequestSchema.parse(changes)), method: 'PUT' })
 export const deleteMemberList = (listId: string): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' })
-export const setMemberListSaved = (slug: string, saved: boolean): Promise<void> => request(`/v1/me/saved-lists/${encodeURIComponent(slug)}`, { method: saved ? 'PUT' : 'DELETE' })
 
 export const logoutMember = (): Promise<void> => request('/v1/auth/logout', { method: 'POST' })
 export const logoutEverywhere = (): Promise<void> => request('/v1/auth/logout-all', { method: 'POST' })

@@ -15,7 +15,7 @@ export function webVitalPageForPath(pathname: string): WebVitalPage {
     return pathname === '/series' || pathname === '/anime' ? 'catalog' : 'title'
   }
   if (startsWithRoute(pathname, '/profile')) return 'profile'
-  if (startsWithRoute(pathname, '/lists')) return 'community'
+  if (startsWithRoute(pathname, '/lists')) return 'member'
   if (['/library', '/settings', '/admin', '/imports'].some((route) => startsWithRoute(pathname, route))) return 'member'
   if (['/sign-in', '/sign-up', '/verify-email', '/forgot-password', '/reset-password', '/onboarding'].some((route) => startsWithRoute(pathname, route))) return 'auth'
   if (['/help', '/support', '/report-issue', '/api'].some((route) => startsWithRoute(pathname, route))) return 'support'

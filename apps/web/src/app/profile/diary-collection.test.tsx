@@ -112,7 +112,7 @@ describe('Diary journal', () => {
   })
   it('moves a successfully edited log to its new month and removes a deleted row in the archive', async () => {
     const user = userEvent.setup()
-    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'public' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 3, lists: 0, reviews: 0, watched: 2 } }
+    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 3, lists: 0, reviews: 0, watched: 2 } }
     render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'diary', items: entries, nextCursor: null }} owner section="diary" titles={props.titles} />)
     await user.click(screen.getByRole('button', { name: `Edit diary entry for ${movieSummary.title}` }))
     const date = screen.getByLabelText('Watched date')
@@ -127,7 +127,7 @@ describe('Diary journal', () => {
   })
   it.each([true, false])('pages repeated watches without exposing ratings across ownership (owner=%s)', async owner => {
     const user = userEvent.setup()
-    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'public' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 2, lists: 0, reviews: 0, watched: 1 } }
+    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 2, lists: 0, reviews: 0, watched: 1 } }
     const earlier = { ...entries[0]!, entryId: 'earlier-watch', watchedOn: '2025-12-01', rewatch: true }
     mocks.archive.mockResolvedValue({ collection: 'diary', items: [earlier], nextCursor: null })
     mocks.ratings.mockRejectedValue(new Error('Rating lookup unavailable'))

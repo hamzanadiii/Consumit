@@ -1,10 +1,18 @@
-import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSchema, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackSwitchRequest, type ResolvePlaybackRequest } from '@consumit/contracts'
+import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSchema, separateAudioListSchema, separateAudioSourceSchema, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackSwitchRequest, type ResolvePlaybackRequest } from '@consumit/contracts'
+
+async function audioRequest(session: PlaybackSession, action: 'audio' | 'audio/prepare', signal: AbortSignal, trackId?: string) {
+  const response = await fetch(`/v1/playback/${session.id}/${action}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceId: session.source.id, ...(trackId ? { trackId } : {}) }), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) })
+  if (!response.ok) throw new Error('Added audio is unavailable right now.')
+  return response.json()
+}
+export async function listSeparateAudio(session: PlaybackSession, signal: AbortSignal) { return separateAudioListSchema.parse(await audioRequest(session, 'audio', signal)).tracks }
+export async function prepareSeparateAudio(session: PlaybackSession, id: string, signal: AbortSignal) { return separateAudioSourceSchema.parse(await audioRequest(session, 'audio/prepare', signal, id)) }
 
 export async function playbackRequest(path: string, body: ResolvePlaybackRequest | PlaybackFailureRequest, signal: AbortSignal): Promise<PlaybackSession> {
   // A dev or edge proxy can reset an idle upstream connection before the API
   // receives the request. Resolve is safe to replay once; recovery actions
   // are stateful and must not be replayed by this layer.
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(21000)])
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(65000)])
   let response: Response
   for (let attempt = 0;; attempt++) {
     try {
@@ -43,7 +51,7 @@ export async function listPlaybackProviders(body: ResolvePlaybackRequest, signal
 export async function switchPlaybackProvider(sessionId: string, body: PlaybackSwitchRequest, signal: AbortSignal): Promise<PlaybackSession> {
   const response = await fetch(`/v1/playback/${sessionId}/switch`, {
     method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(21000)]),
+    body: JSON.stringify(body), signal: AbortSignal.any([signal, AbortSignal.timeout(65000)]),
   })
   if (!response.ok) {
     const result = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))

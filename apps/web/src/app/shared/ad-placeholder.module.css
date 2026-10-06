@@ -1,0 +1,100 @@
+.slot {
+  container-type: inline-size;
+  width: 100%;
+  min-width: 0;
+}
+
+.content {
+  display: none;
+  margin-inline: auto;
+}
+
+.label {
+  margin-bottom: 8px;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.label span {
+  color: var(--fs-secondary);
+}
+
+.frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px dashed var(--fs-field-border);
+  background: var(--fs-rail);
+  color: var(--fs-muted);
+}
+
+.name {
+  font-size: 14px;
+}
+
+.dimensions {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@container (min-width: 300px) {
+  .rectangle {
+    display: block;
+    width: 300px;
+  }
+
+  .rectangle .frame {
+    height: 250px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .rectangle .dimensions::after {
+    content: '300 × 250';
+  }
+}
+
+@container (min-width: 320px) {
+  .banner {
+    display: block;
+    width: 320px;
+  }
+
+  .banner .frame {
+    height: 50px;
+  }
+
+  .banner .dimensions::after {
+    content: '320 × 50';
+  }
+}
+
+@container (min-width: 468px) {
+  .banner {
+    width: 468px;
+  }
+
+  .banner .frame {
+    height: 60px;
+  }
+
+  .banner .dimensions::after {
+    content: '468 × 60';
+  }
+}
+
+@container (min-width: 728px) {
+  .banner {
+    width: 728px;
+  }
+
+  .banner .frame {
+    height: 90px;
+  }
+
+  .banner .dimensions::after {
+    content: '728 × 90';
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "checkedAt": "2026-10-03T04:57:17.205Z",
+  "memberJob": "One Audio language list without duplicated choices or provider labels",
+  "observations": [
+    {
+      "width": 1440,
+      "labels": [
+        "English",
+        "Hindi",
+        "Italian",
+        "Tamil",
+        "Telugu"
+      ],
+      "unique": true,
+      "providerLabels": false,
+      "nativePreferred": true,
+      "separateDecoded": true,
+      "videoUnchanged": true,
+      "bounds": {
+        "x": 686,
+        "y": 41,
+        "width": 300,
+        "height": 424.5625
+      },
+      "stage": {
+        "x": 49,
+        "y": 15,
+        "width": 961,
+        "height": 540.5625
+      },
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "labels": [
+        "English",
+        "Hindi",
+        "Italian",
+        "Tamil",
+        "Telugu"
+      ],
+      "unique": true,
+      "providerLabels": false,
+      "nativePreferred": true,
+      "separateDecoded": true,
+      "videoUnchanged": true,
+      "bounds": {
+        "x": 290,
+        "y": 41,
+        "width": 300,
+        "height": 213.0625
+      },
+      "stage": {
+        "x": 29,
+        "y": 15,
+        "width": 585,
+        "height": 329.0625
+      },
+      "errors": []
+    },
+    {
+      "title": "Swapped",
+      "discovered": 32,
+      "labels": [
+        "Arabic",
+        "Croatian",
+        "Czech",
+        "Danish",
+        "Dutch",
+        "English",
+        "Filipino",
+        "Finnish",
+        "French",
+        "German",
+        "Greek",
+        "Hebrew",
+        "Hindi",
+        "Hungarian",
+        "Indonesian",
+        "Italian",
+        "Japanese",
+        "Korean",
+        "Malay",
+        "Norwegian Bokmål",
+        "Polish",
+        "Portuguese",
+        "Romanian",
+        "Russian",
+        "Spanish",
+        "Swedish",
+        "Tamil",
+        "Telugu",
+        "Thai",
+        "Turkish"
+      ],
+      "unique": true,
+      "providerLabels": false,
+      "nativePreferred": true,
+      "audioPreparationRequests": 0,
+      "videoUnchanged": true
+    }
+  ],
+  "checks": {
+    "playerAndAudioTests": 60,
+    "watchTests": 28,
+    "uiTypes": "pass",
+    "targetedLint": "pass",
+    "webBuild": "pass",
+    "deployedWeb": "healthy"
+  }
+}

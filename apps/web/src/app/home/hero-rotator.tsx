@@ -1,7 +1,7 @@
 'use client'
 
 import { titleHref, watchHref } from '@consumit/contracts'
-import { Pause, Play, Star } from 'lucide-react'
+import { Play, Star } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -56,7 +56,7 @@ function HeroArticle({ animate, eager, hero, titleId }: {
       {hero.backdropUrl ? (
         <Image
           alt=""
-          className="object-cover"
+          className={`object-cover ${styles.art}`}
           fill
           loading={eager ? undefined : 'lazy'}
           priority={eager}
@@ -137,7 +137,6 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   const [documentVisible, setDocumentVisible] = useState(true)
   const [inView, setInView] = useState(true)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const [pausedByMember, setPausedByMember] = useState(false)
   const sectionRef = useRef<HTMLElement>(null)
   const fillRef = useRef<HTMLSpanElement>(null)
   const progressRef = useRef(0)
@@ -185,7 +184,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   // One shared clock drives the fill bar and the slide advance together,
   // so they can never drift apart. Pausing freezes both mid-frame and
   // resuming continues from the exact same position.
-  const running = count > 1 && !hovered && !focused && inView && documentVisible && !reducedMotion && !pausedByMember
+  const running = count > 1 && !hovered && !focused && inView && documentVisible && !reducedMotion
 
   useEffect(() => {
     if (!running) return
@@ -256,7 +255,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
             <button
               aria-current={active || undefined}
               aria-label={`Show ${item.title}`}
-              className={`grid h-11 w-11 cursor-pointer place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none ${styles.selector}`}
+              className={`grid h-11 w-11 cursor-pointer place-items-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none ${styles.selector}`}
               key={`${item.kind}:${item.id}`}
               onClick={() => go(position)}
               type="button"
@@ -280,18 +279,6 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
           )
         })}
       </div>
-      {!reducedMotion ? (
-        <button
-          aria-label={pausedByMember ? 'Resume featured titles' : 'Pause featured titles'}
-          aria-pressed={pausedByMember}
-          className={`hidden cursor-pointer items-center outline-none focus-visible:ring-2 focus-visible:ring-white lg:inline-flex ${styles.pause}`}
-          onClick={() => setPausedByMember((paused) => !paused)}
-          type="button"
-        >
-          {pausedByMember ? <Play aria-hidden="true" className="size-3.5" /> : <Pause aria-hidden="true" className="size-3.5" />}
-          {pausedByMember ? 'Resume' : 'Pause'}
-        </button>
-      ) : null}
     </section>
   )
 }

@@ -1,4 +1,4 @@
-import type { AnimeEpisode, AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule, AnimePage, AnimeSearchResult, AnimeBatch, AnimeSeason } from '@consumit/contracts'
+import type { AnimeEpisode, AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule, AnimePage, AnimeSearchResult, AnimeBatch, AnimeSeason, AnimeBrowseQuery } from '@consumit/contracts'
 import type { AnimeCatalog } from '../catalog/anilist/adapter.ts'
 import type { KitsuCatalog } from '../catalog/kitsu/kitsu.ts'
 import { AnimeError } from './errors.ts'
@@ -15,6 +15,7 @@ export type AnimeService = {
   matchTmdbTitle(title: string, originalTitle: string | null, year: number | null): Promise<number | null>
   trending(page?: number): Promise<AnimePage>
   seasonal(season: AnimeSeason, year: number, page?: number): Promise<AnimePage>
+  browse(query: AnimeBrowseQuery): Promise<AnimePage>
   franchise(anilistId: number): Promise<AnimeFranchise>
   airingSchedule(anilistId: number): Promise<AnimeAiringSchedule>
   batch(anilistIds: number[]): Promise<AnimeBatch>
@@ -91,6 +92,10 @@ export function createAnimeService(
 
     async seasonal(season, year, page = 1) {
       return catalog.seasonal(season, year, page)
+    },
+
+    async browse(query) {
+      return catalog.browse(query)
     },
 
     async franchise(anilistId) {

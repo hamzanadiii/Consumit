@@ -1,0 +1,422 @@
+{
+  "checkedAt": "2026-10-02T23:43:50.411Z",
+  "separateAudio": "unverified",
+  "evidence": [
+    {
+      "ref": {
+        "kind": "movie",
+        "id": 1007757
+      },
+      "elapsedMs": 886,
+      "sources": [
+        {
+          "type": "hls",
+          "quality": "1080p",
+          "status": 200,
+          "cors": "*",
+          "audioRenditions": [
+            {
+              "language": "ara",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ces",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "dan",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "deu",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ell",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "eng",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "spa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "spa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fin",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fil",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fra",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "heb",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "hin",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "hrv",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "hun",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ind",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ita",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "jpn",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "kor",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "msa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "nob",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "nld",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "pol",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "por",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "por",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ron",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "rus",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "swe",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tam",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tel",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tha",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tur",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            }
+          ],
+          "audioSamples": [
+            {
+              "language": "ara",
+              "status": 200,
+              "cors": "*",
+              "mediaPlaylist": true,
+              "sampleStatus": 206,
+              "sampleCors": "*",
+              "receivedBytes": 65536,
+              "audioHandler": false,
+              "videoHandler": false,
+              "adts": false
+            },
+            {
+              "language": "eng",
+              "status": 200,
+              "cors": "*",
+              "mediaPlaylist": true,
+              "sampleStatus": 206,
+              "sampleCors": "*",
+              "receivedBytes": 65536,
+              "audioHandler": false,
+              "videoHandler": false,
+              "adts": false
+            }
+          ],
+          "variantCount": 1,
+          "variants": [
+            {
+              "codecs": null,
+              "resolution": "1920x1080",
+              "audioGroup": "aac"
+            }
+          ],
+          "mediaPlaylist": false
+        }
+      ]
+    },
+    {
+      "ref": {
+        "kind": "series",
+        "id": 108978,
+        "season": 1,
+        "episode": 1
+      },
+      "elapsedMs": 2136,
+      "sources": [
+        {
+          "type": "hls",
+          "quality": "1080p",
+          "status": 200,
+          "cors": "*",
+          "audioRenditions": [
+            {
+              "language": "ara",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ces",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "deu",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ell",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "eng",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "spa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "spa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fil",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fra",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "fra",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "heb",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "hin",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "hun",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ind",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ita",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "jpn",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "kan",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "mal",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "msa",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "nld",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "pol",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "por",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "por",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "ron",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tam",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tel",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tha",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "tur",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            },
+            {
+              "language": "vie",
+              "hasSeparateUri": true,
+              "allowedUri": true
+            }
+          ],
+          "audioSamples": [
+            {
+              "language": "ara",
+              "status": 200,
+              "cors": "*",
+              "mediaPlaylist": true,
+              "sampleStatus": 206,
+              "sampleCors": "*",
+              "receivedBytes": 65536,
+              "audioHandler": false,
+              "videoHandler": false,
+              "adts": false
+            },
+            {
+              "language": "eng",
+              "status": 200,
+              "cors": "*",
+              "mediaPlaylist": true,
+              "sampleStatus": 206,
+              "sampleCors": "*",
+              "receivedBytes": 65536,
+              "audioHandler": false,
+              "videoHandler": false,
+              "adts": false
+            }
+          ],
+          "variantCount": 2,
+          "variants": [
+            {
+              "codecs": null,
+              "resolution": "1920x1080",
+              "audioGroup": "aac"
+            },
+            {
+              "codecs": null,
+              "resolution": "1280x720",
+              "audioGroup": "aac"
+            }
+          ],
+          "mediaPlaylist": false
+        }
+      ]
+    }
+  ]
+}

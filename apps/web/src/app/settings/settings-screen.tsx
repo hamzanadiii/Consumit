@@ -17,7 +17,6 @@ import {
   readStoredSubtitleLanguages,
   savePreferredSubtitleLanguages,
   SegmentedControl,
-  Select,
   ServiceMark,
   SettingsRail,
   SettingsSection,
@@ -88,7 +87,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
   })
   const [profile, setProfile] = useState(initialProfile)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
-  const [visibility, setVisibility] = useState<string>(initialProfile.visibility)
   const [profileSaved, setProfileSaved] = useState(false)
   const [accountAction, setAccountAction] = useState<'delete' | 'password' | null>(null)
   const [accountError, setAccountError] = useState<string | null>(null)
@@ -105,7 +103,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
         displayName: String(data.get('displayName')).trim() || null,
         location: String(data.get('location')).trim() || null,
         username: String(data.get('username')),
-        visibility: data.get('visibility') === 'public' ? 'public' : 'private',
+        visibility: 'private',
       })
       setProfile(updated)
       if (session.member) session.setMember({ ...session.member, avatarUrl: updated.avatarUrl, displayName: updated.displayName, username: updated.username })
@@ -234,19 +232,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                   {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
                 </div>
                 <div><Label htmlFor="settings-location">Location</Label><Input className="mt-2 w-full" defaultValue={profile.location ?? ''} id="settings-location" maxLength={100} name="location" /></div>
-                <div>
-                  <Label htmlFor="settings-visibility">Profile visibility</Label>
-                  <Select
-                    className="mt-2"
-                    id="settings-visibility"
-                    label="Profile visibility"
-                    hideLabel
-                    name="visibility"
-                    onValueChange={setVisibility}
-                    options={[{ label: 'Private', value: 'private' }, { label: 'Public', value: 'public' }]}
-                    value={visibility}
-                  />
-                </div>
+                <p className="text-xs text-muted">Your profile and collections are private.</p>
                 <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>

@@ -7,6 +7,7 @@ import {
   animeTitleDetailSchema,
   type AnimeAiringSchedule,
   type AnimeBatch,
+  type AnimeBrowseQuery,
   type AnimeFranchise,
   type AnimePage,
   type AnimeSearchResult,
@@ -71,6 +72,10 @@ export function createCachedAnimeCatalog(catalog: AnimeCatalog, cache: StaleCach
     async seasonal(season: AnimeSeason, year: number, page = 1, perPage = 20): Promise<AnimePage> {
       return cached<AnimePage>(`anilist:v1:seasonal:${season}:${year}:${page}:${perPage}`, policies.page, animePageSchema,
         () => catalog.seasonal(season, year, page, perPage))
+    },
+    async browse(query: AnimeBrowseQuery, perPage = 20): Promise<AnimePage> {
+      return cached<AnimePage>(`anilist:v1:browse:${query.sort}:${query.genre ?? ''}:${query.year ?? ''}:${query.format ?? ''}:${query.page}:${perPage}`, policies.page, animePageSchema,
+        () => catalog.browse(query, perPage))
     },
     async relations(anilistId): Promise<AnimeFranchise> {
       return cached<AnimeFranchise>(`anilist:v1:relations:${anilistId}`, policies.relations, animeFranchiseSchema,

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, ProviderFailure, type ProviderHttp } from './http.ts'
+import { sourceAccess, adapter, document, mediaType, ProviderFailure, type ProviderHttp } from './http.ts'
 
 const apiOrigin = 'https://scrapper.rivestream.app'
 const defaultReferer = 'https://nextgencloudfabric.com/'
@@ -123,7 +123,7 @@ function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, str
   return { url: rawUrl, headers: {} }
 }
 
-export type RivestreamScope = { id?: string; subs?: string[]; kinds?: readonly ['movie' | 'series'] | undefined }
+export type RivestreamScope = { id?: string; subs?: string[]; kinds?: readonly ['movie' | 'series'] | undefined; relay?: boolean }
 
 export function createRivestreamProvider(http: ProviderHttp, now = Date.now, scope: RivestreamScope = {}) {
   const { id = 'rivestream', subs, kinds } = scope
@@ -139,13 +139,15 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
     const qBase = isTv ? `id=${ref.id}&season=${ref.season}&episode=${ref.episode}` : `id=${ref.id}`
 
     const results = await Promise.all(
-      SUB_PROVIDERS.filter((sub) => !wanted || wanted.includes(sub.id)).map(async (sub) => {
+      // Apogee is selected through its own configured row, which owns the
+      // video/audio role. Keep it out of the combined Rivestream roster.
+      [...SUB_PROVIDERS, ...(scope.relay ? [{ id: 'nebula', lang: 'original' }, { id: 'zephyr', lang: 'original' }] : [])].filter((sub) => (!wanted || wanted.includes(sub.id)) && (sub.id !== 'apogee' || wanted?.includes('apogee'))).map(async (sub) => {
         const url = `${apiOrigin}/api/provider?provider=${sub.id}&${qBase}`
         const controller = new AbortController()
         if (signal.aborted) controller.abort(signal.reason)
         const onAbort = () => controller.abort(signal.reason)
         signal.addEventListener('abort', onAbort, { once: true })
-        const timer = setTimeout(() => controller.abort(new DOMException('Sub-provider timed out', 'TimeoutError')), SUB_PROVIDER_TIMEOUT_MS)
+        const timer = setTimeout(() => controller.abort(new DOMException('Sub-provider timed out', 'TimeoutError')), scope.relay ? 10_000 : SUB_PROVIDER_TIMEOUT_MS)
         try {
           const res = await document(http, url, controller.signal)
           const data = responseSchema.parse(JSON.parse(res.text))
@@ -178,16 +180,31 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
         if (!entry || !entry.url || seen.has(entry.url)) continue
 
         const { url, headers } = unwrapProxy(entry.url)
+        // New relay rows preserve only noncredential playback hints from
+        // the reviewed wrapper, including the Origin required by Nebula.
+        if (scope.relay) {
+          try {
+            const wrapper = new URL(entry.url)
+            if (['proxy.valhallastream.com', 'valhallastream.dpdns.org'].includes(wrapper.hostname)) {
+              const hints: unknown = JSON.parse(wrapper.searchParams.get('headers') ?? '{}')
+              if (hints && typeof hints === 'object' && !Array.isArray(hints)) {
+                for (const [name, value] of Object.entries(hints)) {
+                  if (/^(referer|origin|user-agent|accept)$/i.test(name) && typeof value === 'string' && value.length <= 512 && !/[\r\n]/.test(value)) headers[name.toLowerCase()] = value
+                }
+              }
+            }
+          } catch { /* Existing validated hint remains available. */ }
+        }
         const type = mediaType(url, entry.format?.toLowerCase()) ?? mediaType(url)
         if (!type) continue
         seen.add(entry.url)
 
-        const { height, qualityHint, language } = parseQualityAndLang(entry.quality)
+        const { height, qualityHint, language } = parseQualityAndLang(scope.relay && /4k/i.test(entry.quality ?? '') ? '2160p' : entry.quality)
         const lang = normalizeLang(language || subLang)
         const qTag = qualityHint ? qualityHint.toLowerCase() : 'auto'
-        let expiresAt: string
+        let access: ReturnType<typeof sourceAccess>
         try {
-          expiresAt = accessDeadline(url, now())
+          access = sourceAccess(url, now())
         } catch {
           continue
         }
@@ -196,11 +213,12 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
           key: `${provider}:${qTag}:${idx}`,
           url,
           type,
-          expiresAt,
+          ...access,
           language: lang,
           headers,
           subtitles,
           ...(height ? { height } : {}),
+          ...(wanted?.length === 1 && wanted[0] === 'citadel' ? { qualityGroup: 'citadel' } : {}),
           ...(qualityHint ? { qualityHint } : {}),
         })
       }
@@ -218,5 +236,5 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
     })
 
     return allSources
-  }), { id })
+  }), { id, ...(wanted?.length === 1 && wanted[0] === 'apogee' ? { separateAudio: { label: 'Apogee' } } : {}) })
 }

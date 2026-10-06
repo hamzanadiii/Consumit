@@ -1,0 +1,145 @@
+[
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 13679663,
+      "durationMs": 1097
+    }
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "manifest",
+      "status": 200,
+      "bytes": 3114,
+      "durationMs": 11
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "manifest",
+      "status": 200,
+      "bytes": 642204,
+      "durationMs": 12
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 1212,
+      "durationMs": 11
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3808498,
+      "durationMs": 77
+    }
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 13493072,
+      "durationMs": 615
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 13433679,
+      "durationMs": 437
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 13297444,
+      "durationMs": 507
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12633691,
+      "durationMs": 916
+    }
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok"
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 6804733,
+      "durationMs": 564
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 11694539,
+      "durationMs": 875
+    }
+  },
+  {
+    "outcome": "ok"
+  }
+]

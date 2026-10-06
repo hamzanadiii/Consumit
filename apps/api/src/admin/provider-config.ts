@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { type ProviderRegistration } from '@consumit/provider-sdk'
+import { providerDeliveryModeSchema, type ProviderRole, type ProviderDeliveryMode } from '@consumit/contracts'
 
 export type ProviderKind = 'movie' | 'series' | 'anime'
 export const providerKinds: readonly ProviderKind[] = ['movie', 'series', 'anime']
@@ -9,6 +10,8 @@ export const providerKinds: readonly ProviderKind[] = ['movie', 'series', 'anime
 export type ProviderOverridePatch = {
   removed?: boolean
   enabled?: boolean
+  role?: ProviderRole
+  deliveryMode?: ProviderDeliveryMode
   priority?: number
   order?: Partial<Record<ProviderKind, number>>
   regions?: string[]
@@ -29,8 +32,8 @@ export interface ProviderConfigStore {
 
 /** Drop obsolete settings while preserving operator choices and tombstones. */
 export function cleanOverride(patch: ProviderOverridePatch): ProviderOverridePatch {
-  const allowed = ['removed', 'enabled', 'priority', 'order', 'regions', 'requestsPerMinute', 'concurrency']
-  return Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)))
+  const allowed = ['removed', 'enabled', 'role', 'deliveryMode', 'priority', 'order', 'regions', 'requestsPerMinute', 'concurrency']
+  return Object.fromEntries(Object.entries(patch).filter(([key, value]) => allowed.includes(key) && (key !== 'deliveryMode' || providerDeliveryModeSchema.safeParse(value).success)))
 }
 
 const EMPTY: ProviderOverrides = {}
@@ -85,7 +88,7 @@ export function createProviderConfigStore(configPath: string) {
     all[id] = cleanOverride({ ...all[id], ...patch })
     // Remove entry if all fields are defaults (no overrides)
     const entry = all[id]
-    if (entry && entry.removed === undefined && entry.enabled === undefined && entry.priority === undefined && entry.order === undefined
+    if (entry && entry.removed === undefined && entry.enabled === undefined && entry.role === undefined && entry.deliveryMode === undefined && entry.priority === undefined && entry.order === undefined
       && entry.regions === undefined && entry.requestsPerMinute === undefined && entry.concurrency === undefined) {
       delete all[id]
     }
@@ -118,7 +121,7 @@ export function createProviderConfigStore(configPath: string) {
 /** Saved order takes precedence; new providers append in configuration order. */
 export function orderedProviderIds(providers: readonly ProviderRegistration[], overrides: ProviderOverrides, kind: ProviderKind): string[] {
   return providers.map((provider, index) => ({ provider, index }))
-    .filter(({ provider }) => !overrides[provider.adapter.id]?.removed && !isProviderRemoved(provider) && provider.mediaKinds.includes(kind))
+    .filter(({ provider }) => !overrides[provider.adapter.id]?.removed && !isProviderRemoved(provider) && (overrides[provider.adapter.id]?.role ?? provider.role) !== 'audio' && provider.mediaKinds.includes(kind))
     .sort((a, b) => {
       const left = overrides[a.provider.adapter.id]?.order?.[kind]
       const right = overrides[b.provider.adapter.id]?.order?.[kind]
@@ -134,6 +137,8 @@ export function applyOrdersInPlace(target: Record<ProviderKind, string[]>, provi
 /** Snapshot of a provider's original config before any overrides. */
 type ProviderBase = {
   enabled: boolean
+  role: ProviderRole
+  deliveryMode: ProviderDeliveryMode
   priority: number
   regions: readonly string[]
   requestsPerMinute: number
@@ -156,6 +161,8 @@ function getBase(p: ProviderRegistration): ProviderBase {
   if (!base) {
     base = {
       enabled: p.enabled,
+      role: p.role ?? 'video',
+      deliveryMode: p.deliveryMode ?? 'direct',
       priority: p.priority ?? 0,
       regions: [...p.approvedRegions],
       requestsPerMinute: p.requestsPerMinute,
@@ -179,6 +186,8 @@ export function applyOverridesInPlace(providers: readonly ProviderRegistration[]
     if (!patch) {
       // No override — restore all base values
       p.enabled = base.enabled
+      p.role = base.role
+      p.deliveryMode = base.deliveryMode
       p.priority = base.priority
       p.approvedRegions = [...base.regions]
       p.requestsPerMinute = base.requestsPerMinute
@@ -186,6 +195,9 @@ export function applyOverridesInPlace(providers: readonly ProviderRegistration[]
       continue
     }
     p.enabled = !patch.removed && (patch.enabled ?? base.enabled)
+    p.role = patch.role ?? base.role
+    const frame = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'].includes(p.adapter.id)
+    p.deliveryMode = frame ? 'embed' : patch.deliveryMode === 'embed' ? base.deliveryMode : patch.deliveryMode ?? base.deliveryMode
     p.priority = patch.priority ?? base.priority
     if (patch.regions !== undefined) p.approvedRegions = patch.regions.filter((region) => base.regions.includes(region))
     else p.approvedRegions = [...base.regions]

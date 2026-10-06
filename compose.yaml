@@ -12,7 +12,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.14.0
     profiles: [playback]
-    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--web.enable-lifecycle=false"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
     volumes:
       - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro

@@ -1,11 +1,19 @@
-import { type ProviderRegistration, type ProviderSource, providerResultSchema, validatedSources } from '@consumit/provider-sdk'
+import { type ProviderRegistration, type ProviderSource, providerResultSchema, validatedSources, suppliesVideo } from '@consumit/provider-sdk'
 import { playbackTrackSchema, type ResolvePlaybackRequest } from '@consumit/contracts'
 import { metrics, trace, SpanStatusCode } from '@opentelemetry/api'
 import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlaybackStore } from './state.ts'
+import { matchesRequestedAudio, supportsRequestedAudio } from './audio-policy.ts'
 
-export type ResolvedSource = { source: ProviderSource; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
+export type ResolvedSource = { source: ProviderSource; qualitySources?: ProviderSource[]; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
+
+/** Adapter-declared siblings remain scoped to one mirror and audio track. */
+function qualitySiblings(source: ProviderSource, candidates: ProviderSource[]) {
+  if (!source.qualityGroup) return []
+  return candidates.filter(candidate => candidate.qualityGroup === source.qualityGroup
+    && candidate.type === source.type && candidate.language === source.language && candidate.height !== undefined)
+}
 /** A caption track plus the provider context needed to lease it: subtitle and
  *  video sources stay independent decisions behind one resolve. */
 export type SubtitleCandidate = { track: z.infer<typeof playbackTrackSchema>; hosts: readonly string[]; headers: Record<string, string> }
@@ -60,7 +68,7 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; healthScope?: 'relay' | 'embed'; providerFilter?: (registration: ProviderRegistration) => boolean; sourceFilter?: (source: ProviderSource, registration: ProviderRegistration) => boolean; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
   const now = options.now ?? Date.now
   // One resolve is a sequential waterfall with a shared deadline. Each
   // adapter gets its configured attempt limit; the usual limit is three
@@ -73,7 +81,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   const meter = metrics.getMeter('consumit.playback')
   const attempts = meter.createCounter('provider.attempts')
   const latency = meter.createHistogram('provider.resolve.duration', { unit: 'ms' })
-  const healthKey = (id: string, kind: ResolvePlaybackRequest['ref']['kind']) => `provider-health:v1:${options.region}:${kind}:${id}`
+  const healthKey = (id: string, kind: ResolvePlaybackRequest['ref']['kind']) => `provider-health:v1:${options.region}:${kind}:${id}${options.healthScope ? `:${options.healthScope}` : ''}`
   function state(id: string, kind: ResolvePlaybackRequest['ref']['kind']) {
     const key = healthKey(id, kind)
     let value = health.get(key)
@@ -102,6 +110,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   }
 
   async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal): Promise<ResolvedSource | null> {
+    if (options.providerFilter && !options.providerFilter(registration)) return null
     const current = state(registration.adapter.id, input.ref.kind)
     if (current.window + 60000 <= now()) { current.window = now(); current.requests = 0 }
     const ceiling = current.failures >= 3 ? 1 : registration.concurrency
@@ -112,22 +121,28 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       span.setAttribute('provider.id', registration.adapter.id)
       try {
         const result = await cancellable(registration.adapter.resolve({ ref: input.ref, region: options.region, audioLanguage: input.audioLanguage }, signal), signal)
+        if (options.providerFilter && !options.providerFilter(registration)) return null
         const parsed = providerResultSchema.safeParse(result)
         if (parsed.success && ((!parsed.data.ok && (parsed.data.code === 'empty' || parsed.data.code === 'cancelled')) || (parsed.data.ok && !parsed.data.sources.length))) {
           current.outcomes++; attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'empty' }); return null
         }
         const validated = validatedSources(result, registration, now())
         const tracks = collectSubtitleCandidates(validated, registration)
-        const matching = validated.filter((source) => input.capabilities[source.type])
+        const matching = validated.filter((source) => (source.type === 'iframe' || input.capabilities[source.type]) && matchesRequestedAudio(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration)))
         // Hostile-output validation already ran in validatedSources (schema,
         // expiry, allowlisted https media, no credentials/transforms).
         // Configured providers resolve directly with no approval step.
         const candidates = matching
-        const targetHeight = input.capabilities.maxHeight ?? 1080
+        const targetHeight = input.preferences?.qualityHeight ?? input.capabilities.maxHeight ?? 1080
         const qualityScore = (source: ProviderSource) => source.height === undefined ? 10_000
           : source.height <= targetHeight ? 5_000 + source.height : 4_000 - source.height
-        candidates.sort((a, b) => Number(b.language === input.audioLanguage) - Number(a.language === input.audioLanguage)
-          || Number(b.language === 'original') - Number(a.language === 'original')
+        const languageScore = (source: ProviderSource) => {
+          let language = source.language.toLowerCase()
+          try { language = Intl.getCanonicalLocales(language)[0]?.toLowerCase() ?? language } catch { /* Provider labels may be non-language names. */ }
+          const requested = input.audioLanguage.toLowerCase()
+          return language === requested ? 3 : language.split('-')[0] === requested.split('-')[0] ? 2 : language === 'original' ? 1 : 0
+        }
+        candidates.sort((a, b) => languageScore(b) - languageScore(a)
           || Number(input.capabilities.nativeHls && b.type === 'hls') - Number(input.capabilities.nativeHls && a.type === 'hls')
           || qualityScore(b) - qualityScore(a))
         const source = candidates[0]
@@ -136,7 +151,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         current.latency = current.latency ? current.latency * 0.8 + (now() - started) * 0.2 : now() - started
         current.outcomes++
         attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'success' })
-        return { source, registration, subtitles: tracks, delivery: 'direct' as const }
+        return { source, qualitySources: qualitySiblings(source, matching), registration, subtitles: tracks, delivery: 'direct' as const }
       } catch {
         const message = signal.reason instanceof Error ? signal.reason.message : typeof signal.reason === 'string' ? signal.reason : ''
         const ourCut = message === 'Resolution deadline reached'
@@ -173,8 +188,8 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       return index < 0 ? Number.MAX_SAFE_INTEGER : index
     }
     const candidates = providers.filter((p) => {
-      return p.enabled && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind)
-        && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred)
+      return p.enabled && suppliesVideo(p) && p.approvedRegions.includes(options.region) && (p.mediaKinds as readonly string[]).includes(input.ref.kind)
+        && !excluded.includes(p.upstreamGroup) && (!preferred || p.adapter.id === preferred) && supportsRequestedAudio(p, input) && (!options.providerFilter || options.providerFilter(p))
     }).sort((a, b) => order ? orderIndex(a.adapter.id) - orderIndex(b.adapter.id)
       : (b.priority ?? 0) - (a.priority ?? 0))
     if (!candidates.length) return null
@@ -220,9 +235,9 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       if (signal.aborted) return null
       // Admin overrides mutate registrations in place. Include configuration
       // and saved order so a prior winner cannot bypass an Admin change.
-      const deliveryConfig: unknown[] = providers.map((provider) => [provider.adapter.id, provider.enabled, provider.priority ?? 0, provider.approvedRegions, provider.mediaKinds, provider.mediaHosts, provider.upstreamGroup])
+      const deliveryConfig: unknown[] = providers.map((provider) => [provider.adapter.id, provider.enabled, provider.role ?? 'video', provider.deliveryMode ?? 'direct', provider.relayHostDiscovery, provider.priority ?? 0, provider.approvedRegions, provider.mediaKinds, provider.mediaHosts, provider.upstreamGroup, provider.adapter.audioLanguages])
       deliveryConfig.push([input.ref.kind, ...(options.providerOrders?.[input.ref.kind] ?? [])])
-      const key = JSON.stringify([input, options.region, excluded, preferred, deliveryConfig])
+      const key = JSON.stringify([input, options.region, options.healthScope ?? 'direct', excluded, preferred, deliveryConfig])
       const cached = cache.get(key)
       if (!fresh && cached && cached.until > now()) return cached.value
       if (fresh) cache.delete(key)
@@ -237,16 +252,18 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
             try {
               const raw = await cancellable(options.store.get(sharedKey), signal)
               if (raw) {
-                const cached = JSON.parse(raw) as { provider: string; source: unknown }
+                const cached = JSON.parse(raw) as { provider: string; source: unknown; qualitySources?: unknown[] }
                 const registration = providers.find((entry) => {
-                  return entry.adapter.id === cached.provider && entry.enabled && entry.mediaKinds.includes(input.ref.kind)
+                  return entry.adapter.id === cached.provider && entry.enabled && suppliesVideo(entry) && entry.mediaKinds.includes(input.ref.kind)
                     && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup)
-                    && (!preferred || preferred === entry.adapter.id) && state(entry.adapter.id, input.ref.kind).failures === 0
+                    && (!preferred || preferred === entry.adapter.id) && supportsRequestedAudio(entry, input) && state(entry.adapter.id, input.ref.kind).failures === 0 && (!options.providerFilter || options.providerFilter(entry))
                 })
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
-                  if (source && input.capabilities[source.type]) {
-                    return { source, registration, subtitles: [], delivery: 'direct' as const }
+                  if (source && (source.type === 'iframe' || input.capabilities[source.type]) && matchesRequestedAudio(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration))) {
+                    const siblings = Array.isArray(cached.qualitySources) ? validatedSources({ ok: true, sources: cached.qualitySources.slice(0, 32) }, registration, now())
+                      .filter(candidate => (candidate.type === 'iframe' || input.capabilities[candidate.type]) && matchesRequestedAudio(candidate, input) && (!options.sourceFilter || options.sourceFilter(candidate, registration))) : []
+                    return { source, qualitySources: qualitySiblings(source, siblings), registration, subtitles: [], delivery: 'direct' as const }
                   }
                 }
               }
@@ -261,7 +278,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
             cache.set(key, { value, until: value ? Math.min(now() + cacheSeconds * 1000, Date.parse(value.source.expiresAt) - 30000) : now() + 3000 })
             if (value && options.store) {
               const ttl = Math.min(cacheSeconds, (Date.parse(value.source.expiresAt) - now() - 30000) / 1000)
-              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source, delivery: value.delivery }), ttl).catch(() => undefined)
+              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source, qualitySources: value.qualitySources, delivery: value.delivery }), ttl).catch(() => undefined)
             }
           }
           return value

@@ -16,7 +16,7 @@ export type IdentityRecord = {
     location: string | null
     username: string
     usernameChangedAt: Date | null
-    visibility: 'private' | 'public'
+    visibility: 'private'
   }
   role: 'MEMBER' | 'ADMIN'
   status: 'ACTIVE' | 'DELETED'

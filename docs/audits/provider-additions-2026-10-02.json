@@ -1,0 +1,238 @@
+{
+  "date": "2026-10-02",
+  "origin": "http://localhost:8080",
+  "firstFrames": {
+    "at": "2026-10-02T03:55:52.705Z",
+    "browser": "Chrome",
+    "origin": "http://localhost:8080",
+    "providers": [
+      {
+        "id": "riveapogee",
+        "runtimeId": "riveapogee",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "kind": "movie",
+              "id": 550
+            },
+            "resolved": 1,
+            "resolveMs": 359,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cinejoylisbon",
+        "runtimeId": "cinejoylisbon",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "kind": "movie",
+              "id": 550
+            },
+            "resolved": 1,
+            "resolveMs": 3035,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          },
+          {
+            "kind": "series",
+            "ref": {
+              "kind": "series",
+              "id": 1399,
+              "season": 1,
+              "episode": 1
+            },
+            "resolved": 1,
+            "resolveMs": 1354,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "alternate": {
+    "at": "2026-10-02T04:03:21.170Z",
+    "browser": "Chrome",
+    "origin": "http://localhost:8080",
+    "providers": [
+      {
+        "id": "riveapogee",
+        "runtimeId": "riveapogee",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "kind": "movie",
+              "id": 272
+            },
+            "resolved": 1,
+            "resolveMs": 1044,
+            "direct": false,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": false,
+                "code": "hls-networkError"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "cinejoylisbon",
+        "runtimeId": "cinejoylisbon",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "kind": "movie",
+              "id": 272
+            },
+            "resolved": 1,
+            "resolveMs": 4546,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          },
+          {
+            "kind": "series",
+            "ref": {
+              "kind": "series",
+              "id": 1396,
+              "season": 1,
+              "episode": 1
+            },
+            "resolved": 1,
+            "resolveMs": 5014,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "wecollege": {
+    "cities": [
+      "miami",
+      "boise"
+    ],
+    "refs": [
+      {
+        "kind": "movie",
+        "id": 550
+      },
+      {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      }
+    ],
+    "sourceHost": "moon.zenoak.top",
+    "browserPlaylistStatus": 403,
+    "noReferrerStatus": 403,
+    "serverWithProviderHeadersStatus": 200,
+    "decision": "Not activated: returned CDN requires provider headers that browser HLS cannot send."
+  },
+  "seriesCorrection": {
+    "firstFrame": {
+      "at": "2026-10-02T04:16:15.159Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "riveapogee",
+          "runtimeId": "riveapogee",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "series",
+              "ref": {
+                "id": 1399,
+                "kind": "series",
+                "episode": 1,
+                "season": 1
+              },
+              "resolved": 1,
+              "resolveMs": 1127,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "runningApiSwitch": {
+      "at": "2026-10-02T04:19:51.964Z",
+      "origin": "http://localhost:8080",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "providerListStatus": 200,
+      "providerIds": [
+        "vixsrc",
+        "riveapogee",
+        "cinejoylisbon"
+      ],
+      "resolveStatus": 200,
+      "switchStatus": 200,
+      "selectedProvider": "riveapogee",
+      "delivery": "direct",
+      "host": "img.animecurx.tech",
+      "ok": true,
+      "code": "first-frame"
+    }
+  }
+}

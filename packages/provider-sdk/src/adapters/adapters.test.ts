@@ -5,7 +5,7 @@ import { allowedMediaUrl, createVixsrcProvider, createNhdapiProvider, createVaPl
 import { encodeNxshaPayload } from './nxsha.ts'
 import { decipherPayload } from './vidnest.ts'
 import { decryptWecollegePayload, keystream } from './wecollege-cipher.ts'
-import { accessDeadline, verifiedPlaybackSources } from './http.ts'
+import { accessDeadline, sourceAccess, verifiedPlaybackSources } from './http.ts'
 import type { ProviderSource } from '../index.ts'
 
 const now = Date.UTC(2026, 8, 9)
@@ -132,6 +132,19 @@ describe('imported provider contracts', () => {
     expect(result.ok && result.sources).toHaveLength(3)
     expect(result.ok && result.sources[0]?.subtitles).toMatchObject([{ format: 'vtt' }])
   })
+  it('prefers FilmU singularity direct sources over the extractor fallback', async () => {
+    const identity = () => Promise.resolve({ imdbId: 'tt15239678' })
+    const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url.includes('/api/singularity-movie')) {
+        return { status: 200, text: JSON.stringify({ sources: [{ url: 'https://img.rousav.tech/media/abc/index.m3u8', quality: '1080p', type: 'm3u8' }] }), url }
+      }
+      return { status: 404, text: '', url }
+    })
+    const result = await createFilmuProvider(client, identity, () => now).resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'filmu:singularity:0', type: 'hls', qualityHint: '1080p' }] })
+    expect(result.ok && result.sources).toHaveLength(1)
+    expect(client.mock.calls.map(([url]) => String(url)).some((url) => url.includes('/scrape/'))).toBe(false)
+  })
   it('falls back to the META endpoint when FilmU has no IMDb identity', async () => {
     const identity = () => Promise.resolve({})
     const client = vi.fn<ProviderHttp>(async (url) => {
@@ -221,6 +234,25 @@ describe('imported provider contracts', () => {
     const requested = client.mock.calls.map(([url]) => String(url))
     expect(requested.some((url) => url.includes('provider=citadel'))).toBe(true)
     expect(requested.some((url) => url.includes('provider=apex'))).toBe(false)
+  })
+  it('groups Citadel 720p and 480p under one server with a Quality menu', async () => {
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal) => {
+      signal.throwIfAborted()
+      if (url.includes('scrapper.rivestream.app')) {
+        return { status: 200, text: JSON.stringify({ data: { sources: [
+          { url: 'https://cdn.example/cit720.m3u8', quality: '720p | English', format: 'hls' },
+          { url: 'https://cdn.example/cit480.m3u8', quality: '480p | English', format: 'hls' },
+        ] } }), url }
+      }
+      if (url.endsWith('.m3u8')) return { status: 200, text: mediaPlaylist, url }
+      throw new Error(`Unexpected ${url}`)
+    })
+    const scoped = createRivestreamProvider(client, () => now, { id: 'rivecitadel', subs: ['citadel'] })
+    const result = await scoped.resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [
+      { key: 'citadel:720p:0', height: 720, qualityGroup: 'citadel', qualityHint: '720p', language: 'en' },
+      { key: 'citadel:480p:1', height: 480, qualityGroup: 'citadel', qualityHint: '480p', language: 'en' },
+    ] })
   })
   for (const [id, sub] of [['riveapex', 'apex'], ['rivevanguard', 'vanguard'], ['riveaura', 'aura'], ['riveapogee', 'apogee'], ['rivecitadel', 'citadel'], ['riverigel', 'rigel']] as const) {
     it(`scopes the ${id} single-sub provider to ${sub} only`, async () => {
@@ -316,7 +348,7 @@ describe('imported provider contracts', () => {
       if (url.endsWith('.m3u8')) return { status: 200, text: mediaPlaylist, url }
       throw new Error(`Unexpected ${url}`)
     })
-    const moviesOnly = createRivestreamProvider(client, () => now, { id: 'riveapogee', subs: ['apogee'], kinds: ['movie'] })
+    const moviesOnly = createRivestreamProvider(client, () => now, { id: 'riveapex', subs: ['apex'], kinds: ['movie'] })
     expect(await moviesOnly.resolve(input, new AbortController().signal)).toMatchObject({ ok: true })
     expect(await moviesOnly.resolve(episode, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
     expect(client.mock.calls.map(([url]) => String(url)).some((url) => url.includes('season=3'))).toBe(false)
@@ -549,7 +581,7 @@ describe('imported provider contracts', () => {
       metadata, () => now, { id: 'wecollege-miami', cities: ['miami'] })
     const result = await miami.resolve({ ...input, ref: { kind: 'movie' as const, id: 550 } }, new AbortController().signal)
     expect(miami.id).toBe('wecollege-miami')
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'miami:1080p:0' }] })
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'miami:1080p:0', qualityGroup: 'miami' }] })
     const boiseCalls = http({ text: JSON.stringify({ seed }) }, { text: seal(miamiPayload, 550) }, manifest)
     const boise = createWecollegeProvider(boiseCalls, metadata, () => now, { id: 'wecollege-boise', cities: ['boise'] })
     await boise.resolve({ ...input, ref: { kind: 'movie' as const, id: 550 } }, new AbortController().signal)
@@ -772,23 +804,18 @@ describe('imported provider contracts', () => {
     const encode = (value: unknown) => Buffer.from(JSON.stringify(value), 'utf8').toString('base64')
       .split('').map((char) => alphabet[standard.indexOf(char)]).join('')
     expect(decipherPayload(encode({ url: 'https://cdn.example/a.m3u8', quality: '1080p' }))).toMatchObject({ url: 'https://cdn.example/a.m3u8' })
-    const client = http(
-      { text: JSON.stringify({ encrypted: true, data: encode({ url: 'https://cdn.example/a.m3u8', quality: '1080p' }) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({ streams: [{ url: 'https://cdn.example/b.mp4', language: 'English' }] }) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify({ encrypted: true, data: encode({}) }) },
-      { text: JSON.stringify([{ file: 'https://cdn.example/en.vtt', label: 'English' }, { label: 'NoFile' }]) },
-    )
+    const client = vi.fn<ProviderHttp>(async url => {
+      const body = new URL(url).hostname === 'sub.vdrk.site'
+        ? [{ file: 'https://cdn.example/en.vtt', label: 'English' }, { label: 'NoFile' }]
+        : { encrypted: true, data: encode(url.includes('/yflix/') ? { url: 'https://cdn.example/a.m3u8', quality: '1080p' }
+          : url.includes('/rogflix/') ? { streams: [{ url: 'https://cdn.example/b.mp4', language: 'English' }] } : {}) }
+      return { status: 200, url, text: JSON.stringify(body) }
+    })
     const result = await createVidnestProvider(client, () => now).resolve(input, new AbortController().signal)
     expect(client.mock.calls[0]?.[0]).toBe('https://new.vidnest.fun/yflix/movie/1')
     expect(result).toMatchObject({ ok: true, sources: [
       { key: 'vidnest:catflix:0', type: 'hls', qualityHint: '1080p' },
-      { key: 'vidnest:filxer:1', type: 'native', qualityHint: 'English' },
+      { key: 'vidnest:filxer:1', type: 'native', qualityHint: 'Auto' },
     ] })
     expect(result.ok && result.sources[0]?.subtitles).toMatchObject([{ id: 'vidnest-sub-0', label: 'English', format: 'vtt' }])
   })
@@ -1302,6 +1329,9 @@ describe('imported provider contracts', () => {
     expect(accessDeadline(`https://cdn.example/x.m3u8?expire=${seconds}`, now)).toBe(new Date(seconds * 1000).toISOString())
     expect(accessDeadline(`https://cdn.example/x.m3u8?expire=${now + 600_000}`, now)).toBe(new Date(now + 600_000).toISOString())
     expect(accessDeadline('https://cdn.example/x.m3u8', now)).toBe(new Date(now + 300_000).toISOString())
+    expect(sourceAccess('https://cdn.example/x.m3u8', now)).toEqual({ expiresAt: new Date(now + 300_000).toISOString(), expiryEstimated: true })
+    expect(sourceAccess(`https://cdn.example/x.m3u8?expire=${seconds}`, now)).toEqual({ expiresAt: new Date(seconds * 1000).toISOString(), expiryEstimated: false })
+    expect(sourceAccess('https://cdn.example/x.m3u8', now, now + 600_000)).toEqual({ expiresAt: new Date(now + 600_000).toISOString(), expiryEstimated: false })
     expect(() => accessDeadline(`https://cdn.example/x.m3u8?expire=${Math.floor(now / 1000) - 60}`, now)).toThrow()
   })
   it('resolves VidSrc movies through the gate chain with stamped tokens', async () => {
@@ -1448,6 +1478,13 @@ describe('anime providers', () => {
     expect(client.mock.calls[0]?.[0]).toContain('server=neon')
     expect(result).toMatchObject({ ok: true, sources: [{ key: 'kyren:jett:sub:1:0', type: 'hls', language: 'original' }] })
   })
+  it('rejects explicitly original Kyren audio returned for a dub request', async () => {
+    const client = vi.fn<ProviderHttp>(async url => ({ status: 200, text: url.includes('/api/stream/')
+      ? JSON.stringify({ ok: true, sources: [{ url: 'https://cdn.example/original.m3u8', language: 'original' }] })
+      : url.endsWith('.m3u8') ? '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg0.ts' : 'x'.repeat(2000), url }))
+    expect(await createKyrenProvider(client, animeTitle, () => now).resolve(animeDub, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+    expect(client.mock.calls.every(([url]) => url.includes('/api/stream/'))).toBe(true)
+  })
   it('skips Kyren hits whose segments do not serve', async () => {
     const master = (seg: string) => `#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\n${seg}`
     const client = vi.fn<ProviderHttp>(async (url) => {
@@ -1567,8 +1604,8 @@ describe('anime providers', () => {
     expect(wrongEpisode).toHaveBeenCalledTimes(2)
     const dubClient = paradiseHttp()
     const dubResult = await createAnimeParadiseProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
-    expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animeparadise:sub:1', language: 'original' }] })
-    expect(dubClient).toHaveBeenCalledTimes(3)
+    expect(dubResult).toMatchObject({ ok: false, code: 'empty' })
+    expect(dubClient).not.toHaveBeenCalled()
     const movieClient = paradiseHttp()
     expect(await createAnimeParadiseProvider(movieClient, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
     expect(movieClient).not.toHaveBeenCalled()
@@ -1602,14 +1639,15 @@ describe('anime providers', () => {
     expect(playbackCall?.[3]?.method).toBe('POST')
     expect(playbackCall?.[3]?.body).toContain('"fingerprint"')
   })
-  it('prefers the dub server for English audio and falls back to sub when the dub server is absent', async () => {
+  it('selects the dub server for English audio and rejects episodes without a dub', async () => {
     const dubClient = kaiHttp()
     const dubResult = await createAnimeKaiProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
     expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animekai:dub:1', language: 'en' }] })
     expect(dubClient.mock.calls[4]?.[0]).toContain('/kaidub01/embed/captcha')
     const subOnly = kaiHttp({ watch: '<html><body><ul class="server-list" data-media="sub"><li data-url="https://mfw09.org/e/kaisub01" data-server="MGCLD" data-media="sub"></li></ul></body></html>' })
     const fallbackResult = await createAnimeKaiProvider(subOnly, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
-    expect(fallbackResult).toMatchObject({ ok: true, sources: [{ key: 'animekai:sub:1', language: 'original' }] })
+    expect(fallbackResult).toMatchObject({ ok: false, code: 'empty' })
+    expect(subOnly).toHaveBeenCalledTimes(2)
   })
   it('answers empty for AnimeKai search misses, unplayable servers, and stops non-anime refs early', async () => {
     const mismatch = kaiHttp({ search: JSON.stringify({ ok: true, results: [{ slug: 'bleach-1', title: 'Bleach' }] }) })
@@ -1692,7 +1730,7 @@ describe('anime providers', () => {
     ])
     expect(result).toMatchObject({ ok: true, sources: [{ key: 'animekitsu:sub:1', type: 'native' }] })
   })
-  it('answers empty for AnimeKitsu misses, dub keeps the sub track, and non-anime refs stop early', async () => {
+  it('answers empty for AnimeKitsu misses and stops dub and non-anime refs early', async () => {
     const mismatch = kitsuHttp({ search: JSON.stringify({ data: [{ title: 'Bleach', slug: 'bleach' }] }) })
     expect(await createAnimeKitsuProvider(mismatch, animeTitle, () => now).resolve(animeSub, new AbortController().signal)).toMatchObject({ code: 'empty' })
     expect(mismatch).toHaveBeenCalledTimes(1)
@@ -1707,7 +1745,8 @@ describe('anime providers', () => {
     expect(gatedWatch).toHaveBeenCalledTimes(3)
     const dubClient = kitsuHttp()
     const dubResult = await createAnimeKitsuProvider(dubClient, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
-    expect(dubResult).toMatchObject({ ok: true, sources: [{ key: 'animekitsu:sub:1', language: 'original' }] })
+    expect(dubResult).toMatchObject({ ok: false, code: 'empty' })
+    expect(dubClient).not.toHaveBeenCalled()
     const movieClient = kitsuHttp()
     expect(await createAnimeKitsuProvider(movieClient, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
     expect(movieClient).not.toHaveBeenCalled()

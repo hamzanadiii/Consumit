@@ -115,6 +115,7 @@ function fakeAnimeCatalog(): AnimeCatalog {
   return {
     airingSchedule: vi.fn(async () => ({ episodes: [], page: 1, totalPages: 0 })),
     batch: vi.fn(async () => animeBatch),
+    browse: vi.fn(async () => ({ items: [animeSummary], page: 1, totalPages: 1, totalResults: 1 })),
     relations: vi.fn(async () => ({ main: animeSummary, relations: [] })),
     search: vi.fn(async () => ({ items: [animeSummary], page: 1, totalPages: 1, totalResults: 1 })),
     seasonal: vi.fn(async () => ({ items: [animeSummary], page: 1, totalPages: 1, totalResults: 1 })),

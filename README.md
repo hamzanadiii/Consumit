@@ -1,10 +1,10 @@
 # Consumit
 
-Consumit is a cinematic social streaming and taste-discovery product for movies and series: watch immediately, remember what you love, and discover through people whose taste you trust.
+Consumit is a streaming and personal taste-discovery product for movies, series, and anime: watch, remember what you love, and keep a private library.
 
 ## Project status
 
-The project includes the shared interface system, core product screens, TMDB and AniList catalogs, durable member identity and library records, and configured playback. Taste Match and Circle activity remain unimplemented and render honest empty states. See [the quality audit](./docs/QUALITY-AUDIT.md) for confirmed risks and verification status.
+The project includes the shared interface system, core product screens, TMDB and AniList catalogs, durable member identity and private library records, and configured direct-first playback with an explicitly approved Worker relay tier. Circle, follows, public profiles/list discovery, and review engagement are retired from the active personal product; historical records are retained. See the [product foundation](./docs/PRODUCT.md) for scope and the [current project quality review](./docs/audits/project-quality-2026-10-03.md) for verification status.
 
 ## Local development
 
@@ -36,7 +36,7 @@ bun run dev
 ```
 
 Run the complete local quality gate with `bun run check`.
-`bun run infra:validate` also requires Docker and Terraform on the host; database integration tests and the k6 playback load scenario require their documented local test services.
+`bun run infra:validate` requires Docker and uses the host Terraform installation or its container fallback. Database integration tests and the k6 playback load scenario require their documented isolated test services. Integration suites truncate fixture tables: use disposable stores, never the running application's database.
 
 ## Docker stack
 

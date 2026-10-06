@@ -27,3 +27,6 @@ infra/playback/providers.local.overrides.json
 .env.*
 **/.env
 **/.env.*
+infra/secrets
+infra/cloudflare/*.local.jsonc
+infra/cloudflare/.wrangler

@@ -54,7 +54,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       return {
         exportedAt: exportedAt.toISOString(),
         imports: [],
-        library: { diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] },
+        library: { diary: [], favorites: [], lists: [], saved: [], watched: [] },
         watchHistory: [],
         member: {
           avatarStyle: member.profile.avatarStyle,

@@ -24,7 +24,6 @@ const mocks = vi.hoisted(() => {
     setMemberLiked: vi.fn(),
     setMemberRating: vi.fn(),
     setMemberWatched: vi.fn(),
-    setReviewLiked: vi.fn(),
     updateMemberReview: vi.fn(),
   }
 })
@@ -36,7 +35,6 @@ vi.mock('@/lib/identity-browser', () => ({
   createMemberReview: mocks.createMemberReview,
   getMemberTitleState: mocks.getMemberTitleState,
   listTitleReviews: mocks.listTitleReviews,
-  setReviewLiked: mocks.setReviewLiked,
   setMemberLiked: mocks.setMemberLiked,
   setMemberRating: mocks.setMemberRating,
   setMemberWatched: mocks.setMemberWatched,
@@ -177,9 +175,10 @@ describe('title reviews', () => {
     expect(await screen.findByText('First public take.')).toBeInTheDocument()
     expect(screen.getByText('No stars attached.')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'open_critic' })).toHaveAttribute('href', '/profile/open_critic')
+    expect(screen.getByText('open_critic')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'open_critic' })).not.toBeInTheDocument()
     expect(mocks.getMemberTitleState).not.toHaveBeenCalled()
-    expect(mocks.listTitleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', 'all')
+    expect(mocks.listTitleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent')
   })
 
   it('expands the recent list in place when there is more to show', async () => {
@@ -221,23 +220,6 @@ describe('title reviews', () => {
     await waitFor(() => expect(mocks.listTitleReviews).toHaveBeenCalledTimes(2))
   })
 
-  it('sorts recent reviews by popularity on request', async () => {
-    const user = userEvent.setup()
-    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
-    mocks.listTitleReviews.mockResolvedValue({
-      items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
-      page: 1,
-      totalPages: 1,
-      totalResults: 1,
-    })
-    render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
-
-    expect(await screen.findByText('Recent reviews')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Popular' }))
-    expect(await screen.findByText('Popular reviews')).toBeInTheDocument()
-    expect(mocks.listTitleReviews).toHaveBeenLastCalledWith({ id: 693134, kind: 'movie' }, 1, 'popular', 'all')
-  })
-
   it('keeps review tabs personal with no friends filter', async () => {
     mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
     mocks.listTitleReviews.mockResolvedValue({ ...EMPTY_PAGE })
@@ -246,59 +228,6 @@ describe('title reviews', () => {
     expect(await screen.findByText('Recent reviews')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Friends' })).not.toBeInTheDocument()
     expect(screen.queryByText('Friend reviews')).not.toBeInTheDocument()
-  })
-
-  it('likes a member review optimistically', async () => {
-    const user = userEvent.setup()
-    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
-    mocks.listTitleReviews.mockResolvedValue({
-      items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
-      page: 1,
-      totalPages: 1,
-      totalResults: 1,
-    })
-    mocks.setReviewLiked.mockResolvedValue({ likesCount: 13, reviewId: 'recent-1' })
-    render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
-
-    const like = await screen.findByRole('button', { name: 'Like this review by open_critic' })
-    expect(like).toHaveAttribute('aria-pressed', 'false')
-    await user.click(like)
-
-    expect(mocks.setReviewLiked).toHaveBeenCalledWith('recent-1', true)
-    const unlike = await screen.findByRole('button', { name: 'Unlike this review by open_critic' })
-    expect(unlike).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('13 likes')).toBeInTheDocument()
-  })
-
-  it('reverts the like and reports when the write fails', async () => {
-    const user = userEvent.setup()
-    mocks.getMemberTitleState.mockResolvedValue({ rating: null, like: null, review: null })
-    mocks.listTitleReviews.mockResolvedValue({
-      items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
-      page: 1,
-      totalPages: 1,
-      totalResults: 1,
-    })
-    mocks.setReviewLiked.mockRejectedValue(new mocks.IdentityApiError('The account service returned an invalid response.', { status: 503 }))
-    render(signedIn(<TitleReviews id={693134} kind="movie" title="Dune: Part Two" />))
-
-    await user.click(await screen.findByRole('button', { name: 'Like this review by open_critic' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your like could not be saved')
-    expect(screen.getByRole('button', { name: 'Like this review by open_critic' })).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('shows static like counts to guests with no like action', async () => {
-    mocks.listTitleReviews.mockResolvedValue({
-      items: [recentItem('recent-1', 'open_critic', 'First public take.', 8, 12)],
-      page: 1,
-      totalPages: 1,
-      totalResults: 1,
-    })
-    render(<SessionProvider><TitleReviews id={693134} kind="movie" title="Dune: Part Two" /></SessionProvider>)
-
-    expect(await screen.findByText('12 likes')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /like this review/i })).not.toBeInTheDocument()
   })
 
   it('hides the like action on the viewer’s own review', async () => {

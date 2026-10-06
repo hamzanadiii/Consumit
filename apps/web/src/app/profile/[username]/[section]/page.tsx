@@ -24,7 +24,7 @@ const sections = new Set<ProfileSectionId>(['activity', 'diary', 'films', 'histo
 
 export const metadata: Metadata = {
   title: 'Member archive · Consumit',
-  description: 'Browse your films, diary, reviews, and lists.',
+  description: 'Browse your watched titles, diary, reviews, and lists.',
   robots: { follow: false, index: false },
 }
 
@@ -56,6 +56,7 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
   }
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}/${section}${selectedRating !== undefined ? `?rating=${selectedRating}` : ''}`)
   const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  if (!owner) notFound()
   if (selectedRating !== undefined && (!owner || activeSection !== 'films')) notFound()
   if (section === 'lists' && owner) {
     const collection = await loadListsCollection(profile.canonicalUsername)

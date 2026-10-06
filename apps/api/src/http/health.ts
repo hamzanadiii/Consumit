@@ -10,9 +10,9 @@ const noLimit = { config: { rateLimit: false } }
 /**
  * Liveness answers "is this process serving?" and never checks dependencies.
  * Readiness answers "can this process take traffic?" with a dependency
- * summary but no hard failures for optional parts — load balancers read the
- * `status` field, not just the code. `/health` stays as the historic liveness
- * alias. Per-dependency detail belongs on the future internal endpoint.
+ * summary and HTTP 503 when a required capability lacks configuration.
+ * `/health` stays as the historic liveness alias. Live dependency probes
+ * belong on the future internal endpoint; these flags report configuration.
  */
 export function registerHealthRoutes(app: FastifyInstance, state: HealthState) {
   const live = async () => ({ status: 'ok' as const })

@@ -7,6 +7,7 @@ import { useMemo } from 'react'
 
 import { EpisodeRail, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
+import { AdPlaceholder } from '../../shared/ad-placeholder'
 import type { WatchEpisode, WatchTitle } from '../watch-screen'
 
 function formatRuntime(minutes: number | null | undefined): string | null {
@@ -67,15 +68,18 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
     <div className="min-h-screen bg-[var(--fs-page)]" data-consumit-series-watch>
       <div className="mx-auto w-full max-w-[100rem] px-3 pt-4 pb-10 sm:px-6 lg:px-8">
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <WatchPlayback
-            episode={watchEpisode}
-            key={`${tmdbId}:${seasonNumber}:${episodeNumber}`}
-            layout="embedded"
-            nextHref={nextHref}
-            prevHref={prevHref}
-            title={watchTitle}
-            {...(pinnedProvider ? { pinnedProvider } : {})}
-          />
+          <div className="flex min-w-0 flex-col gap-6">
+            <AdPlaceholder placement="watch" position="early" />
+            <WatchPlayback
+              episode={watchEpisode}
+              key={`${tmdbId}:${seasonNumber}:${episodeNumber}`}
+              layout="embedded"
+              nextHref={nextHref}
+              prevHref={prevHref}
+              title={watchTitle}
+              {...(pinnedProvider ? { pinnedProvider } : {})}
+            />
+          </div>
           <EpisodeRail
             actions={seasonOptions.length > 1 ? (
               <SeasonSelector

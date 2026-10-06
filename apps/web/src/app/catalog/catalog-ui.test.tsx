@@ -34,4 +34,11 @@ describe('catalog UI', () => {
       'Created by Dan Erickson',
     )
   })
+
+  it('explains rate limiting without claiming that metadata timed out', () => {
+    render(<CatalogUnavailableScreen error={{ code: 'RATE_LIMITED', retryable: true }} />)
+    expect(screen.getByText(/Too many catalog requests/)).toBeInTheDocument()
+    expect(screen.queryByText(/did not answer in time/)).not.toBeInTheDocument()
+    expect(screen.getByText('Retry catalog').closest('a')).toHaveAttribute('href', '')
+  })
 })

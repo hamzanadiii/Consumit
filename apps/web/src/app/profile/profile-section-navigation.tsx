@@ -20,7 +20,7 @@ export function ProfileSectionNavigation({ active = 'overview', counts, name, ow
   const items: TabItem[] = [
     { href: root, label: 'Overview', value: 'overview' },
     { href: `${root}/activity`, label: 'Activity', value: 'activity' },
-    { href: `${root}/films`, label: 'Films', value: 'films', ...(counts.films === undefined ? {} : { count: counts.films }) },
+    { href: `${root}/films`, label: 'Watched', value: 'films', ...(counts.films === undefined ? {} : { count: counts.films }) },
     { href: `${root}/diary`, label: 'Diary', value: 'diary', ...(counts.diary === undefined ? {} : { count: counts.diary }) },
     ...(owner ? [{ href: `${root}/history`, label: 'History', value: 'history' }] : []),
     { href: `${root}/reviews`, label: 'Reviews', value: 'reviews', ...(counts.reviews === undefined ? {} : { count: counts.reviews }) },

@@ -1,9 +1,6 @@
 import type {
   CatalogKind,
   CatalogRef,
-  CircleActivityCursor,
-  CircleActivityItem,
-  CircleActivityPage,
   CreateMemberListRequest,
   CreateDiaryEntryRequest,
   CreateReviewRequest,
@@ -12,24 +9,19 @@ import type {
   MemberLibraryCollectionPage,
   MemberLibrarySnapshot,
   MemberListDetail,
-  MemberListCard,
   MemberProfileData,
   MemberProfileArchiveCursor,
   MemberProfileArchivePage,
   MemberRating,
   MemberRatingPage,
   MemberReview,
-  MemberSuggestion,
   MemberTitleRecord,
   MemberTitleState,
   PlaybackProgress,
   ProgressRef,
   ProgressWriteRequest,
-  FollowStatus,
   RecordOrigin,
-  ReviewLike,
   TitleReviewsPage,
-  TitleReviewAudience,
   TitleReviewSort,
   UpdateDiaryEntryRequest,
   UpdateMemberListRequest,
@@ -172,7 +164,8 @@ function profileView(profile: { avatarStyle: string; avatarUrl: string | null; b
     nextUsernameChangeAt: next && next > new Date() ? next.toISOString() : null,
     username: profile.username,
     usernameChangedAt: profile.usernameChangedAt?.toISOString() ?? null,
-    visibility: profile.visibility === 'public' ? 'public' as const : 'private' as const,
+    // Personal profiles remain private, including rows from the public-profile era.
+    visibility: 'private' as const,
   }
 }
 
@@ -357,7 +350,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
             lists: { include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 30 },
             profile: true,
             reviews: { orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
-            _count: { select: { diaryEntries: true, lists: true, reviews: true, watchedTitles: true } },
+            _count: { select: { diaryEntries: true, followers: true, following: true, lists: true, reviews: true, watchedTitles: true } },
           },
           where: { id: memberId, status: 'ACTIVE' },
         }),
@@ -376,6 +369,8 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
           return { count: ratingCounts.find((row) => row.value === value)?._count._all ?? 0, value }
         }),
 
+        // Older deployed web builds require these counts during profile validation.
+        social: { followers: member._count.followers, following: member._count.following },
         statistics: { diaryEntries: member._count.diaryEntries, lists: member._count.lists, reviews: member._count.reviews, watched: member._count.watchedTitles },
       }
     },
@@ -460,13 +455,12 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
           take,
           where: {
             memberId,
-            ...(owner.profile.visibility !== 'public' && owner.id === viewerMemberId ? {} : { visibility: 'public' }),
             ...(cursor && updatedAt ? { OR: [{ updatedAt: { lt: updatedAt } }, { updatedAt, id: { lt: cursor.id } }] } : {}),
           },
         })
         const hasMore = rows.length > pageSize
         const page = rows.slice(0, pageSize)
-        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const }))
+        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: 'private' as const }))
         const last = page.at(-1)
         return { collection, items, nextCursor: next(hasMore, last ? { id: last.id, updatedAt: last.updatedAt.toISOString() } : null) }
       }
@@ -765,7 +759,11 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       }
     },
     async progress(memberId: string, ref: ProgressRef): Promise<PlaybackProgress | null> {
-      const row = await prisma.playbackProgress.findUnique({ where: { memberId_catalogKind_tmdbId_season_episode: progressKey(memberId, ref) } })
+      // A title-only read resumes its latest episode; exact Watch reads retain
+      // their composite key and never borrow a neighboring episode's position.
+      const row = ref.kind !== 'movie' && ref.season === undefined && ref.episode === undefined
+        ? await prisma.playbackProgress.findFirst({ where: { memberId, catalogKind: ref.kind === 'anime' ? 'ANIME' : 'SERIES', tmdbId: ref.id, episode: { gt: 0 } }, orderBy: [{ updatedAt: 'desc' }, { season: 'desc' }, { episode: 'desc' }] })
+        : await prisma.playbackProgress.findUnique({ where: { memberId_catalogKind_tmdbId_season_episode: progressKey(memberId, ref) } })
       return row ? progressView(row) : null
     },
     async watchHistory(memberId: string, cursor: string | undefined, limit: number): Promise<WatchHistoryPage> {

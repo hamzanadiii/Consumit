@@ -40,6 +40,8 @@ Thumbs.db
 /infra/playback/providers.local.json
 /infra/playback/providers.local.overrides.json
 worker/.wrangler/
+infra/cloudflare/.wrangler/
+infra/cloudflare/*.local.jsonc
 worker/.dev.vars
 **/.terraform/
 *.tfstate

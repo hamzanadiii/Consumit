@@ -124,12 +124,14 @@ describe('anime detail screen member surfaces', () => {
     expect(masthead?.querySelector('a[href="/watch/anime/21?episode=1"]')).not.toBeNull()
   })
 
-  it('shows the next-airing box above the member shelf when scheduled', () => {
+  it('shows the next-airing status in the episodes section when scheduled', () => {
     const detail = animeFixture({ nextAiringEpisode: { airingAt: '2026-09-24T00:00:00.000Z', episode: 3 } })
     renderWithProviders(<AnimeDetailScreen airing={null} detail={detail} relations={null} />)
 
     expect(screen.getByText('Next Episode: #3')).toBeInTheDocument()
     expect(screen.getByText(/Airing 9\/24\/2026/)).toBeInTheDocument()
+    expect(document.getElementById('episodes')?.textContent).toMatch(/Next Episode: #3/)
+    expect(document.querySelector('[data-consumit-anime-masthead]')?.textContent).not.toMatch(/Next Episode: #/)
   })
 
   it('wires a Reviews tab and member reviews section for anime', () => {

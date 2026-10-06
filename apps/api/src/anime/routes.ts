@@ -3,7 +3,9 @@ import { z } from 'zod'
 import {
   animeAiringScheduleSchema,
   animeBatchSchema,
+  animeBrowseSortSchema,
   animeEpisodeSchema,
+  animeFormatSchema,
   animeFranchiseSchema,
   animeMatchSchema,
   animePageSchema,
@@ -35,6 +37,13 @@ const seasonalParamsSchema = z.object({
   year: z.coerce.number().int().min(1917).max(2200),
 })
 const seasonalQuerySchema = z.object({ page: pageSchema })
+const browseQuerySchema = z.object({
+  sort: animeBrowseSortSchema.optional().default('popular'),
+  genre: z.string().trim().min(1).max(64).optional(),
+  year: z.coerce.number().int().min(1917).max(2200).optional(),
+  format: animeFormatSchema.optional(),
+  page: pageSchema,
+})
 const batchQuerySchema = z.object({ ids: z.string().trim().min(1).max(600) })
 
 function invalidQuery(message: string): never {
@@ -84,6 +93,17 @@ export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps)
     if (!params.success || !query.success) return invalidQuery('Use a valid season, year, and page between 1 and 500.')
     try {
       return reply.send(proveResponse(animePageSchema, await anime.seasonal(params.data.season, params.data.year, query.data.page)))
+    } catch (error) {
+      return sendAnimeError(error)
+    }
+  })
+
+  app.get('/v1/anime/browse', async (request, reply) => {
+    const parsed = browseQuerySchema.safeParse(request.query)
+    if (!parsed.success) return invalidQuery('Use a valid sort, genre, year, format, and page between 1 and 500.')
+    try {
+      const { page, ...filters } = parsed.data
+      return reply.send(proveResponse(animePageSchema, await anime.browse({ ...filters, page })))
     } catch (error) {
       return sendAnimeError(error)
     }

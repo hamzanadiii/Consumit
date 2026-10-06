@@ -21,8 +21,7 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
       // A single unreadable list never sinks the page; its card renders artless.
     }
   }))
-  const cardRefs = [...library.savedLists.items.flatMap((item) => item.coverTitles)]
-  const refs = [...itemsBySlug.values()].flat().concat(cardRefs)
+  const refs = [...itemsBySlug.values()].flat()
   let posters = new Map<string, CatalogTitleSummary>()
   let catalogUnavailable = false
   const catalogDetailsLimited = new Set(refs.map((ref) => `${ref.kind}:${ref.id}`)).size > MAX_PAGE_CATALOG_ENRICHMENT
@@ -46,17 +45,5 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
     savedByViewer: false,
     isOwner: true,
   }))
-  const savedLists: ListCollectionItem[] = library.savedLists.items.map(({ coverTitles, list, owner }) => ({
-    curator: owner.displayName ?? owner.username,
-    description: list.description,
-    isOwner: false,
-    itemCount: list.itemCount,
-    name: list.name,
-    posters: coverTitles.map((ref) => posters.get(`${ref.kind}:${ref.id}`)?.posterUrl ?? undefined),
-    savedByViewer: true,
-    slug: list.slug,
-    username: owner.username,
-    visibility: 'public',
-  }))
-  return { catalogDetailsLimited, catalogUnavailable, listNextCursor: library.lists.nextCursor, lists, savedLists, savedListNextCursor: library.savedLists.nextCursor }
+  return { catalogDetailsLimited, catalogUnavailable, listNextCursor: library.lists.nextCursor, lists }
 }

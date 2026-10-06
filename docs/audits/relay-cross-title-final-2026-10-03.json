@@ -1,0 +1,98 @@
+[
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1032863
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [
+      "net::ERR_ABORTED"
+    ],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200,
+      200
+    ],
+    "pageErrors": [],
+    "quality": "Auto",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 1038,
+      "position": 94.015749,
+      "frames": 370
+    }
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1032863
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200
+    ],
+    "pageErrors": [],
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 1994,
+      "height": 1080,
+      "position": 94.017625,
+      "frames": 225
+    }
+  },
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200,
+      200
+    ],
+    "pageErrors": [],
+    "quality": "Auto",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 802,
+      "position": 94.026055,
+      "frames": 610
+    }
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200
+    ],
+    "pageErrors": [],
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 1080,
+      "position": 94.01453,
+      "frames": 225
+    }
+  }
+]

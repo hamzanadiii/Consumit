@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
+import { sourceAccess, adapter, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 
 // Port of the PROVE StigStream recipe (providers/stigstream/{stigstream.ts,
 // client.ts} plus the server-scoped rows in providers/stigsplit/stigsplit.ts):
@@ -74,6 +74,9 @@ export type StigstreamScope = {
   id?: string
   /** Upstream server name (Nebula, Orion, …). Scoped rows serve one server. */
   server?: string
+  /** Reviewed original-audio fallback lanes for the aggregate row. */
+  servers?: readonly string[]
+  mediaHosts?: readonly string[]
   /** Source language code for every rendition of this row. */
   audioLanguage?: string
 }
@@ -159,6 +162,7 @@ export function createStigstreamProvider(http: ProviderHttp, now = Date.now, sco
 
   async function session(signal: AbortSignal): Promise<Session> {
     if (cached && now() < cached.expiresAt) return cached
+    if (cached) { cached = null; handshaking = null }
     if (!handshaking) {
       handshaking = doHandshake(signal).then((next) => {
         cached = next
@@ -215,17 +219,19 @@ export function createStigstreamProvider(http: ProviderHttp, now = Date.now, sco
     if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
     const isTv = ref.kind === 'series'
     if (isTv && (!ref.season || !ref.episode)) throw new ProviderFailure('empty')
-    const path = isTv
-      ? `/tv/${encodeURIComponent(server)}/${ref.id}/${ref.season}/${ref.episode}`
-      : `/movie/${encodeURIComponent(server)}/${ref.id}`
-
-    let data: z.infer<typeof streamsSchema>
-    try {
-      data = streamsSchema.parse(await callApi(path, signal))
-    } catch (error) {
-      if (error instanceof ProviderFailure) throw error
-      throw new ProviderFailure('malformed')
+    let data: z.infer<typeof streamsSchema> | undefined
+    let selectedServer = server
+    for (const lane of (scope.servers ?? [server]).slice(0, 6)) {
+      const path = isTv ? `/tv/${encodeURIComponent(lane)}/${ref.id}/${ref.season}/${ref.episode}` : `/movie/${encodeURIComponent(lane)}/${ref.id}`
+      try {
+        const candidate = streamsSchema.parse(await callApi(path, signal))
+        if (scope.mediaHosts) candidate.streams = candidate.streams?.filter(stream => {
+          try { const url = new URL(stream.url); return url.protocol === 'https:' && scope.mediaHosts!.includes(url.hostname) } catch { return false }
+        })
+        if (candidate.streams?.length) { data = candidate; selectedServer = lane; break }
+      } catch { signal.throwIfAborted() }
     }
+    if (!data) throw new ProviderFailure('empty')
     const streams = data.streams ?? []
     if (!streams.length) throw new ProviderFailure('empty')
 
@@ -253,17 +259,18 @@ export function createStigstreamProvider(http: ProviderHttp, now = Date.now, sco
       const height = Number.parseInt(/(\d{3,4})p?/i.exec(quality)?.[1] ?? '0', 10)
       let expiresAt: string
       try {
-        expiresAt = accessDeadline(entry.url, now())
+        expiresAt = sourceAccess(entry.url, now()).expiresAt
       } catch {
         continue
       }
       seen.add(entry.url)
       sources.push({
-        key: `${id}:${quality.toLowerCase()}:${index}`,
+        key: `${id}:${scope.servers ? selectedServer.toLowerCase() + ':' : ''}${quality.toLowerCase()}:${index}`,
         url: entry.url,
         type,
         qualityHint: quality || 'Auto',
         expiresAt,
+        expiryEstimated: sourceAccess(entry.url, now()).expiryEstimated,
         language: audioLanguage,
         headers: headersFor(entry.url),
         subtitles,

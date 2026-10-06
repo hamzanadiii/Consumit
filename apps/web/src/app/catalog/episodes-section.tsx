@@ -1,11 +1,12 @@
 'use client'
 
 import { watchHref, type CatalogSeason, type CatalogSeriesDetail } from '@consumit/contracts'
-import { ChevronLeft, ChevronRight, Play, RotateCcw } from 'lucide-react'
-import Link from 'next/link'
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 
-import { ArtworkFrame, Button, SeasonSelector, SectionHeading } from '@consumit/ui'
+import { Button, SeasonSelector, SectionHeading } from '@consumit/ui'
+
+import { EpisodeCard } from '../shared/episode-card'
 
 const EPISODES_PER_PAGE = 8
 
@@ -19,59 +20,10 @@ export type EpisodesSectionProps = {
   seasons: CatalogSeriesDetail['seasons']
 }
 
-function EpisodeCard({ detail, episode }: {
-  detail: CatalogSeriesDetail
-  episode: CatalogSeason['episodes'][number]
-}) {
-  const href = watchHref(detail, { episode: episode.episodeNumber, season: episode.seasonNumber })
-  const date = episode.airDate ? new Date(`${episode.airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null
-  const meta = [episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null, date].filter(Boolean).join(' · ')
-  return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-all duration-200 ease-out hover:-translate-y-1 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] motion-reduce:transition-none motion-reduce:transform-none" data-filscreen-episode-card>
-      <Link
-        aria-label={`Watch Episode ${episode.episodeNumber}: ${episode.title}`}
-        className="relative block outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--fs-focus)]"
-        href={href}
-      >
-        <ArtworkFrame
-          alt={episode.stillUrl ? `${episode.title} episode still` : `${episode.title} title artwork`}
-          className="rounded-none border-0"
-          ratio="landscape"
-          src={episode.stillUrl ?? detail.backdropUrl ?? detail.posterUrl ?? undefined}
-        >
-          {!episode.stillUrl && (detail.backdropUrl || detail.posterUrl) ? <span className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] text-white">Title artwork</span> : null}
-          <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-80 transition-opacity duration-200 group-hover:opacity-100 motion-reduce:transition-none" />
-          <span aria-hidden="true" className="absolute inset-0 grid place-items-center opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            <span className="grid size-12 place-items-center rounded-full bg-[var(--fs-accent)] text-[var(--fs-on-accent)] shadow-lg transition-transform duration-200 group-hover:scale-110 motion-reduce:transition-none motion-reduce:transform-none">
-              <Play aria-hidden="true" className="size-5 fill-current" />
-            </span>
-          </span>
-        </ArtworkFrame>
-      </Link>
-      <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
-        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">Episode {episode.episodeNumber}</p>
-        <h3 className="truncate font-display text-lg leading-snug text-[var(--fs-ink)]" title={episode.title}>{episode.title}</h3>
-        {meta ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{meta}</p> : <p className="text-xs tabular-nums text-transparent" aria-hidden="true">–</p>}
-        {episode.overview ? <p className="mt-1 min-h-10 text-xs leading-5 text-[var(--fs-secondary)] line-clamp-2">{episode.overview}</p> : <p className="mt-1 min-h-10" aria-hidden="true" />}
-        <div className="mt-auto pt-3">
-          <Link
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-            href={href}
-          >
-            <Play aria-hidden="true" className="size-3 fill-current" />
-            Watch
-          </Link>
-        </div>
-      </div>
-    </article>
-  )
-}
-
 /**
  * FilScreen episodes world: season choice, a still-led episode grid, and
- * pagination. State first (eyebrow), then title and evidence, then a
- * distinct Watch action — the established episode contract, dressed in the
- * FilScreen card language.
+ * pagination. Both episodic title kinds share the Anime card presentation;
+ * this section owns Series season identity and availability.
  */
 export function EpisodesSection({
   detail,
@@ -115,7 +67,7 @@ export function EpisodesSection({
           <ul aria-label={`Season ${season?.seasonNumber ?? ''} episodes, page ${safePage} of ${totalPages}`} className="mt-8 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visible.map((episode) => (
               <li className="min-w-0" key={episode.id}>
-                <EpisodeCard detail={detail} episode={episode} />
+                <EpisodeCard airDate={episode.airDate} duration={episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null} episode={episode.episodeNumber} fallbackArt={detail.backdropUrl ?? detail.posterUrl} href={watchHref(detail, { episode: episode.episodeNumber, season: episode.seasonNumber })} stillUrl={episode.stillUrl} summary={episode.overview} title={episode.title} />
               </li>
             ))}
           </ul>

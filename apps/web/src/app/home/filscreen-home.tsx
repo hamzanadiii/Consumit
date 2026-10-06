@@ -17,6 +17,7 @@ import {
   type FilScreenTheme,
 } from './filscreen-shell'
 import { TitleRail } from '../shared/title-rail'
+import { AdPlaceholder } from '../shared/ad-placeholder'
 
 export {
   FilScreenShell,
@@ -62,6 +63,8 @@ export function FilScreenHome({
         <ContinueRail />
       </section>
 
+      <div className="my-8 sm:my-10"><AdPlaceholder placement="home" position="early" /></div>
+
       {trendingMovies && trendingMovies.length > 0 ? (
         <TitleRail
           icon={<Flame aria-hidden="true" className="size-4 text-[var(--fs-flame)]" />}
@@ -80,6 +83,10 @@ export function FilScreenHome({
           title="Trending Series"
           viewAllHref="/series"
         />
+      ) : null}
+
+      {trendingSeries && trendingSeries.length > 0 ? (
+        <div className="my-8 sm:my-10"><AdPlaceholder placement="home" /></div>
       ) : null}
 
       {trendingAnime && trendingAnime.length > 0 ? (
@@ -108,6 +115,10 @@ export function FilScreenHome({
           title="Top Rated Series"
           viewAllHref="/series"
         />
+      ) : null}
+
+      {topRatedSeries && topRatedSeries.length > 0 ? (
+        <div className="my-8 sm:my-10"><AdPlaceholder placement="home" position="late" /></div>
       ) : null}
 
       {awardWinningShows && awardWinningShows.length > 0 ? (

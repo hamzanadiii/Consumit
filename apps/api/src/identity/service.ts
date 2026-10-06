@@ -47,7 +47,8 @@ function profileView(member: IdentityRecord, now: Date): MemberProfile {
     nextUsernameChangeAt: nextChange && nextChange > now ? nextChange.toISOString() : null,
     username: member.profile.username,
     usernameChangedAt: member.profile.usernameChangedAt?.toISOString() ?? null,
-    visibility: member.profile.visibility,
+    // Older stored profiles may still say public; the active surface is personal.
+    visibility: 'private',
   }
 }
 
@@ -153,7 +154,7 @@ export function createIdentity(options: {
       const resolved = await repository.findByUsername(username)
       if (!resolved) throw new IdentityError('NOT_FOUND', 'Profile not found.')
       const viewer = sessionToken ? await resolveSession(sessionToken) : null
-      if (resolved.record.profile.visibility === 'private' && viewer?.member.id !== resolved.record.id) {
+      if (viewer?.member.id !== resolved.record.id) {
         throw new IdentityError('NOT_FOUND', 'Profile not found.')
       }
       return {

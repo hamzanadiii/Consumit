@@ -25,6 +25,14 @@ export function langLabel(code: string): string {
   return LANG_NAME[code.toLowerCase()] || code.toUpperCase()
 }
 
+/** A filename may name a language or contain an opaque subtitle ID. Only
+ * recognized names/codes can override provider metadata. */
+export function knownLang(name: string): string | undefined {
+  const clean = name.toLowerCase().trim()
+  if (Object.hasOwn(LANG_NAME, clean)) return clean
+  return Object.hasOwn(NAME_TO_CODE, clean) ? NAME_TO_CODE[clean] : undefined
+}
+
 const NAME_TO_CODE: Record<string, string> = Object.fromEntries(
   Object.entries(LANG_NAME).map(([code, name]) => [name.toLowerCase(), code]),
 )
@@ -81,6 +89,21 @@ const SCRIPT_TO_LANG: [RegExp, string][] = [
   [/[\u0590-\u05FF]/, 'he'],
 ]
 
+function languageNameKey(name: string) {
+  return name.normalize('NFKD').replace(/\p{M}/gu, '').trim().toLowerCase()
+}
+
+// Match names before script heuristics: Russian, Ukrainian and Bulgarian
+// share Cyrillic; Arabic, Persian and Urdu share an alphabet too.
+const NATIVE_NAME_TO_CODE = new Map<string, string>()
+for (const code of Object.keys(LANG_NAME)) {
+  if (['iw', 'in', 'ji', 'gr'].includes(code)) continue
+  try {
+    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code)
+    if (name) NATIVE_NAME_TO_CODE.set(languageNameKey(name), code)
+  } catch { /* Unsupported locales retain the explicit aliases below. */ }
+}
+
 /** Detect a language code from native-script text. Returns null when the
  *  text is Latin-only (no script signal). Used when a track label is not a
  *  parseable language name — never default blindly to English. */
@@ -96,7 +119,9 @@ export function detectScriptLang(text: string): string | null {
  *  "اَلْعَرَبِيَّةُ - FlowCast"). Strips a trailing " - Provider" suffix. */
 export function normTrackLang(label: string): string {
   const clean = label.replace(/\s*-\s*[A-Za-z]+\s*$/, '').trim()
-  const nativeName = clean.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+  const nativeName = languageNameKey(clean)
+  const nativeCode = NATIVE_NAME_TO_CODE.get(nativeName)
+  if (nativeCode) return nativeCode
   const nativeCodes: Record<string, string> = {
     'اردو': 'ur', 'العربية': 'ar', 'فارسی': 'fa', 'francais': 'fr',
   }

@@ -1,8 +1,9 @@
 import type { PlaybackRef } from '@consumit/contracts'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, masterVariantHeights, mediaType, playlistAbsoluteHosts, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
+import { sourceAccess, adapter, document, masterVariantHeights, mediaType, playlistAbsoluteHosts, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
 import { decryptWecollegePayload } from './wecollege-cipher.ts'
+import { discoverRelaySource } from './relay-discovery.ts'
 
 const apiOrigin = 'https://api.wecollege.net'
 const mediaOrigin = 'https://movy.sx'
@@ -16,7 +17,7 @@ const payloadSchema = z.object({
 
 export type WecollegeMetadata = { title: string; year: number; imdbId?: string | undefined }
 export type WecollegeMetadataResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<WecollegeMetadata>
-export type WecollegeScope = { id?: string; cities?: string[]; mediaHosts?: readonly string[] }
+export type WecollegeScope = { id?: string; cities?: string[]; mediaHosts?: readonly string[]; relayHostDiscovery?: boolean }
 
 export function createWecollegeProvider(
   http: ProviderHttp,
@@ -106,11 +107,12 @@ export function createWecollegeProvider(
             key: `${city}:${qualityHint.toLowerCase()}:${idx}`,
             url: s.url,
             type,
-            expiresAt: accessDeadline(s.url, now()),
+            ...sourceAccess(s.url, now()),
             language: 'original',
             headers,
             subtitles,
             qualityHint,
+            qualityGroup: city,
             ...(height ? { height } : {}),
           })
         }
@@ -134,7 +136,10 @@ export function createWecollegeProvider(
         // media set, browsers cannot play them (hotlink-guarded origins 403
         // without provider referers, which browsers will not spoof, and no
         // relay exists). The bytes were already fetched for verification.
-        const contained = verified.filter((source) => {
+        const contained = scope.relayHostDiscovery ? (await Promise.all(verified.map(async source => {
+          try { return await discoverRelaySource(source, http, 'wecollege-city-v1', scoped, manifests.get(source.key)) }
+          catch { return undefined }
+        }))).filter((source): source is ProviderSource => source !== undefined) : verified.filter((source) => {
           const text = manifests.get(source.key)
           if (text === undefined || !scope.mediaHosts?.length) return true
           return playlistAbsoluteHosts(text).every((host) => scope.mediaHosts!.some((pattern) =>

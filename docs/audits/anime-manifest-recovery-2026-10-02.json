@@ -1,0 +1,195 @@
+{
+  "before": [
+    {
+      "id": 21,
+      "decoded": false,
+      "media": {
+        "width": 0,
+        "position": 0,
+        "ready": 0
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "refresh",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "refresh",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "refresh",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "refresh",
+          "status": 200,
+          "provider": "animeparadise"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    },
+    {
+      "id": 7785,
+      "decoded": true,
+      "media": {
+        "width": 1920,
+        "position": 1.027792,
+        "ready": 4
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "kyren"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    }
+  ],
+  "after": [
+    {
+      "id": 21,
+      "decoded": true,
+      "media": {
+        "width": 1440,
+        "position": 1.024181,
+        "ready": 4
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "fallback",
+          "status": 200,
+          "provider": "kyren"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    },
+    {
+      "id": 7785,
+      "decoded": true,
+      "media": {
+        "width": 1920,
+        "position": 1.023534,
+        "ready": 4
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "kyren"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    },
+    {
+      "id": 113415,
+      "decoded": true,
+      "media": {
+        "width": 1920,
+        "position": 1.019645,
+        "ready": 4
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "animeparadise"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    },
+    {
+      "id": 172463,
+      "decoded": true,
+      "media": {
+        "width": 1920,
+        "position": 1.012409,
+        "ready": 4
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "status": 200,
+          "provider": "animeparadise"
+        }
+      ],
+      "pageErrors": [],
+      "alerts": [
+        ""
+      ]
+    }
+  ],
+  "loaderComparison": {
+    "provider": "animeparadise",
+    "expiresInMs": 274861,
+    "probes": [
+      {
+        "progressive": false,
+        "decoded": false,
+        "faults": [
+          {
+            "type": "networkError",
+            "detail": "manifestLoadError",
+            "fatal": true,
+            "status": 0
+          }
+        ],
+        "width": 0
+      },
+      {
+        "progressive": true,
+        "decoded": false,
+        "faults": [
+          {
+            "type": "networkError",
+            "detail": "manifestLoadError",
+            "fatal": true,
+            "status": 0
+          }
+        ],
+        "width": 0
+      }
+    ]
+  },
+  "manifest": {
+    "cors": null,
+    "status": 502,
+    "contentType": "text/html; charset=UTF-8",
+    "validPlaylist": false
+  },
+  "tests": {
+    "typecheck": "passed",
+    "lint": "passed",
+    "watchAndCoordinator": 44,
+    "optimizedBuild": "passed"
+  }
+}

@@ -94,9 +94,10 @@ export function createAnimeKitsuProvider(
   now = Date.now,
   resolveTitleVariants?: AnimeTitleVariantsResolver,
 ) {
-  return adapter('animekitsu', async (input, signal) => {
+  return Object.assign(adapter('animekitsu', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
+    if (input.audioLanguage.toLowerCase().split('-')[0] !== 'ja') throw new ProviderFailure('empty')
     let title: string
     try {
       title = (await resolveTitle(ref.id, signal)).trim()
@@ -214,5 +215,5 @@ export function createAnimeKitsuProvider(
       subtitles: [],
     }
     return [source]
-  })
+  }), { audioLanguages: ['ja'] as const })
 }

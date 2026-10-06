@@ -20,7 +20,7 @@ describe('EmbedPlayer', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Dune: Part Two player')).toBeInTheDocument())
     expect(container.querySelector('iframe, embed, object')).not.toBeInTheDocument()
-    expect(screen.getByText('Playing from Consumit · 1080p')).toBeInTheDocument()
+    expect(screen.getAllByText('Playing from Consumit · 1080p').length).toBeGreaterThan(0)
   })
 
   it('renders nothing without configured sources', () => {

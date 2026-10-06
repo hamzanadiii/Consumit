@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod'
-import type { PlaybackRef } from '@consumit/contracts'
+import type { PlaybackRef, ProviderRole, ProviderDeliveryMode } from '@consumit/contracts'
 
 export class AdminApiError extends Error {
   readonly code: string
@@ -21,7 +21,8 @@ async function request<T>(path: string, options: RequestInit, schema?: ZodType<T
       credentials: 'same-origin',
       headers: { accept: 'application/json', ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers as Record<string, string> },
     })
-  } catch {
+  } catch (cause) {
+    if (options.signal?.aborted) throw cause
     throw new AdminApiError('Network error. Check your connection.', { code: 'NETWORK', status: 0 })
   }
   const body = await response.json().catch(() => ({}))
@@ -38,6 +39,10 @@ async function request<T>(path: string, options: RequestInit, schema?: ZodType<T
 
 export type AdminProvider = {
   id: string
+  role?: ProviderRole
+  deliveryMode?: ProviderDeliveryMode
+  proxyApproved?: boolean
+  audioCapabilities?: { separateAudio: 'unverified'; languages: string[]; health: 'untested' }
   removed?: boolean
   configuredRegions?: string[]
   enabled: boolean
@@ -56,8 +61,8 @@ export type ProviderReadinessSummary = {
   enabledRows: number
 }
 
-export async function listProviders(): Promise<{ providers: AdminProvider[]; readiness: ProviderReadinessSummary }> {
-  return request('/v1/admin/providers', { method: 'GET' })
+export async function listProviders(signal?: AbortSignal): Promise<{ providers: AdminProvider[]; readiness: ProviderReadinessSummary }> {
+  return request('/v1/admin/providers', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 
 export type ProviderKind = 'movie' | 'series' | 'anime'
@@ -88,18 +93,18 @@ export type ProviderHealthRow = {
   circuit: { failures: number; playbackFailures: number; openUntil: number; outcomes: number; success: number; latencyMs: number } | null
 }
 
-export async function listProviderHealth(): Promise<Record<'movie' | 'series' | 'anime', ProviderHealthRow[]>> {
-  return request('/v1/admin/providers/health', { method: 'GET' })
+export async function listProviderHealth(signal?: AbortSignal): Promise<Record<'movie' | 'series' | 'anime', ProviderHealthRow[]>> {
+  return request('/v1/admin/providers/health', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 
 export type ProviderMetrics = { starts: number; playbackFailures: number; buffers: number; directSelections: number; resolveSuccess: number; resolveFailures: number; startupP50Ms?: number; startupP95Ms?: number; startupP99Ms?: number; stallP50Ms?: number; stallP95Ms?: number; stallP99Ms?: number }
-export async function listProviderMetrics(): Promise<{ available: boolean; windowMinutes: number; metrics: Record<string, ProviderMetrics> }> {
-  return request('/v1/admin/providers/metrics', { method: 'GET' })
+export async function listProviderMetrics(signal?: AbortSignal): Promise<{ available: boolean; windowMinutes: number; metrics: Record<string, ProviderMetrics> }> {
+  return request('/v1/admin/providers/metrics', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 
 export type ProviderAlert = { name: string; severity: string; state: string; provider?: string; kind?: string; region?: string; since: string }
-export async function listProviderAlerts(): Promise<{ available: boolean; alerts: ProviderAlert[] }> {
-  return request('/v1/admin/providers/alerts', { method: 'GET' })
+export async function listProviderAlerts(signal?: AbortSignal): Promise<{ available: boolean; alerts: ProviderAlert[] }> {
+  return request('/v1/admin/providers/alerts', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 
 export type SubtitleProviderDiagnostic = { id: string; name: string; configured: boolean; requirement: string | null; last: { state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; failure?: string } | null }
@@ -125,8 +130,10 @@ export async function testProvider(providerId: string, ref: PlaybackRef, audioLa
 // --- Provider config overrides ---
 
 export type ProviderOverridePatch = {
+  deliveryMode?: ProviderDeliveryMode
   removed?: boolean
   enabled?: boolean
+  role?: ProviderRole
   priority?: number
   order?: Partial<Record<ProviderKind, number>>
   regions?: string[]
@@ -139,8 +146,8 @@ export async function getProviderConfig(): Promise<{ overrides: Record<string, P
 }
 
 export type ProviderChange = { providerId: string; actorId: string; before: ProviderOverridePatch | null; after: ProviderOverridePatch | null; createdAt: string }
-export async function listProviderChanges(): Promise<{ changes: ProviderChange[] }> {
-  return request('/v1/admin/providers/changes', { method: 'GET' })
+export async function listProviderChanges(signal?: AbortSignal): Promise<{ changes: ProviderChange[] }> {
+  return request('/v1/admin/providers/changes', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 
 export async function updateProviderConfig(providerId: string, patch: ProviderOverridePatch): Promise<{ id: string }> {
@@ -186,6 +193,21 @@ export async function restoreProvider(providerId: string): Promise<void> {
   await request(`/v1/admin/providers/${encodeURIComponent(providerId)}/restore`, { method: 'POST' })
 }
 
-export async function checkHealth(): Promise<HealthResult> {
-  return request('/v1/admin/health', { method: 'GET' })
+export async function checkHealth(signal?: AbortSignal): Promise<HealthResult> {
+  return request('/v1/admin/health', { method: 'GET', ...(signal ? { signal } : {}) })
+}
+
+export type ScoutCandidate = { id: string; mediaKinds: ProviderKind[]; regions: string[]; mediaHosts: string[]; upstreamGroup: string; configured: boolean; separateAudio: boolean }
+export type ProviderInspection = { providerId: string; ok: boolean; code: string; elapsedMs: number; region: string; rejectedSources: number;
+  delivery?: 'direct' | 'relay' | 'embed';
+  sources: { key: string; type: string; language: string; host: string; qualityHint?: string; subtitleCount: number }[];
+  preview?: { src: string; type: 'hls' | 'dash' | 'native' | 'iframe'; qualityHint?: string; expiresAt: string; delivery?: 'direct' | 'relay' | 'embed' } }
+export async function listScoutCandidates(signal?: AbortSignal): Promise<{ candidates: ScoutCandidate[] }> {
+  return request('/v1/admin/providers/scout', { method: 'GET', ...(signal ? { signal } : {}) })
+}
+export async function inspectProvider(providerId: string, ref: PlaybackRef, audioLanguage: string, scope: 'configured' | 'scout', signal: AbortSignal): Promise<ProviderInspection> {
+  return request('/v1/admin/providers/inspect', { method: 'POST', body: JSON.stringify({ providerId, ref, audioLanguage, scope }), signal })
+}
+export async function getScoutRecipe(id: string): Promise<{ recipe: Record<string, unknown> }> {
+  return request(`/v1/admin/providers/scout/${encodeURIComponent(id)}/recipe`, { method: 'GET', signal: AbortSignal.timeout(10000) })
 }

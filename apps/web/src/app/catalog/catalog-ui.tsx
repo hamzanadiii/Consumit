@@ -75,7 +75,7 @@ export function CatalogFailure({ detail }: { detail?: string | undefined }) {
           <RotateCcw aria-hidden="true" /> Retry catalog
         </a>
       )}
-      description="Real title metadata is temporarily unavailable. Consumit will never replace it with made-up catalog data."
+      description="We couldn’t load this page’s titles. Please try again."
       detail={detail}
       title="The catalog missed its cue"
     />
@@ -93,8 +93,10 @@ export function CatalogUnavailableScreen({
     : null
   const detail = catalogError?.code === 'CATALOG_NOT_CONFIGURED'
     ? 'The catalog connection is not configured yet. Add the server-only TMDB API Read Access Token, then restart the API.'
+    : catalogError?.code === 'RATE_LIMITED'
+      ? 'Too many catalog requests arrived at once. Wait a moment, then retry.'
     : catalogError?.retryable === true
-      ? 'The catalog service did not answer in time. Try again in a moment.'
+      ? 'The catalog is temporarily unavailable. Try again in a moment.'
       : undefined
 
   return (

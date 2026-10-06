@@ -20,7 +20,7 @@ export function publicAddress(address: string) {
 }
 
 export type MediaResponse = { status: number; headers: Headers; body: Readable; url: string }
-export type MediaRequest = { method?: 'POST'; body?: string }
+export type MediaRequest = { method?: 'POST'; body?: string | Uint8Array }
 export type MediaTransport = (url: string, hosts: readonly string[], headers: Record<string, string>, signal: AbortSignal, init?: MediaRequest) => Promise<MediaResponse>
 
 /** Bounded DNS reuse avoids multiplying uncancellable OS lookups across
@@ -47,7 +47,7 @@ export function createMediaTransport(): MediaTransport {
     let current = value
     let forwarded = { ...headers }
     let method = init?.method ?? 'GET'
-    let body: string | undefined = init?.body
+    let body: string | Uint8Array | undefined = init?.body
     for (let redirect = 0; redirect <= 3; redirect++) {
       if (!allowedMediaUrl(current, hosts)) throw new Error('Blocked media destination.')
       signal.throwIfAborted()

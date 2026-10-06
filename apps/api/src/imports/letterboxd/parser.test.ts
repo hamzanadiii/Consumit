@@ -17,6 +17,15 @@ describe('Letterboxd import parser', () => {
     expect(isSafeZipPath('C:\\secrets.csv')).toBe(false)
   })
 
+  it('ignores prototype-shaped CSV headers without contaminating normalized member records', async () => {
+    const csv = '__proto__,constructor,Title,Year,tmdbID\nattacker,attacker,Past Lives,2023,666277\n'
+    const result = await parseLetterboxdUpload('watched.csv', Buffer.from(csv))
+    expect(result.rows).toMatchObject([{ kind: 'watched', title: 'Past Lives', tmdbId: 666277 }])
+    expect(Object.getPrototypeOf(result.rows[0])).toBe(Object.prototype)
+    expect(Object.hasOwn(result.rows[0]!, '__proto__')).toBe(false)
+    expect(Object.hasOwn(result.rows[0]!, 'constructor')).toBe(false)
+  })
+
   it('streams an official-style ZIP without extracting files', async () => {
     const archive = Buffer.from('UEsDBBQAAAAIALueJ13PiyIaLwAAAC0AAAALAAAAd2F0Y2hlZC5jc3Z7v3t/SGZJTqpOZGpikU5JbkqSpwtXQGJxiYJPZllqsY6RgZGxjpmZmZG5OS8XAFBLAQIUABQAAAAIALueJ13PiyIaLwAAAC0AAAALAAAAAAAAAAAAAAAAAAAAAAB3YXRjaGVkLmNzdlBLBQYAAAAAAQABADkAAABYAAAAAAA=', 'base64')
     const result = await parseLetterboxdUpload('letterboxd.zip', archive)

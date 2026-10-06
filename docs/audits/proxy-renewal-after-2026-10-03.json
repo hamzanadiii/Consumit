@@ -1,0 +1,17 @@
+[
+  {
+    "provider": "rivezephyr",
+    "delivery": "relay",
+    "expirySeconds": 1800
+  },
+  {
+    "provider": "stormboron",
+    "delivery": "relay",
+    "expirySeconds": 1800
+  },
+  {
+    "provider": "wecollege-miami",
+    "delivery": "relay",
+    "expirySeconds": 1800
+  }
+]

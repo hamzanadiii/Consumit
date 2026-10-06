@@ -15,15 +15,15 @@ describe('durable provider controls', () => {
     const first = createPostgresProviderConfigStore(db.prisma)
     const second = createPostgresProviderConfigStore(db.prisma)
     const revision = await first.getRevision!()
-    await first.setOverride(id, { enabled: false, concurrency: 2 }, 'operator-one')
-    expect(await second.getOverride(id)).toMatchObject({ enabled: false, concurrency: 2 })
+    await first.setOverride(id, { enabled: false, concurrency: 2, role: 'audio', deliveryMode: 'relay' }, 'operator-one')
+    expect(await second.getOverride(id)).toMatchObject({ enabled: false, concurrency: 2, role: 'audio', deliveryMode: 'relay' })
     expect(await second.getRevision!()).toBeGreaterThan(revision)
-    await second.setOverride(id, { concurrency: 1 }, 'operator-two')
-    expect(await first.getOverride(id)).toMatchObject({ enabled: false, concurrency: 1 })
+    await second.setOverride(id, { concurrency: 1, role: 'both', deliveryMode: 'direct' }, 'operator-two')
+    expect(await first.getOverride(id)).toMatchObject({ enabled: false, concurrency: 1, role: 'both', deliveryMode: 'direct' })
     const changes = await first.listChanges!(100)
     expect(changes.filter((entry) => entry.providerId === id)).toMatchObject([
-      { actorId: 'operator-two', before: { enabled: false, concurrency: 2 }, after: { enabled: false, concurrency: 1 } },
-      { actorId: 'operator-one', before: null, after: { enabled: false, concurrency: 2 } },
+      { actorId: 'operator-two', before: { enabled: false, concurrency: 2, role: 'audio', deliveryMode: 'relay' }, after: { enabled: false, concurrency: 1, role: 'both', deliveryMode: 'direct' } },
+      { actorId: 'operator-one', before: null, after: { enabled: false, concurrency: 2, role: 'audio', deliveryMode: 'relay' } },
     ])
     await first.removeOverride(id, 'operator-one')
     expect(await second.getOverride(id)).toBeUndefined()

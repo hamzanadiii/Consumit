@@ -1,0 +1,112 @@
+[
+  {
+    "provider": "wecollege-miami",
+    "ok": true,
+    "sources": [
+      {
+        "host": "moon.zenoak.top",
+        "quality": "2160p",
+        "masterHeights": null
+      },
+      {
+        "host": "moon.zenoak.top",
+        "quality": "1080p",
+        "masterHeights": null
+      },
+      {
+        "host": "moon.zenoak.top",
+        "quality": "720p",
+        "masterHeights": null
+      },
+      {
+        "host": "moon.zenoak.top",
+        "quality": "480p",
+        "masterHeights": null
+      }
+    ]
+  },
+  {
+    "provider": "rivenebula",
+    "ok": true,
+    "sources": [
+      {
+        "host": "nebula.bright67.online",
+        "quality": "HLS",
+        "masterHeights": null,
+        "headerNames": [
+          "referer",
+          "origin",
+          "user-agent"
+        ],
+        "edgeStatus": 502,
+        "edgeBytes": 18
+      }
+    ]
+  },
+  {
+    "provider": "zeta",
+    "ok": true,
+    "sources": [
+      {
+        "host": "remoteconsultinggroup.site",
+        "quality": "Auto",
+        "masterHeights": null,
+        "headerNames": [
+          "origin",
+          "referer",
+          "user-agent"
+        ],
+        "edgeStatus": 403,
+        "edgeBytes": 18,
+        "counterfactualStatus": 403,
+        "counterfactualBytes": 18
+      },
+      {
+        "host": "remoteconsultinggroup.site",
+        "quality": "Auto",
+        "masterHeights": null,
+        "headerNames": [
+          "origin",
+          "referer",
+          "user-agent"
+        ],
+        "edgeStatus": 403,
+        "edgeBytes": 18,
+        "counterfactualStatus": 403,
+        "counterfactualBytes": 18
+      },
+      {
+        "host": "remoteconsultinggroup.site",
+        "quality": "Auto",
+        "masterHeights": null,
+        "headerNames": [
+          "origin",
+          "referer",
+          "user-agent"
+        ],
+        "edgeStatus": 403,
+        "edgeBytes": 18,
+        "counterfactualStatus": 403,
+        "counterfactualBytes": 18
+      }
+    ]
+  },
+  {
+    "provider": "bingebangymovies",
+    "ok": true,
+    "sources": [
+      {
+        "host": "os.bingebangstream.online",
+        "quality": "2160p",
+        "masterHeights": null,
+        "headerNames": [
+          "referer"
+        ],
+        "edgeStatus": 403,
+        "edgeBytes": 18,
+        "counterfactualStatus": 403,
+        "counterfactualBytes": 18
+      }
+    ]
+  }
+]

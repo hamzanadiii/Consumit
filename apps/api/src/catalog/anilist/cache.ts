@@ -23,6 +23,7 @@ const DEFAULT_TTLS: Record<string, CacheTTL> = {
   relations: { freshMs: 24 * 60 * 60_000, staleMs: 7 * 24 * 60 * 60_000 },
   airing: { freshMs: 5 * 60_000, staleMs: 60 * 60_000 },
   seasonal: { freshMs: 15 * 60_000, staleMs: 4 * 60 * 60_000 },
+  browse: { freshMs: 15 * 60_000, staleMs: 4 * 60 * 60_000 },
 }
 
 export const cacheTTLs = DEFAULT_TTLS

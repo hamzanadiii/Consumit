@@ -17,7 +17,7 @@ const watched: ListCollectionItem = {
   curator: 'You',
   username: 'cinema_fan',
   slug: 'cozy-cinema',
-  visibility: 'public',
+  visibility: 'private',
   savedByViewer: false,
   isOwner: true,
 }
@@ -62,14 +62,14 @@ describe('profile lists collection', () => {
     expect(screen.getByRole('link', { name: 'Guilty pleasures, 1 title' })).toBeInTheDocument()
   })
 
-  it('combines name search and privacy without hiding the creation action', async () => {
+  it('searches private lists without public or shared controls', async () => {
     const user = userEvent.setup()
     render(<ListsCollection lists={[watched, secret]} />)
     await user.type(screen.getByRole('searchbox', { name: 'Search your lists' }), 'guilty')
     expect(screen.getByRole('link', { name: 'Guilty pleasures, 1 title' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Cozy cinema, 12 titles' })).not.toBeInTheDocument()
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter your lists by visibility' }), 'public')
-    expect(screen.getByText('No lists match these filters. Try another search or visibility.')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Filter your lists by visibility' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Saved lists' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create list' })).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: 'Search your lists' }))
     expect(screen.getByRole('link', { name: 'Cozy cinema, 12 titles' })).toBeInTheDocument()

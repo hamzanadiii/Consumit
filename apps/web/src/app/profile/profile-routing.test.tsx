@@ -15,16 +15,15 @@ vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Erro
 vi.mock('@/lib/identity-server', () => ({ getServerSession: mocks.session }))
 vi.mock('@/lib/member-server', () => ({ getPublicProfile: mocks.profile, getMemberLibrarySnapshot: mocks.library, getPublicProfileArchivePage: mocks.archive, getMemberList: mocks.list, getMemberRatingsForTitles: mocks.ratings, MemberApiError: class extends Error {} }))
 vi.mock('@/lib/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
-const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'public' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
+const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
 const ownList = { id: 'private-list', slug: 'private-list', name: 'My private collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }
-const savedList = { ...ownList, id: 'saved-list', slug: 'saved-list', name: 'A saved collection', visibility: 'public' }
 
 describe('profile archive routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'hamza' } })
     mocks.profile.mockResolvedValue(profile)
-    mocks.library.mockResolvedValue({ lists: { items: [ownList], nextCursor: null }, savedLists: { items: [{ coverTitles: [], list: savedList, owner: { displayName: 'Alex', username: 'alex' } }], nextCursor: null } })
+    mocks.library.mockResolvedValue({ lists: { items: [ownList], nextCursor: null } })
     mocks.list.mockResolvedValue({ items: [] })
     mocks.archive.mockResolvedValue({ collection: 'lists', items: [], nextCursor: null })
     mocks.ratings.mockResolvedValue([])
@@ -32,20 +31,35 @@ describe('profile archive routing', () => {
   it.each([[ListsRedirect, '/profile/hamza/lists'], [WatchlistRedirect, '/profile/hamza/watchlist'], [LibraryRedirect, '/profile/hamza/history']] as const)('redirects legacy entry points into the member profile', async (page, destination) => {
     await expect(page()).rejects.toThrow(`redirect:${destination}`)
   })
-  it('keeps list creation and saved collections inside the owner Lists tab', async () => {
+  it.each(['watchlist', 'likes', 'films', 'history', 'lists', 'profile'])('keeps the requested %s destination through guest sign-in and opens only the signed-in member archive', async section => {
+    const props = { searchParams: Promise.resolve({ section }) }
+    mocks.session.mockResolvedValue({ status: 'anonymous' })
+    await expect(LibraryRedirect(props)).rejects.toThrow(`redirect:/sign-in?next=${encodeURIComponent(`/library?section=${section}`)}`)
+    expect(mocks.profile).not.toHaveBeenCalled()
+    expect(mocks.archive).not.toHaveBeenCalled()
+    mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'hamza' } })
+    await expect(LibraryRedirect(props)).rejects.toThrow(`redirect:/profile/hamza${section === 'profile' ? '' : `/${section}`}`)
+  })
+  it.each(['network', '//evil.example', ['history', 'likes']])('rejects invalid library sections without loading a member session', async section => {
+    await expect(LibraryRedirect({ searchParams: Promise.resolve({ section }) })).rejects.toThrow('not-found')
+    expect(mocks.session).not.toHaveBeenCalled()
+  })
+  it('keeps private list creation inside the owner Lists tab', async () => {
     render(await ProfileArchivePage({ params: Promise.resolve({ section: 'lists', username: 'hamza' }), searchParams: Promise.resolve({}) }))
     expect(screen.getByRole('heading', { level: 1, name: 'Lists' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create list' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'My private collection, 0 titles' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'A saved collection, 0 titles' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Saved lists' })).not.toBeInTheDocument()
   })
   it('does not read private collections when visiting another member’s Lists', async () => {
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'alex' } })
-    render(await ProfileArchivePage({ params: Promise.resolve({ section: 'lists', username: 'hamza' }), searchParams: Promise.resolve({}) }))
+    await expect(ProfileArchivePage({ params: Promise.resolve({ section: 'lists', username: 'hamza' }), searchParams: Promise.resolve({}) })).rejects.toThrow('not-found')
     expect(mocks.library).not.toHaveBeenCalled()
-    expect(mocks.archive).toHaveBeenCalledWith('hamza', 'lists')
-    expect(screen.queryByRole('button', { name: 'Create list' })).not.toBeInTheDocument()
-    expect(screen.queryByText('My private collection')).not.toBeInTheDocument()
+    expect(mocks.archive).not.toHaveBeenCalled()
+  })
+  it.each(['network', 'followers', 'following'])('rejects retired %s sections before loading member data', async (section) => {
+    await expect(ProfileArchivePage({ params: Promise.resolve({ section, username: 'hamza' }), searchParams: Promise.resolve({}) })).rejects.toThrow('not-found')
+    expect(mocks.profile).not.toHaveBeenCalled()
   })
   it('continues to hide another member’s Watchlist', async () => {
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'alex' } })
@@ -53,7 +67,7 @@ describe('profile archive routing', () => {
     expect(mocks.library).not.toHaveBeenCalled()
   })
 
-  it('combines Films decade and genre choices and recovers from no matches', async () => {
+  it('combines Watched decade and genre choices and recovers from no matches', async () => {
     const user = userEvent.setup()
     const titles = [{ ...movieSummary, year: 1973 }, { ...seriesSummary, genreNames: ['Drama'] }]
     render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'films', items: titles.map(({ id, kind }) => ({ id, kind, origin: 'native', sourceKey: null })), nextCursor: null }} owner section="films" titles={titles} />)
@@ -79,7 +93,7 @@ describe('profile archive routing', () => {
     expect(screen.getByRole('img', { name: 'Your current title rating: 9 out of 10' })).toBeInTheDocument()
   })
 
-  it('filters an owner Films range over loaded watches without showing card ratings', async () => {
+  it('filters an owner Watched range over loaded watches without showing card ratings', async () => {
     mocks.archive.mockResolvedValue({ collection: 'films', items: [movieSummary, seriesSummary].map(({ id, kind }) => ({ id, kind, origin: 'native', sourceKey: null })), nextCursor: null })
     mocks.catalog.mockResolvedValue({ items: [movieSummary, seriesSummary] })
     mocks.ratings.mockResolvedValue([{ id: movieSummary.id, kind: 'movie', value: 8 }, { id: seriesSummary.id, kind: 'series', value: 3 }])
@@ -98,11 +112,12 @@ describe('profile archive routing', () => {
     expect(mocks.archive).not.toHaveBeenCalled()
   })
 
-  it('does not fetch private ratings or show editing in a visitor Diary', async () => {
+  it('rejects a visitor Diary before loading private records', async () => {
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'alex' } })
     mocks.archive.mockResolvedValue({ collection: 'diary', items: [{ entryId: 'one', id: movieSummary.id, kind: 'movie', watchedOn: '2026-01-01', rewatch: false, tags: [], origin: 'native', sourceKey: null }], nextCursor: null })
     mocks.catalog.mockResolvedValue({ items: [movieSummary] })
-    render(await ProfileArchivePage({ params: Promise.resolve({ section: 'diary', username: 'hamza' }), searchParams: Promise.resolve({}) }))
+    await expect(ProfileArchivePage({ params: Promise.resolve({ section: 'diary', username: 'hamza' }), searchParams: Promise.resolve({}) })).rejects.toThrow('not-found')
+    expect(mocks.archive).not.toHaveBeenCalled()
     expect(mocks.ratings).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /Edit diary entry/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /your current rating/ })).not.toBeInTheDocument()

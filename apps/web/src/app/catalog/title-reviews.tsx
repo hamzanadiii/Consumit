@@ -37,9 +37,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
   const [recent, setRecent] = useState<TitleReviewsPage | null>(null)
   const [recentStatus, setRecentStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [showAllRecent, setShowAllRecent] = useState(false)
-  const [tab, setTab] = useState<'recent' | 'popular'>('recent')
-  const sort = tab === 'popular' ? 'popular' : 'recent'
-  const audience = 'all' as const
+  const sort = 'recent' as const
 
   useEffect(() => {
     if (!member) return
@@ -61,7 +59,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
 
   useEffect(() => {
     let cancelled = false
-    void listTitleReviews({ id, kind }, 1, sort, audience).then(
+    void listTitleReviews({ id, kind }, 1, sort).then(
       (page) => {
         if (cancelled) return
         setRecent(page)
@@ -75,7 +73,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
     return () => {
       cancelled = true
     }
-  }, [id, kind, sort, audience])
+  }, [id, kind, sort])
 
   async function reload() {
     setStatus('loading')
@@ -91,7 +89,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
   async function reloadRecent() {
     setRecentStatus('loading')
     try {
-      const page = await listTitleReviews({ id, kind }, 1, sort, audience)
+      const page = await listTitleReviews({ id, kind }, 1, sort)
       setRecent(page)
       setRecentStatus('ready')
     } catch {
@@ -175,28 +173,15 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         <div className="mt-8">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fs-muted)]">
-              {tab === 'popular' ? 'Popular reviews' : 'Recent reviews'}
+              Recent reviews
               <span aria-hidden="true" className="ml-2 font-normal normal-case tabular-nums">{recent?.totalResults}</span>
               <span className="sr-only">, {recent?.totalResults} in total</span>
             </p>
-            <span aria-hidden="true" className="text-xs text-[var(--fs-muted)]">·</span>
-            <div className="flex items-center gap-1" role="group" aria-label="Sort member reviews">
-              {(['recent', 'popular'] as const).map((option) => (
-                <button
-                  className={`inline-flex min-h-9 cursor-pointer items-center rounded-lg px-3 text-xs font-bold capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${tab === option ? 'bg-[var(--fs-accent-soft)] text-[var(--fs-accent)]' : 'text-[var(--fs-muted)] hover:text-[var(--fs-ink)]'}`}
-                  key={option}
-                  onClick={() => setTab(option)}
-                  type="button"
-                >
-                  {option === 'popular' ? 'Popular' : 'Recent'}
-                </button>
-              ))}
-            </div>
           </div>
           {recentItems.length > 0 ? (
             <>
               <div className="mt-5">
-                <ReviewRows key={tab} items={visibleRecent} />
+                <ReviewRows key={sort} items={visibleRecent} />
               </div>
               {(recent?.totalResults ?? 0) > RECENT_PREVIEW_COUNT ? (
                 <button
@@ -209,7 +194,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
                 </button>
               ) : null}
               {showAllRecent && (recent?.totalPages ?? 0) > 1 ? (
-                <p className="mt-1 text-xs text-[var(--fs-muted)] tabular-nums">Showing the 10 most {tab === 'popular' ? 'popular' : 'recent'} of {recent?.totalResults}.</p>
+                <p className="mt-1 text-xs text-[var(--fs-muted)] tabular-nums">Showing the 10 most recent of {recent?.totalResults}.</p>
               ) : null}
               {(recent?.totalPages ?? 0) > 1 ? (
                 <Link

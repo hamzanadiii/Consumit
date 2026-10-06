@@ -22,11 +22,12 @@ describe('member usernames', () => {
       displayName: 'Member',
       location: 'Rabat',
       username: 'second_name',
-      visibility: 'public',
+      visibility: 'private',
     })
     expect(updated.username).toBe('second_name')
     expect((await identity.getSession(currentSession.sessionToken))?.id).toBe(authenticated.member.id)
-    expect(await identity.getProfile('first_name')).toMatchObject({ canonicalUsername: 'second_name', profile: { username: 'second_name' } })
+    expect(await identity.getProfile('first_name', currentSession.sessionToken)).toMatchObject({ canonicalUsername: 'second_name', profile: { username: 'second_name' } })
+    await expect(identity.getProfile('first_name')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(await identity.usernameAvailability('first_name')).toEqual({ available: false, username: 'first_name' })
   })
 })

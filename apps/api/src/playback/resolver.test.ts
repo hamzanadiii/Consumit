@@ -9,6 +9,73 @@ const input = { ref: { kind: 'movie' as const, id: 1 }, capabilities: { hls: tru
 function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie', 'series'] } }
 afterEach(() => vi.useRealTimers())
 describe('bounded playback resolution', () => {
+  it('offers only validated qualities from the selected source group, including shared-cache reads', async () => {
+    const registration = provider('city')
+    registration.adapter = createStaticProvider('city', [{ ref: input.ref, sources: [
+      ...[480, 720, 1080, 2160].map(height => ({ ...source, key: `miami-${height}`, height, qualityGroup: 'miami' })),
+      { ...source, key: 'boise', height: 1440, qualityGroup: 'boise' },
+      { ...source, key: 'hostile', height: 4320, qualityGroup: 'miami', url: 'https://unapproved.example/a.m3u8' },
+    ] }])
+    const store = createMemoryPlaybackStore()
+    const resolve = () => createResolver([registration], { region: 'US', store }).resolve(input, new AbortController().signal)
+    expect((await resolve())?.qualitySources?.map(source => source.height).sort((a, b) => a! - b!)).toEqual([480, 720, 1080, 2160])
+    await Promise.resolve()
+    expect((await resolve())?.qualitySources?.map(source => source.height).sort((a, b) => a! - b!)).toEqual([480, 720, 1080, 2160])
+  })
+  it('excludes audio-only roles including prior cached video winners', async () => {
+    const audio = provider('audio')
+    const resolve = vi.spyOn(audio.adapter, 'resolve')
+    const video = { ...provider('video'), role: 'both' as const }
+    const resolver = createResolver([audio, video], { region: 'US' })
+    expect((await resolver.resolve(input, new AbortController().signal))?.registration.adapter.id).toBe('audio')
+    resolve.mockClear(); audio.role = 'audio'
+    expect((await resolver.resolve(input, new AbortController().signal))?.registration.adapter.id).toBe('video')
+    expect(resolve).not.toHaveBeenCalled()
+    expect(await resolver.resolve(input, new AbortController().signal, [], 'audio')).toBeNull()
+  })
+  it('selects the requested resolution before a higher fixed rendition', async () => {
+    const registration = provider('video')
+    registration.adapter = createStaticProvider('video', [{ ref: input.ref, sources: [{ ...source, key: '1080', height: 1080 }, { ...source, key: '720', height: 720 }] }])
+    const resolver = createResolver([registration], { region: 'US' })
+    expect((await resolver.resolve({ ...input, preferences: { qualityHeight: 720 } }, new AbortController().signal))?.source.height).toBe(720)
+    expect((await resolver.resolve({ ...input, preferences: { qualityHeight: 1080 } }, new AbortController().signal))?.source.height).toBe(1080)
+  })
+  it('prefers a matching language family over unspecified original audio', async () => {
+    const registration = provider('video')
+    registration.adapter = createStaticProvider('video', [{ ref: input.ref, sources: [{ ...source, key: 'original', language: 'original', height: 1080 }, { ...source, key: 'french', language: 'fra', height: 720 }] }])
+    const resolver = createResolver([registration], { region: 'US' })
+    expect((await resolver.resolve({ ...input, audioLanguage: 'fr-CA', preferences: { qualityHeight: 720 } }, new AbortController().signal))?.source.key).toBe('french')
+  })
+  it('skips a declared sub-only adapter without making upstream dub requests', async () => {
+    const sub = { ...provider('sub'), mediaKinds: ['anime'] as const }
+    sub.adapter = { ...sub.adapter, audioLanguages: ['ja'], resolve: vi.fn(async () => ({ ok: true as const, sources: [source] })) }
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 21, episode: 1 } }
+    expect(await createResolver([sub], { region: 'US' }).resolve(animeInput, new AbortController().signal)).toBeNull()
+    expect(sub.adapter.resolve).not.toHaveBeenCalled()
+    expect(await createResolver([sub], { region: 'US' }).resolve({ ...animeInput, audioLanguage: 'ja' }, new AbortController().signal)).not.toBeNull()
+  })
+  it('rejects an original-audio source in the shared dub access cache', async () => {
+    const store = createMemoryPlaybackStore()
+    const get = store.get
+    store.get = async key => key.startsWith('access:') ? JSON.stringify({ provider: 'dub', source }) : get(key)
+    const dub = { ...provider('dub'), mediaKinds: ['anime'] as const }
+    dub.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [{ ...source, language: 'en' }] }))
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 21, episode: 1 } }
+    const resolved = await createResolver([dub], { region: 'US', store }).resolve(animeInput, new AbortController().signal)
+    expect(resolved?.source.language).toBe('en')
+    expect(dub.adapter.resolve).toHaveBeenCalledOnce()
+  })
+  it('never substitutes original anime audio for a requested dub', async () => {
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 21, episode: 1 } }
+    const sub = { ...provider('sub'), mediaKinds: ['anime'] as const }
+    sub.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [source] }))
+    const dub = { ...provider('dub'), mediaKinds: ['anime'] as const }
+    dub.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [{ ...source, language: 'en' }] }))
+    const resolved = await createResolver([sub, dub], { region: 'US' }).resolve(animeInput, new AbortController().signal)
+    expect(resolved?.registration.adapter.id).toBe('dub')
+    expect(resolved?.source.language).toBe('en')
+    expect(await createResolver([sub], { region: 'US' }).resolve(animeInput, new AbortController().signal)).toBeNull()
+  })
   it('cools a provider after repeated playback failures even when resolution keeps succeeding', async () => {
     let now = Date.now()
     const direct = provider('direct')
@@ -91,7 +158,7 @@ describe('bounded playback resolution', () => {
       adapter: createStaticProvider('anime-only', [{ ref: { kind: 'anime', id: 793, episode: 1 }, sources: [source] }]),
       mediaKinds: ['anime'],
     }
-    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 793, episode: 1 } }
+    const animeInput = { ...input, ref: { kind: 'anime' as const, id: 793, episode: 1 }, audioLanguage: 'ja' }
     const resolved = await createResolver([movieOnly, animeOnly], { region: 'US' }).resolve(animeInput, new AbortController().signal)
     expect(resolved?.registration.adapter.id).toBe('anime-only')
     expect(movieOnly.adapter.resolve).not.toHaveBeenCalled()

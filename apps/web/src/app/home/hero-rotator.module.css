@@ -2,6 +2,7 @@
 @media (min-width: 1024px) {
   .frame {
     background: #121216;
+    height: 100%;
   }
 
   .shade {
@@ -16,7 +17,7 @@
 
   .copy {
     min-height: clamp(392px, 68svh, 588px);
-    max-width: min(660px, calc(100% - 104px));
+    max-width: min(720px, calc(100% - 104px));
     padding: clamp(32px, 3.5vw, 56px);
     gap: 14px;
   }
@@ -40,6 +41,7 @@
 
   .selector {
     border: 1px solid transparent;
+    border-radius: var(--consumit-radius-control, 5px);
     transition: background-color 160ms ease, border-color 160ms ease;
   }
 
@@ -52,23 +54,11 @@
     background: rgb(0 0 0 / 28%);
   }
 
-  .pause {
-    position: absolute;
-    right: 24px;
-    bottom: 22px;
-    gap: 8px;
-    min-height: 44px;
-    padding: 0 12px;
-    border: 1px solid rgb(255 255 255 / 28%);
-    border-radius: var(--consumit-radius-control, 5px);
-    background: rgb(0 0 0 / 52%);
-    color: #f4f0e8;
-    font-size: 12px;
-  }
+}
 
-  .pause:hover {
-    background: rgb(0 0 0 / 76%);
-    border-color: rgb(255 255 255 / 60%);
+@media (min-width: 1600px) {
+  .art {
+    object-position: center 35%;
   }
 }
 

@@ -15,7 +15,7 @@ import { connection } from 'next/server'
 import { cache } from 'react'
 import type { ZodType } from 'zod'
 
-import { publicCatalogFetchOptions } from './public-catalog-cache'
+import { publicCatalogFetchOptions, PUBLIC_CATALOG_REQUEST_TIMEOUT_MS } from './public-catalog-cache'
 
 export class CatalogApiError extends Error {
   readonly code: string
@@ -43,9 +43,9 @@ async function request<T>(path: string, schema: ZodType<T>, renderMode: RenderMo
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
-      ...(renderMode === 'cached-public' ? publicCatalogFetchOptions() : { cache: 'no-store' as const }),
+      ...publicCatalogFetchOptions(),
       headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(6_000),
+      signal: AbortSignal.timeout(PUBLIC_CATALOG_REQUEST_TIMEOUT_MS),
     })
   } catch (cause) {
     throw new CatalogApiError('The Consumit catalog service could not be reached.', {

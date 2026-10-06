@@ -1,0 +1,120 @@
+[
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1032863
+    },
+    "passed": true,
+    "quality": "Auto",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 1038,
+      "position": 94.018777,
+      "frames": 369
+    },
+    "failedMediaStatuses": []
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1032863
+    },
+    "passed": true,
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 1994,
+      "height": 1080,
+      "position": 94.024878,
+      "frames": 226
+    },
+    "failedMediaStatuses": []
+  },
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1101383
+    },
+    "passed": false,
+    "quality": "Auto",
+    "delivery": "relay",
+    "error": "browser-timeout"
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1101383
+    },
+    "passed": true,
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 2592,
+      "height": 1080,
+      "position": 94.039656,
+      "frames": 272
+    },
+    "failedMediaStatuses": []
+  },
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 550
+    },
+    "passed": true,
+    "quality": "Auto",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 800,
+      "position": 94.029764,
+      "frames": 338
+    },
+    "failedMediaStatuses": []
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 550
+    },
+    "passed": true,
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 1080,
+      "position": 94.025605,
+      "frames": 270
+    },
+    "failedMediaStatuses": []
+  },
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": false,
+    "quality": "Auto",
+    "delivery": "relay",
+    "error": "browser-timeout"
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": false,
+    "quality": "1080p",
+    "delivery": "relay",
+    "error": "browser-timeout"
+  }
+]

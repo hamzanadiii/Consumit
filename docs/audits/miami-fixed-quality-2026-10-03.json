@@ -1,0 +1,70 @@
+[
+  {
+    "requestedHeight": 1080,
+    "sameSession": true,
+    "provider": "wecollege-miami",
+    "delivery": "relay",
+    "quality": "1080p",
+    "qualities": [
+      2160,
+      1080,
+      720,
+      480
+    ],
+    "manifestStatus": 200,
+    "validManifest": true,
+    "segmentStatus": 200,
+    "segmentBytes": 4159171
+  },
+  {
+    "requestedHeight": 720,
+    "sameSession": true,
+    "provider": "wecollege-miami",
+    "delivery": "relay",
+    "quality": "720p",
+    "qualities": [
+      2160,
+      1080,
+      720,
+      480
+    ],
+    "manifestStatus": 200,
+    "validManifest": true,
+    "segmentStatus": 200,
+    "segmentBytes": 2101820
+  },
+  {
+    "requestedHeight": 480,
+    "sameSession": true,
+    "provider": "wecollege-miami",
+    "delivery": "relay",
+    "quality": "480p",
+    "qualities": [
+      2160,
+      1080,
+      720,
+      480
+    ],
+    "manifestStatus": 200,
+    "validManifest": true,
+    "segmentStatus": 200,
+    "segmentBytes": 990968
+  },
+  {
+    "requestedHeight": 2160,
+    "sameSession": true,
+    "provider": "wecollege-miami",
+    "delivery": "relay",
+    "quality": "2160p",
+    "qualities": [
+      2160,
+      1080,
+      720,
+      480
+    ],
+    "manifestStatus": 200,
+    "validManifest": true,
+    "segmentStatus": 200,
+    "segmentBytes": 10455809
+  }
+]

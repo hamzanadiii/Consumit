@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PlaybackEvents, PlaybackRef, PlaybackSession, DeliveryFailure } from '@consumit/contracts'
 
-import { ConsumitPlayer, type DirectMediaSource } from '@consumit/ui'
+import { ConsumitPlayer, readQualityPreference, type DirectMediaSource } from '@consumit/ui'
 import { createPlaybackCoordinator, watchSourceExpiry } from '@/lib/playback-coordinator'
 import { playbackCapabilities } from '@/lib/playback-browser'
 import { listEmbedProviders, recoverEmbedSession, resolveEmbedSession, switchEmbedSession } from '@/lib/embed-playback-browser'
@@ -76,9 +76,9 @@ function createEmbedCoordinator() {
       if (!token) throw new Error('Playback session expired.')
       return recoverEmbedSession(current, token, action, failure, signal)
     },
-    switch(current, providerId, signal) {
+    switch(current, providerId, signal, preferences) {
       if (!token) throw new Error('Playback session expired.')
-      return switchEmbedSession(current, token, providerId, signal)
+      return switchEmbedSession(current, token, providerId, signal, preferences)
     },
   })
   return {
@@ -123,7 +123,7 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
     requestRef.current = controller
     setBusy(true); setError(null)
     try {
-      const request = { ref: playbackRef, audioLanguage: audioLanguage ?? lang ?? 'en', capabilities: playbackCapabilities() }
+      const request = { ref: playbackRef, audioLanguage: audioLanguage ?? lang ?? 'en', capabilities: playbackCapabilities(), preferences: { qualityHeight: readQualityPreference() } }
       const next = await coordinator.resolve(request, controller.signal)
       if (controller.signal.aborted) return
       setResume({ position: clock.current.position, playing: clock.current.playing })
@@ -151,7 +151,7 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
     try {
       // Recovery re-runs the full waterfall (20s server deadline) + settle:
       // the browser abort must stay behind it.
-      const next = await coordinator.recover(session, reason, AbortSignal.any([controller.signal, AbortSignal.timeout(21_000)]), deliveryFailure)
+      const next = await coordinator.recover(session, reason, AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]), deliveryFailure)
       if (controller.signal.aborted) return
       if (next.ref.kind !== session.ref.kind || next.ref.id !== session.ref.id || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Playback returned a different title.')
       setResume(retained); setSession(next)
@@ -180,7 +180,7 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
       .then(setExtraSubtitles, () => { subtitlesLoaded.current = false })
   }, [playbackRef, lang])
   const staticSource = sources?.[0]
-  const source: DirectMediaSource | undefined = session?.source ?? (staticSource ? {
+  const source: DirectMediaSource | undefined = (session && session.source.type !== 'iframe' ? { ...session.source, type: session.source.type } : undefined) ?? (staticSource ? {
     src: staticSource.url,
     type: staticSource.type,
     subtitles: subtitles?.map((sub) => ({ id: sub.url, label: sub.label, language: sub.label.slice(0, 32), url: sub.url })),
@@ -197,6 +197,7 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
       onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)}
       onSubtitleRequest={loadSubtitles}
       onPlaybackEvent={(event) => eventsRef.current?.push(event)}
+      onMediaPreferencesChange={(preferences) => coordinator.setPreferences({ ...preferences, ...(audioLanguage ? { audioLanguage } : {}) })}
       onRetry={() => void start()}
       onDurationChange={(event) => { if (Number.isFinite(event.currentTarget.duration) && event.currentTarget.duration > 0) durationRef.current = event.currentTarget.duration }}
       onEnded={(event) => { clock.current.playing = false; emit('ended', event.currentTarget) }}

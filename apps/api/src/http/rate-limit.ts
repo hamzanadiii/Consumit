@@ -4,6 +4,20 @@ import { hashSessionToken } from '../identity/session.ts'
 
 const SESSION_COOKIES = ['__Host-consumit_session', 'consumit_session']
 
+/** Public metadata fans out during page rendering and has no member state.
+ * Give those reads their own bounded budget: every SSR render otherwise
+ * shares the web server's IP and can exhaust the member-request bucket. */
+export function isCatalogRead(request: FastifyRequest): boolean {
+  return request.method === 'GET' && (
+    request.url.startsWith('/v1/titles/') || request.url.startsWith('/v1/anime/')
+  )
+}
+
+export function apiRateLimitKey(request: FastifyRequest): string {
+  const key = rateLimitKey(request)
+  return isCatalogRead(request) ? `catalog:${key}` : key
+}
+
 /**
  * Rate-limit bucket for a request.
  *

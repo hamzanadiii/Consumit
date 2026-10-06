@@ -8,6 +8,7 @@ import {
   findCuesAt,
   formatSubtitleDelayMs,
   nativeLanguageName,
+  subtitleLabelDetail,
   parseVttCues,
 } from './subtitle-sync'
 
@@ -81,6 +82,13 @@ describe('computeSyncDelayMs', () => {
 })
 
 describe('nativeLanguageName', () => {
+  it('keeps release details while excluding bare multilingual provider labels', () => {
+    for (const label of ['Arabic', 'Albanian', 'اَلْعَرَبِيَّةُ', 'Українська', 'தமிழ்', 'Türkçe']) {
+      expect(subtitleLabelDetail(label)).toBeUndefined()
+    }
+    expect(subtitleLabelDetail('A New Hope')).toBe('A New Hope')
+    expect(subtitleLabelDetail('Movie.1080p.BluRay')).toBe('Movie.1080p.BluRay')
+  })
   it('renders native names PROVE-embed style', () => {
     expect(nativeLanguageName('ar', 'Arabic (yify)')).toBe('العربية')
     expect(nativeLanguageName('en', 'English (yify)')).toBe('English')
@@ -92,6 +100,7 @@ describe('nativeLanguageName', () => {
   it('falls back to the label without a usable code', () => {
     expect(nativeLanguageName(undefined, 'English (yify)')).toBe('English (yify)')
     expect(nativeLanguageName('', 'Off')).toBe('Off')
+    expect(nativeLanguageName('und', 'Uploaded')).toBe('Uploaded')
   })
 })
 

@@ -65,6 +65,7 @@ describe('episodes section', () => {
     const date = new Date('2023-05-01T00:00:00Z').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
     expect(screen.getByText(`50 min · ${date}`)).toBeInTheDocument()
     expect(screen.getAllByText('Title artwork')).toHaveLength(8)
+    expect(screen.getAllByRole('link', { name: 'Play episode' })).toHaveLength(8)
   })
 
   it('paginates long seasons eight at a time with a result count', async () => {

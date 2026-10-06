@@ -25,9 +25,9 @@ describe('global error translation', () => {
     const app = await buildApp()
     openApps.push(app)
 
-    let response = await app.inject({ method: 'GET', url: '/v1/titles/discover?kind=all' })
+    let response = await app.inject({ method: 'GET', url: '/v1/me/library' })
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      response = await app.inject({ method: 'GET', url: '/v1/titles/discover?kind=all' })
+      response = await app.inject({ method: 'GET', url: '/v1/me/library' })
     }
 
     expect(response.statusCode).toBe(429)

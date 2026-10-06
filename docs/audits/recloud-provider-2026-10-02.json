@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-02",
+  "provider": "recloud",
+  "reference": "PROVE/providers/anime/recloud.ts",
+  "mediaKinds": [
+    "anime"
+  ],
+  "knownAudioLanguages": [
+    "ja",
+    "en"
+  ],
+  "mediaHosts": [
+    "cdn.4animo.xyz"
+  ],
+  "localEnabled": true,
+  "exampleEnabled": false,
+  "checks": {
+    "selectedSdkTests": 137,
+    "apiPlaybackTests": 55,
+    "sdkTypecheck": "passed",
+    "focusedApiConfigurationTypecheck": "passed",
+    "changedFileLint": "passed",
+    "apiBuild": "passed"
+  },
+  "browser": {
+    "at": "2026-10-02T17:49:51.275Z",
+    "results": [
+      {
+        "id": 16498,
+        "audio": "sub",
+        "switched": true,
+        "decoded": true,
+        "ms": 8203,
+        "media": {
+          "width": 1920,
+          "position": 1.029346,
+          "host": ""
+        },
+        "actions": [
+          {
+            "action": "resolve",
+            "status": 200,
+            "provider": "animeparadise"
+          },
+          {
+            "action": "switch",
+            "status": 200,
+            "provider": "recloud"
+          }
+        ],
+        "pageErrors": []
+      },
+      {
+        "id": 16498,
+        "audio": "dub",
+        "switched": true,
+        "decoded": true,
+        "ms": 7089,
+        "media": {
+          "width": 1920,
+          "position": 1.032325,
+          "host": ""
+        },
+        "actions": [
+          {
+            "action": "resolve",
+            "status": 200,
+            "provider": "kyren"
+          },
+          {
+            "action": "switch",
+            "status": 200,
+            "provider": "recloud"
+          }
+        ],
+        "pageErrors": []
+      },
+      {
+        "id": 21,
+        "audio": "sub",
+        "switched": true,
+        "decoded": true,
+        "ms": 17247,
+        "media": {
+          "width": 1440,
+          "position": 1.043738,
+          "host": ""
+        },
+        "actions": [
+          {
+            "action": "resolve",
+            "status": 200,
+            "provider": "animeparadise"
+          },
+          {
+            "action": "switch",
+            "status": 200,
+            "provider": "recloud"
+          }
+        ],
+        "pageErrors": []
+      }
+    ]
+  },
+  "initialFailure": {
+    "anilistId": 21,
+    "episode": 1,
+    "audio": "sub",
+    "switchStatus": 503,
+    "protectedAdapterResult": "unavailable",
+    "laterRetry": "resolved both adapter lanes; SUB decoded in player"
+  },
+  "liveAudioRosters": {
+    "sub": [
+      "animeparadise",
+      "kyren",
+      "animekai",
+      "animekitsu",
+      "recloud"
+    ],
+    "dub": [
+      "kyren",
+      "animekai",
+      "recloud"
+    ]
+  },
+  "limits": [
+    "Startup checks, not full-episode or whole-catalog coverage.",
+    "Variant routing was verified; recordings were not independently listened to.",
+    "Browser timings include initial resolution and a provider switch."
+  ]
+}

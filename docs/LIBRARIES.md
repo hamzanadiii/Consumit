@@ -4,11 +4,11 @@
 
 - Bun 1.4.0 is the package manager, script runner, API runtime, and workspace orchestrator.
 - Node 24 LTS is the supported Node.js line for framework tooling and ecosystem compatibility.
-- Bun's native workspace filtering is sufficient for the current three workspaces. Add a build graph or remote cache only when measured build time or dependency ordering requires one.
+- Bun's native workspace filtering is sufficient for the current six workspaces. Add a build graph or remote cache only when measured build time or dependency ordering requires one.
 
 ## Web application
 
-- Next.js 16.3.4 with the App Router and React 19.2.8.
+- Next.js 16.3.6 with the App Router and React 19.2.8. The lockfile contains compatible security updates; Next's lint configuration stays on the same 16.3 line.
 - Tailwind CSS 4.3.3 for token-driven utility styling.
 - Lucide React 1.39.0 for consistent, typed, tree-shakable interface icons.
 - Self-hosted Charter and DejaVu Sans webfonts preserve the design typography without depending on client machines or a remote font service.
@@ -19,10 +19,12 @@
 - OpenTelemetry API/SDK and OTLP HTTP exporters provide opt-in playback traces and metrics. A separate disposable Valkey instance holds playback sessions, leases, and access caches.
 - Playwright with branded Chrome verifies controlled H.264/AAC decoding and touch layouts. k6 supplies a local admission/load scenario. Physical Safari remains a separate release gate; see [PLAYBACK.md](./PLAYBACK.md).
 
-- Fastify 5.12.1 on Bun.
-- `@fastify/cors`, `@fastify/helmet`, and `@fastify/rate-limit` establish the HTTP boundary baseline.
+- Fastify 5.12.5 on Bun.
+- `@fastify/cookie`, `@fastify/helmet`, `@fastify/multipart`, and `@fastify/rate-limit` establish the same-origin HTTP boundary baseline.
 - API modules expose an app factory so tests do not need to bind a network port.
 - Native `fetch` is the TMDB transport. No provider wrapper is used, keeping retry, timeout, validation, and normalization policy inside the catalog adapter.
+- Prisma with its PostgreSQL adapter and `pg` owns durable records through one bounded process pool. `iovalkey` provides separate authentication and disposable playback state. Authentication is application-owned; `hash-wasm` supplies password hashing and native HTTP supplies the email transport.
+- `csv-parse` 7.0.3 and `yauzl` support bounded Letterboxd import processing. The worker consumes durable Postgres jobs; a separate queue framework is not installed.
 
 ## Catalog contracts
 
@@ -42,6 +44,6 @@
 
 ## Deliberately deferred
 
-Do not add these until a named vertical slice needs them: database ORM, Postgres client, Valkey client, authentication, state manager, forms, queues, telemetry SDKs, Storybook, and monorepo task runners.
+Do not add these until a named vertical slice needs them: a client state manager, form framework, external queue framework, Storybook, or monorepo task runner. Database, authentication, Valkey, and telemetry dependencies above are already part of shipped slices.
 
 When shared dependency versions become repetitive across more workspaces, introduce Bun catalogs. When lint or TypeScript configuration needs reuse beyond the root baseline, create explicit config packages rather than duplicating configuration.

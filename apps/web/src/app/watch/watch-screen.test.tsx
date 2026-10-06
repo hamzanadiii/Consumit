@@ -6,6 +6,14 @@ import { movieDetail } from '@/test/catalog-fixtures'
 import { WatchScreen } from './watch-screen'
 
 describe('real catalog watch state', () => {
+  it('loads external posters on the app origin while retaining anonymous media CORS', () => {
+    render(<WatchScreen title={movieDetail} />)
+    const video = screen.getByLabelText('Dune: Part Two player')
+    const poster = new URL(video.getAttribute('poster')!, window.location.origin)
+    expect(poster.origin).toBe(window.location.origin)
+    expect(poster.searchParams.get('url')).toBe(movieDetail.backdropUrl)
+    expect(video).toHaveAttribute('crossorigin', 'anonymous')
+  })
   it('never supplies a playable source when no configured provider exists', () => {
     const { container } = render(<WatchScreen title={movieDetail} />)
     const player = screen.getByLabelText('Dune: Part Two player')

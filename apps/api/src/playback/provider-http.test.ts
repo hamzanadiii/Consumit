@@ -4,6 +4,28 @@ import { createProviderHttp } from './provider-http.ts'
 import type { MediaTransport } from './transport.ts'
 
 describe('bounded provider HTTP', () => {
+  it('exposes bounded media scopes only on explicitly configured discovery transports', async () => {
+    const transport=vi.fn<MediaTransport>(async url=>({status:200,url,headers:new Headers(),body:Readable.from(['media'])}))
+    expect(createProviderHttp(['provider.example'],transport).mediaScope).toBeUndefined()
+    const http=createProviderHttp(['provider.example'],transport,true),scope=http.mediaScope!(['rotating.example'])
+    await scope('https://rotating.example/part.ts',{},new AbortController().signal,{readPrefixBytes:8})
+    expect(transport.mock.calls[0]?.[1]).toEqual(['rotating.example'])
+    expect(()=>http.mediaScope!(Array(9).fill('rotating.example'))).toThrow()
+    expect(()=>http.mediaScope!(['*.example'])).toThrow()
+    expect(scope.mediaScope).toBeUndefined()
+  })
+  it('preserves binary control envelopes and caps request bytes for binary and Unicode bodies', async () => {
+    const bytes = Buffer.from([0, 255, 128, 1])
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from([bytes]) }))
+    const http = createProviderHttp(['provider.example'], transport)
+    const signal = new AbortController().signal
+    const response = await http('https://provider.example/g', {}, signal, { method: 'POST', body: bytes })
+    expect(response.bytes).toEqual(bytes)
+    expect(transport.mock.calls[0]?.[4]).toEqual({ method: 'POST', body: bytes })
+    await expect(http('https://provider.example/g', {}, signal, { method: 'POST', body: new Uint8Array(65_537) })).rejects.toThrow('limit')
+    await expect(http('https://provider.example/g', {}, signal, { method: 'POST', body: 'é'.repeat(32_769) })).rejects.toThrow('limit')
+    expect(transport).toHaveBeenCalledTimes(1)
+  })
   it('applies destination policy and bounds streamed documents without content-length', async () => {
     const body = Readable.from([Buffer.alloc(700000), Buffer.alloc(700000)])
     const transport = vi.fn<MediaTransport>(async (url) => ({ status: 200, url, headers: new Headers(), body }))

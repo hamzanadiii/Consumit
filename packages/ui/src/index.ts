@@ -87,6 +87,7 @@ export {
   WatchHeader,
   type WatchHeaderProps,
 } from './playback/playback'
+export { readQualityPreference, createQualityPreference, type MediaPreferences } from './playback/media-preferences'
 export {
   ConsumitPlayer,
   type ConsumitPlayerProps,

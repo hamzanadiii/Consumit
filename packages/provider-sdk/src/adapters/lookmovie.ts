@@ -62,6 +62,22 @@ async function requestJson<T>(http: ProviderHttp, url: string, signal: AbortSign
   return schema.parse(JSON.parse(response.text))
 }
 
+// lmscript stalls individual reads for minutes at a time (observed live:
+// hung TLS handshakes while other queries answer instantly). One stalled
+// read must not burn the whole 15s attempt budget, or a retryable query
+// never gets tried. Each catalog read gets its own bound; a timeout behaves
+// like any other retryable upstream failure.
+const READ_TIMEOUT_MS = 6000
+
+function boundedRead(parent: AbortSignal) {
+  const controller = new AbortController()
+  if (parent.aborted) controller.abort(parent.reason)
+  const onAbort = () => controller.abort(parent.reason)
+  parent.addEventListener('abort', onAbort, { once: true })
+  const timer = setTimeout(() => controller.abort(new DOMException('LookMovie read timed out', 'TimeoutError')), READ_TIMEOUT_MS)
+  return { signal: controller.signal, cleanup: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort) } }
+}
+
 export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieMetadataResolver, now = Date.now) {
   return adapter('lookmovie', async ({ ref }, signal) => {
     if (ref.kind !== 'movie') throw new ProviderFailure('empty')
@@ -69,14 +85,54 @@ export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieM
     const title = identity.title.trim()
     if (!title || !Number.isInteger(identity.year)) throw new ProviderFailure('empty')
 
-    const search = await requestJson(http,
-      `${apiOrigin}/v1/movies?filters[q]=${encodeURIComponent(title)}`, signal, searchSchema)
-    const match = matchingMovie(search.items ?? [], title, identity.year)
-    if (!match?.id_movie) throw new ProviderFailure('empty')
+    // PROVE progressive-shortening recipe: lmscript full-title search often
+    // returns empty (e.g. "Avengers Infinity War" -> 0 hits while "Avengers"
+    // has it), so fall back through progressively shorter word-prefix
+    // queries. The exact full title is always tried first; at most four
+    // catalog reads run before the match is declared a miss.
+    const words = normalizeTitle(title).split(' ').filter(Boolean)
+    const queries: string[] = [title]
+    for (let n = words.length - 1; n >= 1; n--) {
+      const shortened = words.slice(0, n).join(' ')
+      if (shortened.length > 2 && !queries.includes(shortened)) queries.push(shortened)
+    }
 
-    const view = await requestJson(http,
-      `${apiOrigin}/v1/movies/view?expand=streams,subtitles&id=${encodeURIComponent(String(match.id_movie))}`,
-      signal, viewSchema)
+    let match: ReturnType<typeof matchingMovie> | undefined
+    let lastError: unknown
+    for (const query of queries.slice(0, 4)) {
+      const read = boundedRead(signal)
+      let search: z.infer<typeof searchSchema>
+      try {
+        search = await requestJson(http,
+          `${apiOrigin}/v1/movies?filters[q]=${encodeURIComponent(query)}`, read.signal, searchSchema)
+      } catch (error) {
+        read.cleanup()
+        if (error instanceof ProviderFailure) { lastError = error; continue }
+        if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError') && !signal.aborted) {
+          lastError = new ProviderFailure('unavailable')
+          continue
+        }
+        throw error
+      }
+      read.cleanup()
+      const found = matchingMovie(search.items ?? [], title, identity.year)
+      if (found?.id_movie) { match = found; break }
+    }
+    if (!match?.id_movie) {
+      // A down catalog stays retryable; a genuine miss answers empty.
+      if (lastError instanceof ProviderFailure && lastError.code !== 'empty') throw lastError
+      throw new ProviderFailure('empty')
+    }
+
+    const viewRead = boundedRead(signal)
+    let view: z.infer<typeof viewSchema>
+    try {
+      view = await requestJson(http,
+        `${apiOrigin}/v1/movies/view?expand=streams,subtitles&id=${encodeURIComponent(String(match.id_movie))}`,
+        viewRead.signal, viewSchema)
+    } finally {
+      viewRead.cleanup()
+    }
 
     const subtitles: ProviderSource['subtitles'] = []
     const seenSubtitles = new Set<string>()
@@ -116,6 +172,7 @@ export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieM
         url: url.href,
         type: mediaType(url.href) ?? 'hls',
         qualityHint: height ? `${height}p` : 'Auto',
+        qualityGroup: 'lookmovie',
         expiresAt,
         language: 'original',
         headers: {},

@@ -6,6 +6,7 @@ import Link from 'next/link'
 
 import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
 import { WatchPlayback } from './watch-playback'
+import { watchPoster } from './watch-poster'
 
 /** Minimal title surface the Watch screens need. Movie/series catalog
  *  details and anime details both satisfy it; anime titles map their
@@ -75,7 +76,7 @@ export function WatchScreen({ audioLanguage, demo, episode, title, interactive =
   const meta = episode
     ? [episode.seasonNumber != null ? `Season ${episode.seasonNumber}` : null, `Episode ${episode.episodeNumber}`, episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null].filter(Boolean).join(' · ')
     : [title.year, title.kind === 'movie' && title.runtimeMinutes ? `${title.runtimeMinutes} min` : 'Movie'].filter(Boolean).join(' · ')
-  const poster = episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined
+  const poster = watchPoster(episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl)
   const hasDemo = demo != null
   const demoMeta = demo?.topMeta ?? (demo ? `Playing from Consumit · ${demo.qualityLabel ?? demo.source.qualityHint ?? 'HD'}` : undefined)
 

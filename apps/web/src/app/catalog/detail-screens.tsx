@@ -1,9 +1,8 @@
 'use client'
 
-import { watchHref, type CatalogMovieDetail, type CatalogPerson, type CatalogSeason, type CatalogSeriesDetail, type CatalogTitleDetail, type CatalogTitleSummary } from '@consumit/contracts'
-import { Play, Star } from 'lucide-react'
+import { type CatalogMovieDetail, type CatalogPerson, type CatalogSeason, type CatalogSeriesDetail, type CatalogTitleDetail, type CatalogTitleSummary } from '@consumit/contracts'
+import { Star } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useRef, useState } from 'react'
 
 import { CastCard, SectionHeading, Tabs } from '@consumit/ui'
@@ -12,7 +11,9 @@ import { browserCatalogSeason } from '@/lib/catalog-browser'
 import { makerByline } from './catalog-ui'
 import { EpisodesSection } from './episodes-section'
 import { MemberActionPanel } from './member-action-panel'
+import { AdPlaceholder } from '../shared/ad-placeholder'
 import { TitleReviews } from './title-reviews'
+import { TitlePlayAction } from './title-play-action'
 import { FilScreenShell, TitleRail } from '../shared'
 
 function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
@@ -73,7 +74,7 @@ function DetailFacts({ detail }: { detail: CatalogTitleDetail }) {
     ['Released', detail.releaseDate ?? 'Not listed'],
   ]
   return (
-    <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-[var(--fs-line)] pt-7 text-xs sm:grid-cols-2 xl:grid-cols-3">
+    <dl className="mt-9 grid gap-x-8 gap-y-6 border-t border-[var(--fs-line)] pt-7 text-xs sm:grid-cols-2 2xl:grid-cols-3">
       {facts.map(([term, value]) => (
         <div className="grid grid-cols-[7rem_1fr] gap-3" key={term}>
           <dt className="text-[var(--fs-muted)]">{term}</dt>
@@ -171,13 +172,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
           ) : null}
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <Link
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-orange px-6 text-sm font-bold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-              href={watchHref(detail)}
-            >
-              <Play aria-hidden="true" className="size-4" />
-              Play
-            </Link>
+            <TitlePlayAction id={detail.id} kind={detail.kind} {...(detail.kind === 'series' ? { seasons: detail.seasons } : {})} />
           </div>
         </div>
 
@@ -201,6 +196,7 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
     <FilScreenShell activeKindTab="movies" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
+        <div className="mt-8 px-1 sm:px-3 lg:px-4"><AdPlaceholder placement="detail" position="early" /></div>
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
           <Tabs
             activeValue="overview"
@@ -212,12 +208,13 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               { href: '#related', label: 'Related', value: 'related' },
             ]}
           />
-          <section className="py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="movie-about-heading">
-            <div className="max-w-5xl">
+          <section className="grid gap-8 py-10 sm:py-12 lg:py-14 xl:grid-cols-[minmax(0,1fr)_300px]" id="overview" aria-labelledby="movie-about-heading">
+            <div className="min-w-0 max-w-5xl">
               <SectionHeading id="movie-about-heading" title="About the film" />
               <p className="mt-5 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
               <DetailFacts detail={detail} />
             </div>
+            <div className="hidden xl:block"><AdPlaceholder placement="detail" shape="rectangle" /></div>
           </section>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="movie-cast-heading">
             <SectionHeading id="movie-cast-heading" title="Cast & crew" />
@@ -233,6 +230,7 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               year={detail.year}
             />
           </section>
+          <div className="my-8 xl:hidden"><AdPlaceholder placement="detail" /></div>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="movie-related-heading">
             <RelatedRail current={detail} items={detail.recommendations} />
           </section>
@@ -271,6 +269,7 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
     <FilScreenShell activeKindTab="series" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
+        <div className="mt-8 px-1 sm:px-3 lg:px-4"><AdPlaceholder placement="detail" position="early" /></div>
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
           <Tabs
             activeValue="episodes"
@@ -295,10 +294,13 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               seasons={detail.seasons}
             />
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="series-about-heading">
-            <SectionHeading id="series-about-heading" title={`About ${detail.title}`} />
-            <p className="mt-5 max-w-[72ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
-            <DetailFacts detail={detail} />
+          <section className="grid gap-8 border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14 xl:grid-cols-[minmax(0,1fr)_300px]" id="overview" aria-labelledby="series-about-heading">
+            <div className="min-w-0">
+              <SectionHeading id="series-about-heading" title={`About ${detail.title}`} />
+              <p className="mt-5 max-w-[72ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
+              <DetailFacts detail={detail} />
+            </div>
+            <div className="hidden xl:block"><AdPlaceholder placement="detail" shape="rectangle" /></div>
           </section>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="series-cast-heading">
             <SectionHeading id="series-cast-heading" title="Cast & crew" />
@@ -314,6 +316,7 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               year={detail.year}
             />
           </section>
+          <div className="my-8 xl:hidden"><AdPlaceholder placement="detail" /></div>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="series-related-heading">
             <RelatedRail current={detail} items={detail.recommendations} />
           </section>

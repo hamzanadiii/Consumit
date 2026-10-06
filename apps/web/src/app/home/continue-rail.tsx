@@ -3,7 +3,7 @@
 import { titleHref, watchHref, progressWriteRequestSchema, type CatalogTitleSummary } from '@consumit/contracts'
 import { Check, Info, Pencil, RotateCcw, X } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { ArtworkFrame } from '@consumit/ui'
 
@@ -11,6 +11,7 @@ import { browserCatalogBatch } from '@/lib/catalog-browser'
 import { catalogKey } from '@/lib/catalog-registry'
 
 import { SaveTitleButton } from '../catalog/save-title-button'
+import styles from './continue-rail.module.css'
 
 type ResumeEntry = {
   durationSeconds: number | null | undefined
@@ -99,60 +100,6 @@ export function ContinueRail() {
   const [status, setStatus] = useState<'loading' | 'empty' | 'ready' | 'error'>('loading')
   const [rows, setRows] = useState<readonly { entry: ResumeEntry; title: CatalogTitleSummary }[]>([])
   const [editing, setEditing] = useState(false)
-  const railRef = useRef<HTMLUListElement>(null)
-  const hoveredRef = useRef<string | null>(null)
-  const scheduleRef = useRef<(() => void) | null>(null)
-
-  // Scroll-linked coverflow: the card nearest the rail's center swells to
-  // full size and brightness through `--cv`, and a hovered or
-  // keyboard-focused card pops a touch further. One rAF-throttled pass per
-  // scroll frame drives everything from the same clock, so scale, brightness,
-  // and the slide position can never drift apart. Transform and filter only,
-  // positions read via rects.
-  useEffect(() => {
-    if (status !== 'ready') return
-    const rail = railRef.current
-    if (!rail) return
-    let frame = 0
-    const reduceMotion = typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const update = () => {
-      frame = 0
-      const railRect = rail.getBoundingClientRect()
-      const center = railRect.left + railRect.width / 2
-      const spread = Math.max(1, railRect.width * 0.6)
-      const hoveredKey = hoveredRef.current
-      rail.querySelectorAll('[data-cover-item]').forEach((node) => {
-        const item = node as HTMLElement
-        if (reduceMotion) {
-          item.style.setProperty('--cv', '1')
-          item.style.setProperty('--ch', '0')
-          return
-        }
-        const rect = item.getBoundingClientRect()
-        const distance = Math.abs(rect.left + rect.width / 2 - center) / spread
-        item.style.setProperty('--cv', Math.max(0, 1 - distance).toFixed(3))
-        item.style.setProperty('--ch', hoveredKey !== null && item.dataset.coverKey === hoveredKey ? '1' : '0')
-      })
-    }
-    const schedule = () => {
-      if (typeof requestAnimationFrame !== 'function') {
-        update()
-        return
-      }
-      if (!frame) frame = requestAnimationFrame(update)
-    }
-    update()
-    rail.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    return () => {
-      scheduleRef.current = null
-      rail.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
-      if (frame) cancelAnimationFrame(frame)
-    }
-  }, [status, rows.length])
 
   const load = useCallback(() => {
     let cancelled = false
@@ -262,7 +209,7 @@ export function ContinueRail() {
           </Link>
         </div>
       ) : (
-        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-3 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" ref={railRef} role="region" tabIndex={0}>
+        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" role="region" tabIndex={0}>
           {rows.map(({ entry, title }) => {
         const href = watchHref(title, entry.season !== undefined || entry.episode !== undefined
           ? { episode: entry.episode ?? 1, season: entry.season ?? 1 }
@@ -275,33 +222,15 @@ export function ContinueRail() {
         const totalMinutes = entry.durationSeconds ? Math.max(1, Math.round(entry.durationSeconds / 60)) : null
         const metaText = `${episodeLabel}${remaining ?? (entry.percent > 0 ? `${entry.percent}% watched` : title.year)}`
         const coverKey = `${entry.kind}:${entry.id}:${entry.season ?? 0}:${entry.episode ?? 0}`
-        const hoverOn = () => {
-          hoveredRef.current = coverKey
-          scheduleRef.current?.()
-        }
-        const hoverOff = () => {
-          if (hoveredRef.current === coverKey) hoveredRef.current = null
-          scheduleRef.current?.()
-        }
         return (
           <li
             className="w-[85%] max-w-[26rem] shrink-0 snap-start py-2 sm:w-[22rem] lg:w-[25rem]"
             data-cover-item
             data-cover-key={coverKey}
             key={coverKey}
-            onBlur={hoverOff}
-            onFocus={hoverOn}
-            onMouseEnter={hoverOn}
-            onMouseLeave={hoverOff}
           >
-            <div
-              className="group relative transition-[transform,filter] duration-300 ease-out motion-reduce:transition-none"
-              style={{
-                filter: 'brightness(min(1, calc(0.72 + 0.28 * var(--cv, 0) + 0.28 * var(--ch, 0))))',
-                transform: 'scale(calc((0.94 + 0.06 * var(--cv, 0)) * (1 + 0.04 * var(--ch, 0))))',
-              }}
-            >
-              <div className="relative overflow-hidden rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] shadow-sm transition-all duration-300 ease-out group-hover:border-[var(--fs-accent)]/50 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.65)] motion-reduce:transition-none">
+            <div className={`group relative ${styles.card}`}>
+              <div className={`relative overflow-hidden rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] ${styles.surface}`}>
                 {/* Full-card link for direct resume playback. z-[1] keeps it
                     above the artwork frame (a later positioned sibling that
                     would otherwise swallow every click) and below the
@@ -314,7 +243,7 @@ export function ContinueRail() {
 
                 <ArtworkFrame
                   alt={`${title.title} backdrop`}
-                  className="rounded-none border-0 transition-transform duration-500 ease-out group-hover:scale-[1.04] motion-reduce:transition-none"
+                  className={`rounded-none border-0 ${styles.artwork}`}
                   loading="lazy"
                   ratio="landscape"
                   src={title.backdropUrl ?? title.posterUrl ?? undefined}
@@ -322,16 +251,16 @@ export function ContinueRail() {
                   {/* Cinematic gradient overlays */}
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent transition-opacity duration-300 group-hover:via-black/55"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent"
                   />
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-100"
+                    className={`pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent ${styles.topScrim}`}
                   />
 
                   {/* Bottom: Editorial title, time info, and progress rail */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 pt-6">
-                    <p className="truncate font-display text-lg font-normal leading-tight text-white transition-colors duration-150 group-hover:text-[var(--fs-accent)] sm:text-xl">
+                    <p className="truncate font-display text-lg font-normal leading-tight text-white sm:text-xl">
                       {title.title}
                     </p>
                     <div className="mt-1 flex items-center justify-between gap-2 text-xs tabular-nums text-white/70">
@@ -340,21 +269,17 @@ export function ContinueRail() {
                         {totalMinutes === null ? `${positionMinutes}m` : `${positionMinutes}m of ${totalMinutes}m`}
                       </span>
                     </div>
-                    <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20 transition-[height] duration-200 group-hover:h-1.5">
+                    <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
                       <div
-                        className="relative h-full rounded-full bg-[var(--fs-accent)] shadow-[0_0_8px_var(--fs-accent)] transition-all duration-300"
+                        className="relative h-full rounded-full bg-[var(--fs-accent)]"
                         style={{ width: `${entry.percent}%` }}
                       >
-                        <div className="fs-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent motion-reduce:hidden" />
                       </div>
                     </div>
                   </div>
                 </ArtworkFrame>
 
-                {/* Action buttons sit outside ArtworkFrame to stay in the
-                    parent stacking context. ArtworkFrame gains a transform on
-                    hover (scale), which creates a new stacking context that
-                    would trap any z-index children below the full-card Link. */}
+                {/* Keep action buttons above the full-card resume link. */}
                 {editing ? (
                   <button
                     aria-label={`Remove ${title.title} from Continue watching`}
@@ -365,7 +290,7 @@ export function ContinueRail() {
                     <X aria-hidden="true" className="size-4" />
                   </button>
                 ) : (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 opacity-0 transition-all duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+                <div className={`absolute top-3 right-3 z-10 flex items-center gap-1.5 ${styles.actions}`}>
                   <SaveTitleButton
                     className="!size-9 !h-9 !w-9 !p-0 [&_svg]:!size-4 rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
                     id={title.id}

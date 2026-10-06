@@ -33,15 +33,19 @@ import {
   Server,
   Settings,
   SkipForward,
-  Sun,
+  SkipBack,
   TriangleAlert,
   Volume2,
   VolumeX,
   Wand2,
-  X,
 } from 'lucide-react'
 
 import { cn } from '../lib/cn'
+import { Toggle } from '../selection/selection'
+import { PlayerAdjustment, PlayerPanel, PlayerSettingRow } from './player-panel'
+import { createVolumeBoost } from './volume-boost'
+import { createSeparateAudioPlayer, type SeparateAudioState, type SeparateAudioSource, type SeparateAudioTrack } from './separate-audio'
+import { audioMenuOptions } from './audio-menu'
 import { MissingArtwork } from '../media/media'
 import {
   formatPlaybackTime,
@@ -49,6 +53,7 @@ import {
   type DirectMediaSource,
 } from './media-source'
 import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
+import type { MediaPreferences } from './media-preferences'
 import { createPlaybackControllerNext } from './playback-controller-next'
 import type { EngineDeliveryFailure } from './media-engine'
 import {
@@ -58,16 +63,15 @@ import {
   fetchVttCues,
   formatSubtitleDelayMs,
   nativeLanguageName,
+  subtitleLabelDetail,
   parseVttCues,
-  PREFERRED_LANGUAGE_CODES,
   readStoredSubtitleDelayMs,
   readStoredSubtitleLanguages,
-  savePreferredSubtitleLanguages,
   SUBTITLE_DELAY_KEY,
   type SubtitleCue,
 } from './subtitle-sync'
 
-export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync'
+export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance'
 
 export type CaptionSize = 'small' | 'medium' | 'large' | 'xlarge'
 export type CaptionBackground = 'cinematic' | 'boxed' | 'subtle'
@@ -123,6 +127,12 @@ export type ConsumitPlayerProps = Omit<
   onBack?: (() => void) | undefined
   /** Secondary top-line context, e.g. "Playing from Consumit · 4K". */
   topMeta?: ReactNode | undefined
+  /** Source resolution belongs to Watch; this only presents its pending state. */
+  preparing?: boolean | undefined
+  preparationMeta?: ReactNode | undefined
+  /** Exact neighboring episode actions supplied by the Watch route. */
+  onPreviousEpisode?: (() => void) | undefined
+  onNextEpisode?: (() => void) | undefined
   /** Pause-overlay facts line, e.g. "2026 · 1h 40m · ★ 6.5 · PG-13". Shown while paused. */
   pauseFacts?: ReactNode | undefined
   /** Pause-overlay title artwork logo (TMDB artwork mark). Falls back to the serif title. Shown while paused. */
@@ -134,6 +144,11 @@ export type ConsumitPlayerProps = Omit<
   audioOptions?: readonly PlayerOption[] | undefined
   selectedAudio?: string | undefined
   onAudioChange?: ((value: string) => void) | undefined
+  separateAudioTracks?: readonly SeparateAudioTrack[] | undefined
+  separateAudioLoading?: boolean | undefined
+  separateAudioError?: string | null | undefined
+  onAudioRequest?: (() => void) | undefined
+  onSeparateAudioSelect?: ((id: string) => Promise<SeparateAudioSource>) | undefined
   subtitleOptions?: readonly PlayerOption[] | undefined
   selectedSubtitle?: string | undefined
   onSubtitleChange?: ((value: string) => void) | undefined
@@ -186,6 +201,13 @@ export type ConsumitPlayerProps = Omit<
   serverOptions?: readonly PlayerOption[] | undefined
   selectedServer?: string | undefined
   onServerChange?: ((value: string) => void) | undefined
+  /** Auto keeps the current stream and lets Watch choose replacements. */
+  serverAuto?: boolean | undefined
+  onServerAuto?: (() => void) | undefined
+  serverLoading?: boolean | undefined
+  serverError?: string | null | undefined
+  serverBusy?: boolean | undefined
+  onServerRequest?: (() => void) | undefined
   onRetry?: (() => void) | undefined
   /** Chromecast output. The button renders only when a Cast runtime and a
    *  configured receiver exist; the caller owns session, progress, and
@@ -197,6 +219,7 @@ export type ConsumitPlayerProps = Omit<
   resumePlaying?: boolean | undefined
   onSourceError?: ((reason: 'network' | 'media' | 'gone' | 'expired', deliveryFailure?: EngineDeliveryFailure) => void) | undefined
   onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
+  onMediaPreferencesChange?: ((preferences: MediaPreferences) => void) | undefined
 }
 
 const DEFAULT_SUBTITLES: readonly PlayerOption[] = [
@@ -360,27 +383,30 @@ function dedupePlayerOptions(options: readonly PlayerOption[]): PlayerOption[] {
   return unique
 }
 
-/**
- * FilScreen-flavored settings row: calm hover wash, soft orange wash plus an
- * inset accent ring and a check for selection — the sidebar-active language.
- * Keyboard focus keeps its own visible ring.
- */
+/** Quiet choices share the player panel language and retain keyboard focus. */
 function settingsRowClass(selected: boolean) {
   return cn(
-    'flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm outline-none transition-all motion-reduce:transition-none',
+    'consumit-player-option flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm outline-none transition-colors motion-reduce:transition-none',
     selected
       ? 'bg-orange/15 font-bold text-ink shadow-[inset_0_0_0_1px_var(--color-orange)] focus-visible:ring-2 focus-visible:ring-orange'
       : 'text-copy hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange',
   )
 }
 
-/**
- * Floating frosted-glass settings menu for the FilScreen vibe:
- * a clean bottom sheet on small screens, and a sleek floating popover card
- * anchored in the bottom-right above the player controls on desktop.
- */
-const RAIL_PANEL_CLASS =
-  'fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-[#0b0b0e] p-1 sm:absolute sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card sm:border sm:border-white/15 sm:p-2'
+/** Language is canonical metadata; upstream labels may be mistranslated.
+ * Keep original release information available without using it as a language. */
+function SubtitleTrackLabel({ language, label, detail }: { language?: string | undefined; label: string; detail?: string | undefined }) {
+  const description = detail || (language && language !== 'und' ? subtitleLabelDetail(label) : undefined)
+  return <span className="min-w-0 flex-1 text-left" title={label}>
+    <bdi className="block truncate text-sm font-medium tracking-normal" data-player-subtitle-label dir="auto" lang={language}>{nativeLanguageName(language, label)}</bdi>
+    {description ? <bdi className="block truncate text-xs text-muted tracking-normal" dir="auto">{description}</bdi> : null}
+  </span>
+}
+
+function subtitleCandidateDetail(track: PlayerSubtitleCandidate) {
+  const release = track.release || subtitleLabelDetail(track.label)
+  return [track.provider, release, track.hi || track.sdh ? 'HI' : undefined, track.forced ? 'Forced' : undefined, track.machineTranslated ? 'Machine translated' : undefined].filter(Boolean).join(' · ')
+}
 
 /** Set on the canary web deployment; Watch and embeds always use the same core. */
 const useNextPlaybackCore = process.env.NEXT_PUBLIC_PLAYBACK_CORE === 'next'
@@ -449,6 +475,7 @@ function PlayerIconButton({
       aria-expanded={menuId ? Boolean(expanded) : undefined}
       aria-label={label}
       aria-pressed={menuId ? undefined : active}
+      data-player-icon-button
       className={cn(
         'grid size-10 shrink-0 place-items-center rounded-control border outline-none transition-all motion-reduce:transition-none',
         'focus-visible:ring-2 focus-visible:ring-orange',
@@ -485,14 +512,20 @@ export function ConsumitPlayer({
   extraSubtitles,
   muted,
   onAudioChange,
+  separateAudioTracks,
+  separateAudioLoading,
+  separateAudioError,
+  onAudioRequest,
+  onSeparateAudioSelect,
   onBack,
+  onPreviousEpisode,
+  onNextEpisode,
   onBrightnessChange,
   onCaptionBackgroundChange,
   onCaptionFontChange,
   onCaptionPositionChange,
   onCaptionSizeChange,
   onSubtitleDelayMsChange,
-  onSubtitleLanguagesChange,
   subtitleDelayMs: controlledSubtitleDelayMs,
   subtitleLanguages: controlledSubtitleLanguages,
   captionBackground: controlledCaptionBackground,
@@ -507,11 +540,18 @@ export function ConsumitPlayer({
   onRetry,
   onSourceError,
   onPlaybackEvent,
+  onMediaPreferencesChange,
   resumeAt = 0,
   resumePlaying = false,
   serverOptions,
   selectedServer,
   onServerChange,
+  serverAuto,
+  onServerAuto,
+  serverLoading,
+  serverError,
+  serverBusy,
+  onServerRequest,
   onSubtitleChange,
   onSubtitleRequest,
   subtitleDiscovery,
@@ -525,6 +565,8 @@ export function ConsumitPlayer({
   pauseOverview,
   playbackRates = DEFAULT_RATES,
   posterSrc,
+  preparing = false,
+  preparationMeta,
   preload = 'metadata',
   qualityOptions: suppliedQualityOptions,
   selectedAudio: controlledAudio,
@@ -541,6 +583,8 @@ export function ConsumitPlayer({
   videoClassName,
   ...props
 }: ConsumitPlayerProps) {
+  const [failedPreparationLogo, setFailedPreparationLogo] = useState<string | undefined>()
+  const preparationLogo = pauseLogoUrl && pauseLogoUrl !== failedPreparationLogo ? pauseLogoUrl : undefined
   const [engineState, setEngineState] = useState<ControllerSnapshot | null>(null)
   const audioOptions: readonly PlayerOption[] = useMemo(
     () => dedupePlayerOptions(suppliedAudioOptions ?? (source ? engineState?.audio ?? [] : DEFAULT_AUDIO)),
@@ -557,8 +601,8 @@ export function ConsumitPlayer({
   const [preparedCandidateUrls, setPreparedCandidateUrls] = useState<readonly string[]>([])
   const [preparedCandidateIds, setPreparedCandidateIds] = useState<readonly string[]>([])
   const preparedPlayableCount = new Set((extraSubtitles ?? []).filter((track) => preparedCandidateUrls.includes(track.url)).map((track) => track.url)).size
-  /* PROVE-embed style track count (Off excluded) for the menu header
-   *  and the toolbar badge. */
+  /* PROVE-embed style track count (Off excluded) for the subtitles menu
+   *  header. The toolbar icon carries no badge. */
   const subtitleTrackCount = subtitleDiscovery
     ? subtitleDiscovery.languages.reduce((total, language) => total + language.count, 0) + subtitleOptions.filter((option) => option.value !== 'off').length - preparedPlayableCount
     : subtitleOptions.filter((option) => option.value !== 'off').length
@@ -604,17 +648,30 @@ export function ConsumitPlayer({
     }
     return groups
   }, [orderedServerOptions])
-  const dedupedRates = useMemo(() => [...new Set(playbackRates)], [playbackRates])
-  const showServerSection = (dedupedServerOptions?.length ?? 0) > 1
+  const dedupedRates = useMemo(() => {
+    const rates = [...new Set(playbackRates)].filter((rate) => Number.isFinite(rate) && rate > 0).sort((a, b) => a - b)
+    return rates.length ? rates : DEFAULT_RATES
+  }, [playbackRates])
+  const showServerSection = !onServerAuto && (dedupedServerOptions?.length ?? 0) > 1
+  const currentServerLabel = dedupedServerOptions?.find((option) => option.value === selectedServer)?.label ?? selectedServer
   const shellRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const separateAudioRef = useRef<HTMLAudioElement>(null)
+  const separateAudioPlayer = useRef<ReturnType<typeof createSeparateAudioPlayer> | null>(null)
+  const separateSelection = useRef(0)
+  const [separateState, setSeparateState] = useState<SeparateAudioState>({ track: null, loading: false, active: false, error: null, offset: 0 })
+  const [preparingAudioId, setPreparingAudioId] = useState<string | null>(null)
+  const [audioPreparationError, setAudioPreparationError] = useState<string | null>(null)
   const hideTimer = useRef<number | undefined>(undefined)
   const controllerRef = useRef<ReturnType<typeof createPlaybackController> | null>(null)
   const controllerPhaseRef = useRef<ControllerSnapshot['phase']>('loading')
   const attachedMediaRef = useRef<{ controller: ReturnType<typeof createPlaybackController>; src: string; type: DirectMediaSource['type'] } | null>(null)
-  const playbackCallbacks = useRef({ onSourceError, onPlaybackEvent, resumeAt, resumePlaying })
-  useEffect(() => { playbackCallbacks.current = { onSourceError, onPlaybackEvent, resumeAt, resumePlaying } }, [onSourceError, onPlaybackEvent, resumeAt, resumePlaying])
+  const playbackCallbacks = useRef({ onSourceError, onPlaybackEvent, onMediaPreferencesChange, resumeAt, resumePlaying })
+  useEffect(() => { playbackCallbacks.current = { onSourceError, onPlaybackEvent, onMediaPreferencesChange, resumeAt, resumePlaying } }, [onSourceError, onPlaybackEvent, onMediaPreferencesChange, resumeAt, resumePlaying])
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuReturnFocus = useRef<HTMLButtonElement | null>(null)
+  const volumeBoostController = useRef<ReturnType<typeof createVolumeBoost> | null>(null)
+  const separateAudioBoost = useRef<ReturnType<typeof createVolumeBoost> | null>(null)
   // Hydration reads the server snapshot; normal client-only mounts can use
   // their source immediately. This keeps disabled attributes deterministic.
   const mounted = useSyncExternalStore(subscribeHydration, clientHydrationSnapshot, serverHydrationSnapshot)
@@ -632,9 +689,39 @@ export function ConsumitPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPip, setIsPip] = useState(false)
   const [isBuffering, setIsBuffering] = useState(false)
+  const [presentedMedia, setPresentedMedia] = useState<string | undefined>(undefined)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const startupPending = preparing || (hasSource && (autoPlay || resumePlaying || isPlaying) && isBuffering && presentedMedia !== mediaSrc && !hasError && !engineState?.needsGesture)
   const [activeMenu, setActiveMenu] = useState<PlayerMenuId | null>(null)
+  const [volumeBoost, setVolumeBoost] = useState(1)
+  const [boostError, setBoostError] = useState<string | null>(null)
+  const separateAudioEnabled = Boolean(onSeparateAudioSelect)
+  useEffect(() => {
+    const video = videoRef.current, audio = separateAudioRef.current
+    if (!video || !audio || !separateAudioEnabled) return
+    const player = createSeparateAudioPlayer(video, audio, {
+      output: (value) => (volumeBoostController.current ??= createVolumeBoost(video)).output(value),
+      state: setSeparateState,
+      boost: separateAudioBoost.current ??= createVolumeBoost(audio),
+    })
+    separateAudioPlayer.current = player
+    return () => { separateSelection.current++; player.dispose(); separateAudioPlayer.current = null; queueMicrotask(() => { if (!audio.isConnected) separateAudioBoost.current?.dispose() }) }
+  }, [separateAudioEnabled])
+  useEffect(() => { separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null) }, [mediaSrc])
+  useEffect(() => { if (activeMenu === 'audio') onAudioRequest?.() }, [activeMenu, onAudioRequest])
+  useEffect(() => {
+    const video = videoRef.current
+    return () => {
+      // Strict Mode and Activity can clean up effects while retaining the same
+      // media element. A detached element is the audio graph's lifetime boundary.
+      queueMicrotask(() => { if (!video?.isConnected) volumeBoostController.current?.dispose() })
+    }
+  }, [])
+  const closeMenu = useCallback(() => {
+    setActiveMenu(null)
+    menuReturnFocus.current?.focus({ preventScroll: true })
+  }, [])
   const [subtitleSearch, setSubtitleSearch] = useState('')
   const [subtitleSearchResults, setSubtitleSearchResults] = useState<PlayerSubtitleCandidate[]>([])
   const [nextSearchCursor, setNextSearchCursor] = useState<number | null>(null)
@@ -721,6 +808,8 @@ export function ConsumitPlayer({
   }, [muted, controlledAutoSkip])
 
   const selectedAudio = controlledAudio ?? (source ? engineState?.audioTrack : undefined) ?? internalAudio
+  const unifiedAudio = useMemo(() => audioMenuOptions(audioOptions, separateState.track && !separateAudioTracks?.some(track => track.id === separateState.track?.id) ? [...(separateAudioTracks ?? []), separateState.track] : separateAudioTracks ?? []), [audioOptions, separateAudioTracks, separateState.track])
+  const selectedAudioLabel = unifiedAudio.find(option => separateState.track ? option.separate.some(track => track.id === separateState.track?.id) : option.stream.some(track => track.value === selectedAudio))?.label ?? 'Default'
   const selectedSubtitle = controlledSubtitle ?? (source ? engineState?.subtitleTrack : undefined) ?? internalSubtitle
   const selectedQuality = controlledQuality ?? (source ? engineState?.quality : undefined) ?? internalQuality
   const selectedRate = controlledRate ?? internalRate
@@ -863,12 +952,24 @@ export function ConsumitPlayer({
     )
   }, [])
 
+  const hasKeyboardFocus = useCallback(() => {
+    const focused = document.activeElement
+    return focused instanceof HTMLElement && shellRef.current?.contains(focused) && focused.matches(':focus-visible')
+  }, [])
+
   const scheduleHide = useCallback(() => {
     if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
+    hideTimer.current = undefined
+    // Playback start and pointer movement can run after focus capture. Never
+    // re-arm a timer that hides the control a keyboard user is operating.
+    if (hasKeyboardFocus()) return
     if (isPlaying && activeMenu == null) {
-      hideTimer.current = window.setTimeout(() => setControlsVisible(false), autoHideMs)
+      hideTimer.current = window.setTimeout(() => {
+        hideTimer.current = undefined
+        if (!hasKeyboardFocus()) setControlsVisible(false)
+      }, autoHideMs)
     }
-  }, [autoHideMs, isPlaying, activeMenu])
+  }, [autoHideMs, isPlaying, activeMenu, hasKeyboardFocus])
 
   const pokeControls = useCallback(() => {
     setControlsVisible(true)
@@ -896,6 +997,7 @@ export function ConsumitPlayer({
       change(snapshot) {
         controllerPhaseRef.current = snapshot.phase
         setEngineState(snapshot)
+        if (snapshot.preferences) playbackCallbacks.current.onMediaPreferencesChange?.(snapshot.preferences)
         setIsBuffering(snapshot.phase === 'loading' || snapshot.phase === 'buffering' || snapshot.phase === 'switching')
         setHasError(snapshot.phase === 'failed')
         if (snapshot.needsGesture) { setIsPlaying(false); setControlsVisible(true) }
@@ -1175,11 +1277,11 @@ export function ConsumitPlayer({
       if (target && !menu.contains(target)) {
         const trigger = shell.querySelector(`[aria-controls="consumit-player-menu-${activeMenu}"]`)
         if (trigger && target && trigger.contains(target)) return
-        setActiveMenu(null)
+        closeMenu()
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveMenu(null)
+      if (event.key === 'Escape') closeMenu()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -1187,7 +1289,7 @@ export function ConsumitPlayer({
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [activeMenu])
+  }, [activeMenu, closeMenu])
 
   useEffect(
     () => () => {
@@ -1300,16 +1402,32 @@ export function ConsumitPlayer({
   }
 
   function toggleMenu(menu: PlayerMenuId) {
+    if (menu === 'server' && activeMenu !== 'server') onServerRequest?.()
     pokeControls()
+    if (activeMenu == null) menuReturnFocus.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null
     if (menu === 'subtitles' && activeMenu !== 'subtitles') onSubtitleRequest?.()
     setActiveMenu((current) => (current === menu ? null : menu))
   }
 
   function chooseAudio(value: string) {
+    separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null)
     controllerRef.current?.audio(value)
     if (!controlledAudio) setInternalAudio(value)
     onAudioChange?.(value)
-    setActiveMenu(null)
+    closeMenu()
+  }
+  async function chooseSeparateAudio(id: string) {
+    if (!onSeparateAudioSelect || !separateAudioPlayer.current) return
+    const generation = ++separateSelection.current
+    setPreparingAudioId(id); setAudioPreparationError(null)
+    try {
+      const track = await onSeparateAudioSelect(id)
+      if (generation !== separateSelection.current) return
+      await separateAudioPlayer.current?.select(track)
+      await separateAudioPlayer.current?.boost(volumeBoost)
+    } catch {
+      if (generation === separateSelection.current) setAudioPreparationError('This audio is unavailable right now. Your current audio is still playing.')
+    } finally { if (generation === separateSelection.current) setPreparingAudioId(null) }
   }
 
   function chooseSubtitle(value: string) {
@@ -1317,7 +1435,7 @@ export function ConsumitPlayer({
     if (!controlledSubtitle) setInternalSubtitle(value)
     storeValue('consumit.player.subtitles', value)
     onSubtitleChange?.(value)
-    setActiveMenu(null)
+    closeMenu()
   }
 
   async function loadSubtitleLanguage(language: string, cursor = 0) {
@@ -1404,14 +1522,16 @@ export function ConsumitPlayer({
 
   function chooseServer(value: string) {
     onServerChange?.(value)
-    setActiveMenu(null)
+    closeMenu()
   }
 
   function chooseQuality(value: string) {
-    controllerRef.current?.quality(value)
+    // Source renditions are selected by the owner; their heights are not
+    // hls.js level indexes for the currently attached fixed playlist.
+    if (!(suppliedQualityOptions && onQualityChange)) controllerRef.current?.quality(value)
     if (!controlledQuality) setInternalQuality(value)
     onQualityChange?.(value)
-    setActiveMenu(null)
+    closeMenu()
   }
 
   function chooseRate(value: number) {
@@ -1419,7 +1539,23 @@ export function ConsumitPlayer({
     if (!controlledRate) setInternalRate(value)
     storeValue('consumit.player.rate', String(value))
     onRateChange?.(value)
-    setActiveMenu(null)
+  }
+
+  async function changeVolumeBoost(value: number) {
+    const video = videoRef.current
+    if (!video) return
+    const controller = volumeBoostController.current ??= createVolumeBoost(video)
+    try {
+      const applied = await controller.set(value)
+      await separateAudioPlayer.current?.boost(value)
+      if (!video.isConnected) return
+      setVolumeBoost(applied)
+      setBoostError(null)
+    } catch {
+      if (!video.isConnected) return
+      setVolumeBoost(1)
+      setBoostError('Volume boost is unavailable in this browser. Normal volume is unchanged.')
+    }
   }
 
   function changeBrightness(next: number) {
@@ -1462,20 +1598,6 @@ export function ConsumitPlayer({
 
   function adjustSubtitleDelayMs(delta: number) {
     chooseSubtitleDelayMs(subtitleDelayMs + delta)
-  }
-
-  function chooseSubtitleLanguages(next: readonly string[]) {
-    const clean = savePreferredSubtitleLanguages(next)
-    if (controlledSubtitleLanguages == null) setInternalSubtitleLanguages(clean)
-    onSubtitleLanguagesChange?.(clean)
-  }
-
-  function toggleSubtitleLanguage(code: string) {
-    if (subtitleLanguages.includes(code)) {
-      chooseSubtitleLanguages(subtitleLanguages.filter((entry) => entry !== code))
-    } else {
-      chooseSubtitleLanguages([...subtitleLanguages, code].slice(0, 3))
-    }
   }
 
   function flashSyncStatus(message: string) {
@@ -1681,6 +1803,7 @@ export function ConsumitPlayer({
       data-player-core={useNextPlaybackCore ? 'next' : 'legacy'}
       data-controls-visible={chromeVisible ? 'true' : 'false'}
       data-fullscreen={isFullscreen ? 'true' : 'false'}
+      data-preparing={startupPending ? 'true' : 'false'}
       ref={shellRef}
     >
       {status ? (
@@ -1708,22 +1831,19 @@ export function ConsumitPlayer({
           /* Inline keeps the catalog aspect box; fullscreen fills the room
              like the old-master fixed inset-0 shell. */
           isFullscreen ? 'aspect-auto h-full max-h-none flex-1' : 'aspect-video max-h-full',
+          !isFullscreen && 'min-h-80 sm:min-h-0',
           !chromeVisible && isPlaying && 'cursor-none',
         )}
         onKeyDown={onShellKeyDown}
         onMouseMove={pokeControls}
         onPointerDown={pokeControls}
         onTouchStart={pokeControls}
-        onFocusCapture={() => {
-          setControlsVisible(true)
-          if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
-          hideTimer.current = undefined
-        }}
+        onFocusCapture={pokeControls}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) scheduleHide()
         }}
-        onMouseLeave={(event) => {
-          if (isPlaying && activeMenu == null && !event.currentTarget.contains(document.activeElement)) {
+        onMouseLeave={() => {
+          if (isPlaying && activeMenu == null && !hasKeyboardFocus()) {
             setControlsVisible(false)
             if (hideTimer.current != null) window.clearTimeout(hideTimer.current)
             hideTimer.current = undefined
@@ -1772,8 +1892,15 @@ export function ConsumitPlayer({
             setHasError(false)
             onPlay?.(event)
           }}
-          onPlaying={() => setIsBuffering(false)}
-          onSeeking={() => setIsBuffering(true)}
+          onPlaying={(event) => {
+            setIsBuffering(false)
+            setPresentedMedia(mediaSrc)
+            props.onPlaying?.(event)
+          }}
+          onSeeking={(event) => {
+            setIsBuffering(true)
+            props.onSeeking?.(event)
+          }}
           onSeeked={(event) => {
             setIsBuffering(false)
             props.onSeeked?.(event)
@@ -1796,6 +1923,7 @@ export function ConsumitPlayer({
         >
           {children}
         </video>
+        {onSeparateAudioSelect ? <audio aria-hidden="true" crossOrigin="anonymous" hidden preload="none" ref={separateAudioRef} /> : null}
 
         {showTopBar ? (
           <div
@@ -1836,14 +1964,50 @@ export function ConsumitPlayer({
               <p className={cn('truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md', !isPlaying && hasSource && !hasError && pauseLogoUrl && 'hidden sm:block')}>{title}</p>
               {topMeta ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta}</p> : null}
             </div>
-            <div aria-hidden="true" className="w-11 shrink-0" />
+            <div className="pointer-events-auto hidden shrink-0 items-center gap-2 lg:flex" data-player-episode-navigation>
+              {isFullscreen && onPreviousEpisode ? <PlayerIconButton label="Previous episode" onClick={onPreviousEpisode}><SkipBack aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
+              {isFullscreen && onNextEpisode ? <PlayerIconButton label="Next episode" onClick={onNextEpisode}><SkipForward aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
+              <img alt="Consumit" className="ml-3 size-[44px] shrink-0 sm:size-[56px]" height={56} src="/assets/consumit-mark.svg" width={56} />
+            </div>
+          </div>
+        ) : null}
+
+        {startupPending ? (
+          <div className="consumit-player-preparation pointer-events-none absolute inset-0" data-player-preparation role="status">
+            {posterSrc ? <img alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" src={posterSrc} /> : null}
+            <div className="consumit-player-preparation-shade absolute inset-0" />
+            <div className="consumit-player-preparation-copy absolute">
+              {preparationLogo ? (
+                <>
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    className="consumit-player-preparation-logo"
+                    onError={() => setFailedPreparationLogo(preparationLogo)}
+                    ref={(image) => {
+                      // SSR artwork can fail before React attaches its error handler.
+                      if (image?.complete && image.naturalWidth === 0) setFailedPreparationLogo(preparationLogo)
+                    }}
+                    src={preparationLogo}
+                  />
+                  <span className="sr-only">{title}</span>
+                </>
+              ) : <p className="consumit-player-preparation-title font-display text-ink">{title}</p>}
+              {preparationMeta ?? topMeta ? <p className="mt-3 text-sm text-copy">{preparationMeta ?? topMeta}</p> : null}
+              <div aria-hidden="true" className="consumit-player-preparation-steps" data-stage={hasSource ? 'connecting' : 'resolving'}>
+                <span /><span /><span />
+              </div>
+              <p className="mt-4 text-sm text-copy">{hasSource ? 'Preparing playback…' : 'Finding your stream…'}</p>
+            </div>
           </div>
         ) : null}
 
         {isBuffering && hasSource && !hasError ? (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status">
+          <div className={cn('pointer-events-none absolute inset-0 grid place-items-center', startupPending && 'lg:hidden')} role="status">
             <span className="sr-only">Buffering video</span>
-            <Loader2 aria-hidden="true" className="size-10 animate-spin text-ink motion-reduce:animate-none" />
+            <span className="consumit-player-buffering grid size-16 place-items-center rounded-full bg-black/60">
+              <Loader2 aria-hidden="true" className="size-8 animate-spin text-orange motion-reduce:animate-none" />
+            </span>
           </div>
         ) : null}
 
@@ -1851,7 +2015,7 @@ export function ConsumitPlayer({
           <div className="pointer-events-none absolute inset-x-0 top-1/3 text-center text-sm font-bold text-ink" role="status">Tap play to start watching</div>
         ) : null}
 
-        {!isPlaying && hasSource && !hasError && activeMenu == null && (pauseFacts != null || pauseLogoUrl != null || pauseOverview != null) ? (
+        {!isPlaying && !startupPending && hasSource && !hasError && activeMenu == null && (pauseFacts != null || pauseLogoUrl != null || pauseOverview != null) ? (
           <div
             className={cn(
               'pointer-events-none absolute inset-0 flex items-center justify-start pb-16',
@@ -1915,7 +2079,7 @@ export function ConsumitPlayer({
           </div>
         ) : null}
 
-        {captionsOn && overlayCueText && !hasError ? (
+        {captionsOn && overlayCueText && !hasError && (captionPosition === 'top' || !chromeVisible) ? (
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6 transition-[top,bottom] duration-300 motion-reduce:transition-none',
@@ -1929,7 +2093,13 @@ export function ConsumitPlayer({
           >
             <p
               className={cn(
-                'max-w-3xl text-center leading-snug text-balance whitespace-pre-line',
+                // No text-balance here: subtitle files author their own line
+                // breaks (one speaker per line, reading rhythm), and
+                // rebalancing has reordered RTL punctuation in Chromium.
+                // unicode-bidi:plaintext resolves direction per line so a
+                // mixed two-speaker cue orders each line on its own; dir
+                // remains as the fallback for older engines.
+                'max-w-3xl text-center leading-snug whitespace-pre-line [unicode-bidi:plaintext]',
                 captionSizeClass(captionSize, isFullscreen),
                 captionFontClass(captionFont),
                 overlayCueUntracked && 'tracking-normal',
@@ -1981,7 +2151,18 @@ export function ConsumitPlayer({
             chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
         >
-          <div className="flex items-baseline justify-between gap-4 text-xs">
+          <div className="relative flex items-baseline justify-between gap-4 text-xs" data-player-timing>
+          {captionsOn && !hasError && captionPosition === 'bottom' && overlayCueText && chromeVisible ? (
+            <div className={cn('pointer-events-none absolute inset-x-0 bottom-full flex items-center justify-center pb-2', captionSizeClass(captionSize, isFullscreen))} data-player-caption-slot data-consumit-player-caption-position="bottom">
+              <p
+                className={cn('max-w-3xl text-center leading-snug whitespace-pre-line [unicode-bidi:plaintext]', captionFontClass(captionFont), overlayCueUntracked && 'tracking-normal', captionBackgroundClass(captionBackground))}
+                data-consumit-player-caption
+                data-caption-font={captionFont}
+                data-caption-size={captionSize}
+                dir="auto"
+              >{overlayCueText}</p>
+            </div>
+          ) : null}
             <p className="min-w-0 truncate font-semibold text-ink drop-shadow-sm">{chapterLabel}</p>
             <p className="shrink-0 tabular-nums text-muted drop-shadow-sm">
               {formatPlaybackTime(currentTime)} / {formatPlaybackTime(duration)}
@@ -1989,6 +2170,7 @@ export function ConsumitPlayer({
           </div>
           <div
             className="group relative mt-1.5 flex h-6 items-center rounded-micro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange"
+            data-player-timeline
             onMouseLeave={() => setHoverTime(null)}
             onMouseMove={(event) => {
               if (duration <= 0) return
@@ -2045,6 +2227,7 @@ export function ConsumitPlayer({
             <div className="flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">
               <button
                 aria-label={isPlaying ? 'Pause' : 'Play'}
+                data-player-play-button
                 className="grid size-11 shrink-0 place-items-center rounded-control bg-ink font-bold text-canvas outline-none transition-colors duration-200 motion-reduce:transition-none hover:bg-ink/85 shadow-[0_2px_12px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:bg-ink/30 disabled:text-muted"
                 disabled={!hasSource || hasError}
                 onClick={() => void togglePlayback()}
@@ -2079,12 +2262,13 @@ export function ConsumitPlayer({
                   <span className="absolute text-[8px] font-bold">10</span>
                 </span>
               </button>
+              <div className="consumit-player-volume flex items-center" data-player-volume-control>
               <PlayerIconButton disabled={!hasSource} label={isMuted || volume === 0 ? 'Unmute' : 'Mute'} onClick={toggleMute} title="Mute (M)">
                 {isMuted || volume === 0 ? <VolumeX aria-hidden="true" className="size-5" strokeWidth={1.75} /> : <Volume2 aria-hidden="true" className="size-5" strokeWidth={1.75} />}
               </PlayerIconButton>
               <input
                 aria-label="Volume"
-                className="h-10 w-16 cursor-pointer accent-orange sm:w-20"
+                className="consumit-player-volume-slider h-10 cursor-pointer accent-orange"
                 disabled={!hasSource}
                 max={1}
                 min={0}
@@ -2093,6 +2277,7 @@ export function ConsumitPlayer({
                 type="range"
                 value={isMuted ? 0 : volume}
               />
+              </div>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none sm:gap-2">
               {hasSource ? (
@@ -2121,27 +2306,17 @@ export function ConsumitPlayer({
                 </PlayerIconButton>
               ) : null}
               {hasSource ? (
-                <span className="relative inline-flex shrink-0">
-                  <PlayerIconButton
-                    active={activeMenu === 'subtitles' || captionsOn}
-                    disabled={!hasSource}
-                    expanded={activeMenu === 'subtitles'}
-                    label="Subtitles"
-                    menuId="subtitles"
-                    onClick={() => toggleMenu('subtitles')}
-                    title={captionsOn ? `Subtitles: ${selectedSubtitle}` : 'Subtitles'}
-                  >
-                    <Captions aria-hidden="true" className="size-5" strokeWidth={1.75} />
-                  </PlayerIconButton>
-                  {subtitleTrackCount > 0 ? (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute -top-1 -right-1 z-10 min-w-5 rounded-full border border-orange bg-orange px-1 text-center text-[10px] leading-4 font-bold tabular-nums text-canvas"
-                    >
-                      {subtitleTrackCount}
-                    </span>
-                  ) : null}
-                </span>
+                <PlayerIconButton
+                  active={activeMenu === 'subtitles' || activeMenu === 'appearance' || captionsOn}
+                  disabled={!hasSource}
+                  expanded={activeMenu === 'subtitles' || activeMenu === 'appearance'}
+                  label="Subtitles"
+                  menuId={activeMenu === 'appearance' ? 'appearance' : 'subtitles'}
+                  onClick={() => toggleMenu('subtitles')}
+                  title={captionsOn ? `Subtitles: ${selectedSubtitle}` : 'Subtitles'}
+                >
+                  <Captions aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                </PlayerIconButton>
               ) : null}
               {hasSource ? (
                 <PlayerIconButton
@@ -2157,11 +2332,11 @@ export function ConsumitPlayer({
                 </PlayerIconButton>
               ) : null}
               <PlayerIconButton
-                active={activeMenu === 'settings'}
+                active={activeMenu === 'settings' || activeMenu === 'playback' || activeMenu === 'audio'}
                 disabled={!hasSource}
-                expanded={activeMenu === 'settings'}
+                expanded={activeMenu === 'settings' || activeMenu === 'playback' || activeMenu === 'audio'}
                 label="Settings: audio, speed, brightness"
-                menuId="settings"
+                menuId={activeMenu === 'playback' || activeMenu === 'audio' ? activeMenu : 'settings'}
                 onClick={() => toggleMenu('settings')}
               >
                 <Settings aria-hidden="true" className="size-5" strokeWidth={1.75} />
@@ -2200,300 +2375,117 @@ export function ConsumitPlayer({
         </div>
         {activeMenu === 'settings' ? (
           <div className="contents" ref={menuRef}>
-            <div
-              aria-label="Settings options"
-              className={cn(RAIL_PANEL_CLASS, 'sm:w-[340px]')}
-              id="consumit-player-menu-settings"
-              role="menu"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
-                <p className="text-base font-bold text-ink">Settings</p>
-                <button
-                  aria-label="Close settings"
-                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={() => setActiveMenu(null)}
-                  type="button"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
-                </button>
+            <PlayerPanel aria-label="Settings options" id="consumit-player-menu-settings" onClose={closeMenu} title="Settings">
+              <div className="p-3">
+                <div className="space-y-1">
+                  <PlayerSettingRow icon={<QualityIcon className="size-5" />} label="Quality" value={qualityOptions.find((option) => option.value === selectedQuality)?.label ?? 'Auto'} onClick={() => setActiveMenu('quality')} />
+                  <PlayerSettingRow icon={<Server className="size-5" />} label="Server" value={serverAuto ? 'Auto' : currentServerLabel ?? orderedServerOptions?.[0]?.label ?? 'Unavailable'} disabled={!onServerRequest && !dedupedServerOptions?.length} onClick={() => toggleMenu('server')} />
+                  <PlayerSettingRow icon={<Captions className="size-5" />} label="Subtitles" value={captionsOn ? (subtitleOptions.find((option) => option.value === selectedSubtitle)?.label || 'On') : 'Off'} onClick={() => toggleMenu('subtitles')} />
+                  <PlayerSettingRow icon={<Music className="size-5" />} label="Audio" value={selectedAudioLabel} onClick={() => setActiveMenu('audio')} />
+                </div>
+                <div className="consumit-player-panel-section">
+                  <PlayerSettingRow icon={<Gauge className="size-5" />} label="Playback settings" value={selectedRate === 1 ? 'Normal speed' : selectedRate + '×'} onClick={() => setActiveMenu('playback')} />
+                  <PlayerSettingRow icon={<Moon className="size-5" />} label="Sleep Timer" value={sleepTimer ? sleepTimer + 'm' : 'Off'} onClick={cycleSleepTimer} />
+                  <div className="consumit-player-setting-row">
+                    <Captions aria-hidden="true" className="size-5 text-muted" /><span className="flex-1 text-sm">Enable Subtitles</span>
+                    <Toggle checked={captionsOn} label="Enable Subtitles" onCheckedChange={toggleSubtitlesSwitch} />
+                  </div>
+                  <div className="consumit-player-setting-row">
+                    <SkipForward aria-hidden="true" className="size-5 text-muted" /><span className="flex-1 text-sm">Auto-skip intros</span>
+                    <Toggle checked={autoSkip} label="Auto-skip intros" onCheckedChange={toggleAutoSkip} />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-3 p-3">
-                {/* 2x2 Quick Status Grid */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={() => setActiveMenu('quality')}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                      <QualityIcon className="size-3.5" />
-                      <span>Quality</span>
-                    </div>
-                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
-                      {qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality ?? 'Auto'}
-                    </span>
-                  </button>
-
-                  <button
-                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={() => setActiveMenu('server')}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                      <Server className="size-3.5" />
-                      <span>Server</span>
-                    </div>
-                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
-                      {dedupedServerOptions?.find((s) => s.value === selectedServer)?.label ?? selectedServer ?? 'Default'}
-                    </span>
-                  </button>
-
-                  <button
-                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={() => setActiveMenu('subtitles')}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                      <Captions className="size-3.5" />
-                      <span>Subtitles</span>
-                    </div>
-                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
-                      {captionsOn ? (subtitleOptions.find((s) => s.value === selectedSubtitle)?.label ?? selectedSubtitle) : 'Off'}
-                    </span>
-                  </button>
-
-                  <button
-                    className="flex flex-col items-start rounded-control border border-white/10 bg-white/[0.04] p-2.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.08] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={() => {
-                      if (audioOptions.length > 1) {
-                        const currentIndex = audioOptions.findIndex((a) => a.value === selectedAudio)
-                        const nextIndex = (currentIndex + 1) % audioOptions.length
-                        chooseAudio(audioOptions[nextIndex]!.value)
-                      }
-                    }}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                      <Music className="size-3.5" />
-                      <span>Audio</span>
-                    </div>
-                    <span className="mt-1 block w-full truncate text-sm font-semibold text-ink">
-                      {audioOptions.find((a) => a.value === selectedAudio)?.label ?? selectedAudio ?? 'Default'}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Interactive Rows: Sleep Timer & Enable Subtitles */}
-                <div className="space-y-0.5 border-t border-white/10 pt-2">
-                  <button
-                    className="flex w-full items-center justify-between rounded-control px-2.5 py-2 text-left transition-colors hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={cycleSleepTimer}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
-                      <Moon className="size-4 text-muted" strokeWidth={1.75} />
-                      <span>Sleep Timer</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted">
-                      <span className={sleepTimer ? 'font-bold text-orange' : ''}>
-                        {sleepTimer ? `${sleepTimer}m` : 'Off'}
-                      </span>
-                      <ChevronRight className="size-3.5" />
-                    </div>
-                  </button>
-
-                  <div className="flex w-full items-center justify-between rounded-control px-2.5 py-2">
-                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
-                      <Captions className="size-4 text-muted" strokeWidth={1.75} />
-                      <span>Enable Subtitles</span>
-                    </div>
-                    <button
-                      aria-checked={captionsOn}
-                      className={cn(
-                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus-visible:ring-2 focus-visible:ring-orange',
-                        captionsOn ? 'bg-orange' : 'bg-white/20 hover:bg-white/30',
-                      )}
-                      onClick={toggleSubtitlesSwitch}
-                      role="switch"
-                      type="button"
-                    >
-                      <span
-                        className={cn(
-                          'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                          captionsOn ? 'translate-x-4' : 'translate-x-0',
-                        )}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Playback Settings (Speed & Brightness) */}
-                <div className="space-y-2 border-t border-white/10 pt-2">
-                  <div className="flex items-center gap-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
-                    <Gauge className="size-3.5" />
-                    <span>Playback Settings</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 px-1 pb-1" role="group" aria-label="Playback speed">
-                    {dedupedRates.map((rate) => {
-                      const selected = selectedRate === rate
-                      return (
-                        <button
-                          aria-pressed={selected}
-                          className={settingsChipClass(selected)}
-                          key={rate}
-                          onClick={() => chooseRate(rate)}
-                          type="button"
-                        >
-                          {rate}×
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 px-1 pt-1 pb-1">
-                    <label className="flex items-center gap-2 text-sm text-ink" htmlFor="consumit-player-brightness">
-                      <Sun className="size-3.5 text-muted" />
-                      <span>Brightness</span>
-                    </label>
-                    <input
-                      aria-label="Brightness"
-                      className="h-9 w-28 cursor-pointer accent-orange"
-                      id="consumit-player-brightness"
-                      max={1.3}
-                      min={0.6}
-                      onChange={(event) => changeBrightness(Number(event.currentTarget.value))}
-                      step={0.05}
-                      type="range"
-                      value={brightness}
-                    />
-                  </div>
-                </div>
-
-                {/* Auto-skip intros */}
-                <div className="space-y-2 border-t border-white/10 pt-2">
-                  <div className="flex w-full items-center justify-between rounded-control px-2.5 py-2">
-                    <div className="flex items-center gap-2.5 text-sm font-medium text-ink">
-                      <SkipForward className="size-4 text-muted" strokeWidth={1.75} />
-                      <span>Auto-skip intros</span>
-                    </div>
-                    <button
-                      aria-checked={autoSkip}
-                      className={cn(
-                        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none focus-visible:ring-2 focus-visible:ring-orange',
-                        autoSkip ? 'bg-orange' : 'bg-white/20 hover:bg-white/30',
-                      )}
-                      onClick={toggleAutoSkip}
-                      role="switch"
-                      type="button"
-                    >
-                      <span
-                        className={cn(
-                          'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                          autoSkip ? 'translate-x-4' : 'translate-x-0',
-                        )}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Audio Tracks (if multi-audio) */}
-                {audioOptions.length > 1 ? (
-                  <div role="group" aria-label="Audio" className="space-y-1 border-t border-white/10 pt-2">
-                    <p className="px-1 pb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Audio Track</p>
-                    {audioOptions.map((option) => {
-                      const selected = selectedAudio === option.value
-                      return (
-                        <button
-                          aria-checked={selected}
-                          className={settingsRowClass(selected)}
-                          key={option.value}
-                          onClick={() => chooseAudio(option.value)}
-                          role="menuitemradio"
-                          type="button"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate leading-5">{option.label}</span>
-                            {option.detail ? <span className="block truncate text-xs font-normal text-muted leading-4">{option.detail}</span> : null}
-                          </span>
-                          {selected ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
+            </PlayerPanel>
+          </div>
+        ) : null}
+        {activeMenu === 'playback' ? (
+          <div className="contents" ref={menuRef}>
+            <PlayerPanel aria-label="Playback settings" id="consumit-player-menu-playback" onBack={() => setActiveMenu('settings')} onClose={closeMenu} title="Playback settings">
+              <div className="p-3">
+                <PlayerAdjustment accessibleLabel="Playback speed" label="Speed" valueLabel={selectedRate === 1 ? 'Normal' : selectedRate + '×'} value={Math.max(0, dedupedRates.indexOf(selectedRate))} min={0} max={dedupedRates.length - 1} disabled={dedupedRates.length === 1} step={1} ticks={dedupedRates.map((rate, index) => ({ value: index, label: rate + '×' }))} onChange={(index) => chooseRate(dedupedRates[index] ?? selectedRate)} />
+                <PlayerAdjustment label="Volume boost" valueLabel={volumeBoost === 1 ? 'Off' : volumeBoost + '×'} value={volumeBoost} min={1} max={3} step={0.5} ticks={[1, 1.5, 2, 2.5, 3].map((value) => ({ value, label: value + '×' }))} onChange={(value) => void changeVolumeBoost(value)} />
+                {boostError ? <p className="px-1 text-xs text-copy" role="status">{boostError}</p> : null}
+                <PlayerAdjustment label="Brightness" valueLabel={Math.round(brightness * 100) + '%'} value={brightness} min={0.6} max={1.3} step={0.05} ticks={[{ value: 0.6, label: '60%' }, { value: 1, label: '100%' }, { value: 1.3, label: '130%' }]} onChange={changeBrightness} />
               </div>
-            </div>
+            </PlayerPanel>
+          </div>
+        ) : null}
+        {activeMenu === 'audio' ? (
+          <div className="contents" ref={menuRef}>
+            <PlayerPanel aria-label="Audio" id="consumit-player-menu-audio" onBack={() => setActiveMenu('settings')} onClose={closeMenu} title="Audio">
+              <div className="space-y-1 p-3">
+                {engineState?.audioNotice ? <p className="mb-3 text-sm leading-6 text-copy" role="status">{engineState.audioNotice}</p> : null}
+                {!audioOptions.length ? <button className={settingsRowClass(!separateState.track)} onClick={() => { separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null) }} type="button">Stream audio</button> : null}
+                {unifiedAudio.map(option => {
+                  const selected = separateState.track ? option.separate.some(track => track.id === separateState.track?.id) : option.stream.some(track => track.value === selectedAudio)
+                  const loading = option.separate.some(track => track.id === preparingAudioId || (separateState.loading && track.id === separateState.track?.id))
+                  const stream = option.stream.find(track => track.value === selectedAudio) ?? option.stream[0]
+                  return <button aria-checked={selected} aria-busy={loading} className={settingsRowClass(selected)} key={option.key} onClick={() => stream ? chooseAudio(stream.value) : void chooseSeparateAudio(option.separate[0]!.id)} role="menuitemradio" type="button"><span className="min-w-0 flex-1">{option.label}</span>{loading ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : selected ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>
+                })}
+                {onAudioRequest ? <>
+                  {separateAudioLoading ? <p className="pt-2 text-sm text-copy" role="status">Finding languages…</p> : null}
+                  {separateAudioError || audioPreparationError || separateState.error ? <p className="mb-2 text-sm leading-6 text-copy" role="status">{audioPreparationError ?? separateState.error ?? separateAudioError}</p> : null}
+                  {separateState.track ? <div className="mt-3 border-t border-white/10 pt-3">
+                    <p className="mb-2 text-xs leading-5 text-muted" role="status">{separateState.warning ?? 'Different recordings may need a sync adjustment.'}</p>
+                    <PlayerAdjustment label="Audio sync" valueLabel={`${separateState.offset > 0 ? '+' : ''}${separateState.offset.toFixed(1)}s`} value={separateState.offset} min={-30} max={30} step={0.1} ticks={[]} onChange={value => separateAudioPlayer.current?.offset(value)} />
+                    <button className="mt-2 text-xs text-copy hover:text-ink" onClick={() => separateAudioPlayer.current?.offset(0)} type="button">Reset audio sync</button>
+                  </div> : null}
+                </> : null}
+              </div>
+            </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'quality' ? (
           <div className="contents" ref={menuRef}>
-            <div
-              aria-label="Quality"
-              className={RAIL_PANEL_CLASS}
-              id="consumit-player-menu-quality"
-              role="menu"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
-                <p className="text-base font-bold text-ink">Quality</p>
-                <button
-                  aria-label="Close quality"
-                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={() => setActiveMenu(null)}
-                  type="button"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
-                </button>
-              </div>
+            <PlayerPanel aria-label="Quality" id="consumit-player-menu-quality" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Quality">
               <div className="p-3">
-                <div className="flex flex-wrap gap-2 px-1 pb-1" role="group" aria-label="Quality options">
+                {engineState?.qualityNotice ? <p className="mb-3 text-sm leading-6 text-copy" role="status">{engineState.qualityNotice}</p> : null}
+                <div className="space-y-1" role="group" aria-label="Quality options">
                   {qualityOptions.map((option) => {
                     const selected = selectedQuality === option.value
                     return (
                       <button
                         aria-checked={selected}
-                        className={settingsChipClass(selected, true)}
+                        className={settingsRowClass(selected)}
                         key={option.value}
                         onClick={() => chooseQuality(option.value)}
                         role="menuitemradio"
                         title={option.detail ?? option.label}
                         type="button"
                       >
-                        {option.label}
+                        <span className="flex-1">{option.label}</span>
+                        {selected ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}
                       </button>
                     )
                   })}
                 </div>
               </div>
-            </div>
+            </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'server' ? (
           <div className="contents" ref={menuRef}>
-            <div
-              aria-label="Server"
-              className={RAIL_PANEL_CLASS}
-              id="consumit-player-menu-server"
-              role="menu"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
-                <p className="text-base font-bold text-ink">Server</p>
-                <button
-                  aria-label="Close server"
-                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={() => setActiveMenu(null)}
-                  type="button"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
-                </button>
-              </div>
+            <PlayerPanel aria-label="Server" id="consumit-player-menu-server" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Server">
               <div className="space-y-1 p-3">
+                {onServerAuto ? <>
+                  <button aria-checked={Boolean(serverAuto)} className={cn('flex min-h-11 w-full items-center gap-3 rounded-control px-3 text-left text-sm text-ink outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:opacity-50', serverAuto && 'bg-orange/15')} disabled={serverBusy} onClick={() => { onServerAuto(); closeMenu() }} role="menuitemradio" type="button">
+                    <span className="min-w-0 flex-1"><span className="block font-medium">Auto</span><span className="block text-xs text-muted">Choose automatically</span></span>
+                    {serverAuto ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                  </button>
+                  {currentServerLabel ? <p className="px-3 py-2 text-xs text-copy">Playing from {currentServerLabel}</p> : null}
+                </> : null}
+                {serverLoading ? <p className="px-3 py-2 text-xs text-copy" role="status">Finding servers…</p> : null}
+                {serverBusy ? <p className="px-3 py-2 text-xs text-copy" role="status">Switching server…</p> : null}
+                {serverError ? <div className="px-3 py-2"><p className="text-xs text-copy" role="status">{serverError}</p><button className="min-h-11 text-sm text-ink underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-orange" disabled={serverLoading} onClick={onServerRequest} type="button">Try again</button></div> : null}
+                {!serverLoading && !serverError && onServerAuto && !dedupedServerOptions?.some(option => option.value !== selectedServer) ? <p className="px-3 py-2 text-xs text-muted">No other servers are available for this title.</p> : null}
                 {(serverGroups ?? []).map((group) => (
                   <div key={group.family || 'servers'} role="group" aria-label={group.family ? displayFamilyName(group.family) : 'Servers'}>
                     {group.family && (serverGroups?.length ?? 0) > 1 ? (
                       <p className="px-3 pt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{displayFamilyName(group.family)}</p>
                     ) : null}
                     {group.options.map((option) => {
-                      const selected = (selectedServer ?? orderedServerOptions?.[0]?.value) === option.value
+                      const selected = !serverAuto && (selectedServer ?? orderedServerOptions?.[0]?.value) === option.value
                       const favorite = favoriteServers.includes(option.value)
                       const flag = regionFlag(option.region)
                       const region = regionName(option.region)
@@ -2507,6 +2499,7 @@ export function ConsumitPlayer({
                         >
                           <button
                             aria-checked={selected}
+                            disabled={serverBusy}
                             className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-control px-3 text-left text-sm outline-none transition-all motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange"
                             onClick={() => chooseServer(option.value)}
                             role="menuitemradio"
@@ -2542,36 +2535,20 @@ export function ConsumitPlayer({
                     </div>
                 ))}
               </div>
-            </div>
+            </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'sync' ? (
           <div className="contents" ref={menuRef}>
-            <div
-              aria-label="Subtitle sync"
-              className={cn(RAIL_PANEL_CLASS, 'sm:w-[340px]')}
-              id="consumit-player-menu-sync"
-              role="menu"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
-                <p className="text-base font-bold text-ink">Subtitle sync</p>
-                <button
-                  aria-label="Close subtitle sync"
-                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={() => setActiveMenu(null)}
-                  type="button"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
-                </button>
-              </div>
+            <PlayerPanel aria-label="Subtitle sync" backLabel="Back to subtitles" id="consumit-player-menu-sync" onClose={closeMenu} onBack={() => toggleMenu('subtitles')} title="Subtitle sync">
               <div className="space-y-3 p-3">
                 <div className="flex items-center justify-between px-1">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Current offset</p>
+                  <p className="text-sm text-copy">Current offset</p>
                   <p aria-live="polite" className="text-sm font-bold tabular-nums text-orange">
                     {formatSubtitleDelayMs(subtitleDelayMs)}
                   </p>
                 </div>
-                <p className="px-1 text-center text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
+                <p className="px-1 text-sm leading-6 text-copy">
                   Click a line when you hear it spoken
                 </p>
                 <div
@@ -2584,7 +2561,7 @@ export function ConsumitPlayer({
                   aria-label="Subtitle lines"
                 >
                   {syncCueWindow.visible.length === 0 ? (
-                    <p className="grid h-full place-items-center text-center text-xs font-bold uppercase tracking-wider text-muted">
+                    <p className="grid h-full place-items-center text-center text-sm text-muted">
                       {captionsOn ? 'No subtitles loaded' : 'Subtitles are off'}
                     </p>
                   ) : (
@@ -2624,7 +2601,7 @@ export function ConsumitPlayer({
                     type="button"
                   >
                     <Minus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-[10px] font-bold">50</span>
+                    <span className="ml-1 text-xs">50 ms</span>
                   </button>
                   <button
                     aria-label="Reset subtitle sync offset"
@@ -2633,6 +2610,7 @@ export function ConsumitPlayer({
                     type="button"
                   >
                     <RotateCcw aria-hidden="true" className="size-3.5" />
+                    <span className="ml-1 text-xs">Reset</span>
                   </button>
                   <button
                     aria-label="Shift subtitles forwards 50 milliseconds"
@@ -2641,7 +2619,7 @@ export function ConsumitPlayer({
                     type="button"
                   >
                     <Plus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-[10px] font-bold">50</span>
+                    <span className="ml-1 text-xs">50 ms</span>
                   </button>
                 </div>
                 {syncStatus ? (
@@ -2650,39 +2628,19 @@ export function ConsumitPlayer({
                   </p>
                 ) : null}
               </div>
-            </div>
+            </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'subtitles' ? (
           <div className="contents" ref={menuRef}>
-            <div
-              aria-label="Subtitles"
-              className={RAIL_PANEL_CLASS}
-              id="consumit-player-menu-subtitles"
-              role="menu"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-white/10 p-3.5 pb-2.5">
-                <p className="text-base font-bold text-ink">
-                  Subtitles
-                  {subtitleTrackCount > 0 ? (
-                    <span className="ml-2 align-middle text-xs font-bold tabular-nums text-muted">
-                      {subtitleTrackCount} {subtitleTrackCount === 1 ? 'sub' : 'subs'}
-                    </span>
-                  ) : null}
-                </p>
-                <button
-                  aria-label="Close subtitles"
-                  className="grid size-8 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={() => setActiveMenu(null)}
-                  type="button"
-                >
-                  <X aria-hidden="true" className="size-4" strokeWidth={2} />
-                </button>
-              </div>
+            <PlayerPanel aria-label="Subtitles" id="consumit-player-menu-subtitles" onClose={closeMenu} onBack={() => setActiveMenu("settings")} meta={subtitleTrackCount > 0 ? subtitleTrackCount + (subtitleTrackCount === 1 ? " track" : " tracks") : undefined} title="Subtitles">
               <div className="space-y-1 p-3">
                 <button aria-checked={!captionsOn} className={settingsRowClass(!captionsOn)} onClick={() => chooseSubtitle('off')} role="menuitemradio" type="button">
                   <span className="min-w-0 flex-1 text-left font-medium">Off</span>
                   {!captionsOn ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
+                </button>
+                <button className={settingsRowClass(false)} onClick={() => setActiveMenu('appearance')} type="button">
+                  <span className="min-w-0 flex-1 text-left font-medium">Subtitle appearance</span><ChevronRight aria-hidden="true" className="size-4 text-muted" />
                 </button>
                 <input accept=".srt,.vtt,text/vtt,application/x-subrip" className="sr-only" onChange={(event) => { void uploadSubtitle(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
                 <button className={settingsRowClass(false)} onClick={() => uploadInputRef.current?.click()} type="button">
@@ -2707,7 +2665,7 @@ export function ConsumitPlayer({
                 {subtitleSearch.trim() ? <div className="space-y-1">
                   {searchingSubtitles ? <p className="px-2 text-xs text-muted" role="status">Searching tracks…</p> : null}
                   {!searchingSubtitles && subtitleSearchResults.length === 0 ? <p className="px-2 text-xs text-muted">No tracks match this search.</p> : null}
-                  {subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{nativeLanguageName(track.language, track.language)} · {track.label}</span><span className="block truncate text-xs text-muted">{track.provider}{track.release ? ` · ${track.release}` : ''}</span></span></button>)}
+                  {subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} /></button>)}
                   {nextSearchCursor != null ? <button className={settingsRowClass(false)} onClick={() => void runSubtitleSearch(subtitleSearch, nextSearchCursor)} type="button">Load more matches</button> : null}
                 </div> : null}
                 {!subtitleSearch.trim() && !subtitleDiscovery?.loading && subtitleLanguageRows.length === 0 ? <p className="px-2 py-2 text-sm text-muted">No subtitles found for this title yet.</p> : null}
@@ -2719,57 +2677,25 @@ export function ConsumitPlayer({
                       setOpenSubtitleLanguage(opened ? null : code)
                       if (!opened && onSubtitlePage) void loadSubtitleLanguage(code)
                     }} type="button">
-                      <span className="min-w-0 flex-1 truncate text-left font-medium">{nativeLanguageName(code, code === 'und' ? 'Uploaded' : code.toUpperCase())}</span>
+                      <bdi className="min-w-0 flex-1 truncate text-left font-medium tracking-normal" dir="auto" lang={code}>{nativeLanguageName(code, code === 'und' ? 'Uploaded' : code.toUpperCase())}</bdi>
                       <span className="tabular-nums text-muted">{count}</span><ChevronRight aria-hidden="true" className={cn('size-4 text-muted transition-transform', opened && 'rotate-90')} />
                     </button>
                     {opened ? <div aria-label={`${nativeLanguageName(code, code)} subtitle tracks`} className="space-y-1 pl-3">
-                      {localOptions.map((option) => <button aria-checked={selectedSubtitle === option.value} className={settingsRowClass(selectedSubtitle === option.value)} key={option.value} onClick={() => chooseSubtitle(option.value)} role="menuitemradio" type="button"><span className="min-w-0 flex-1 truncate text-left text-sm">{option.label}</span>{selectedSubtitle === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
-                      {(discoveredTracks[code] ?? []).filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle === track.id} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><span className="min-w-0 flex-1 text-left"><span className="block truncate text-sm font-medium">{track.label}</span><span className="block truncate text-xs text-muted">{track.provider}{track.release ? ` · ${track.release}` : ''}{track.hi ? ' · HI' : ''}{track.forced ? ' · Forced' : ''}{track.machineTranslated ? ' · Machine translated' : ''}</span></span>{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
+                      {localOptions.map((option) => <button aria-checked={selectedSubtitle === option.value} className={settingsRowClass(selectedSubtitle === option.value)} key={option.value} onClick={() => chooseSubtitle(option.value)} role="menuitemradio" type="button"><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{selectedSubtitle === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
+                      {(discoveredTracks[code] ?? []).filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle === track.id} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
                       {nextSubtitleCursor[code] != null ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code, nextSubtitleCursor[code]!)} type="button">Load more tracks</button> : null}
                       {nextSubtitleCursor[code] == null && (discoveredTracks[code]?.length ?? 0) < (subtitleDiscovery?.languages.find((language) => language.code === code)?.count ?? 0) ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code)} type="button">Show latest tracks</button> : null}
                     </div> : null}
                   </div>
                 })}
-                <div className="mt-2 space-y-3 border-t border-white/10 pt-3">
-                  <div aria-label="Preferred subtitle languages" className="space-y-1.5 px-1" role="group">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
-                        Preferred languages
-                      </p>
-                      <p className="text-[11px] tabular-nums text-faint">{subtitleLanguages.length}/3</p>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {PREFERRED_LANGUAGE_CODES.map((code) => {
-                        const order = subtitleLanguages.indexOf(code)
-                        const selected = order !== -1
-                        const capped = !selected && subtitleLanguages.length >= 3
-                        return (
-                          <button
-                            aria-pressed={selected}
-                            className={settingsChipClass(selected, true)}
-                            disabled={capped}
-                            key={code}
-                            onClick={() => toggleSubtitleLanguage(code)}
-                            title={selected ? `Preferred language ${order + 1}, remove` : capped ? 'Remove one first (3 max)' : 'Add as preferred language'}
-                            type="button"
-                          >
-                            {selected ? (
-                              <span aria-hidden="true" className="mr-1 inline-grid size-4 place-items-center rounded-full bg-orange text-[10px] font-bold text-canvas">
-                                {order + 1}
-                              </span>
-                            ) : null}
-                            {nativeLanguageName(code, code.toUpperCase())}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <p className="text-[11px] leading-4 text-faint">
-                      Subtitles are fetched in these languages first, in order.
-                    </p>
-                  </div>
-                  <p className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">
-                    Captions appearance
-                  </p>
+              </div>
+            </PlayerPanel>
+          </div>
+        ) : null}
+        {activeMenu === 'appearance' ? (
+          <div className="contents" ref={menuRef}>
+            <PlayerPanel aria-label="Subtitle appearance" backLabel="Back to subtitles" id="consumit-player-menu-appearance" onBack={() => setActiveMenu('subtitles')} onClose={closeMenu} title="Subtitle appearance">
+              <div className="space-y-3 p-3">
                   <div aria-label="Caption size" className="space-y-1.5 px-1" role="group">
                     <p className="text-xs font-medium text-copy">Size</p>
                     <div className="flex flex-wrap gap-1.5">
@@ -2836,70 +2762,8 @@ export function ConsumitPlayer({
                       </div>
                     </div>
                   </div>
-                  <div aria-label="Subtitle sync delay" className="space-y-1.5 px-1" role="group">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-copy">Sync delay</p>
-                      <p aria-live="polite" className="text-xs font-bold tabular-nums text-orange">
-                        {formatSubtitleDelayMs(subtitleDelayMs)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        aria-label="Shift subtitles backwards 500 milliseconds"
-                        className={settingsChipClass(false, true)}
-                        onClick={() => adjustSubtitleDelayMs(-500)}
-                        type="button"
-                      >
-                        −500
-                      </button>
-                      <button
-                        aria-label="Shift subtitles backwards 100 milliseconds"
-                        className={settingsChipClass(false)}
-                        onClick={() => adjustSubtitleDelayMs(-100)}
-                        type="button"
-                      >
-                        <Minus aria-hidden="true" className="size-3.5" />
-                      </button>
-                      <button
-                        aria-label="Reset subtitle sync offset"
-                        className={settingsChipClass(subtitleDelayMs === 0, true)}
-                        onClick={() => chooseSubtitleDelayMs(0)}
-                        type="button"
-                      >
-                        <RotateCcw aria-hidden="true" className="size-3.5" />
-                      </button>
-                      <button
-                        aria-label="Shift subtitles forwards 100 milliseconds"
-                        className={settingsChipClass(false)}
-                        onClick={() => adjustSubtitleDelayMs(100)}
-                        type="button"
-                      >
-                        <Plus aria-hidden="true" className="size-3.5" />
-                      </button>
-                      <button
-                        aria-label="Shift subtitles forwards 500 milliseconds"
-                        className={settingsChipClass(false, true)}
-                        onClick={() => adjustSubtitleDelayMs(500)}
-                        type="button"
-                      >
-                        +500
-                      </button>
-                    </div>
-                    <button
-                      className="flex w-full items-center justify-between rounded-control px-2.5 py-2 text-left text-sm transition-colors hover:bg-white/[0.06] outline-none focus-visible:ring-2 focus-visible:ring-orange"
-                      onClick={() => setActiveMenu('sync')}
-                      type="button"
-                    >
-                      <span className="flex items-center gap-2 font-medium text-ink">
-                        <Wand2 aria-hidden="true" className="size-4 text-muted" strokeWidth={1.75} />
-                        Visual sync…
-                      </span>
-                      <ChevronRight aria-hidden="true" className="size-3.5 text-muted" />
-                    </button>
-                  </div>
-                </div>
               </div>
-            </div>
+            </PlayerPanel>
           </div>
         ) : null}
       </div>
@@ -2910,7 +2774,7 @@ export function ConsumitPlayer({
 function PlayIcon() {
   return (
     <svg aria-hidden="true" className="size-5 fill-current" viewBox="0 0 20 20">
-      <path d="M6 4.5v11l9-5.5-9-5.5Z" />
+      <path d="M3 2v16l14-8L3 2Z" />
     </svg>
   )
 }
@@ -2918,8 +2782,8 @@ function PlayIcon() {
 function PauseIcon() {
   return (
     <svg aria-hidden="true" className="size-5 fill-current" viewBox="0 0 20 20">
-      <rect height="11" width="3.4" x="5" y="4.5" />
-      <rect height="11" width="3.4" x="11.6" y="4.5" />
+      <rect height="16" width="4.5" x="3" y="2" />
+      <rect height="16" width="4.5" x="12.5" y="2" />
     </svg>
   )
 }

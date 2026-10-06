@@ -47,7 +47,7 @@ beforeEach(() => {
   mocks.saveMemberFavorites.mockResolvedValue({})
 })
 const profile: MemberProfileData = {
-  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', location: null, nextUsernameChangeAt: null, username: 'alex_sample', usernameChangedAt: null, visibility: 'public' },
+  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', location: null, nextUsernameChangeAt: null, username: 'alex_sample', usernameChangedAt: null, visibility: 'private' },
   diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 0, reviews: 0, watched: 0 },
 }
 
@@ -81,6 +81,8 @@ describe('profile as a personal cinema', () => {
     expect(screen.queryByRole('button', { name: /follow/i })).not.toBeInTheDocument()
     expect(screen.queryByText('followers')).not.toBeInTheDocument()
     expect(screen.queryByText('following')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Network' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /share/i })).not.toBeInTheDocument()
   })
   it('renders profile stats, collection links, and recent activity', () => {
     render(
@@ -89,7 +91,7 @@ describe('profile as a personal cinema', () => {
           ...profile,
           diary: [{ entryId: 'e1', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, rewatch: false, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-02` }, { entryId: 'e2', episode: 3, id: seriesSummary.id, kind: 'series', origin: 'native', rewatch: false, season: 1, sourceKey: null, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-01` }],
           favorites: [{ id: movieSummary.id, kind: 'movie', position: 1, origin: 'native', sourceKey: null }],
-          lists: [{ description: null, id: 'l1', itemCount: 2, name: 'Shortlist', origin: 'native', slug: 'shortlist', visibility: 'public' }],
+          lists: [{ description: null, id: 'l1', itemCount: 2, name: 'Shortlist', origin: 'native', slug: 'shortlist', visibility: 'private' }],
           reviews: [{ body: 'A patient masterpiece.', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, reviewId: 'r1', reviewedOn: '2026-09-06', tags: [] }],
           statistics: { diaryEntries: 1, lists: 1, reviews: 1, watched: 1 },
         }}
@@ -100,7 +102,7 @@ describe('profile as a personal cinema', () => {
     expect(within(stats).getByText('watched').closest('a')).toHaveAttribute('href', '/profile/alex_sample/films')
     expect(within(stats).getByText('diary').closest('a')).toHaveAttribute('href', '/profile/alex_sample/diary')
     const tabs = screen.getByRole('navigation', { name: 'Alex profile sections' })
-    expect(within(tabs).getByRole('link', { name: 'Films, 1' })).toHaveAttribute('href', '/profile/alex_sample/films')
+    expect(within(tabs).getByRole('link', { name: 'Watched, 1' })).toHaveAttribute('href', '/profile/alex_sample/films')
     expect(within(tabs).getByRole('link', { name: 'Diary, 1' })).toHaveAttribute('href', '/profile/alex_sample/diary')
     expect(within(tabs).getByRole('link', { name: 'Reviews, 1' })).toHaveAttribute('href', '/profile/alex_sample/reviews')
     expect(within(tabs).getByRole('link', { name: 'Lists, 1' })).toHaveAttribute('href', '/profile/alex_sample/lists')

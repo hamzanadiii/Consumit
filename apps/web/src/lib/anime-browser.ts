@@ -3,6 +3,7 @@ import {
   animeSearchResultSchema,
   apiErrorResponseSchema,
   animePageSchema,
+  type AnimeBrowseQuery,
   type AnimeEpisode,
   type AnimeSeason,
 } from '@consumit/contracts'
@@ -59,6 +60,17 @@ export async function browserAnimeSeasonal(season: AnimeSeason, year: number, pa
 
 export async function browserAnimeTrending(page: number, signal?: AbortSignal) {
   const parsed = animePageSchema.safeParse(await request(`/v1/anime/trending?page=${page}`, signal))
+  if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned an invalid response.')
+  return parsed.data
+}
+
+/** Server-driven anime discovery: sort plus genre, year, and format filters. */
+export async function browserAnimeBrowse(query: AnimeBrowseQuery, signal?: AbortSignal) {
+  const params = new URLSearchParams({ sort: query.sort, page: String(query.page) })
+  if (query.genre) params.set('genre', query.genre)
+  if (query.year !== undefined) params.set('year', String(query.year))
+  if (query.format) params.set('format', query.format)
+  const parsed = animePageSchema.safeParse(await request(`/v1/anime/browse?${params}`, signal))
   if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned an invalid response.')
   return parsed.data
 }

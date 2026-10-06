@@ -1,0 +1,350 @@
+{
+  "mode": "fresh-source-injected-inspection-live-worker-actual-player",
+  "titleId": 550,
+  "responses": [
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 0,
+      "ms": 405,
+      "bytes": 3094
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 1,
+      "ms": 482,
+      "bytes": 935090
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 609,
+      "bytes": 1205
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 897,
+      "bytes": 2101820
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 1,
+      "ms": 1085,
+      "bytes": 935090
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 1156,
+      "bytes": 1212
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 1441,
+      "bytes": 14006089
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 2616,
+      "bytes": 13313509
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 3692,
+      "bytes": 10888657
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 4599,
+      "bytes": 6006336
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 5539,
+      "bytes": 8886901
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 6767,
+      "bytes": 14507277
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 8508,
+      "bodyFailed": true
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 9739,
+      "bodyFailed": true
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 10782,
+      "bodyFailed": true
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 15241,
+      "bytes": 12285112
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 17028,
+      "bytes": 13064230
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 17898,
+      "bytes": 12268767
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 18790,
+      "bytes": 11175182
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 19970,
+      "bytes": 5685248
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 21175,
+      "bytes": 675840
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 21838,
+      "bytes": 688128
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 22438,
+      "bytes": 602112
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 23052,
+      "bytes": 724992
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 31006,
+      "bytes": 1085440
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 31910,
+      "bytes": 822411
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 32723,
+      "bytes": 655360
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 33494,
+      "bytes": 598016
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 34210,
+      "bytes": 847872
+    }
+  ],
+  "failures": [
+    {
+      "ms": 15147,
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "ms": 30498,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 31514,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 32281,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 33037,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 33782,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 34525,
+      "error": "net::ERR_ABORTED"
+    },
+    {
+      "ms": 34585,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 35645,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 37723,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 37772,
+      "error": "net::ERR_FAILED"
+    },
+    {
+      "ms": 38836,
+      "error": "net::ERR_FAILED"
+    }
+  ],
+  "samples": [
+    {
+      "time": 3.850246,
+      "width": 1280,
+      "height": 720,
+      "frames": 97,
+      "error": null
+    },
+    {
+      "time": 8.8687,
+      "width": 3840,
+      "height": 2160,
+      "frames": 217,
+      "error": null
+    },
+    {
+      "time": 13.877133,
+      "width": 3840,
+      "height": 2160,
+      "frames": 337,
+      "error": null
+    },
+    {
+      "time": 92.452006,
+      "width": 3840,
+      "height": 2160,
+      "frames": 446,
+      "error": null
+    },
+    {
+      "time": 97.481801,
+      "width": 3840,
+      "height": 2160,
+      "frames": 567,
+      "error": null
+    },
+    {
+      "time": 102.504219,
+      "width": 3840,
+      "height": 2160,
+      "frames": 687,
+      "error": null
+    },
+    {
+      "time": 0,
+      "width": 0,
+      "height": 0,
+      "frames": 0,
+      "error": null
+    },
+    {
+      "time": 0,
+      "width": 0,
+      "height": 0,
+      "frames": 0,
+      "error": null
+    },
+    {
+      "error": null
+    }
+  ],
+  "evidence": "Decode: First frame confirmed\nStartup: 1159ms\nSeek: Confirmed\nStalls observed: 2\nBrowser failure: cors"
+}

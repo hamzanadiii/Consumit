@@ -1,0 +1,17 @@
+{
+  "movie": 522406,
+  "provider": "rivezephyr",
+  "expirySeconds": 1800,
+  "passed": true,
+  "recoveries": [],
+  "failedMediaStatuses": [],
+  "pageErrors": [],
+  "media": {
+    "position": 330.034988,
+    "width": 3840,
+    "height": 1920,
+    "frames": 7925,
+    "reloads": 0
+  },
+  "wallSeconds": 330
+}

@@ -1,4 +1,4 @@
-import { validatedSources, type MediaKind, type ProviderRegistration } from '@consumit/provider-sdk'
+import { validatedSources, suppliesVideo, type MediaKind, type ProviderRegistration } from '@consumit/provider-sdk'
 import type { PlaybackRef } from '@consumit/contracts'
 import type { PlaybackStore } from './state.ts'
 
@@ -80,7 +80,7 @@ export function createProbeScheduler(deps: {
     try {
       if (deps.store && !await deps.store.claim('probe:scheduler', lock, Math.max(60, Math.ceil(intervalMs / 1000))).catch(() => false)) return
       for (const registration of providers) {
-        if (!registration.enabled) continue
+        if (!registration.enabled || !suppliesVideo(registration)) continue
         for (const kind of registration.mediaKinds) {
           for (const probeRegion of regionsFor(registration)) {
             await probe(registration, kind, probeRegion)

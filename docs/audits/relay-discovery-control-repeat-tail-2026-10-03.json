@@ -1,0 +1,292 @@
+[
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12968069,
+      "durationMs": 1202
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12163606,
+      "durationMs": 1036
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12298318,
+      "durationMs": 869
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12677637,
+      "durationMs": 1660
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 9209929,
+      "durationMs": 1220
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 10234819,
+      "durationMs": 876
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 2719984,
+      "durationMs": 281
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3119860,
+      "durationMs": 96
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 5866728,
+      "durationMs": 94
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3040900,
+      "durationMs": 50
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 2129664,
+      "durationMs": 49
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 645592,
+      "durationMs": 8
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 1045656,
+      "durationMs": 20
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 2496640,
+      "durationMs": 45
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 11716985,
+      "durationMs": 1161
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 4173788,
+      "durationMs": 457
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3087524,
+      "durationMs": 125
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "stormboron",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3044660,
+      "durationMs": 85
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 11989949,
+      "durationMs": 967
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 1210,
+      "durationMs": 11
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 5266611,
+      "durationMs": 111
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 5385619,
+      "durationMs": 32
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 4572022,
+      "durationMs": 18
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 4854921,
+      "durationMs": 38
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3391734,
+      "durationMs": 17
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3538515,
+      "durationMs": 11
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3843315,
+      "durationMs": 45
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "wecollege-miami",
+      "kind": "media",
+      "status": 200,
+      "bytes": 3264262,
+      "durationMs": 14
+    }
+  },
+  {
+    "outcome": "ok",
+    "relay": {
+      "provider": "rivezephyr",
+      "kind": "media",
+      "status": 200,
+      "bytes": 12387301,
+      "durationMs": 1779
+    }
+  }
+]

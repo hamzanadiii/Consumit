@@ -1,0 +1,360 @@
+{
+  "date": "2026-10-03",
+  "titleId": 550,
+  "rows": [
+    {
+      "id": "wecollege-miami",
+      "kind": "movie",
+      "titleId": 550,
+      "pass": false,
+      "mediaResponses": [
+        {
+          "status": 200,
+          "kind": "hls",
+          "depth": 0,
+          "host": "moon.zenoak.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 403,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        }
+      ],
+      "networkFailures": [],
+      "pageErrors": [],
+      "resolved": true,
+      "resolveCode": "resolved",
+      "delivery": "relay",
+      "error": "TimeoutError",
+      "failedStage": "first-frame",
+      "rootReprobeStatus": 200,
+      "evidence": "Decode: Failed\nStartup: Unchecked\nSeek: Unchecked\nStalls observed: 0\nBrowser failure: headers"
+    }
+  ],
+  "repeat": [
+    {
+      "id": "wecollege-miami",
+      "kind": "movie",
+      "titleId": 550,
+      "pass": false,
+      "mediaResponses": [
+        {
+          "status": 200,
+          "kind": "hls",
+          "depth": 0,
+          "host": "moon.zenoak.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 200,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        },
+        {
+          "status": 403,
+          "kind": "auto",
+          "depth": 1,
+          "host": "ultramoss.top"
+        }
+      ],
+      "networkFailures": [],
+      "pageErrors": [],
+      "resolved": true,
+      "resolveCode": "resolved",
+      "delivery": "relay",
+      "error": "TimeoutError",
+      "failedStage": "first-frame",
+      "rootReprobeStatus": 200,
+      "evidence": "Decode: Failed\nStartup: Unchecked\nSeek: Unchecked\nStalls observed: 0\nBrowser failure: headers"
+    }
+  ],
+  "workerTail": [
+    {
+      "outcome": "ok",
+      "exceptions": [],
+      "logs": [
+        "{\"event\":\"relay.request\",\"provider\":\"wecollege-miami\",\"kind\":\"manifest\",\"status\":200,\"bytes\":877910,\"durationMs\":196}"
+      ]
+    },
+    {
+      "outcome": "ok",
+      "exceptions": [],
+      "logs": [
+        "{\"event\":\"relay.request\",\"provider\":\"wecollege-miami\",\"kind\":\"media\",\"status\":200,\"bytes\":1212,\"durationMs\":71}"
+      ]
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        },
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        },
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        },
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "exceededCpu",
+      "exceptions": [
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        },
+        {
+          "name": "Error",
+          "message": "Worker exceeded CPU time limit."
+        }
+      ],
+      "logs": []
+    },
+    {
+      "outcome": "ok",
+      "exceptions": [],
+      "logs": [
+        "{\"event\":\"relay.request\",\"provider\":\"wecollege-miami\",\"kind\":\"media\",\"status\":403,\"bytes\":0,\"durationMs\":62}"
+      ]
+    },
+    {
+      "outcome": "ok",
+      "exceptions": [],
+      "logs": [
+        "{\"event\":\"relay.request\",\"provider\":\"wecollege-miami\",\"kind\":\"manifest\",\"status\":200,\"bytes\":877910,\"durationMs\":96}"
+      ]
+    }
+  ],
+  "cpuRepeat": [
+    {
+      "id": "wecollege-miami",
+      "kind": "movie",
+      "titleId": 550,
+      "pass": false,
+      "mediaResponses": [],
+      "networkFailures": [
+        "net::ERR_FAILED"
+      ],
+      "pageErrors": [],
+      "resolved": true,
+      "resolveCode": "resolved",
+      "delivery": "relay",
+      "error": "TimeoutError",
+      "failedStage": "first-frame",
+      "rootReprobeStatus": 503,
+      "evidence": "Decode: Failed\nStartup: Unchecked\nSeek: Unchecked\nStalls observed: 0\nBrowser failure: manifest"
+    }
+  ],
+  "wecollegeHintProbe": [
+    {
+      "index": 0,
+      "mode": "bare",
+      "status": 206
+    },
+    {
+      "index": 0,
+      "mode": "referer",
+      "status": 206
+    },
+    {
+      "index": 0,
+      "mode": "rootHints",
+      "status": 206
+    },
+    {
+      "index": 1,
+      "mode": "bare",
+      "status": 206
+    },
+    {
+      "index": 1,
+      "mode": "referer",
+      "status": 206
+    },
+    {
+      "index": 1,
+      "mode": "rootHints",
+      "status": 206
+    },
+    {
+      "index": 2,
+      "mode": "bare",
+      "status": 206
+    },
+    {
+      "index": 2,
+      "mode": "referer",
+      "status": 206
+    },
+    {
+      "index": 2,
+      "mode": "rootHints",
+      "status": 206
+    },
+    {
+      "index": 8,
+      "mode": "bare",
+      "status": 206
+    },
+    {
+      "index": 8,
+      "mode": "referer",
+      "status": 206
+    },
+    {
+      "index": 8,
+      "mode": "rootHints",
+      "status": 206
+    },
+    {
+      "index": 15,
+      "mode": "bare",
+      "status": 403
+    },
+    {
+      "index": 15,
+      "mode": "referer",
+      "status": 206
+    },
+    {
+      "index": 15,
+      "mode": "rootHints",
+      "status": 206
+    }
+  ],
+  "headerFix": {
+    "workerVersion": "c74ede25-a682-470e-82b2-5c731c9723de",
+    "workerPlan": "Free",
+    "workerTestsPassed": 26,
+    "scope": "Fixed public movy.sx Referer for the two WeCollege relay rows on their approved split media hosts",
+    "remainingCpuFailure": true
+  }
+}

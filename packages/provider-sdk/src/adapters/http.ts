@@ -24,12 +24,15 @@ export function parseSkipSegments(value: unknown): SkipSegment[] {
 /** The host application supplies bounded, DNS-pinned HTTP; adapters never call global fetch. */
 export type ProviderHttpRequest = {
   method?: 'POST'
-  body?: string
+  body?: string | Uint8Array
   /** Read only this many response bytes, for bounded media liveness probes. */
   readPrefixBytes?: number
 }
-export type ProviderHttpResponse = { status: number; text: string; url: string; headers?: Headers }
-export type ProviderHttp = (url: string, headers: Record<string, string>, signal: AbortSignal, init?: ProviderHttpRequest) => Promise<ProviderHttpResponse>
+export type ProviderHttpResponse = { status: number; text: string; url: string; headers?: Headers; bytes?: Uint8Array }
+export type ProviderHttp = ((url: string, headers: Record<string, string>, signal: AbortSignal, init?: ProviderHttpRequest) => Promise<ProviderHttpResponse>) & {
+  /** Present only for explicitly configured relay-discovery adapters. */
+  mediaScope?: (hosts: readonly string[]) => ProviderHttp
+}
 export const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
 
 export class ProviderFailure extends Error {
@@ -67,6 +70,12 @@ export async function document(http: ProviderHttp, url: string, signal: AbortSig
 
 /** Unknown upstream expiry gets a conservative refresh deadline, never a durable cache entry. */
 export function accessDeadline(url: string, now: number, explicit?: number) {
+  return sourceAccess(url, now, explicit).expiresAt
+}
+
+/** Distinguish a real upstream expiry from our conservative freshness timer.
+ * The latter must not become a hard five-minute edge-media cutoff. */
+export function sourceAccess(url: string, now: number, explicit?: number) {
   const query = new URL(url).searchParams
   // Some upstreams sign `expire` in seconds or milliseconds instead of the
   // `expires`/`exp` names; values at/above 1e12 are already milliseconds.
@@ -75,7 +84,7 @@ export function accessDeadline(url: string, now: number, explicit?: number) {
   const expiry = explicit ?? (expireMs > 0 ? expireMs : Number(query.get('expires') ?? query.get('exp') ?? 0) * 1000)
   const until = expiry > 0 ? Math.min(expiry, now + 1_800_000) : now + 300_000
   if (!Number.isFinite(until) || until <= now + 30_000) throw new ProviderFailure('empty')
-  return new Date(until).toISOString()
+  return { expiresAt: new Date(until).toISOString(), expiryEstimated: !(expiry > 0) }
 }
 
 export function mediaType(url: string, hint?: string): ProviderSource['type'] | undefined {

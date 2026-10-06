@@ -34,20 +34,45 @@ describe('per-member rate-limit buckets', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = []
   afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())))
 
+  it('allows normal metadata fan-out beyond 100 reads without blocking member requests', async () => {
+    const app = await buildApp({})
+    apps.push(app)
+    for (let attempt = 0; attempt < 150; attempt += 1) {
+      const res = await app.inject({ method: 'GET', url: '/v1/titles/search?q=ab&kind=all' })
+      expect(res.statusCode).not.toBe(429)
+    }
+    const member = await app.inject({ method: 'GET', url: '/v1/me' })
+    expect(member.statusCode).not.toBe(429)
+  })
+
+  it('keeps a bounded shared metadata budget and a separate member budget', async () => {
+    const app = await buildApp({})
+    apps.push(app)
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const url = attempt % 2 === 0 ? '/v1/titles/search?q=ab&kind=all' : '/v1/anime/batch?ids=invalid'
+      const res = await app.inject({ method: 'GET', url })
+      expect(res.statusCode).not.toBe(429)
+    }
+    const limited = await app.inject({ method: 'GET', url: '/v1/titles/discover' })
+    expect(limited.statusCode).toBe(429)
+    expect(limited.json()).toEqual({ error: expect.objectContaining({ code: 'RATE_LIMITED', retryable: true }) })
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0)
+    expect((await app.inject({ method: 'GET', url: '/v1/me' })).statusCode).not.toBe(429)
+  })
+
   it('exhausting one session bucket leaves other sessions unaffected', async () => {
-    // The limiter hooks matched routes only, so exercise a real route (the
-    // unavailable catalog answers 503; the status is irrelevant here).
+    // The limiter hooks matched routes only, so exercise a real member route.
     const app = await buildApp({})
     apps.push(app)
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const res = await app.inject({ method: 'GET', url: '/v1/titles/search?q=ab&kind=all', cookies: { consumit_session: 'token-a' } })
+      const res = await app.inject({ method: 'GET', url: '/v1/me', cookies: { consumit_session: 'token-a' } })
       expect(res.statusCode).not.toBe(429)
     }
-    const limited = await app.inject({ method: 'GET', url: '/v1/titles/search?q=ab&kind=all', cookies: { consumit_session: 'token-a' } })
+    const limited = await app.inject({ method: 'GET', url: '/v1/me', cookies: { consumit_session: 'token-a' } })
     expect(limited.statusCode).toBe(429)
     expect(limited.json()).toEqual({ error: expect.objectContaining({ code: 'RATE_LIMITED', retryable: true }) })
 
-    const other = await app.inject({ method: 'GET', url: '/v1/titles/search?q=ab&kind=all', cookies: { consumit_session: 'token-b' } })
+    const other = await app.inject({ method: 'GET', url: '/v1/me', cookies: { consumit_session: 'token-b' } })
     expect(other.statusCode).not.toBe(429)
   })
 })

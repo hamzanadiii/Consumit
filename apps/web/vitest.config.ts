@@ -1,11 +1,15 @@
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'server-only': createRequire(import.meta.url).resolve('next/dist/compiled/server-only/empty.js'),
+    },
   },
   test: {
     environment: 'jsdom',

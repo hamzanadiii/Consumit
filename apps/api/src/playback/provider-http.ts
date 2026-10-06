@@ -2,9 +2,10 @@ import type { ProviderHttp } from '@consumit/provider-sdk'
 import { fetchMedia, type MediaTransport } from './transport.ts'
 
 /** Resolution documents use the same destination protections as media, with a hard body cap. */
-export function createProviderHttp(hosts: readonly string[], transport: MediaTransport = fetchMedia): ProviderHttp {
-  return async (url, headers, signal, init) => {
-    if (init?.body && init.body.length > 65_536) throw new Error('Provider request exceeds its limit.')
+export function createProviderHttp(hosts: readonly string[], transport: MediaTransport = fetchMedia, relayDiscovery = false): ProviderHttp {
+  const http: ProviderHttp = async (url, headers, signal, init) => {
+    const requestSize = typeof init?.body === 'string' ? Buffer.byteLength(init.body) : init?.body?.byteLength ?? 0
+    if (requestSize > 65_536) throw new Error('Provider request exceeds its limit.')
     const prefixLimit = init?.readPrefixBytes
     if (prefixLimit !== undefined && (!Number.isInteger(prefixLimit) || prefixLimit < 1 || prefixLimit > 65_536)) {
       throw new Error('Provider response prefix limit is invalid.')
@@ -35,7 +36,13 @@ export function createProviderHttp(hosts: readonly string[], transport: MediaTra
         if (prefixLimit !== undefined && size >= prefixLimit) break
       }
       signal.throwIfAborted()
-      return { status: response.status, url: response.url, text: Buffer.concat(chunks).toString('utf8'), headers: response.headers }
+      const bytes = Buffer.concat(chunks)
+      return { status: response.status, url: response.url, text: bytes.toString('utf8'), bytes, headers: response.headers }
     } finally { signal.removeEventListener('abort', abort); response.body.destroy() }
   }
+  if (relayDiscovery) http.mediaScope = (destinations) => {
+    if (!destinations.length || destinations.length > 8 || destinations.some(host => !/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(host))) throw new Error('Invalid discovered media scope.')
+    return createProviderHttp(destinations, transport)
+  }
+  return http
 }

@@ -172,7 +172,6 @@ export function WatchlistCollection({ catalogDetailsLimited = false, catalogUnav
                 if (view === 'shelf') return <li className="flex items-center gap-5 py-4" key={refKey(item)}><Link aria-label={label} className="flex min-w-0 flex-1 items-center gap-4 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={titleHref(item)}><ArtworkFrame alt="" className="w-14 shrink-0" src={title?.posterUrl ?? undefined} />{caption}</Link>{saveAction}</li>
                 return (
                   <TitleCard
-                    action={saveAction}
                     className="min-w-0"
                     href={titleHref(item)}
                     key={refKey(item)}

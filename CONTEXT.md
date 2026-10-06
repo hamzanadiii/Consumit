@@ -1,6 +1,6 @@
 # Consumit
 
-Consumit is a social streaming and taste-discovery product for movies, series, and anime. This glossary defines the product language used across design, product, and engineering.
+Consumit is a streaming and personal taste-discovery product for movies, series, and anime. This glossary defines the product language used across design, product, and engineering.
 
 ## People and taste
 
@@ -13,7 +13,7 @@ The private access record through which a member authenticates and controls secu
 _Avoid_: Member, profile
 
 **Profile**:
-A member's public or private expression of taste, including favorites, diary entries, ratings, reviews, lists, and circle.
+A member's private expression of taste, including favorites, diary entries, ratings, reviews, and personal collections.
 _Avoid_: Account page
 
 **Username**:
@@ -21,15 +21,15 @@ A member-chosen, unique public identifier used in profile links. A username may 
 _Avoid_: Handle, member ID
 
 **Circle**:
-The members a member chooses to trust for social discovery; their activity can influence recommendations and feeds. A circle is not a reciprocal friendship or a private communication channel.
+An archived social-discovery concept for followed members; it is outside the active product.
 _Avoid_: Friend list, network, chat
 
 **Follow**:
-A one-way relationship that adds another member to a member's circle.
+An archived one-way social relationship; it is outside the active product.
 _Avoid_: Friend request, connection
 
 **Taste**:
-A member's evolving preference profile, expressed through favorites, ratings, reviews, watch history, lists, and followed members.
+A member's evolving preference profile, expressed through favorites, ratings, reviews, watch history, and personal lists.
 _Avoid_: Profile data, preferences
 
 **Taste Match**:
@@ -37,7 +37,7 @@ A personalized estimate of how well a title, list, or another member aligns with
 _Avoid_: Compatibility score, recommendation score
 
 **Activity**:
-A member-visible event created by watching, rating, reviewing, following, or curating a list.
+A personal event created by watching, rating, reviewing, or curating a list.
 _Avoid_: Feed item, notification
 
 ## Catalog and curation
@@ -104,6 +104,16 @@ _Avoid_: Account link, synchronization
 An external, configured source that makes a title available for playback through Consumit.
 _Avoid_: Host, scraper, streaming service
 
+**Provider Role**:
+An Admin assignment of Video source, Audio source, or Both. Video source and Both can supply the main stream and its bundled audio. Audio source excludes a provider from video selection and permits reviewed separate-audio discovery. Apogee supports optional added audio for exact movies and series episodes. A role is operator intent; it does not establish delivery health or compatibility with another recording.
+
+**Provider Delivery Tier**:
+A provider's explicitly configured route: Direct, Relay, or Embed. Direct and Relay use Consumit controls; Embed uses an external provider's player inside Watch and has no supported progress synchronization.
+
+**Provider Embed**:
+An external provider's playback surface inside Watch, with its own playback controls. It is distinct from the Consumit Player and from a public Consumit player embed.
+_Avoid_: Consumit Player, public embed API
+
 **Availability Preference**:
 A streaming service a member selects to improve discovery and availability results; it is not a linked billing account.
 _Avoid_: Connected account, subscription connection
@@ -137,12 +147,16 @@ The recorded browser-side reason an active playback source failed, used to guide
 _Avoid_: Error message, failure detail
 
 **Watch**:
-The focused Consumit screen that contains the Consumit Player and provides automatic recovery, reporting, and trust guidance. Provider and source identities stay out of normal viewing controls.
+The focused Consumit screen containing the Consumit Player or a configured Provider Embed. It keeps the exact title or episode and offers source selection and recovery.
 _Avoid_: Watch / Embed, provider frame
 
 **Consumit Player**:
-The first-party playback surface through which a member watches a configured direct media source while keeping one consistent set of controls.
+The first-party playback surface through which a member watches a validated configured media source while keeping one consistent set of controls.
 _Avoid_: Embed frame, provider player
+
+**Provider Candidate**:
+A reviewed, shipped adapter recipe available in Admin's isolated Provider scout. It is outside the live provider roster until an operator installs its approved base configuration. A successful exact-title test is evidence for that sample, not a guarantee of provider availability or recording compatibility.
+_Avoid_: Verified provider, automatically discovered host
 
 ## Anime domain
 

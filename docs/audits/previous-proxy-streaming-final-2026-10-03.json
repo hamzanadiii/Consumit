@@ -1,0 +1,375 @@
+{
+  "mode": "fresh-source-injected-inspection-live-worker-actual-player",
+  "titleId": 550,
+  "responses": [
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 0,
+      "ms": 489,
+      "bytes": 3094
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 1,
+      "ms": 571,
+      "bytes": 935090
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 695,
+      "bytes": 1205
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 699,
+      "bytes": 2101820
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "hls",
+      "depth": 1,
+      "ms": 881,
+      "bytes": 935090
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 949,
+      "bytes": 1212
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 948,
+      "bytes": 14006089
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 1982,
+      "bytes": 13313509
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 2997,
+      "bytes": 10888657
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 3786,
+      "bytes": 6006336
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 4791,
+      "bytes": 8886901
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 5376,
+      "bytes": 14507277
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 6547,
+      "bodyFailed": true
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 7337,
+      "bodyFailed": true
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 8125,
+      "bytes": 14958612
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 9114,
+      "bytes": 13288199
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 10108,
+      "bytes": 12901338
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 13329,
+      "bytes": 13198481
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 15219,
+      "bytes": 12285112
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 16192,
+      "bytes": 13064230
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 17105,
+      "bytes": 12268767
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 17929,
+      "bytes": 11175182
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 18727,
+      "bytes": 11953243
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 19573,
+      "bytes": 12180267
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 20532,
+      "bytes": 12438792
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 21567,
+      "bytes": 12104772
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 22620,
+      "bytes": 14794161
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 23630,
+      "bytes": 11865929
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 24439,
+      "bytes": 12146293
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 25345,
+      "bytes": 14002139
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 26337,
+      "bytes": 12344583
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 29251,
+      "bytes": 14153210
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 35235,
+      "bytes": 11307942
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 41222,
+      "bytes": 12051508
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 47225,
+      "bytes": 11374394
+    },
+    {
+      "status": 200,
+      "host": "zcdn.bluevelvet.space",
+      "kind": "auto",
+      "depth": 2,
+      "ms": 53227,
+      "bytes": 13332547
+    }
+  ],
+  "failures": [],
+  "samples": [
+    {
+      "time": 4.007058,
+      "width": 1280,
+      "height": 720,
+      "frames": 101,
+      "error": null
+    },
+    {
+      "time": 9.015841,
+      "width": 3840,
+      "height": 2160,
+      "frames": 221,
+      "error": null
+    },
+    {
+      "time": 14.023305,
+      "width": 3840,
+      "height": 2160,
+      "frames": 341,
+      "error": null
+    },
+    {
+      "time": 93.239081,
+      "width": 3840,
+      "height": 2160,
+      "frames": 469,
+      "error": null
+    },
+    {
+      "time": 98.334114,
+      "width": 3840,
+      "height": 2160,
+      "frames": 591,
+      "error": null
+    },
+    {
+      "time": 103.393176,
+      "width": 3840,
+      "height": 2160,
+      "frames": 713,
+      "error": null
+    },
+    {
+      "time": 108.407555,
+      "width": 3840,
+      "height": 2160,
+      "frames": 833,
+      "error": null
+    },
+    {
+      "time": 113.383303,
+      "width": 3840,
+      "height": 2160,
+      "frames": 952,
+      "error": null
+    },
+    {
+      "time": 118.387694,
+      "width": 3840,
+      "height": 2160,
+      "frames": 1072,
+      "error": null
+    },
+    {
+      "time": 123.406324,
+      "width": 3840,
+      "height": 2160,
+      "frames": 1192,
+      "error": null
+    },
+    {
+      "time": 128.414154,
+      "width": 3840,
+      "height": 2160,
+      "frames": 1312,
+      "error": null
+    }
+  ],
+  "evidence": "Decode: First frame confirmed\nStartup: 1012ms\nSeek: Confirmed\nStalls observed: 1"
+}

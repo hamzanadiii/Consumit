@@ -33,7 +33,7 @@ function toRecord(row: IdentityRow): IdentityRecord {
       location: row.profile.location,
       username: row.profile.username,
       usernameChangedAt: row.profile.usernameChangedAt,
-      visibility: row.profile.visibility === 'public' ? 'public' : 'private',
+      visibility: 'private',
     },
     role: row.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
     status: row.status,
@@ -88,17 +88,13 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       }
     },
     async exportMember(memberId, exportedAt) {
-      const [row, watched, diary, saved, favorites, lists, savedLists, ratings, reviews, imports, watchHistory] = await Promise.all([
+      const [row, watched, diary, saved, favorites, lists, ratings, reviews, imports, watchHistory] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
         prisma.watchedTitle.findMany({ where: { memberId } }),
         prisma.diaryEntry.findMany({ orderBy: { watchedOn: 'desc' }, where: { memberId } }),
         prisma.savedTitle.findMany({ where: { memberId } }),
         prisma.favorite.findMany({ orderBy: { position: 'asc' }, take: MAX_MEMBER_FAVORITES, where: { memberId } }),
         prisma.memberList.findMany({ include: { _count: { select: { items: true } } }, where: { memberId } }),
-        prisma.savedMemberList.findMany({
-          include: { list: { include: { _count: { select: { items: true } }, items: { orderBy: { position: 'asc' }, take: 5 }, member: { include: { profile: true } } } } },
-          where: { memberId, list: { visibility: 'public', member: { status: 'ACTIVE', profile: { is: { visibility: 'public' } } } } },
-        }),
         prisma.rating.findMany({ where: { memberId } }),
         prisma.review.findMany({ orderBy: { reviewedOn: 'desc' }, where: { memberId } }),
         prisma.importBatch.findMany({ orderBy: { createdAt: 'desc' }, where: { memberId } }),
@@ -120,14 +116,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         library: {
           diary: diary.map((item) => ({ ...(item.episode > 0 ? { ...(item.catalogKind === 'SERIES' || item.season > 0 ? { season: item.season } : {}), episode: item.episode } : {}), entryId: item.id, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: calendarDay(item.watchedOn) })),
           favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
-          lists: lists.map((item) => ({ description: item.description, id: item.id, itemCount: item._count.items, name: item.name, origin: dataOrigin(item.origin), slug: item.slug, visibility: item.visibility === 'public' ? 'public' as const : 'private' as const })),
-          savedLists: savedLists.flatMap((savedList) => savedList.list.member.profile ? [{
-            coverTitles: savedList.list.items.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind) })),
-            list: { description: savedList.list.description, id: savedList.list.id, itemCount: savedList.list._count.items, name: savedList.list.name, origin: dataOrigin(savedList.list.origin), slug: savedList.list.slug, visibility: 'public' as const },
-            owner: { displayName: savedList.list.member.profile.displayName, username: savedList.list.member.profile.username },
-            savedAt: savedList.createdAt.toISOString(),
-            savedByViewer: true,
-          }] : []),
+          lists: lists.map((item) => ({ description: item.description, id: item.id, itemCount: item._count.items, name: item.name, origin: dataOrigin(item.origin), slug: item.slug, visibility: 'private' as const })),
           saved: saved.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
           watched: watched.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
         },

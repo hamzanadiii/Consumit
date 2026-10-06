@@ -96,7 +96,7 @@ providers.push(...configuredProviders([{
 let playback = createPlayback({ providers, store, region: 'US' })
 const subtitleRaws = [
   ...Array.from({ length: 25 }, (_, i) => ({ provider: 'fixture-subtitles', lang: 'en', label: `English release ${i + 1}`, format: 'srt' as const, url: `https://subs.example/en-${i + 1}.srt` })),
-  ...Array.from({ length: 2 }, (_, i) => ({ provider: 'fixture-subtitles', lang: 'ar', label: `Arabic release ${i + 1}`, format: 'srt' as const, url: `https://subs.example/ar-${i + 1}.srt` })),
+  ...['اَلْعَرَبِيَّةُ', 'Albanian'].map((label, i) => ({ provider: 'fixture-subtitles', lang: 'ar', label, format: 'srt' as const, url: `https://subs.example/ar-${i + 1}.srt` })),
 ]
 const subtitleFiles = createStoreFileStore(store)
 async function warmSubtitleFiles() {

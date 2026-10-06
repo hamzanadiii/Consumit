@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Readable } from 'node:stream'
+import { createGrantCodec } from '@consumit/media-relay'
 import { createStaticProvider, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import { buildApp } from '../app.ts'
 import { loadEnv } from '../config/env.ts'
 import { createPlayback } from './playback.ts'
 import { createMemoryPlaybackStore } from './state.ts'
+import { createPlaybackRelay } from './relay.ts'
 
 const ref = { kind: 'movie' as const, id: 1 }
 const track = { id: 'en', label: 'English', language: 'en', url: 'https://media.example/subs/en.vtt', format: 'vtt' as const }
@@ -19,6 +22,81 @@ async function setup() {
   return app
 }
 describe('playback session API', () => {
+  it('validates and honors a startup server choice through the HTTP contract', async () => {
+    const app = await setup()
+    const headers = { origin: 'http://localhost:3000' }
+    const selected = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers, payload: { ...body, providerId: 'backup' } })
+    expect(selected.statusCode).toBe(200)
+    expect(selected.json().source.providerId).toBe('backup')
+    expect(selected.json().ref).toEqual(ref)
+    const unavailable = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers, payload: { ...body, providerId: 'unknown' } })
+    expect(unavailable.statusCode).toBe(400)
+    const malformed = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers, payload: { ...body, providerId: '' } })
+    expect(malformed.statusCode).toBe(400)
+  })
+  it('serves signed control playlists without relaying asset bytes or accepting caller URLs', async () => {
+    const origin = 'http://localhost:3000', secret = 'test-manifest-secret-at-least-32-characters'
+    const signer = await createGrantCodec(secret)
+    const grant = { version: 1 as const, provider: 'stormboron', url: 'https://rotating.example/master.m3u8', origin, expires: Date.now() + 60000, headers: {}, headerHost: 'rotating.example', kind: 'hls' as const, depth: 0, recipe: 'storm-boron-v1' as const, hosts: ['rotating.example'] }
+    const transport = vi.fn(async (url: string) => ({ status: 200, url, headers: new Headers(), body: Readable.from([url.endsWith('master.m3u8') ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant.m3u8\n' : '#EXTM3U\n#EXTINF:6,\nsegment.ts\n']) }))
+    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { stormboron: ['static.example'] }, discovery: { stormboron: 'storm-boron-v1' } }, transport)
+    const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers: [], store: createMemoryPlaybackStore(), region: 'US', relay }) })
+    apps.push(app)
+    const token = await signer.seal(grant), url = `/v1/playback/relay-manifest?grant=${token}`
+    const root = await app.inject({ url })
+    expect(root.statusCode).toBe(200)
+    expect(root.headers['cache-control']).toBe('private, no-store')
+    expect(root.headers['content-type']).toContain('application/vnd.apple.mpegurl')
+    const child = root.body.split('\n').find(line => line.startsWith(origin))!
+    expect(new URL(child).pathname).toBe('/v1/playback/relay-manifest')
+    const variant = await app.inject({ url: new URL(child).pathname + new URL(child).search, headers: { origin } })
+    expect(variant.statusCode).toBe(200)
+    expect(variant.body).toContain('https://edge.example/media/')
+    expect((await app.inject({ url, headers: { origin: 'https://other.example' } })).statusCode).toBe(403)
+    expect((await app.inject({ url: url + '&url=https://other.example' })).statusCode).toBe(403)
+    expect((await app.inject({ url: `/v1/playback/relay-manifest?grant=${await signer.seal({ ...grant, kind: 'auto' })}` })).statusCode).toBe(503)
+    expect((await app.inject({ url: url.slice(0, -12) + 'x'.repeat(12) })).statusCode).toBe(503)
+    expect(transport).toHaveBeenCalledTimes(2)
+  })
+  it('retains changed quality and audio intent through refresh and fallback without selecting audio-only providers', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = ['primary', 'reserved', 'backup'].map((id) => ({
+      adapter: createStaticProvider(id, [{ ref, sources: [{ ...source, key: '1080-en', height: 1080, language: 'en' }, { ...source, key: '720-fr', height: 720, language: 'fr' }] }]),
+      role: id === 'reserved' ? 'audio' : 'video', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'],
+    }))
+    const playback = createPlayback({ providers, store, region: 'US' })
+    const signal = new AbortController().signal
+    const selected = await playback.resolve('viewer', body, signal)
+    expect((await playback.listProviders(body, signal)).map((p) => p.id)).toEqual(['primary', 'backup'])
+    await expect(playback.switchProvider('viewer', selected.id, 'reserved', signal)).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    const refreshed = await playback.recover('viewer', selected.id, { sourceId: selected.source.id, reason: 'expired', preferences: { qualityHeight: 720, audioLanguage: 'fr' } }, true, signal)
+    expect(refreshed.source.id).toContain('primary:')
+    expect(refreshed.source.qualityHint).toBe('720p')
+    const fallback = await playback.recover('viewer', selected.id, { sourceId: refreshed.source.id, reason: 'network' }, false, signal)
+    expect(fallback.source.providerId).toBe('backup')
+    expect(fallback.source.qualityHint).toBe('720p')
+    await store.close()
+  })
+  it('keeps sub-only providers out of dub lists and retains dub audio through recovery', async () => {
+    const store = createMemoryPlaybackStore()
+    const animeRef = { kind: 'anime' as const, id: 21, episode: 1 }
+    const animeInput = { ...body, ref: animeRef, audioLanguage: 'en' }
+    const providers: ProviderRegistration[] = ['sub', 'dub', 'backup'].map(id => ({
+      adapter: Object.assign(createStaticProvider(id, [{ ref: animeRef, sources: [{ ...source, language: id === 'sub' ? 'original' : 'en' }] }]), { audioLanguages: id === 'sub' ? ['ja'] : ['ja', 'en'] }),
+      enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['anime'],
+    }))
+    const playback = createPlayback({ providers, store, region: 'US' })
+    const signal = new AbortController().signal
+    expect((await playback.listProviders(animeInput, signal)).map(provider => provider.id)).toEqual(['dub', 'backup'])
+    const selected = await playback.resolve('viewer', animeInput, signal)
+    expect(selected.source.providerId).toBe('dub')
+    const refreshed = await playback.recover('viewer', selected.id, { sourceId: selected.source.id, reason: 'expired' }, true, signal)
+    const fallback = await playback.recover('viewer', selected.id, { sourceId: refreshed.source.id, reason: 'network' }, false, signal)
+    expect(fallback).toMatchObject({ id: selected.id, ref: animeRef, source: { providerId: 'backup' } })
+    const subOnly = createPlayback({ providers: providers.slice(0, 1), store, region: 'US' })
+    await expect(subOnly.resolve('viewer', animeInput, signal)).rejects.toMatchObject({ code: 'PLAYBACK_UNAVAILABLE', message: expect.stringContaining('English dub') })
+    await store.close()
+  })
   it.each([
     { delivery: 'proxy', src: source.url },
     { delivery: 'auto', src: source.url },
@@ -180,6 +258,22 @@ describe('playback session API', () => {
     expect(forth.json().source.providerId).toBe('backup')
     const unknown = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/switch`, headers, payload: { providerId: 'nope' } })
     expect(unknown.statusCode).toBe(400)
+  })
+  it('falls back to a working earlier provider after a manual selection fails', async () => {
+    const app = await setup()
+    const resolved = await app.inject({ method: 'POST', url: '/v1/playback/resolve', headers: { origin: 'http://localhost:3000' }, payload: body })
+    const session = resolved.json()
+    const cookie = resolved.cookies[0]!
+    const headers = { origin: 'http://localhost:3000', cookie: `${cookie.name}=${cookie.value}` }
+    const switched = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/switch`, headers, payload: { providerId: 'backup' } })
+    expect(switched.statusCode).toBe(200)
+    const selected = switched.json()
+    // Same-provider renewal must not turn the earlier working source into a miss.
+    const refreshed = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/refresh`, headers, payload: { sourceId: selected.source.id, reason: 'expired' } })
+    expect(refreshed.statusCode).toBe(200)
+    const fallback = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/fallback`, headers, payload: { sourceId: refreshed.json().source.id, reason: 'network', deliveryFailure: 'timeout' } })
+    expect(fallback.statusCode).toBe(200)
+    expect(fallback.json()).toMatchObject({ id: session.id, ref: body.ref, fallbackCount: 1, source: { providerId: 'primary' } })
   })
   it('lists direct providers and rejects unknown delivery failures', async () => {
     const store = createMemoryPlaybackStore()

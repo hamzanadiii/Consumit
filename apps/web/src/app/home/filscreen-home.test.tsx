@@ -110,7 +110,7 @@ describe('filscreen live home', () => {
     expect(screen.queryByRole('link', { name: 'Categories' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search titles' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
-    expect(screen.queryByRole('link', { name: 'History' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('href', '/library?section=history')
   })
 
   it('renders dark by default and persists the member theme choice', async () => {

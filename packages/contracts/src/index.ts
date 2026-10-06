@@ -318,6 +318,20 @@ export const animeSearchResultSchema = z.object({
 })
 export type AnimeSearchResult = z.infer<typeof animeSearchResultSchema>
 
+export const animeBrowseSortSchema = z.enum(['popular', 'top-rated', 'new', 'old'])
+export type AnimeBrowseSort = z.infer<typeof animeBrowseSortSchema>
+/** Server-driven anime discovery: an AniList sort plus genre, year, and
+ *  format filters. Genre is an AniList genre name; unknown values return an
+ *  empty page rather than an error. */
+export const animeBrowseQuerySchema = z.object({
+  sort: animeBrowseSortSchema.default('popular'),
+  genre: z.string().trim().min(1).max(64).optional(),
+  year: z.int().min(1917).max(2200).optional(),
+  format: animeFormatSchema.optional(),
+  page: z.int().min(1).max(500).default(1),
+})
+export type AnimeBrowseQuery = z.infer<typeof animeBrowseQuerySchema>
+
 export const animePlaybackRefSchema = z.object({
   kind: z.literal('anime'),
   anilistId: z.int().positive(),
@@ -778,10 +792,24 @@ export const playbackCapabilitiesSchema = z.object({
   nativeHls: z.boolean().default(false),
   maxHeight: z.int().min(240).max(4320).optional(),
 })
+export const providerRoleSchema = z.enum(['video', 'audio', 'both'])
+export type ProviderRole = z.infer<typeof providerRoleSchema>
+export const playbackPreferencesSchema = z.object({
+  qualityHeight: z.int().min(144).max(4320).nullable().optional(),
+  audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).optional(),
+})
+export type PlaybackPreferences = z.infer<typeof playbackPreferencesSchema>
+export const separateAudioTrackSchema = z.object({ id: z.string().regex(/^[a-f0-9]{32}$/), label: z.string().min(1).max(128), language: z.string().min(2).max(32), provider: z.string().min(1).max(80) })
+export type SeparateAudioTrack = z.infer<typeof separateAudioTrackSchema>
+export const separateAudioListSchema = z.object({ tracks: z.array(separateAudioTrackSchema).max(40) })
+export const separateAudioSourceSchema = separateAudioTrackSchema.extend({ src: z.url().max(4096).refine(url => url.startsWith('https://')), duration: z.number().positive().max(86400), expiresAt: z.iso.datetime() })
+export type SeparateAudioSource = z.infer<typeof separateAudioSourceSchema>
 export const resolvePlaybackRequestSchema = z.object({
   ref: playbackRefSchema,
   capabilities: playbackCapabilitiesSchema,
   audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).default('en'),
+  providerId: z.string().min(1).max(80).optional(),
+  preferences: playbackPreferencesSchema.optional(),
 })
 export const playbackTrackSchema = z.object({
   id: z.string().min(1).max(128), label: z.string().min(1).max(128),
@@ -802,34 +830,40 @@ export const skipSegmentSchema = z.object({
   start: z.number().min(0).max(86400),
   end: z.number().min(0).max(86400),
 })
-export const playbackDeliverySchema = z.literal('direct')
+export const playbackDeliverySchema = z.enum(['direct', 'relay', 'embed'])
 export type PlaybackDelivery = z.infer<typeof playbackDeliverySchema>
-/** Every provider supplies browser-direct media. */
-export const providerDeliveryModeSchema = z.literal('direct')
+/** Provider pool assignment; Proxy uses the independently approved relay. */
+export const providerDeliveryModeSchema = z.enum(['direct', 'relay', 'embed'])
 export type ProviderDeliveryMode = z.infer<typeof providerDeliveryModeSchema>
 /** Browser delivery failures guide renewal and provider fallback. */
 export const deliveryFailureSchema = z.enum(['cors', 'manifest', 'segment', 'forbidden', 'timeout', 'headers', 'unstable', 'manual'])
 export type DeliveryFailure = z.infer<typeof deliveryFailureSchema>
 export const playbackSourceSchema = z.object({
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
-  type: z.enum(['hls', 'dash', 'native']), src: z.string().min(1).max(4096),
+  type: z.enum(['hls', 'dash', 'native', 'iframe']), src: z.string().min(1).max(4096),
   qualityHint: z.string().min(1).max(24).optional(),
+  qualityHeights: z.array(z.int().min(144).max(4320)).max(32).optional(),
   delivery: playbackDeliverySchema.default('direct'),
   expiresAt: z.iso.datetime(), subtitles: z.array(playbackTrackSchema).max(32).default([]),
   skipSegments: z.array(skipSegmentSchema).max(8).default([]),
+}).superRefine((source, context) => {
+  if ((source.type === 'iframe') !== (source.delivery === 'embed')) context.addIssue({ code: 'custom', message: 'Frame sources require embed delivery.' })
+  if (source.type === 'iframe' && !/^https:\/\//.test(source.src)) context.addIssue({ code: 'custom', message: 'Frame sources require HTTPS.' })
 })
 export const playbackSessionSchema = z.object({
   id: z.string().uuid(), ref: playbackRefSchema, source: playbackSourceSchema,
-  expiresAt: z.iso.datetime(), fallbackCount: z.int().min(0).max(3),
+  expiresAt: z.iso.datetime(), fallbackCount: z.int().min(0).max(128),
   capabilities: z.object({ refresh: z.boolean(), fallback: z.boolean(), externalSubtitles: z.boolean() }),
 })
 export const playbackFailureRequestSchema = z.object({
   sourceId: z.string().min(1).max(160), reason: z.enum(['network', 'media', 'expired', 'unsupported']),
   deliveryFailure: deliveryFailureSchema.optional(),
+  preferences: playbackPreferencesSchema.optional(),
 })
 export const playbackEventsSchema = z.object({ events: z.array(z.object({
-  type: z.enum(['started', 'buffer-start', 'buffer-end', 'error', 'switched', 'ended']),
+  type: z.enum(['started', 'buffer-start', 'buffer-end', 'error', 'switched', 'ended', 'viewing']),
   position: z.number().min(0).max(86400), elapsedMs: z.number().min(0).max(86400000).optional(),
+  delivery: playbackDeliverySchema.optional(),
   browser: z.enum(['chrome', 'edge', 'firefox', 'safari', 'other']).optional(),
 })).min(1).max(20) })
 /** Low-cardinality, anonymous browser performance measurements. Page values
@@ -847,7 +881,7 @@ export const webVitalEventSchema = z.object({
 export const webVitalBatchSchema = z.object({ events: z.array(webVitalEventSchema).min(1).max(20) }).strict()
 export type WebVitalEvent = z.infer<typeof webVitalEventSchema>
 export type WebVitalBatch = z.infer<typeof webVitalBatchSchema>
-export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80) })
+export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80), preferences: playbackPreferencesSchema.optional() })
 export const playbackProviderSchema = z.object({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80),
   detail: z.string().min(1).max(80).optional(),
@@ -946,7 +980,9 @@ export const memberProfileDataSchema = z.object({
   profile: profileSchema,
   reviews: z.array(memberReviewSchema),
   ratingDistribution: z.array(z.object({ count: z.int().nonnegative(), value: z.int().min(1).max(10) })).length(10).optional(),
-  
+  /** Compatibility with deployed web builds from before personal-only profiles.
+   * Counts are stored data and remain behind the owner-only profile route. */
+  social: z.object({ followers: z.int().nonnegative(), following: z.int().nonnegative() }).optional(),
   statistics: z.object({
     diaryEntries: z.int().nonnegative(),
     lists: z.int().nonnegative(),

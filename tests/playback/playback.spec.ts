@@ -44,9 +44,22 @@ test('native playback saves guest progress and resumes after reload', async ({ p
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThanOrEqual(12)
 })
 
+test('pointer playback lets transport controls fade away', async ({ page }) => {
+  await page.goto('/watch/movie/1')
+  const video = page.locator('video')
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThanOrEqual(2)
+  await video.evaluate((el: HTMLVideoElement) => el.pause())
+  await page.getByRole('button', { name: 'Play', exact: true }).click()
+  await page.mouse.move(640, 300)
+  await expect(page.locator('[data-consumit-player]')).toHaveAttribute('data-controls-visible', 'false', { timeout: 6000 })
+})
+
 test('focused player controls stay visible while video plays', async ({ page }) => {
   await start(page, 1)
   await page.getByRole('button', { name: 'Pause', exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Shift+Tab')
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeFocused()
   await page.waitForTimeout(3_200)
   await expect(page.locator('[data-consumit-player]')).toHaveAttribute('data-controls-visible', 'true')
 })
@@ -115,7 +128,7 @@ test('subtitle discovery shows all languages, pages tracks, and prepares the sel
   await expect(menu.getByRole('button', { name: 'Load more tracks' })).toBeVisible()
   await menu.getByRole('button', { name: 'Load more tracks' }).click()
   await expect(menu.getByRole('button', { name: /English release 25/ })).toBeVisible()
-  await menu.getByRole('button', { name: /^English release 1\s/ }).click()
+  await menu.getByRole('button', { name: /English release 1$/ }).click()
   await expect(page.locator('video track[src*="/v1/subtitles/file/"]')).toHaveCount(1)
   await page.getByRole('button', { name: 'Subtitles' }).click()
   await page.locator('input[type="file"][accept*=".srt"]').setInputFiles({
@@ -132,11 +145,12 @@ test('repeated short source renewals keep playback, captions, and paused positio
   test.setTimeout(120_000)
   await start(page, 5)
   const video = page.locator('video')
-  // WebKit may take long enough to reach the clip end while starting the
-  // fixture. Hold it at a stable point while configuring speed and captions.
+  // Configure paused playback.
   await video.evaluate((element: HTMLVideoElement) => element.pause())
   await page.getByRole('button', { name: 'Settings: audio, speed, brightness' }).click()
-  await page.getByRole('group', { name: 'Playback speed' }).getByRole('button', { name: '0.5×' }).click()
+  await page.getByRole('button', { name: /^Playback settings/ }).click()
+  await page.getByRole('slider', { name: 'Playback speed' }).press('Home')
+  await page.keyboard.press('Escape')
   await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.playbackRate)).toBe(0.5)
   await video.evaluate((element: HTMLVideoElement) => { element.currentTime = 12 })
   // This title has a deterministic English track. Discovery pagination and

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ProviderIdentityResolver, ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, ProviderFailure, userAgent, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
+import { sourceAccess, adapter, document, mediaType, ProviderFailure, userAgent, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
 
 const streamApi = 'https://streamdata.vaplayer.ru/api.php'
 const playerOrigin = 'https://nextgencloudfabric.com'
@@ -60,7 +60,7 @@ export function createVaPlayerProvider(http: ProviderHttp, identity: ProviderIde
         language: 'original',
         qualityHint,
         ...(height === undefined ? {} : { height }),
-        expiresAt: accessDeadline(url, now()),
+        ...sourceAccess(url, now()),
         subtitles: [],
       })
     }

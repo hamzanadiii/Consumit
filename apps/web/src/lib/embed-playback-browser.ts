@@ -1,4 +1,4 @@
-import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSchema, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type ResolvePlaybackRequest } from '@consumit/contracts'
+import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSchema, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type ResolvePlaybackRequest, type PlaybackPreferences } from '@consumit/contracts'
 
 async function responseJson(response: Response): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null)
@@ -12,9 +12,8 @@ async function post(path: string, body: unknown, signal: AbortSignal, token?: st
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
-    // 21s keeps the browser abort behind the resolver's shared 20s deadline
-    // so slow direct chains resolve server-side instead of dying client-side.
-    signal: AbortSignal.any([signal, AbortSignal.timeout(21_000)]),
+    // Both the direct and relay tiers have a bounded 20s resolution deadline.
+    signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
     cache: 'no-store',
   })
   return responseJson(response)
@@ -40,8 +39,8 @@ export async function recoverEmbedSession(session: PlaybackSession, token: strin
   return parsed.data
 }
 
-export async function switchEmbedSession(session: PlaybackSession, token: string, providerId: string, signal: AbortSignal): Promise<PlaybackSession> {
-  const parsed = playbackSessionSchema.safeParse(await post(`/${session.id}/switch`, { providerId }, signal, token))
+export async function switchEmbedSession(session: PlaybackSession, token: string, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences): Promise<PlaybackSession> {
+  const parsed = playbackSessionSchema.safeParse(await post(`/${session.id}/switch`, { providerId, ...(preferences ? { preferences } : {}) }, signal, token))
   if (!parsed.success) throw new Error('Playback returned an invalid source.')
   return parsed.data
 }

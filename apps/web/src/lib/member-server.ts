@@ -23,7 +23,6 @@ import {
   type MemberRatingPage,
   type MemberRating,
   type CatalogRef,
-  type TitleReviewAudience,
   type TitleReviewsPage,
   type TitleReviewSort,
 } from '@consumit/contracts'
@@ -81,4 +80,4 @@ export const getMemberRatingsForTitles = cache((titles: readonly CatalogRef[]): 
   return request(`/v1/me/ratings/lookup?${new URLSearchParams({ titles: refs })}`, memberRatingLookupResponseSchema)
 })
 export const getMemberList = cache((slug: string): Promise<MemberListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, memberListDetailSchema))
-export const getTitleReviews = cache((kind: CatalogKind, id: number, page: number, sort: TitleReviewSort, audience: TitleReviewAudience = 'all'): Promise<TitleReviewsPage> => request(`/v1/reviews/${kind}/${id}?page=${page}&sort=${sort}&audience=${audience}`, titleReviewsPageSchema))
+export const getTitleReviews = cache((kind: CatalogKind, id: number, page: number, sort: TitleReviewSort): Promise<TitleReviewsPage> => request(`/v1/reviews/${kind}/${id}?page=${page}&sort=${sort}`, titleReviewsPageSchema))

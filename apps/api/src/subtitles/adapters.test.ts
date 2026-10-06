@@ -144,6 +144,8 @@ describe('castlesubs', () => {
     post: (async () => enc({ data: { subtitles: [
       { url: 'https://cdn.castle.example/sub123.vtt', title: 'English', abbreviate: 'en' },
       { url: 'https://cdn.castle.example/en.vtt', title: 'Albanian', abbreviate: '[ar] Albanian' },
+      { url: 'https://cdn.castle.example/Arabic.vtt', title: 'Albanian', abbreviate: 'ar' },
+      { url: 'https://cdn.castle.example/French.srt', title: 'Arabic', abbreviate: 'ar' },
     ] } })) as SubtitleHttp['post'],
   }
   const provider = createCastleSubsProvider(http)
@@ -156,14 +158,14 @@ describe('castlesubs', () => {
 
   it('harvests direct subtitle files through season resolution', async () => {
     const found = await provider.search({ type: 'tv', title: 'Example', year: 2024, season: 1, episode: 2 }, new AbortController().signal)
-    expect(found).toHaveLength(2)
+    expect(found).toHaveLength(4)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
     expect(found[0]?.url).toBe('https://cdn.castle.example/sub123.vtt')
   })
 
   it('answers anime queries on the TV path', async () => {
     const found = await provider.search({ type: 'anime', title: 'Example', episode: 2 }, new AbortController().signal)
-    expect(found).toHaveLength(2)
+    expect(found).toHaveLength(4)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
   })
 
@@ -171,6 +173,8 @@ describe('castlesubs', () => {
     const found = await provider.search({ type: 'tv', title: 'Example', year: 2024, season: 1, episode: 2 }, new AbortController().signal)
     const fixed = found.find((track) => track.url.endsWith('/en.vtt'))
     expect(fixed).toMatchObject({ lang: 'en', label: 'en' })
+    expect(found.find((track) => track.url.endsWith('/Arabic.vtt'))).toMatchObject({ lang: 'ar', label: 'Arabic' })
+    expect(found.find((track) => track.url.endsWith('/French.srt'))).toMatchObject({ lang: 'fr', label: 'French' })
   })
 })
 
@@ -439,6 +443,13 @@ describe('natsuki', () => {
 })
 
 describe('normTrackLang', () => {
+  it.each([
+    ['فارسی', 'fa'], ['اُردُو', 'ur'], ['עברית', 'he'], ['বাংলা', 'bn'],
+    ['Українська', 'uk'], ['Български', 'bg'], ['Српски', 'sr'],
+    ['தமிழ்', 'ta'], ['తెలుగు', 'te'], ['한국어', 'ko'], ['Türkçe', 'tr'],
+  ])('recognizes the native language %s without guessing from its shared script', (name, code) => {
+    expect(normTrackLang(`${name} - FlowCast`)).toBe(code)
+  })
   it('detects native-script labels instead of defaulting to English', () => {
     expect(normTrackLang('اَلْعَرَبِيَّةُ - FlowCast')).toBe('ar')
     expect(normTrackLang('English - Citadel')).toBe('en')

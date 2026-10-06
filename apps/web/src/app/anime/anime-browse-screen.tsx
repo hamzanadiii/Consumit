@@ -1,15 +1,15 @@
-import type { AnimePage, AnimeSeason } from '@consumit/contracts'
+import type { AnimePage } from '@consumit/contracts'
 
 import { FilScreenShell } from '../shared'
 
 import { AnimeBrowseContent } from './anime-browse-content'
 
-type AnimeBrowseScreenProps = { trending: AnimePage; seasonal: AnimePage; season: AnimeSeason; year: number }
+type AnimeBrowseScreenProps = { trending: AnimePage; initial: AnimePage; currentYear: number }
 
-export function AnimeBrowseScreen({ trending, seasonal, season, year }: AnimeBrowseScreenProps) {
+export function AnimeBrowseScreen({ trending, initial, currentYear }: AnimeBrowseScreenProps) {
   return (
     <FilScreenShell activeKindTab="anime" pageHeading="Anime">
-      <AnimeBrowseContent trending={trending} seasonal={seasonal} season={season} year={year} />
+      <AnimeBrowseContent trending={trending} initial={initial} currentYear={currentYear} />
     </FilScreenShell>
   )
 }

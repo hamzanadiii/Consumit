@@ -11,6 +11,15 @@ describe('identity profile routes', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = []
   afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())))
 
+  it('cannot evade the credential limit by rotating untrusted session cookies', async () => {
+    const app = await buildApp({ env: loadEnv({ APP_ORIGIN: origin, NODE_ENV: 'test' }), identity: createFakeIdentity() })
+    apps.push(app)
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const result = await app.inject({ cookies: { consumit_session: `fake-${attempt}` }, headers: { origin }, method: 'POST', payload: {}, url: '/v1/auth/login' })
+      expect(result.statusCode).toBe(attempt < 10 ? 400 : 429)
+    }
+  })
+
   it('registers a chosen username and serves the authenticated real profile', async () => {
     const identity = createFakeIdentity()
     const env = loadEnv({ APP_ORIGIN: origin, NODE_ENV: 'test' })

@@ -2,18 +2,19 @@
 
 import type { AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule, AnimeEpisode } from '@consumit/contracts'
 import { watchHref } from '@consumit/contracts'
-import { ArtworkFrame, CastCard, SectionHeading, Tabs } from '@consumit/ui'
-import { CalendarClock, ChevronLeft, ChevronRight, Play, Star } from 'lucide-react'
+import { CastCard, SectionHeading, Tabs } from '@consumit/ui'
+import { CalendarClock, ChevronLeft, ChevronRight, Star } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 
 import { browserAnimeEpisodes } from '@/lib/anime-browser'
 
 import { TitleCard } from '../../shared/title-card'
+import { EpisodeCard } from '../../shared/episode-card'
 
 import { MemberActionPanel } from '../../catalog/member-action-panel'
 import { TitleReviews } from '../../catalog/title-reviews'
+import { TitlePlayAction } from '../../catalog/title-play-action'
 
 import { FilScreenShell, AnimeTitleRail } from '@/app/shared'
 
@@ -141,29 +142,12 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
           ) : null}
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <Link
-              className="inline-flex min-h-11 items-center gap-2 rounded-control bg-orange px-6 text-sm font-bold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-              href={watchHref({ kind: 'anime', id: detail.anilistId }, { episode: 1, season: 1 })}
-            >
-              <Play aria-hidden="true" className="size-4 fill-current" />
-              Play
-            </Link>
+            <TitlePlayAction episodes={detail.episodes} id={detail.anilistId} kind="anime" />
           </div>
         </div>
 
-        {/* Next-airing box above the Member Action Shelf, same shelf the
-            movie and series heroes carry. */}
+        {/* Member Action Shelf, same shelf the movie and series heroes carry. */}
         <div className="flex w-full max-w-2xl flex-col gap-4 lg:max-w-none">
-          {detail.nextAiringEpisode ? (
-            <div className="rounded-xl border border-[var(--fs-accent)]/30 bg-[var(--fs-accent)]/5 px-4 py-3">
-              <p className="text-xs font-bold text-[var(--fs-accent)]">
-                Next Episode: #{detail.nextAiringEpisode.episode}
-              </p>
-              <p className="mt-0.5 text-xs text-white/70">
-                Airing {formatAirDate(detail.nextAiringEpisode.airingAt)}
-              </p>
-            </div>
-          ) : null}
           <MemberActionPanel
             id={detail.anilistId}
             kind="anime"
@@ -174,59 +158,6 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
         </div>
       </div>
     </header>
-  )
-}
-
-function AnimeEpisodeCard({ anilistId, airDate, duration, episode, fallbackArt, stillUrl, summary, title, upcoming }: {
-  anilistId: number
-  airDate?: string | null | undefined
-  duration: string | null
-  episode: number
-  fallbackArt?: string | null | undefined
-  stillUrl?: string | null | undefined
-  summary?: string | null | undefined
-  title?: string | null | undefined
-  upcoming: boolean
-}) {
-  return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-card border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-colors hover:border-[var(--fs-accent)]/60 motion-reduce:transition-none" data-filscreen-episode-card>
-      <ArtworkFrame
-        alt={stillUrl ? title ? `${title} still` : `Episode ${episode} still` : `Episode ${episode} title artwork`}
-        className="rounded-none border-0"
-        ratio="landscape"
-        src={stillUrl ?? fallbackArt ?? undefined}
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
-        <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
-          Episode {episode}
-          {upcoming ? (
-            <span className="rounded border border-white/30 bg-black/40 px-1.5 py-0.5 text-[10px] font-bold normal-case tracking-normal text-white">
-              Upcoming
-            </span>
-          ) : null}
-        </p>
-        {title ? <p className="truncate text-sm font-bold text-[var(--fs-ink)]" title={title}>{title}</p> : null}
-        {!stillUrl && fallbackArt ? <p className="text-[10px] text-[var(--fs-muted)]">Title artwork</p> : null}
-        {duration || airDate ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{[duration, airDate ? new Date(`${airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null].filter(Boolean).join(' · ')}</p> : null}
-        {summary ? <p className="line-clamp-2 text-xs leading-5 text-[var(--fs-muted)]">{summary}</p> : null}
-        <div className="mt-3">
-          {upcoming ? (
-            <span className="inline-flex min-h-9 cursor-not-allowed items-center gap-1.5 rounded-control border border-[var(--fs-line)] px-4 text-xs font-bold text-[var(--fs-muted)]">
-              <Play aria-hidden="true" className="size-3 fill-current" />
-              Upcoming
-            </span>
-          ) : (
-            <Link
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-orange px-4 text-xs font-bold text-canvas outline-none transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-              href={watchHref({ kind: 'anime', id: anilistId }, { episode, season: 1 })}
-            >
-              <Play aria-hidden="true" className="size-3 fill-current" />
-              Play episode
-            </Link>
-          )}
-        </div>
-      </div>
-    </article>
   )
 }
 
@@ -259,8 +190,8 @@ function AnimeEpisodeWithArt({ anilistId, art, duration, episode, fallbackArt, s
   const name = stream?.title?.replace(/^episode\s+\d+\s*[-–:]\s*/i, '').trim()
     || art?.title || null
   return (
-    <AnimeEpisodeCard
-      anilistId={anilistId}
+    <EpisodeCard
+      href={watchHref({ kind: 'anime', id: anilistId }, { episode, season: 1 })}
       airDate={art?.airDate}
       duration={art?.duration ? formatDuration(art.duration) : duration}
       episode={episode}
@@ -315,6 +246,15 @@ function AnimeEpisodesSection({ detail }: { detail: AnimeTitleDetail }) {
       <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">
         Episode numbers and airing state come from AniList. Unaired episodes unlock as they broadcast.
       </p>
+      {detail.nextAiringEpisode ? (
+        <p className="mt-3 flex items-center gap-2 text-xs tabular-nums text-[var(--fs-muted)]" role="status">
+          <CalendarClock aria-hidden="true" className="size-4 shrink-0 text-[var(--fs-accent)]" />
+          <span className="min-w-0">
+            <strong className="font-bold text-[var(--fs-accent)]">Next Episode: #{detail.nextAiringEpisode.episode}</strong>
+            <span> · Airing {formatAirDate(detail.nextAiringEpisode.airingAt)}</span>
+          </span>
+        </p>
+      ) : null}
       {episodes.length ? (
         <>
           <ul aria-label={`Episodes, page ${safePage} of ${totalPages}`} className="mt-8 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

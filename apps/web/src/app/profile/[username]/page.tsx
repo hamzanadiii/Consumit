@@ -31,6 +31,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   }
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}`)
   const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  if (!owner) notFound()
   let savedPreview: { hasMore: boolean; items: CatalogRef[] } | { unavailable: true } | undefined
   if (owner) {
     try {

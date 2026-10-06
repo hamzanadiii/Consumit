@@ -14,7 +14,7 @@ import { StaleCache } from './catalog/stale-cache.ts'
 import { loadEnv, type ApiEnv } from './config/env.ts'
 import { createDbClient } from './db/client.ts'
 import { rateLimitExceeded, registerErrorHandlers } from './http/errors.ts'
-import { rateLimitKey } from './http/rate-limit.ts'
+import { apiRateLimitKey, isCatalogRead } from './http/rate-limit.ts'
 import { registerHealthRoutes } from './http/health.ts'
 import { generateRequestId, loggerOptions, registerRequestContext } from './http/request-context.ts'
 import { createIdentity } from './identity/service.ts'
@@ -34,6 +34,7 @@ import { createPostgresMemberData } from './member-data/postgres-member-data.ts'
 import { registerMemberDataRoutes } from './member-data/routes.ts'
 import { unavailableMemberData } from './member-data/unavailable-member-data.ts'
 import { createPlayback, type Playback } from './playback/playback.ts'
+import { createPlaybackRelay } from './playback/relay.ts'
 import { registerPlaybackRoutes } from './playback/routes.ts'
 import { createMemoryPlaybackStore, createValkeyPlaybackStore } from './playback/state.ts'
 import { loadConfiguredProviders } from './playback/configured-providers.ts'
@@ -68,6 +69,7 @@ import { createVdrkV2Provider } from './subtitles/vdrkv2.ts'
 import { createYifyProvider } from './subtitles/yify.ts'
 import { createTmdbMetadataResolver } from './playback/tmdb-metadata.ts'
 import { registerAdminRoutes } from './admin/routes.ts'
+import { createScoutCatalog, scoutRecipes } from './admin/scout-catalog.ts'
 import { applyOrdersInPlace, createProviderConfigStore, type ProviderConfigStore, type ProviderKind } from './admin/provider-config.ts'
 import { createPostgresProviderConfigStore } from './admin/postgres-provider-config.ts'
 import { applyOverridesInPlace } from './admin/provider-config.ts'
@@ -108,11 +110,10 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1, parts: 2 } })
   await app.register(rateLimit, {
     errorResponseBuilder: () => rateLimitExceeded(),
-    // Per-member buckets: server-rendered traffic shares the web
-    // container's IP, so IP-only keys collapse every member into one
-    // bucket and normal browsing returns 429s. See rateLimitKey.
-    keyGenerator: (request) => rateLimitKey(request),
-    max: 100,
+    // Public catalog fan-out has a separate bounded bucket; it cannot
+    // consume the general member budget. Credential routes remain stricter.
+    keyGenerator: (request) => apiRateLimitKey(request),
+    max: (request) => isCatalogRead(request) ? 600 : 100,
     timeWindow: '1 minute',
   })
 
@@ -194,12 +195,13 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   registerCatalogRoutes(app, { anime: animeService, catalog: resolvedCatalog })
   registerAnimeRoutes(app, { anime: animeService })
   const playbackStore = env.playback?.enabled && env.playback.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore()
-  const rawProviders = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, {
+  const providerOptions = {
     tmdbToken: env.tmdbToken,
     animeTitleResolver: createAnimeTitleResolver(resolvedAnimeCatalog),
     animeTitleVariantsResolver: createAnimeTitleVariantsResolver(resolvedAnimeCatalog),
     animeMetaResolver: createAnimeMetaResolver(resolvedAnimeCatalog),
-  }) : []
+  }
+  const rawProviders = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, providerOptions) : []
   const legacyProviderConfig = env.playback?.mediaConfig ? createProviderConfigStore(env.playback.mediaConfig.replace(/\.json$/, '.overrides.json')) : null
   const durableProviderConfig = db && env.playback?.enabled && env.nodeEnv !== 'test' ? createPostgresProviderConfigStore(db.prisma) : null
   if (durableProviderConfig && legacyProviderConfig && !providerConfigStore) {
@@ -225,7 +227,8 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     }, 5000)
     app.addHook('onClose', async () => clearInterval(timer))
   }
-  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders })
+  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders, audioOrigin: env.appOrigin,
+    ...(env.playback?.relay ? { relay: createPlaybackRelay(env.playback.relay), relayOrigin: env.appOrigin } : {}) })
   registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
   // Synthetic probes run in-process on a stagger (off in tests and when the
   // interval is zero). Past one instance every host probes; the reads are
@@ -284,7 +287,7 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
       ...(!env.subtitleKeys.openSubtitles ? { opensubtitles: 'OpenSubtitles API key and account credentials' } : {}),
     },
   })
-  registerAdminRoutes(app, { env, identity: resolvedIdentity, repository, providers, providerOrders, playbackStore, playback: resolvedPlayback, subtitles: subtitleService, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined })
+  registerAdminRoutes(app, { env, identity: resolvedIdentity, repository, providers, scoutCatalog: env.playback?.enabled ? createScoutCatalog(providerOptions) : undefined, scoutRecipes, providerOrders, playbackStore, playback: resolvedPlayback, subtitles: subtitleService, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined })
   registerSubtitleRoutes(app, {
     subtitles: subtitleService,
     env,

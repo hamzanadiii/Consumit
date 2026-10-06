@@ -55,6 +55,7 @@ function fakeAnimeCatalog(): AnimeCatalog {
   return {
     airingSchedule: vi.fn(async () => airing),
     batch: vi.fn(async () => batch),
+    browse: vi.fn(async () => page),
     relations: vi.fn(async () => franchise),
     search: vi.fn(async () => search),
     seasonal: vi.fn(async () => page),
@@ -116,6 +117,25 @@ describe('anime routes', () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.json()).toMatchObject({ anilistId: 1, status: 'FINISHED', coverImage: { url: null } })
+  })
+
+  it('browses anime by sort and filters before calling the metadata adapter', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    const app = await buildApp({ animeCatalog })
+    openApps.push(app)
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/browse?sort=top-rated&genre=Action&year=2024&format=TV&page=2' })
+    expect(hit.statusCode).toBe(200)
+    expect(animeCatalog.browse).toHaveBeenCalledWith({ sort: 'top-rated', genre: 'Action', year: 2024, format: 'TV', page: 2 })
+    vi.mocked(animeCatalog.browse).mockClear()
+    const defaults = await app.inject({ method: 'GET', url: '/v1/anime/browse' })
+    expect(defaults.statusCode).toBe(200)
+    expect(animeCatalog.browse).toHaveBeenCalledWith({ sort: 'popular', page: 1 })
+    vi.mocked(animeCatalog.browse).mockClear()
+    for (const query of ['sort=viral', 'sort=new&year=1800', 'sort=old&format=OVA2', 'sort=popular&page=501', 'sort=popular&genre=']) {
+      expect((await app.inject({ method: 'GET', url: `/v1/anime/browse?${query}` })).statusCode).toBe(400)
+    }
+    expect(animeCatalog.browse).not.toHaveBeenCalled()
   })
 
   it('uses exact canonical episode metadata for a separately cataloged anime season', async () => {

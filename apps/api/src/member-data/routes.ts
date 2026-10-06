@@ -1,24 +1,15 @@
 import {
   catalogRefSchema,
-  circleActivityCursorSchema,
-  type CircleActivityCursor,
-  circleActivityPageSchema,
-  circleActivityQuerySchema,
   createMemberListRequestSchema,
-  discoverMemberListsSchema,
   createDiaryEntryRequestSchema,
   createReviewRequestSchema,
   diaryEntrySchema,
   favoriteSelectionRequestSchema,
-  followStateSchema,
-  followStatusSchema,
   memberLibraryCollectionPageSchema,
   memberLibraryCollectionSchema,
   memberLibraryPageQuerySchema,
   memberLibrarySnapshotSchema,
   memberListDetailSchema,
-  memberSearchQuerySchema,
-  memberSuggestionSchema,
   memberProfileDataSchema,
   memberProfileArchiveCursorSchema,
   memberProfileArchiveKindSchema,
@@ -38,9 +29,7 @@ import {
   progressRefSchema,
   progressWriteRequestSchema,
   watchHistoryPageSchema,
-  reviewLikeSchema,
   setRatingRequestSchema,
-  setReviewLikeRequestSchema,
   titleReviewsPageSchema,
   titleReviewsQuerySchema,
   updateDiaryEntryRequestSchema,
@@ -62,7 +51,9 @@ import type { MemberData } from './member-data.ts'
 export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiEnv; identity: Identity; memberData: MemberData }) {
   const cookieName = sessionCookieName(deps.env)
 
-  async function viewer(request: FastifyRequest, required: boolean) {
+  function viewer(request: FastifyRequest, required: true): Promise<string>
+  function viewer(request: FastifyRequest, required: false): Promise<string | undefined>
+  async function viewer(request: FastifyRequest, required: boolean): Promise<string | undefined> {
     const token = request.cookies?.[cookieName]
     if (!token) {
       if (required) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
@@ -148,11 +139,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return memberLibraryCollectionPageSchema.parse(page)
   })
 
-  
-
-  
-
-  app.put('/v1/me/favorites', async (request, reply) => {
+app.put('/v1/me/favorites', async (request, reply) => {
     guardMutation(request)
     const parsed = favoriteSelectionRequestSchema.safeParse(request.body)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose up to four valid Favorites.')
@@ -231,11 +218,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return reply.code(204).send()
   })
 
-  
-
-  
-
-  for (const method of ['PUT', 'DELETE'] as const) {
+for (const method of ['PUT', 'DELETE'] as const) {
     app.route({
       handler: async (request, reply) => {
         guardMutation(request)
@@ -424,15 +407,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, true)))
   })
 
-  
-
-  
-
-  
-
-  
-
-  app.post('/v1/me/reviews', async (request, reply) => {
+app.post('/v1/me/reviews', async (request, reply) => {
     guardMutation(request)
     const parsed = createReviewRequestSchema.safeParse(request.body)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Write a review between 1 and 10,000 characters.')

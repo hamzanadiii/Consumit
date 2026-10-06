@@ -9,7 +9,7 @@ import { SessionProvider } from './session/session'
 import { THEME_INIT_SCRIPT } from './home/filscreen-theme'
 import { WebVitals } from './web-vitals'
 
-const siteDescription = 'Watch immediately, remember what you love, and discover through people whose taste you trust.'
+const siteDescription = 'Watch movies, series, and anime. Remember what you love in your private library.'
 
 export const metadata: Metadata = {
   description: siteDescription,

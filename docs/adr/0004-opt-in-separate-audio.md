@@ -1,0 +1,15 @@
+# Offer optional separate audio in the Consumit Player
+
+On 2026-10-03 the product owner explicitly chose to retain the current video while adding Apogee audio. The first experiment discovers the exact movie or series episode through a reviewed adapter capability, using only enabled Audio source or Both registrations. It does not aggregate arbitrary providers or activate added audio automatically.
+
+The owned playback session exposes an on-demand track list and preparation endpoint. Preparation validates the VOD audio playlist and every referenced URL against its configured provider. Media bytes remain browser-direct under ADR 0003. The video session, video engine, quality, progress and history are unchanged by selecting audio.
+
+The later movie-restoration request enables one Apogee Both registration for movies and TV. Discovery handles wrapper masters with at most three playlist fetches, validating all referenced hosts before each step. Apogee remains outside the combined Rivestream roster; its own role controls selection. Existing provider order and overrides are preserved when updating the role.
+
+One separate audio element uses hls.js and follows the primary video's clock, seeking, pause, playback speed, volume and mute. Web Audio suppresses only the primary sound after alternate audio is ready. The controller rejects audio playlists that decode video, restores primary sound on startup failure or a four-second alternate-audio stall, and cancels added audio on video-source replacement. Native-browser-only HLS and casting retain the primary stream's audio in this first slice.
+
+Media-clock alignment is distinct from dialogue alignment. Matching title/episode identity and close durations cannot prove matching cuts or studio intros. A duration difference above the lesser of 30 seconds and one percent (with a two-second minimum tolerance) is rejected. Smaller differences above two seconds produce visible guidance. An explicit per-selection sync adjustment from -30 to +30 seconds is available; it is not inferred from duration or persisted globally. This is an opt-in experiment and does not claim universal recording compatibility.
+
+Admin continues to label provider-wide audio health and separate-audio verification untested/unverified. Reviewed discovery capability is adapter-owned, and assigning a role cannot create it. Automatic mixing, soundtrack fingerprint alignment, cross-provider audio fallback and full-episode compatibility certification require later evidence.
+
+The subsequent member request consolidates stream and separate tracks into one Audio language list, hiding provider names and separate-source headings. Canonical language codes merge duplicates, with known regional and accessible variants preserved. Existing stream audio is preferred over a separate recording of the same language; internal membership retains selection and failure identity. A member still explicitly chooses any separate audio needed for a missing language. This presentation change does not expand provider discovery or compatibility guarantees.

@@ -7,15 +7,14 @@ import { TitleReviewsPage } from '../../../catalog/title-reviews-page'
 
 type TitleMovieReviewsPageProps = {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ audience?: string | undefined; page?: string | undefined; sort?: string | undefined }>
+  searchParams: Promise<{ page?: string | undefined; sort?: string | undefined }>
 }
 
-function parseSearchParams(searchParams: { audience?: string | undefined; page?: string | undefined; sort?: string | undefined }) {
+function parseSearchParams(searchParams: { page?: string | undefined; sort?: string | undefined }) {
   const page = Number(searchParams.page ?? '1')
   return {
-    audience: 'all' as const,
     page: Number.isInteger(page) && page >= 1 ? page : 1,
-    sort: searchParams.sort === 'popular' ? 'popular' as const : 'recent' as const,
+    sort: 'recent' as const,
   }
 }
 
@@ -39,5 +38,5 @@ export default async function TitleMovieReviewsPage({ params, searchParams }: Ti
   const id = Number(slug)
   if (!Number.isInteger(id) || id <= 0) notFound()
   const query = parseSearchParams(await searchParams)
-  return <TitleReviewsPage audience={query.audience} id={id} kind="movie" page={query.page} sort={query.sort} />
+  return <TitleReviewsPage id={id} kind="movie" page={query.page} sort={query.sort} />
 }

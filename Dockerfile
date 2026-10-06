@@ -7,6 +7,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/media-relay/package.json packages/media-relay/package.json
 COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 RUN bun install --frozen-lockfile
@@ -20,6 +21,7 @@ COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/media-relay/package.json packages/media-relay/package.json
 COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 RUN bun install --frozen-lockfile --filter @consumit/api
@@ -35,6 +37,12 @@ ENV NODE_ENV=production \
 # xz binary: the subtitles engine shells to `xz -dc` for XZ-compressed
 # singles (AnimeTosho .ass.xz); without it those candidates are skipped.
 RUN apk add --no-cache xz xz-libs
+# First-party subtitle files live on a mounted volume. The daemon creates
+# fresh named volumes root-owned, and the app runs as bun: pre-create the
+# directory with app ownership so newly provisioned volumes stay writable.
+# (Existing root-owned volumes need a one-time host-side chown instead;
+# the image cannot repair a mounted volume's ownership.)
+RUN mkdir -p /var/lib/consumit/subtitles && chown bun:bun /var/lib/consumit/subtitles
 COPY --from=api-build --chown=bun:bun /app/apps/api/dist/index.js ./index.js
 COPY --from=api-build --chown=bun:bun /app/apps/api/dist/import-worker.js ./worker.js
 USER bun

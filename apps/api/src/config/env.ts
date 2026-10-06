@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseRelayProviders, parseRelayDiscovery, type PlaybackRelayConfig } from '../playback/relay.ts'
 
 const envSchema = z.object({
   APP_ORIGIN: z.url().default('http://localhost:3000'),
@@ -10,6 +11,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   PLAYBACK_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_RELAY_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_RELAY_ORIGIN: z.url().optional(),
+  PLAYBACK_RELAY_SECRET: z.string().min(32).optional(),
+  PLAYBACK_RELAY_PROVIDERS: z.string().max(30000).optional(),
+  PLAYBACK_RELAY_DISCOVERY_PROVIDERS: z.string().max(512).optional(),
   PLAYBACK_VALKEY_URL: z.string().min(1).optional(),
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
@@ -31,6 +37,7 @@ const envSchema = z.object({
 
 export type ApiEnv = {
   playback?: {
+    relay?: PlaybackRelayConfig
     enabled: boolean; stateUrl: string | undefined; mediaConfig: string | undefined;
     /** Advertised API/resolver instance count. Past one, shared Valkey state
      *  is mandatory (resolver cache, sessions, rate limits, health). */
@@ -70,6 +77,13 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  let relay: PlaybackRelayConfig | undefined
+  if (value.PLAYBACK_RELAY_ENABLED === 'true') {
+    if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RELAY_ORIGIN || !value.PLAYBACK_RELAY_SECRET || !value.PLAYBACK_RELAY_PROVIDERS) throw new Error('Relay requires playback, an origin, a secret, and approved providers.')
+    const url = new URL(value.PLAYBACK_RELAY_ORIGIN)
+    if (url.protocol !== 'https:' || url.origin !== value.PLAYBACK_RELAY_ORIGIN || url.username || url.password) throw new Error('Relay requires an exact HTTPS origin.')
+    relay = { origin: url.origin, secret: value.PLAYBACK_RELAY_SECRET, providers: parseRelayProviders(value.PLAYBACK_RELAY_PROVIDERS), ...(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS ? { discovery: parseRelayDiscovery(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS) } : {}) }
+  }
   if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_MEDIA_CONFIG) throw new Error('Playback requires PLAYBACK_MEDIA_CONFIG.')
   // Single-instance launches run playback on bounded in-process state; shared
   // Valkey becomes mandatory past one instance, where split-brain resolvers
@@ -99,6 +113,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   }
   return {
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
+      ...(relay ? { relay } : {}),
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
     adminMetricsUrl: value.ADMIN_METRICS_URL,
     appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),

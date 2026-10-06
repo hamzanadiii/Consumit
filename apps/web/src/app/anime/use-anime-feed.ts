@@ -1,15 +1,13 @@
 'use client'
 
-import type { AnimePage } from '@consumit/contracts'
+import type { AnimeBrowseQuery, AnimePage } from '@consumit/contracts'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { browserAnimeSeasonal } from '@/lib/anime-browser'
+import { browserAnimeBrowse } from '@/lib/anime-browser'
 
-export type AnimeFeedQuery = {
-  season: 'WINTER' | 'SPRING' | 'SUMMER' | 'FALL'
-  year: number
-}
+export type AnimeFeedQuery = Omit<AnimeBrowseQuery, 'page'>
 
+// The owner remounts this feed when its query changes. Each feed owns its requests.
 export function useAnimeFeed(query: AnimeFeedQuery, initialPage?: AnimePage) {
   const [page, setPage] = useState(initialPage)
   const [loading, setLoading] = useState(!initialPage)
@@ -24,7 +22,7 @@ export function useAnimeFeed(query: AnimeFeedQuery, initialPage?: AnimePage) {
     const controller = new AbortController()
     requestRef.current = controller
     try {
-      const next = await browserAnimeSeasonal(query.season, query.year, (page?.page ?? 0) + 1, controller.signal)
+      const next = await browserAnimeBrowse({ ...query, page: (page?.page ?? 0) + 1 }, controller.signal)
       if (cancelledRef.current || requestRef.current !== controller || controller.signal.aborted) return
       setPage((previous) => {
         const items = new Map(previous?.items.map((item) => [item.anilistId, item]))
