@@ -2035,16 +2035,16 @@ export function ConsumitPlayer({
                   <img
                     alt=""
                     aria-hidden="true"
-                    className="mr-auto max-h-32 w-auto max-w-full object-contain object-left [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-44"
+                    className="mr-auto max-h-24 w-auto max-w-full object-contain object-left [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-36"
                     src={pauseLogoUrl}
                   />
                   <span className="sr-only">{title}</span>
                 </>
               ) : (
-                <p className="font-display text-4xl leading-tight font-normal tracking-tight text-balance text-ink sm:text-6xl">{title}</p>
+                <p className="font-display text-3xl leading-tight font-normal tracking-tight text-balance text-ink sm:text-5xl">{title}</p>
               )}
-              {pauseFacts ? <p className="mt-3 text-sm tabular-nums text-copy sm:text-base">{pauseFacts}</p> : null}
-              {pauseOverview ? <p className="mt-3 line-clamp-3 max-w-[62ch] text-sm leading-6 text-copy sm:text-base sm:leading-7">{pauseOverview}</p> : null}
+              {pauseFacts ? <p className="mt-2.5 text-sm tabular-nums text-copy">{pauseFacts}</p> : null}
+              {pauseOverview ? <p className="mt-2.5 line-clamp-3 max-w-[62ch] text-sm leading-6 text-copy">{pauseOverview}</p> : null}
             </div>
           </div>
         ) : null}

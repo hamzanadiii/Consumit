@@ -123,9 +123,11 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
   return (
     <div className="min-h-screen bg-[var(--fs-page)]" data-consumit-anime-watch>
       <div className="mx-auto w-full max-w-[100rem] px-3 pt-4 pb-10 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <AdPlaceholder placement="watch" position="early" />
+        </div>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex min-w-0 flex-col gap-6">
-            <AdPlaceholder placement="watch" position="early" />
             <WatchPlayback
               audioLanguage={audio === 'dub' ? 'en' : 'ja'}
               episode={toWatchEpisode(detail, episode, currentStream, currentArt)}
