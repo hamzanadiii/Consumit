@@ -8,7 +8,7 @@ import { useMemo, useRef, useState } from 'react'
 
 import { useAnimeFeed, type AnimeFeedQuery } from './use-anime-feed'
 import { BrowseHero } from '../shared/browse-hero'
-import { LandscapeCard } from '../shared/landscape-card'
+import { TitleCard } from '../shared/title-card'
 
 function animeHref(anime: AnimeTitleSummary) {
   return `/anime/${anime.anilistId}`
@@ -75,19 +75,9 @@ function AnimeFeed({ heading, initialPage, onReset, query }: { heading: string; 
         <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="browse-results-heading">{heading}</h2>
         <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${items.length} titles` : 'Finding titles…'}</p>
       </div>
-      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {items.map((anime) => (
-          <li className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_260px]" key={`anime:${anime.anilistId}`}>
-            <LandscapeCard
-              artworkSrc={anime.bannerImage ?? anime.coverImage.url}
-              href={animeHref(anime)}
-              meta={{ kind: 'Anime', rating: anime.averageScore === null ? null : anime.averageScore / 10, year: anime.seasonYear }}
-              note={anime.format}
-              title={anime.titles.preferred}
-            />
-          </li>
-        ))}
-        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-video animate-pulse rounded-[6px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
+      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
+        {items.map((anime) => <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" key={`anime:${anime.anilistId}`} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, year: anime.seasonYear, posterUrl: anime.coverImage.url, tmdbRating: anime.averageScore === null ? null : anime.averageScore / 10 }} />)}
+        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && items.length === 0 ? (
         <div className="py-16 text-center">

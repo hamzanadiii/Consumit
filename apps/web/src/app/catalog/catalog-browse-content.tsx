@@ -1,6 +1,6 @@
 'use client'
 
-import { kindLabel, titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary } from '@consumit/contracts'
+import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary } from '@consumit/contracts'
 import { ArtworkFrame, Button, Select } from '@consumit/ui'
 import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
@@ -9,7 +9,7 @@ import { Fragment, useMemo, useRef, useState } from 'react'
 import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { BrowseHero } from '../shared/browse-hero'
-import { LandscapeCard } from '../shared/landscape-card'
+import { TitleCard } from '../shared/title-card'
 import { AdPlaceholder } from '../shared/ad-placeholder'
 import { useCatalogFeed } from './use-catalog-feed'
 
@@ -74,23 +74,16 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
         <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
-      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
         {page?.items.map((title, index) => (
           <Fragment key={`${title.kind}:${title.id}`}>
-            <li className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_260px]">
-              <LandscapeCard
-                artworkSrc={title.backdropUrl ?? title.posterUrl}
-                href={titleHref(title)}
-                meta={{ kind: kindLabel(title.kind), rating: title.tmdbRating, year: title.year }}
-                title={title.title}
-              />
-            </li>
+            <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" title={title} />
             {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdPlaceholder placement="catalog" /></li> : null}
             {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdPlaceholder placement="catalog" /></li> : null}
             {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdPlaceholder placement="catalog" /></li> : null}
           </Fragment>
         ))}
-        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-video animate-pulse rounded-[6px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
+        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && page?.items.length === 0 ? (
         <div className="py-16 text-center">
