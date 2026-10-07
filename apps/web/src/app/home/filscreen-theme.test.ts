@@ -5,7 +5,6 @@ import { SIDEBAR_INIT_SCRIPT } from './filscreen-theme'
 function runInitScript() {
   // The layout inlines this script in <head>; run it against the jsdom
   // document the same way a blocking script runs before first paint.
-  // eslint-disable-next-line no-eval
   eval(SIDEBAR_INIT_SCRIPT)
 }
 

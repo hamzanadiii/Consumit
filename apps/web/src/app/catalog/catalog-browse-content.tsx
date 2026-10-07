@@ -1,6 +1,6 @@
 'use client'
 
-import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary } from '@consumit/contracts'
+import { kindLabel, titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary } from '@consumit/contracts'
 import { ArtworkFrame, Button, Select } from '@consumit/ui'
 import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
@@ -8,7 +8,8 @@ import { Fragment, useMemo, useRef, useState } from 'react'
 
 import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
-import { TitleCard } from '../shared/title-card'
+import { BrowseHero } from '../shared/browse-hero'
+import { LandscapeCard } from '../shared/landscape-card'
 import { AdPlaceholder } from '../shared/ad-placeholder'
 import { useCatalogFeed } from './use-catalog-feed'
 
@@ -21,7 +22,7 @@ function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: Cat
   }
   const scrollButtonClass = 'grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
   return (
-    <section aria-labelledby="featured-heading" className="mb-10 sm:mb-12">
+    <section aria-labelledby="featured-heading" className="mb-8 sm:mb-10">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)] sm:text-3xl" id="featured-heading">{kind === 'movie' ? 'Now Playing' : 'Trending Now'}</h2>
         <div className="flex gap-1.5">
@@ -73,16 +74,23 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
         <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
-      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
+      <ul aria-busy={loading} className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {page?.items.map((title, index) => (
           <Fragment key={`${title.kind}:${title.id}`}>
-            <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" title={title} />
+            <li className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_260px]">
+              <LandscapeCard
+                artworkSrc={title.backdropUrl ?? title.posterUrl}
+                href={titleHref(title)}
+                meta={{ kind: kindLabel(title.kind), rating: title.tmdbRating, year: title.year }}
+                title={title.title}
+              />
+            </li>
             {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdPlaceholder placement="catalog" /></li> : null}
             {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdPlaceholder placement="catalog" /></li> : null}
             {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdPlaceholder placement="catalog" /></li> : null}
           </Fragment>
         ))}
-        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
+        {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-video animate-pulse rounded-[6px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
       {!loading && !error && page?.items.length === 0 ? (
         <div className="py-16 text-center">
@@ -102,7 +110,7 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
 
 function BrowseSelect({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: readonly { label: string; value: string }[]; value: string }) {
   return (
-    <div className="min-w-0 flex-1 sm:w-44 sm:flex-none">
+    <div className="min-w-0 grow basis-[calc(50%-0.25rem)] sm:w-44 sm:flex-none sm:basis-auto sm:grow-0">
       <Select hideLabel label={label} onValueChange={onChange} options={options} placeholder={label} value={value} />
     </div>
   )
@@ -115,23 +123,36 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
   const genres = [...new Set([...popular.items, ...current.items].flatMap((title) => title.genreNames))].sort()
   const query = useMemo(() => ({ kind, feed, genre: genre || undefined, year: year ? Number(year) : undefined }), [kind, feed, genre, year])
   const isDefault = !genre && !year && feed === 'popular'
+  const backdrops = useMemo(
+    () => [...popular.items, ...current.items].map((title) => title.backdropUrl ?? title.posterUrl),
+    [current.items, popular.items],
+  )
   function reset() { setGenre(''); setYear(''); setFeed('popular') }
   return (
     <main className="consumit-catalog-browse w-full">
-      <div className="mb-7 flex flex-col gap-6 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
-        <div className="shrink-0">
-          <h1 className="font-display text-[2.75rem] leading-tight tracking-[-0.025em] text-[var(--fs-ink)] sm:text-5xl">{kind === 'movie' ? 'Movies' : 'Series'}<span className="text-[var(--fs-accent)]">.</span></h1>
-          <p className="mt-2 text-sm text-[var(--fs-muted)]">{kind === 'movie' ? 'Find your next great watch.' : 'Find your next can’t-stop-watching.'}</p>
-        </div>
-        <div aria-label="Filter titles" className="grid grid-cols-3 items-center gap-2 max-[359px]:grid-cols-2 sm:flex sm:flex-wrap" role="group">
-          <SlidersHorizontal aria-hidden="true" className="mr-2 hidden size-4 text-[var(--fs-muted)] xl:block" />
+      <BrowseHero
+        backdrops={backdrops}
+        description={kind === 'movie' ? 'Find your next great watch.' : 'Find your next can’t-stop-watching.'}
+        title={kind === 'movie' ? 'Movies' : 'Series'}
+      />
+      <div className="mt-7 sm:mt-8">
+        <FeaturedRail items={current.items} kind={kind} />
+      </div>
+      <div
+        aria-label="Filter titles"
+        className="mb-7 flex flex-wrap items-center gap-2 border-y border-[var(--fs-line)] py-3"
+        role="group"
+      >
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+          <SlidersHorizontal aria-hidden="true" className="mr-1 hidden size-4 shrink-0 text-[var(--fs-muted)] xl:block" />
           <BrowseSelect label="Genre" onChange={setGenre} options={[{ label: 'All genres', value: '' }, ...genres.map((name) => ({ label: name, value: name }))]} value={genre} />
           <BrowseSelect label="Year" onChange={setYear} options={[{ label: 'All years', value: '' }, ...Array.from({ length: currentYear - 1899 }, (_, index) => currentYear + 1 - index).map((value) => ({ label: String(value), value: String(value) }))]} value={year} />
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {!isDefault ? <Button onClick={reset} size="sm" variant="ghost">Reset</Button> : null}
           <BrowseSelect label="Sort by" onChange={(value) => setFeed(value === 'top-rated' ? 'top-rated' : 'popular')} options={[{ label: 'Popular', value: 'popular' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
-          {!isDefault ? <Button className="col-span-3 justify-self-end max-[359px]:col-span-2" onClick={reset} size="sm" variant="ghost">Reset</Button> : null}
         </div>
       </div>
-      <FeaturedRail items={current.items} kind={kind} />
       {current.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdPlaceholder placement="catalog" position="early" /></div> : null}
       <CatalogFeed initialPage={isDefault ? popular : undefined} key={`${kind}:${feed}:${genre}:${year}`} query={query} reset={reset} />
     </main>
