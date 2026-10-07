@@ -754,8 +754,13 @@ export function ConsumitPlayer({
   /* Old-master-inspired transient feedback: brief ±10s flash on seek. */
   const [lastSkip, setLastSkip] = useState<{ amount: number; at: number; direction: 'forward' | 'backward' } | null>(null)
   const lastSkipTimer = useRef<number | undefined>(undefined)
-  /* Old-master-inspired scrub hover preview (desktop pointer only). */
+  /* Old-master-inspired scrub hover preview (desktop pointer only). Pointer
+   *  moves fire far faster than frames paint; coalesce them to one render
+   *  per animation frame so scrubbing cannot saturate the main thread and
+   *  hitch playback indicators (e.g. the buffering spinner freezing while
+   *  the pointer moves). */
   const [hoverTime, setHoverTime] = useState<number | null>(null)
+  const hoverRaf = useRef<number | undefined>(undefined)
 
   const [internalAudio, setInternalAudio] = useState(() => audioOptions[0]?.value ?? 'english')
   const [internalSubtitle, setInternalSubtitle] = useState('english')
@@ -2171,13 +2176,24 @@ export function ConsumitPlayer({
           <div
             className="group relative mt-1.5 flex h-6 items-center rounded-micro has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange"
             data-player-timeline
-            onMouseLeave={() => setHoverTime(null)}
+            onMouseLeave={() => {
+              if (hoverRaf.current !== undefined) {
+                window.cancelAnimationFrame(hoverRaf.current)
+                hoverRaf.current = undefined
+              }
+              setHoverTime(null)
+            }}
             onMouseMove={(event) => {
-              if (duration <= 0) return
-              const rect = event.currentTarget.getBoundingClientRect()
-              if (rect.width <= 0) return
-              const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
-              setHoverTime(ratio * duration)
+              if (duration <= 0 || hoverRaf.current !== undefined) return
+              const { clientX } = event
+              const target = event.currentTarget
+              hoverRaf.current = window.requestAnimationFrame(() => {
+                hoverRaf.current = undefined
+                const rect = target.getBoundingClientRect()
+                if (rect.width <= 0) return
+                const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+                setHoverTime(ratio * duration)
+              })
             }}
           >
             {hoverTime != null && duration > 0 ? (
@@ -2440,7 +2456,6 @@ export function ConsumitPlayer({
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Quality" id="consumit-player-menu-quality" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Quality">
               <div className="p-3">
-                {engineState?.qualityNotice ? <p className="mb-3 text-sm leading-6 text-copy" role="status">{engineState.qualityNotice}</p> : null}
                 <div className="space-y-1" role="group" aria-label="Quality options">
                   {qualityOptions.map((option) => {
                     const selected = selectedQuality === option.value

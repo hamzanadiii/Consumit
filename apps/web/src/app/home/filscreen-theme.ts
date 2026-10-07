@@ -23,6 +23,41 @@ export const THEME_INIT_SCRIPT = [
   '})();',
 ].join('')
 
+/**
+ * Collapsed-rail mirror for the blocking script below. React state starts
+ * expanded and syncs after mount, so without this a stored collapsed choice
+ * flashes open on every full load. These rules reproduce only the collapsed
+ * geometry (narrow column, hidden labels/wordmark); the mounted shell takes
+ * over with identical classes, so there is no visual delta when it syncs.
+ * Unlayered on purpose: it must outrank the layered Tailwind utilities.
+ */
+const SIDEBAR_COLLAPSED_CSS = [
+  'html[data-consumit-sidebar="collapsed"] .fs-sidebar-shell{grid-template-columns:1fr}',
+  'html[data-consumit-sidebar="collapsed"] .fs-sidebar-label,html[data-consumit-sidebar="collapsed"] .fs-sidebar-wordmark{display:none}',
+  '@media (max-width:1023.98px){html[data-consumit-sidebar="collapsed"] #filscreen-sidebar{display:none}}',
+  '@media (min-width:1024px){html[data-consumit-sidebar="collapsed"] .fs-sidebar-shell{grid-template-columns:76px minmax(0,1fr)}}',
+  '@media (min-width:1024px){html[data-consumit-sidebar="collapsed"] #filscreen-sidebar{flex-direction:column;align-items:center;padding:1.25rem .75rem}}',
+].join('')
+
+/**
+ * Blocking pre-paint script rendered in the root layout `<head>` next to
+ * the theme script. When the stored sidebar choice is collapsed it marks
+ * `<html>` and injects the collapsed-rail mirror before first paint, so a
+ * reload never flashes the expanded rail. React hydrates expanded and syncs
+ * to the same collapsed state with no visual change.
+ */
+export const SIDEBAR_INIT_SCRIPT = [
+  '(function(){',
+  'try{',
+  "if(window.localStorage.getItem('consumit.home-sidebar')!=='collapsed')return;",
+  "var h=document.documentElement;h.setAttribute('data-consumit-sidebar','collapsed');",
+  "var s=document.createElement('style');s.setAttribute('data-consumit-sidebar-css','');",
+  `s.textContent=${JSON.stringify(SIDEBAR_COLLAPSED_CSS)};`,
+  '(document.head||h).appendChild(s);',
+  '}catch(e){}',
+  '})();',
+].join('')
+
 export type FilScreenTheme = 'dark' | 'light'
 
 /**
@@ -100,7 +135,9 @@ export const THEME_STYLE = [
   '.fs-sidebar-item{transition:background-color .18s ease,color .18s ease,border-color .18s ease}',
   '@keyframes fs-hero-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}',
   '.fs-hero-in{animation:fs-hero-in .45s cubic-bezier(.16,1,.3,1) both}',
+  '@keyframes fs-route-progress{from{transform:translateX(-110%)}to{transform:translateX(320%)}}',
+  '.fs-route-progress{animation:fs-route-progress 1.1s ease-in-out infinite}',
   '.fs-noscroll{scrollbar-width:none;-ms-overflow-style:none}',
   '.fs-noscroll::-webkit-scrollbar{display:none}',
-  '@media (prefers-reduced-motion:reduce){.fs-sidebar-shell,.fs-sidebar-rail{transition:none}.fs-sidebar-item,.fs-rail-active,.fs-fade,.fs-hero-in{animation:none}}',
+  '@media (prefers-reduced-motion:reduce){.fs-sidebar-shell,.fs-sidebar-rail{transition:none}.fs-sidebar-item,.fs-rail-active,.fs-fade,.fs-hero-in{animation:none}.fs-route-progress{animation:none;transform:none;width:100%}}',
 ].join('')

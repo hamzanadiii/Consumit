@@ -90,6 +90,11 @@ function normalizeLang(value: string): string {
   return lower
 }
 
+/** Hostnames known to serve proxy-wrapped media instead of direct bytes.
+ *  Mirrors the reviewed relay wrapper set: the inner `url` target still
+ *  passes the full media allowlist before any source crosses into playback. */
+const PROXY_WRAPPER_HOSTS = new Set(['proxy.valhallastream.com', 'valhallastream.dpdns.org'])
+
 function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, string> } {
   let parsed: URL
   try {
@@ -98,7 +103,12 @@ function unwrapProxy(rawUrl: string): { url: string; headers: Record<string, str
     return { url: rawUrl, headers: {} }
   }
 
-  if (parsed.pathname.includes('proxy')) {
+  // Wrappers bury the media URL in `?url=` behind either a proxy pathname
+  // (/proxy/…) or a proxy hostname (proxy.valhallastream.com/m3u8?...).
+  // Apogee currently serves the latter; without unwrapping, direct rows
+  // reject the wrapper as relay-shaped and separate-audio discovery starves.
+  const host = parsed.hostname.toLowerCase()
+  if (parsed.pathname.includes('proxy') || /(^|\.)proxy\./.test(host) || PROXY_WRAPPER_HOSTS.has(host)) {
     const innerUrl = parsed.searchParams.get('url')
     if (innerUrl) {
       const headersParam = parsed.searchParams.get('headers')

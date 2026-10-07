@@ -16,19 +16,14 @@ import {
   PREFERRED_LANGUAGE_CODES,
   readStoredSubtitleLanguages,
   savePreferredSubtitleLanguages,
-  SegmentedControl,
-  ServiceMark,
   SettingsRail,
   SettingsSection,
-  Toggle,
 } from '@consumit/ui'
 
 import { FilScreenShell } from '../shared'
 import { useSession } from '../session/session'
 import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
-
-type ToggleKey = 'autoplay' | 'releases' | 'spoilers' | 'subtitles'
 
 /** Preferred subtitle languages (max 3, priority order). Device-local like
  *  every player preference; the watch screen refetches live on change. */
@@ -79,12 +74,6 @@ function SubtitleLanguagePicker() {
 export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
   const router = useRouter()
   const session = useSession()
-  const [values, setValues] = useState<Record<ToggleKey, boolean>>({
-    autoplay: false,
-    releases: true,
-    spoilers: true,
-    subtitles: true,
-  })
   const [profile, setProfile] = useState(initialProfile)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
   const [profileSaved, setProfileSaved] = useState(false)
@@ -161,10 +150,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
     }
   }
 
-  function toggle(key: ToggleKey) {
-    setValues((current) => ({ ...current, [key]: !current[key] }))
-  }
-
   return (
     <FilScreenShell pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-settings-screen>
@@ -179,7 +164,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
           <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
             <SettingsRail
               activeHref="/settings"
-              avatarSrc={session.member ? memberAvatarSrc(session.member.avatarUrl, session.member.id) : '/assets/hamza-avatar.svg'}
+              avatarSrc={session.member ? memberAvatarSrc(session.member.avatarUrl, session.member.id) : undefined}
               avatarTreatment={session.member?.avatarStyle ?? profile.avatarStyle}
               className="min-w-0 max-w-full overflow-hidden [&_nav]:w-full [&_nav]:max-w-full [&_nav]:overflow-x-auto [&_ul]:flex [&_ul]:w-max [&_ul]:gap-2 [&_a]:whitespace-nowrap lg:[&_nav]:overflow-visible lg:[&_ul]:block lg:[&_ul]:w-auto lg:[&_ul]:space-y-1"
               username={`@${profile.username}`}
@@ -257,13 +242,13 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
 
             <SettingsSection
               className="scroll-mt-8"
-              description="Your profile visibility is stored with your account. Social controls will appear only when the social system exists."
+              description="Profiles, watch history, diary, reviews, and lists belong to their member. Visitors are always rejected."
               id="privacy"
               title="Privacy & social"
             >
               <PreferenceRow
                 control={<span className="rounded-control border border-control-outline px-4 py-2 text-sm font-bold capitalize text-ink">{profile.visibility}</span>}
-                description="Change this saved value in the Account form above. Imported lists remain private until explicitly published."
+                description="Profiles stay private. There is no visibility switch because nothing is shared."
                 label="Profile visibility"
               />
               <PreferenceRow control={<span className="text-xs font-bold uppercase tracking-[0.1em] text-muted">Not available</span>} description="Follows and activity sharing are not implemented, so no activity is published. Consumit has no direct messaging." label="Social sharing" />
@@ -271,29 +256,19 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
 
             <SettingsSection
               className="scroll-mt-8"
-              description="Your services guide availability. They are preferences, not linked billing accounts."
+              description="Resolution, audio, and subtitles are chosen per title inside the player and remembered on this device."
               id="playback"
               title="Streaming & playback"
             >
-              <div className="py-5">
-                <p className="text-sm font-bold text-ink">Availability preferences</p>
-                <p className="mt-1 text-xs leading-5 text-muted">We use these choices to organize available sources. Consumit never manages or changes your subscriptions.</p>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <ServiceMark description="Preferred for availability" name="Netflix" src="/assets/services/netflix.svg" />
-                  <ServiceMark description="Preferred for availability" name="Shahid" src="/assets/services/shahid.svg" />
-                </div>
-                <Button className="mt-5" variant="secondary">Edit preferences</Button>
-              </div>
-              <PreferenceRow control={<Toggle checked={values.autoplay} label="Autoplay next episode" onCheckedChange={() => toggle('autoplay')} />} description="Start the next available episode after a short countdown." label="Autoplay next episode" />
               <PreferenceRow
-                control={<SegmentedControl className="w-48" defaultValue="auto" legend="Playback quality" name="playback-quality" options={[{ label: 'Auto', value: 'auto' }, { label: 'Highest', value: 'highest' }]} />}
-                description="The Consumit Player adapts quality while keeping the same first-party controls."
-                label="Playback quality"
+                control={<span className="rounded-control border border-control-outline px-4 py-2 text-sm font-bold text-ink">Automatic</span>}
+                description="If a source fails, Consumit switches to the next working source without losing your position. Pick a different server anytime from the player Server menu."
+                label="Source recovery"
               />
               <PreferenceRow
-                control={<SegmentedControl className="w-48" defaultValue="ask" legend="Unavailable source behavior" name="unavailable-behavior" options={[{ label: 'Ask me', value: 'ask' }, { label: 'Switch', value: 'switch' }]} />}
-                description="Choose what happens if the current playback source becomes unavailable."
-                label="Source changes"
+                control={<span className="rounded-control border border-control-outline px-4 py-2 text-sm font-bold text-ink">Player menu</span>}
+                description="Open Quality, Audio, or Subtitles in the player toolbar. Your last choice becomes the starting point for the next title."
+                label="Quality and tracks"
               />
             </SettingsSection>
 
@@ -304,17 +279,15 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               title="Language & subtitles"
             >
               <PreferenceRow
-                control={<SegmentedControl className="w-44" defaultValue="original" legend="Preferred audio" name="preferred-audio" options={[{ label: 'Original', value: 'original' }, { label: 'Dubbed', value: 'dubbed' }]} />}
-                description="Prefer the original audio when the selected source includes it."
-                label="Preferred audio"
-              />
-              <PreferenceRow control={<Toggle checked={values.subtitles} label="Enable subtitles by default" onCheckedChange={() => toggle('subtitles')} />} description="Start playback with English subtitles when available." label="Subtitles by default" />
-              <PreferenceRow
                 control={<SubtitleLanguagePicker />}
                 description="Applies on this device to every movie, series, and anime. The first language also drives automatic track selection."
                 label="Preferred subtitle languages"
               />
-              <PreferenceRow control={<Toggle checked={values.spoilers} label="Hide spoilers" onCheckedChange={() => toggle('spoilers')} />} description="Keep spoiler-marked reviews and comments behind an explicit reveal." label="Hide spoilers" />
+              <PreferenceRow
+                control={<span className="rounded-control border border-control-outline px-4 py-2 text-sm font-bold text-ink">Player menu</span>}
+                description="Audio, subtitle tracks, timing, and text appearance are chosen per title in the player Audio and Subtitles menus."
+                label="Audio and appearance"
+              />
             </SettingsSection>
 
             <SettingsSection
@@ -323,7 +296,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               id="notifications"
               title="Notifications"
             >
-              <PreferenceRow control={<Toggle checked={values.releases} label="New episode notifications" onCheckedChange={() => toggle('releases')} />} description="Hear when a saved series has a new available episode." label="New episodes" />
+              <PreferenceRow control={<span className="text-xs font-bold uppercase tracking-[0.1em] text-muted">Not available</span>} description="Release tracking is not implemented, so nothing is announced. Saved series keep their existing library behavior." label="New episodes" />
             </SettingsSection>
 
             <SettingsSection

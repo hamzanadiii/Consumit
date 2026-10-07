@@ -2,6 +2,41 @@ import { audioTrackLabel, canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUr
 import { RelayLeaseRouter, relayLeaseLoader } from './relay-lease'
 
 export type MediaOption = { value: string; label: string; language?: string | undefined; height?: number | undefined }
+
+/** Best-first menu order: known heights descend, height-less entries keep
+ *  manifest order at the end. Values stay bound to their engine identifiers,
+ *  so selection is unaffected by display order. Auto always leads separately. */
+export function orderQualityOptions(options: MediaOption[]): MediaOption[] {
+  return [...options].sort((a, b) => (b.height ?? -1) - (a.height ?? -1))
+}
+
+/** Fixed quality ladder. Upstreams report odd heights (960p, 640p, …) for
+ *  what are standard rungs, which litters the menu and trips "unavailable"
+ *  notices for rungs that effectively exist. */
+const STANDARD_HEIGHTS = [2160, 1440, 1080, 720, 480, 360, 240]
+
+/** Snap a rendition height to its nearest standard rung (ties round up:
+ *  900p reads as 1080p). Unknown heights stay unknown. */
+export function snapQualityHeight(height: number | undefined): number | undefined {
+  if (height === undefined) return undefined
+  let best = STANDARD_HEIGHTS[0]!
+  for (const rung of STANDARD_HEIGHTS) {
+    if (Math.abs(height - rung) < Math.abs(height - best)) best = rung
+  }
+  return best
+}
+
+/** Collapse same-rung duplicates from snapping (first manifest entry wins,
+ *  matching player dedupe). Height-less entries always survive. */
+export function dedupeSnappedQualities(options: MediaOption[]): MediaOption[] {
+  const seen = new Set<number>()
+  return options.filter((option) => {
+    if (option.height === undefined) return true
+    if (seen.has(option.height)) return false
+    seen.add(option.height)
+    return true
+  })
+}
 export type EngineTracks = { qualities: MediaOption[]; audio: MediaOption[]; subtitles: MediaOption[] }
 export type MediaEngine = {
   destroy(): void
@@ -66,6 +101,14 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     })
     let lastError: EngineFailure = 'network'
     let lastDeliveryFailure: EngineDeliveryFailure | undefined
+    // Decoded truth for mislabeled single-rung masters: some upstreams
+    // declare one bogus height (e.g. 240p) while serving HD segments. The
+    // decoded frame size is ground truth, but only stable when no ABR ladder
+    // can move beneath it — so it corrects single-rendition menus exclusively.
+    const decodedHeight = () => {
+      const height = video.videoHeight
+      return Number.isFinite(height) && height > 0 ? height : undefined
+    }
     const publish = () => {
       try {
         // Device-tier Auto ceiling (ADR-0002 amendment A): phones never burn
@@ -80,7 +123,12 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         /* Auto cap is a preference, never a crash */
       }
       events.tracks({
-      qualities: [...auto, ...hls.levels.map((level, index) => ({ value: String(index), label: level.height ? `${level.height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps`, height: level.height || undefined }))],
+      qualities: [...auto, ...orderQualityOptions(dedupeSnappedQualities(hls.levels.map((level, index) => {
+        const declared = typeof level.height === 'number' ? level.height : undefined
+        const truth = hls.levels.length === 1 ? decodedHeight() : undefined
+        const height = snapQualityHeight(truth ?? declared)
+        return { value: String(index), label: height ? `${height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps`, height: height ?? undefined }
+      })))],
       audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: audioTrackLabel({ name: track.name, lang: track.lang, isDefault: track.default }, index), language: track.lang })),
       subtitles: hls.subtitleTracks.map((track, index) => ({ value: String(index), label: track.name || track.lang || `Subtitles ${index + 1}`, language: track.lang })),
       })
@@ -109,6 +157,10 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         : undefined
       events.fatal(lastError, lastDeliveryFailure)
     })
+    // Intrinsic size changes as segments decode; re-ground the single-rung
+    // label once real pixels exist. Multi-rung ladders keep manifest labels.
+    const onVideoResize = () => publish()
+    video.addEventListener('resize', onVideoResize)
     hls.loadSource(source.src); hls.attachMedia(video)
     return {
       quality(value) { hls.currentLevel = value === 'auto' ? -1 : Number(value) },
@@ -130,14 +182,17 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         // when a seek is waiting for bytes. Retry the element's destination.
         if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(video.currentTime); return true
       },
-      destroy() { lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
+      destroy() { video.removeEventListener('resize', onVideoResize); lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
     }
   }
   const dash = await import('dashjs')
   signal?.throwIfAborted()
   const player = dash.MediaPlayer().create()
   const publish = () => events.tracks({
-    qualities: [...auto, ...player.getRepresentationsByType('video').map((track) => ({ value: track.id, label: track.height ? `${track.height}p` : 'Video', height: track.height || undefined }))],
+    qualities: [...auto, ...orderQualityOptions(dedupeSnappedQualities(player.getRepresentationsByType('video').map((track) => {
+      const height = snapQualityHeight(typeof track.height === 'number' ? track.height : undefined)
+      return { value: track.id, label: height ? `${height}p` : 'Video', height: height ?? undefined }
+    })))],
     audio: player.getTracksFor('audio').map((track, index) => ({ value: String(index), label: track.lang || `Audio ${index + 1}`, language: track.lang ?? undefined })),
     subtitles: player.getTracksFor('text').map((track, index) => ({ value: String(index), label: track.lang || `Subtitles ${index + 1}`, language: track.lang ?? undefined })),
   })

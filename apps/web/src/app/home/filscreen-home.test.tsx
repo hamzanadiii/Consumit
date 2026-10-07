@@ -6,6 +6,7 @@ import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
 import { FilScreenHome } from './filscreen-home'
+import { ShellStateProvider } from './shell-state'
 
 let mockPathname = '/'
 vi.mock('next/navigation', () => ({
@@ -52,7 +53,7 @@ const popular = [
 
 describe('filscreen live home', () => {
   it('links Watch directly to the player and keeps TMDB evidence separate from member claims', async () => {
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/watch/movie/693134')
     expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
@@ -62,7 +63,7 @@ describe('filscreen live home', () => {
   })
 
   it('renders trending movies before trending series with real poster art and drops popular', () => {
-    render(<FilScreenHome hero={hero} trendingMovies={trendingMovies} trendingSeries={trendingSeries} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={trendingMovies} trendingSeries={trendingSeries} /></ShellStateProvider>)
 
     expect(screen.getByRole('heading', { name: 'Trending Movies' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Trending Series' })).toBeInTheDocument()
@@ -81,7 +82,7 @@ describe('filscreen live home', () => {
   })
 
   it('keeps the home surface personal with no social feed', () => {
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.queryByRole('heading', { name: 'Circle activity' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Find members' })).not.toBeInTheDocument()
@@ -89,14 +90,14 @@ describe('filscreen live home', () => {
   })
 
   it('credits TMDB with a path to catalog credits', () => {
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('link', { name: 'TMDB' })).toHaveAttribute('href', 'https://www.themoviedb.org')
     expect(screen.getByRole('link', { name: 'Catalog credits' })).toHaveAttribute('href', '/about#catalog-credit')
   })
 
   it('offers sign in to guests and marks Home as current', () => {
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
@@ -105,7 +106,7 @@ describe('filscreen live home', () => {
 
   it('follows the current route with the sidebar pill', () => {
     mockPathname = '/search'
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.queryByRole('link', { name: 'Categories' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search titles' })).toBeInTheDocument()
@@ -115,7 +116,7 @@ describe('filscreen live home', () => {
 
   it('renders dark by default and persists the member theme choice', async () => {
     const user = userEvent.setup()
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(shellTheme()).toBe('dark')
     const toggle = screen.getByRole('button', { name: 'Switch to light mode' })
@@ -129,7 +130,7 @@ describe('filscreen live home', () => {
 
   it('keeps the document theme stamp in sync so dark mode actually applies', async () => {
     const user = userEvent.setup()
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(document.documentElement.getAttribute('data-consumit-theme')).toBe('dark')
 
@@ -144,14 +145,14 @@ describe('filscreen live home', () => {
 
   it('restores a stored light theme on load', () => {
     window.localStorage.setItem('consumit.home-theme', 'light')
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(shellTheme()).toBe('light')
   })
 
   it('collapses to an icon rail and restores with the choice persisted', async () => {
     const user = userEvent.setup()
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
@@ -168,7 +169,7 @@ describe('filscreen live home', () => {
 
   it('restores a collapsed sidebar on load', () => {
     window.localStorage.setItem('consumit.home-sidebar', 'collapsed')
-    render(<FilScreenHome hero={hero} popular={popular} trending={trending} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
     expect(showSidebarButtons()).toHaveLength(2)

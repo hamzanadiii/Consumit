@@ -6,7 +6,8 @@ import './globals.css'
 import { siteUrl } from '@/lib/site'
 
 import { SessionProvider } from './session/session'
-import { THEME_INIT_SCRIPT } from './home/filscreen-theme'
+import { SIDEBAR_INIT_SCRIPT, THEME_INIT_SCRIPT } from './home/filscreen-theme'
+import { ShellStateProvider } from './home/shell-state'
 import { WebVitals } from './web-vitals'
 
 const siteDescription = 'Watch movies, series, and anime. Remember what you love in your private library.'
@@ -38,11 +39,15 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         {/* Pre-paint FilScreen theme: runs before first paint so stored light
             mode never flashes dark (including the loading fallback). */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Pre-paint collapsed rail: same idea for the stored sidebar choice. */}
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }} />
       </head>
       <body>
         <SessionProvider initialStatus="loading">
-          <WebVitals />
-          {children}
+          <ShellStateProvider>
+            <WebVitals />
+            {children}
+          </ShellStateProvider>
         </SessionProvider>
       </body>
     </html>

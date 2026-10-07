@@ -24,7 +24,12 @@ describe('configured real provider integration', () => {
     const [provider] = configuredProviders([{ ...row, enabled: true }], { transport, tmdbToken: 'fixture-token' })
     expect(allowedMediaUrl('https://srv315.excentionses.cyou/movie/1080.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
     expect(allowedMediaUrl('https://srv315.tormisted.cyou/movie/720.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
-    for (const host of ['excentionses.cyou', 'evil.excentionses.cyou', 'srv315.excentionses.cyou.evil.example', 'srv315.unrelated.cyou']) {
+    // The .cyou flux rotates domains faster than manual curation (tormisted
+    // -> ancender -> choosed within days); the numbered-srv shape rule
+    // covers the family. Structural mismatches still fail closed.
+    expect(allowedMediaUrl('https://srv315.ancender.cyou/movie/1080.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
+    expect(allowedMediaUrl('https://srv315.choosed.cyou/movie/1080.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
+    for (const host of ['choosed.cyou', 'evil.choosed.cyou', 'srv315.choosed.cyou.evil.example', 'srv315.faitioninthrey.site.evil.example']) {
       expect(allowedMediaUrl(`https://${host}/movie.m3u8`, provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(false)
     }
     const playback = createPlayback({ providers: [provider!], store: createMemoryPlaybackStore(), region: 'US' })

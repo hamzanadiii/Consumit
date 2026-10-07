@@ -495,6 +495,33 @@ describe('playback shell components', () => {
     }
   })
 
+  it('coalesces rapid timeline hover moves to one render per frame', async () => {
+    const { container } = prototypePlayer()
+    const video = container.querySelector('video')!
+    setClock(video, 0, 3600)
+    act(() => {
+      video.dispatchEvent(new Event('loadedmetadata'))
+    })
+    const timeline = container.querySelector('[data-player-timeline]')!
+    vi.spyOn(timeline, 'getBoundingClientRect').mockReturnValue({
+      width: 1000, height: 24, top: 0, left: 0, right: 1000, bottom: 24, x: 0, y: 0, toJSON: () => ({}),
+    })
+    // A lone move applies on the next frame.
+    fireEvent.mouseMove(timeline, { clientX: 100 })
+    await screen.findByText('6:00')
+    // Two moves inside one frame collapse into the first position: the
+    // trailing move never renders, so rapid scrubbing cannot flood renders.
+    fireEvent.mouseMove(timeline, { clientX: 500 })
+    fireEvent.mouseMove(timeline, { clientX: 900 })
+    await screen.findByText('30:00')
+    expect(screen.queryByText('54:00')).not.toBeInTheDocument()
+    // The next frame picks up the latest position.
+    fireEvent.mouseMove(timeline, { clientX: 900 })
+    await screen.findByText('54:00')
+    fireEvent.mouseLeave(timeline)
+    await waitFor(() => expect(screen.queryByText('54:00')).not.toBeInTheDocument())
+  })
+
   it('keeps Arabic two-line cues ordered with per-line direction', async () => {
     const vtt = 'WEBVTT\n\n00:00:01.000 --> 00:00:04.000\n-حسنا! ونحن في طريقنا إلى البقاء على قيد الحياة!\n-و لا مزيد من جبابرة قادمون الداخل!\n'
     const fetchMock = vi.fn(async () => ({ ok: true, body: undefined, text: async () => vtt }))

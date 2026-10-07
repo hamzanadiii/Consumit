@@ -83,6 +83,20 @@ describe('settings preferred subtitle languages', () => {
   }, 15_000)
 })
 
+describe('settings honest playback surface', () => {
+  it('shows automatic recovery and player-owned tracks without dead controls', () => {
+    render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
+
+    expect(screen.getByText('Automatic')).toBeInTheDocument()
+    expect(screen.getByText(/switches to the next working source without losing your position/)).toBeInTheDocument()
+    expect(screen.getAllByText('Not available')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Edit preferences' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Autoplay next episode')).not.toBeInTheDocument()
+    expect(screen.queryByText('Playback quality')).not.toBeInTheDocument()
+    expect(screen.queryByText('Hide spoilers')).not.toBeInTheDocument()
+  })
+})
+
 describe('settings avatar portrait picker', () => {
   beforeEach(() => {
     vi.clearAllMocks()

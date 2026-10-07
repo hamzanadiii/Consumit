@@ -33,7 +33,8 @@ import { useSession } from '../session/session'
 import { OnDemandLink as Link } from '../shared/on-demand-link'
 
 export { SIDEBAR_STORAGE_KEY, THEME_INIT_SCRIPT, THEME_STORAGE_KEY, THEME_STYLE, stampDocumentTheme, type FilScreenTheme } from './filscreen-theme'
-import { SIDEBAR_STORAGE_KEY, THEME_STORAGE_KEY, THEME_STYLE, stampDocumentTheme, type FilScreenTheme } from './filscreen-theme'
+import { THEME_STYLE } from './filscreen-theme'
+import { useShellState } from './shell-state'
 
 export const CONTRACT_HTML =
   '<!--FilScreen Shell [seed 1f265dab] THESIS: dual-theme 3-column chooser owns Consumit, dark by default. ' +
@@ -46,6 +47,36 @@ const SIDEBAR_ROW_CLASS =
 
 const SIDEBAR_ICON_CLASS =
   'grid place-items-center text-[var(--fs-muted)] transition-all duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none motion-reduce:transform-none'
+
+/** A per-tab guest character: one random letter, stable for the browser
+ *  session via sessionStorage. Rendered as 'G' on the server and first paint
+ *  so hydration never mismatches, then upgraded after mount. */
+const GUEST_CHARACTER_KEY = 'consumit.guest-character'
+function useGuestCharacter(): string {
+  const [character, setCharacter] = useState('G')
+  useEffect(() => {
+    let next: string
+    try {
+      const stored = window.sessionStorage.getItem(GUEST_CHARACTER_KEY)
+      if (stored && /^[A-Z]$/.test(stored)) {
+        next = stored
+      } else {
+        next = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+        try {
+          window.sessionStorage.setItem(GUEST_CHARACTER_KEY, next)
+        } catch {
+          // Storage is optional; the letter still lasts for this mount.
+        }
+      }
+    } catch {
+      // Private browsing may block storage; fall through to a fresh pick.
+      next = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only sessionStorage sync; server render stays 'G' so hydration matches
+    setCharacter(next)
+  }, [])
+  return character
+}
 
 const MEMBER_ARCHIVES = [
   { section: 'watchlist', label: 'Watchlist', icon: Bookmark },
@@ -62,7 +93,7 @@ function SidebarRowLabel({
   children: ReactNode
   iconOnly?: boolean | undefined
 }) {
-  return <span className={iconOnly ? 'sr-only' : 'fs-fade text-sm font-normal'}>{children}</span>
+  return <span className={iconOnly ? 'sr-only' : 'fs-fade fs-sidebar-label text-sm font-normal'}>{children}</span>
 }
 
 function SidebarLink({
@@ -80,15 +111,25 @@ function SidebarLink({
   iconOnly?: boolean | undefined
   label: string
 }) {
+  // Destination pages render slowly enough that a click with no immediate
+  // feedback reads as broken. The click only records the marker here — the
+  // visible progress lives in the shell's top route bar, so rows never
+  // change shape. The marker survives the route transition (shell state
+  // outlives the remounting shell) and clears on arrival; a safety timeout
+  // covers failed navigations.
+  const { beginNavigation, pendingHref } = useShellState()
+  const pending = pendingHref === href && !active
   return (
     <Link
       {...(active ? { 'aria-current': 'page' } : {})}
+      {...(pending ? { 'aria-busy': true } : {})}
       className={
         active
           ? 'fs-sidebar-item group flex min-h-11 shrink-0 items-center gap-3 rounded-control bg-[var(--fs-accent-soft)] px-3 text-sm font-bold whitespace-nowrap text-[var(--fs-ink)] border border-[var(--fs-accent)]/40 outline-none transition-all duration-200 ease-out active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
           : SIDEBAR_ROW_CLASS
       }
       href={href}
+      onClick={() => beginNavigation(href)}
       style={{ animationDelay: `${delay}ms` }}
       {...(iconOnly ? { title: label } : {})}
     >
@@ -116,59 +157,21 @@ export function FilScreenShell({
   const defaultPath = activeKindTab === 'series' ? '/series' : activeKindTab === 'movies' ? '/movies' : activeKindTab === 'anime' ? '/anime' : '/'
   const pathname = currentPathname || hookPathname || defaultPath
   const { clearMember, member } = useSession()
-  // SSR-safe: server and first client render share these defaults so
-  // hydration always matches. Stored preferences sync in the effect below;
-  // first paint is already correct via the blocking THEME_INIT_SCRIPT +
-  // the `html[data-consumit-theme]` CSS override, so there is no flash.
-  const [theme, setTheme] = useState<FilScreenTheme>('dark')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Sidebar/theme choices live in the root-layout provider so they survive
+  // page remounts (every screen renders its own shell). Local state here
+  // would reset to expanded/dark on each navigation.
+  const { sidebarOpen, toggleSidebar: persistSidebarToggle, theme, toggleTheme, pendingHref } = useShellState()
   const [searchOpen, setSearchOpen] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
   const showSidebarRef = useRef<HTMLButtonElement>(null)
   const searchTriggerRef = useRef<HTMLButtonElement>(null)
   const avatarSrc = member ? memberAvatarSrc(member.avatarUrl, member.id) : null
-
-  // Mount-only sync of device-stored prefs (external store), matching the
-  // pre-paint script. Direct setState in this effect is intentional.
-  useEffect(() => {
-    let nextTheme: FilScreenTheme | null = null
-    let nextSidebar: boolean | null = null
-    try {
-      if (window.localStorage.getItem(THEME_STORAGE_KEY) === 'light') {
-        nextTheme = 'light'
-      }
-      if (window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'collapsed') {
-        nextSidebar = false
-      }
-    } catch {
-      // Storage denial keeps the defaults.
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional mount-only external-store sync
-    if (nextTheme) setTheme(nextTheme)
-    if (nextSidebar !== null) setSidebarOpen(nextSidebar)
-    stampDocumentTheme(nextTheme ?? 'dark')
-  }, [])
-
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, next)
-    } catch {
-      // Storage denial keeps the session-only choice.
-    }
-    stampDocumentTheme(next)
-  }
+  const guestCharacter = useGuestCharacter()
 
   function toggleSidebar() {
-    const next = !sidebarOpen
-    setSidebarOpen(next)
-    try {
-      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? 'open' : 'collapsed')
-    } catch {
-      // Storage denial keeps the session-only choice.
-    }
-    if (!next) {
+    const willCollapse = sidebarOpen
+    persistSidebarToggle()
+    if (willCollapse) {
       requestAnimationFrame(() => showSidebarRef.current?.focus())
     }
   }
@@ -219,6 +222,11 @@ export function FilScreenShell({
 
   return (
     <div className="min-h-screen bg-[var(--fs-shell)] text-[var(--fs-ink)]" data-filscreen-home data-theme={theme} style={{ colorScheme: theme }}>
+      {pendingHref ? (
+        <div aria-label="Loading page" className="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden" role="status">
+          <div aria-hidden="true" className="fs-route-progress h-full w-1/4 bg-[var(--fs-accent)]" />
+        </div>
+      ) : null}
       <div aria-hidden="true" dangerouslySetInnerHTML={{ __html: CONTRACT_HTML }} />
       <style>{THEME_STYLE}</style>
       {pageHeading ? <h1 className="sr-only">{pageHeading}</h1> : null}
@@ -226,7 +234,7 @@ export function FilScreenShell({
         <aside aria-label="Primary" id="filscreen-sidebar" className={sidebarOpen ? 'fs-sidebar-rail flex flex-col gap-6 border-b border-[var(--fs-line)] p-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-6' : 'fs-sidebar-rail hidden flex-col items-center gap-6 border-[var(--fs-line)] py-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3'}>
           <div className={sidebarOpen ? 'flex min-h-11 items-center justify-between gap-2' : 'flex min-h-11 flex-col items-center justify-center gap-2'}>
             {sidebarOpen ? (
-              <Link aria-label="Consumit home" className="fs-fade inline-flex min-h-11 items-center gap-2.5 rounded text-sm font-bold tracking-[0.2em] outline-none transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none" href="/">
+              <Link aria-label="Consumit home" className="fs-fade fs-sidebar-wordmark inline-flex min-h-11 items-center gap-2.5 rounded text-sm font-bold tracking-[0.2em] outline-none transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none" href="/">
                 <Image alt="" className="size-7" height={28} src="/assets/consumit-mark.svg" width={28} />
                 CONSUMIT
               </Link>
@@ -371,7 +379,7 @@ export function FilScreenShell({
                 </Link>
               ) : (
                 <Link aria-label="Guest profile" title="Guest profile" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/library?section=profile">
-                  <Avatar className="size-11" name="Guest" size="md" treatment="noir" />
+                  <Avatar className="size-11" name={guestCharacter} size="md" treatment="noir" />
                 </Link>
               )}
             </div>

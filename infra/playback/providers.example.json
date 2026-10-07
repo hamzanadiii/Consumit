@@ -221,10 +221,8 @@
     "mediaHostPatterns": [
       "^srv[0-9]+\\.faitioninthrey\\.site$",
       "^srv[0-9]+\\.superoled\\.site$",
-      "^srv[0-9]+\\.excentionses\\.cyou$",
       "^srv[0-9]+\\.cromning\\.site$",
-      "^srv[0-9]+\\.tormisted\\.cyou$",
-      "^srv[0-9]+\\.ancender\\.cyou$"
+      "^srv[0-9]+\\.[a-z-]+\\.cyou$"
     ],
     "resolutionHosts": [],
     "upstreamGroup": "lookmovie",

@@ -1,6 +1,7 @@
 'use client'
 
 import { kindLabel, titleHref, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
+import { Select } from '@consumit/ui'
 import { ArrowRight, CornerDownLeft, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -25,6 +26,15 @@ const OVERLAY_ANIMATION = [
 ].join('')
 
 type SearchStatus = 'idle' | 'loading' | 'error'
+
+type SearchScope = 'all' | 'movie' | 'series' | 'anime'
+
+const SCOPES: ReadonlyArray<{ value: SearchScope; label: string; placeholder: string }> = [
+  { value: 'all', label: 'All', placeholder: 'Search movies and TV shows…' },
+  { value: 'movie', label: 'Movies', placeholder: 'Search movies…' },
+  { value: 'series', label: 'Series', placeholder: 'Search series…' },
+  { value: 'anime', label: 'Anime', placeholder: 'Search anime…' },
+]
 
 type OverlayEntry = {
   href: string
@@ -99,6 +109,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
   const inputRef = useRef<HTMLInputElement | null>(null)
   const requestIdRef = useRef(0)
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState<SearchScope>('all')
   const [results, setResults] = useState<readonly OverlayEntry[]>([])
   const [status, setStatus] = useState<SearchStatus>('idle')
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -136,10 +147,11 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
       setStatus('loading')
       // Movies/series (TMDB) and anime (AniList) are separate domains.
       // Either outage must not take down the other: each resolves to null
-      // on failure and only a total miss surfaces the error state.
+      // on failure and only a total miss surfaces the error state. A chosen
+      // scope searches its domain only.
       void Promise.all([
-        browserSearchCatalog(normalized, 'all').catch(() => null),
-        browserSearchAnime(normalized).catch(() => null),
+        scope === 'anime' ? Promise.resolve(null) : browserSearchCatalog(normalized, scope).catch(() => null),
+        scope === 'all' ? browserSearchAnime(normalized).catch(() => null) : Promise.resolve(null),
       ]).then(([catalog, anime]) => {
         if (requestIdRef.current !== requestId) return
         if (!catalog && !anime) {
@@ -153,7 +165,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
       })
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [normalized, open, retryNonce])
+  }, [normalized, open, retryNonce, scope])
 
   useEffect(() => {
     if (!open || activeIndex < 0) return
@@ -200,8 +212,20 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
         role="dialog"
       >
         <form onSubmit={handleSubmit} role="search">
-          <div className="flex items-center gap-3 border-b border-[var(--fs-line)] px-4 sm:px-5">
-            <Search aria-hidden="true" className="size-5 shrink-0 text-[var(--fs-accent)]" />
+          <div className="flex items-center gap-2 border-b border-[var(--fs-line)] px-4 py-3 sm:gap-3 sm:px-5">
+            <Search aria-hidden="true" className="size-5 shrink-0 text-[var(--fs-muted)]" />
+            <Select
+              className="w-28 shrink-0"
+              hideLabel
+              label="Search scope"
+              onValueChange={(value) => {
+                setScope(value as SearchScope)
+                setActiveIndex(-1)
+                inputRef.current?.focus()
+              }}
+              options={SCOPES.map(({ label, value }) => ({ label, value }))}
+              value={scope}
+            />
             <label className="sr-only" htmlFor="filscreen-command-search">
               Search movies, series, and anime
             </label>
@@ -211,7 +235,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               aria-controls="filscreen-search-results"
               aria-expanded={results.length > 0}
               autoComplete="off"
-              className="h-16 min-w-0 flex-1 bg-transparent text-lg text-[var(--fs-ink)] caret-[var(--fs-focus)] outline-none placeholder:text-[var(--fs-muted)]"
+              className="h-12 min-w-0 flex-1 bg-transparent text-lg text-[var(--fs-ink)] caret-[var(--fs-focus)] outline-none placeholder:text-[var(--fs-muted)]"
               id="filscreen-command-search"
               maxLength={100}
               onChange={(event) => handleQuery(event.currentTarget.value)}
@@ -227,7 +251,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                   onClose()
                 }
               }}
-              placeholder="Search movies, series, anime…"
+              placeholder={SCOPES.find((entry) => entry.value === scope)?.placeholder ?? 'Search movies and TV shows…'}
               ref={inputRef}
               role="combobox"
               spellCheck={false}
@@ -246,37 +270,24 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               >
                 <X aria-hidden="true" className="size-4" />
               </button>
-            ) : (
-              <kbd className="hidden shrink-0 rounded-md border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-2 py-1 text-[11px] font-bold text-[var(--fs-muted)] sm:inline-block">
-                ESC
-              </kbd>
-            )}
+            ) : null}
+            <kbd className="hidden shrink-0 rounded-md border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-2 py-1 text-[11px] font-bold text-[var(--fs-muted)] sm:inline-block">
+              ESC
+            </kbd>
           </div>
         </form>
 
         <div className="min-h-0 overflow-y-auto">
           {!showResults ? (
-            <div className="px-4 py-5 sm:px-5">
-              <p className="text-xs font-bold tracking-[0.12em] text-[var(--fs-muted)] uppercase">Jump to</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {([
-                  ['Trending movies', '/movies'],
-                  ['Trending series', '/series'],
-                  ['Trending anime', '/anime'],
-                  ['New for you', '/'],
-                ] as const).map(([label, href]) => (
-                  <Link
-                    className="inline-flex min-h-11 items-center justify-between gap-2 rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none transition-all hover:-translate-y-px hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-                    href={href}
-                    key={href}
-                    onClick={onClose}
-                  >
-                    {label}
-                    <ArrowRight aria-hidden="true" className="size-4 text-[var(--fs-muted)]" />
-                  </Link>
-                ))}
-              </div>
-              <p className="mt-4 text-xs text-[var(--fs-muted)]">Type at least two characters to search the live catalog.</p>
+            <div className="flex flex-col items-center px-5 py-14 text-center sm:px-8">
+              <span aria-hidden="true" className="grid size-14 place-items-center rounded-full border border-[var(--fs-line)] bg-[var(--fs-rail)]">
+                <Search className="size-6 text-[var(--fs-muted)]" />
+              </span>
+              <p className="mt-5 text-lg font-bold text-[var(--fs-ink)]">Find something to watch</p>
+              <p className="mt-2 max-w-xs text-sm leading-6 text-[var(--fs-muted)]">
+                Start typing a title, then narrow by <strong className="text-[var(--fs-ink)]">Movies</strong>,{' '}
+                <strong className="text-[var(--fs-ink)]">Series</strong> or <strong className="text-[var(--fs-ink)]">Anime</strong>.
+              </p>
             </div>
           ) : status === 'loading' && results.length === 0 ? (
             <p className="px-5 py-8 text-sm text-[var(--fs-muted)]" role="status">
@@ -307,7 +318,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                 return (
                   <li
                     aria-selected={selected}
-                    className={`flex items-center gap-3 rounded-xl px-2 py-2 outline-none transition-colors ${
+                    className={`flex items-center gap-4 rounded-xl px-3 py-2.5 outline-none transition-colors ${
                       selected ? 'bg-[var(--fs-accent-soft)] shadow-[inset_0_0_0_1px_var(--fs-accent)]' : 'hover:bg-[var(--fs-hover)]'
                     }`}
                     id={`fs-search-option-${index}`}
@@ -315,7 +326,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                     onMouseEnter={() => setActiveIndex(index)}
                     role="option"
                   >
-                    <span aria-hidden="true" className="grid h-14 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-[var(--fs-rail)] text-sm font-bold text-[var(--fs-muted)]">
+                    <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
                       {item.posterUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- tiny command-palette thumb avoids Next image overhead
                         <img alt="" className="h-full w-full object-cover" loading="lazy" src={item.posterUrl} />
@@ -330,8 +341,8 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                       tabIndex={-1}
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-bold text-[var(--fs-ink)]">{item.title}</span>
-                        <span className="mt-0.5 block truncate text-xs text-[var(--fs-muted)]">
+                        <span className="block truncate text-base font-bold text-[var(--fs-ink)]">{item.title}</span>
+                        <span className="mt-1 block truncate text-sm text-[var(--fs-muted)]">
                           {item.meta}
                           {item.ratingLabel ? (
                             <>
@@ -341,7 +352,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                           ) : null}
                         </span>
                       </span>
-                      <CornerDownLeft aria-hidden="true" className={`size-4 shrink-0 ${selected ? 'text-[var(--fs-accent)]' : 'text-[var(--fs-muted)]'}`} />
+                      <CornerDownLeft aria-hidden="true" className={`size-5 shrink-0 ${selected ? 'text-[var(--fs-accent)]' : 'text-[var(--fs-muted)]'}`} />
                     </Link>
                   </li>
                 )

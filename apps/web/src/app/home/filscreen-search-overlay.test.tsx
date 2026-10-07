@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +7,7 @@ import { renderWithProviders as render } from '@/test/render'
 
 import { FilScreenHome } from './filscreen-home'
 import { FilScreenSearchOverlay } from './filscreen-search-overlay'
+import { ShellStateProvider } from './shell-state'
 
 const mocks = vi.hoisted(() => ({
   browserSearchAnime: vi.fn(),
@@ -57,7 +58,7 @@ beforeEach(() => {
 describe('filscreen command search', () => {
   it('opens a fullscreen dialog with a cool expanding panel when the trigger is clicked', async () => {
     const user = userEvent.setup()
-    render(<FilScreenHome hero={hero} trendingMovies={[]} trendingSeries={[]} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={[]} trendingSeries={[]} /></ShellStateProvider>)
 
     await user.click(screen.getByRole('button', { name: 'Search titles' }))
 
@@ -65,13 +66,27 @@ describe('filscreen command search', () => {
     expect(dialog).toBeInTheDocument()
     expect(dialog).toHaveClass('fs-search-panel')
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Search movies, series, and anime' })).toHaveFocus())
-    expect(screen.getByText('Jump to')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Trending anime/ })).toHaveAttribute('href', '/anime')
+    expect(screen.getByText('Find something to watch')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Search movies, series, and anime' })).toHaveAttribute('placeholder', 'Search movies and TV shows…')
+  })
+
+  it('narrows the live search to the chosen scope', async () => {
+    const user = userEvent.setup()
+    mocks.browserSearchCatalog.mockResolvedValue({ items: [movieSummary], page: 1, totalPages: 1, totalResults: 1 })
+    render(<FilScreenSearchOverlay onClose={() => {}} open />)
+
+    await user.click(screen.getByRole('button', { name: 'Search scope All' }))
+    await user.click(screen.getByRole('option', { name: 'Movies' }))
+    await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'dune')
+
+    await waitFor(() => expect(mocks.browserSearchCatalog).toHaveBeenCalledWith('dune', 'movie'))
+    expect(mocks.browserSearchAnime).not.toHaveBeenCalled()
+    expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
   })
 
   it('toggles with Cmd+K and closes with Escape', async () => {
     const user = userEvent.setup()
-    render(<FilScreenHome hero={hero} trendingMovies={[]} trendingSeries={[]} />)
+    render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={[]} trendingSeries={[]} /></ShellStateProvider>)
 
     await user.keyboard('{Control>}k{/Control}')
     expect(screen.getByRole('dialog', { name: 'Search titles' })).toBeInTheDocument()
@@ -127,7 +142,8 @@ describe('filscreen command search', () => {
 
     await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'one')
 
-    const options = await screen.findAllByRole('option')
+    const listbox = await screen.findByRole('listbox')
+    const options = await within(listbox).findAllByRole('option')
     expect(options[0]).toHaveTextContent('One Piece')
     expect(options[1]).toHaveTextContent('Dune: Part Two')
 
@@ -143,7 +159,8 @@ describe('filscreen command search', () => {
 
     await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'dune')
 
-    const options = await screen.findAllByRole('option')
+    const listbox = await screen.findByRole('listbox')
+    const options = await within(listbox).findAllByRole('option')
     expect(options[0]).toHaveTextContent('Dune: Part Two')
     expect(options[1]).toHaveTextContent('One Piece')
 

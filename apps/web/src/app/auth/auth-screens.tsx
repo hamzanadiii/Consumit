@@ -261,7 +261,11 @@ export function SignUpScreen({ titles = [] }: { titles?: readonly CatalogTitleSu
       {step === 'register' ? (
         <>
         <SignupStepHeader current={1} />
-        <form className="space-y-5" method="post" onSubmit={beginIdentity}>
+        {/* Keyed per step so React never recycles input DOM nodes across
+            steps: without keys the register/identity/verify forms reconcile
+            into each other and a recycled node flips uncontrolled to
+            controlled (plus risks leaking DOM state between steps). */}
+        <form className="space-y-5" key="signup-register" method="post" onSubmit={beginIdentity}>
           <AuthField autoComplete="email" id="sign-up-email" label="Email" name="email" onChange={(event) => setEmail(event.currentTarget.value)} placeholder="you@example.com" required type="email" value={email} />
           <AuthField autoComplete="new-password" helper="Use 12–128 characters. A password manager is even better." id="sign-up-password" label="Password" minLength={12} name="password" onChange={(event) => setPassword(event.currentTarget.value)} placeholder="At least 12 characters" required type="password" value={password} />
           <div className="relative flex min-h-11 items-center gap-3">
@@ -276,7 +280,7 @@ export function SignUpScreen({ titles = [] }: { titles?: readonly CatalogTitleSu
       ) : step === 'identity' ? (
         <>
         <SignupStepHeader current={2} />
-        <form className="space-y-5" method="post" onSubmit={register}>
+        <form className="space-y-5" key="signup-identity" method="post" onSubmit={register}>
           <div className="space-y-4 rounded-2xl border border-border bg-surface p-5 sm:p-6">
           <AuthField autoCapitalize="none" autoComplete="username" helper="3–30 lowercase letters, numbers, or underscores." id="sign-up-username" label="Username" maxLength={30} minLength={3} name="username" onBlur={() => void checkUsername()} onChange={(event) => { setUsername(event.currentTarget.value.toLowerCase()); setUsernameState('idle') }} pattern="[a-z0-9_]{3,30}" placeholder="cinema_fan" required value={username} />
           {usernameState === 'checking' ? <p className="text-xs text-muted" role="status">Checking username…</p> : null}
@@ -292,7 +296,7 @@ export function SignUpScreen({ titles = [] }: { titles?: readonly CatalogTitleSu
       ) : (
         <>
         <SignupStepHeader current={3} />
-        <form className="space-y-5" method="post" onSubmit={verify}>
+        <form className="space-y-5" key="signup-verify" method="post" onSubmit={verify}>
           <p className="text-sm leading-6 text-copy">Enter the six-digit code sent to <strong className="text-ink">{email}</strong>. Creating the account finishes only after this step.</p>
           <AuthField autoComplete="one-time-code" id="sign-up-code" inputMode="numeric" label="Verification code" maxLength={6} name="code" pattern="[0-9]{6}" required />
           <FormMessage error={error} message={message} />

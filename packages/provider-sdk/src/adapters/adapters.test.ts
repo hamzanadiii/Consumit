@@ -205,6 +205,19 @@ describe('imported provider contracts', () => {
     expect(result.ok && result.sources[1]?.headers).not.toHaveProperty('Cookie')
     expect(result.ok && result.sources[1]?.headers).not.toHaveProperty('X-Evil')
   })
+  it('unwraps proxy-hostname wrappers to their allowlisted inner media', async () => {
+    const wrapped = `https://proxy.valhallastream.com/m3u8?url=${encodeURIComponent('https://cdn.example/inner.m3u8')}&headers=${encodeURIComponent(JSON.stringify({ Referer: 'https://example.com/', Cookie: 'steal-me' }))}`
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal) => {
+      signal.throwIfAborted()
+      if (url.includes('scrapper.rivestream.app')) {
+        return { status: 200, text: JSON.stringify({ data: { sources: [{ url: wrapped, quality: '1080p', format: 'hls' }] } }), url }
+      }
+      throw new Error(`Unexpected ${url}`)
+    })
+    const result = await createRivestreamProvider(client, () => now, { id: 'riveapogee', subs: ['apogee'] }).resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://cdn.example/inner.m3u8', headers: { referer: 'https://example.com/' } }] })
+    expect(result.ok && result.sources[0]?.headers).not.toHaveProperty('Cookie')
+  })
   it('scopes VidRock aliases to one server', async () => {
     const novaUrl = await vidrockEncrypt('https://cdn.example/nova.m3u8')
     const orionUrl = await vidrockEncrypt('https://cdn.example/orion.m3u8')

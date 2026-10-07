@@ -57,6 +57,15 @@ describe('SessionProvider', () => {
     expect(screen.getByTestId('session-state')).toHaveTextContent('authenticated:hamzanadi')
   })
 
+  it('retries a failed bootstrap once before reporting an unavailable session', async () => {
+    getCurrentMember.mockRejectedValueOnce(new Error('unreachable')).mockResolvedValue(member)
+    render(<SessionProvider initialStatus="loading"><SessionState /></SessionProvider>)
+
+    expect(screen.getByTestId('session-state')).toHaveTextContent('loading:none')
+    await waitFor(() => expect(screen.getByTestId('session-state')).toHaveTextContent('authenticated:hamzanadi'), { timeout: 5000 })
+    expect(getCurrentMember).toHaveBeenCalledTimes(2)
+  })
+
   it('skips the browser session lookup on Watch routes seeded by the server', () => {
     getCurrentMember.mockResolvedValue(null)
     window.history.replaceState({}, '', '/watch/movie/1')

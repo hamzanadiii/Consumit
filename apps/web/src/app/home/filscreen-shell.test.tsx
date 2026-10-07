@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionProvider } from '../session/session'
 
 import { FilScreenShell } from './filscreen-shell'
+import { ShellStateProvider } from './shell-state'
 
 const mocks = vi.hoisted(() => ({
   logoutMember: vi.fn(),
@@ -36,7 +37,9 @@ const member = {
 function renderShell(children = <p>Content</p>, pathname = '/') {
   return render(
     <SessionProvider initialMember={{ ...member }} initialStatus="authenticated">
-      <FilScreenShell currentPathname={pathname}>{children}</FilScreenShell>
+      <ShellStateProvider>
+        <FilScreenShell currentPathname={pathname}>{children}</FilScreenShell>
+      </ShellStateProvider>
     </SessionProvider>,
   )
 }
@@ -96,7 +99,7 @@ describe('FilScreenShell', () => {
 
   it('keeps personal shortcuts and a guest avatar visible while sending guests through authentication', async () => {
     const user = userEvent.setup()
-    render(<SessionProvider initialStatus="anonymous"><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></SessionProvider>)
+    render(<SessionProvider initialStatus="anonymous"><ShellStateProvider><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></ShellStateProvider></SessionProvider>)
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(within(navigation).getAllByRole('link')).toHaveLength(6)
     expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
@@ -105,6 +108,8 @@ describe('FilScreenShell', () => {
     }
     const guest = screen.getByRole('link', { name: 'Guest profile' })
     expect(guest).toHaveAttribute('href', '/library?section=profile')
+    expect(guest.textContent).toMatch(/^[A-Z]$/)
+    expect(window.sessionStorage.getItem('consumit.guest-character')).toBe(guest.textContent)
     expect(screen.getByRole('button', { name: 'Search titles' }).nextElementSibling).toBe(guest)
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))

@@ -30,19 +30,34 @@ export function SessionProvider({ children, initialMember = null, initialStatus 
     if (window.location.pathname === '/watch' || window.location.pathname.startsWith('/watch/')) return
     const controller = new AbortController()
     const startedAtRevision = revision.current
-    void getCurrentMember(controller.signal).then(
-      (nextMember) => {
-        if (controller.signal.aborted || revision.current !== startedAtRevision) return
-        setMemberState(nextMember)
-        setStatus(nextMember ? 'authenticated' : 'anonymous')
-      },
-      () => {
-        if (controller.signal.aborted || revision.current !== startedAtRevision) return
-        setMemberState(null)
-        setStatus('unavailable')
-      },
-    )
-    return () => controller.abort()
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    const settled = () => controller.signal.aborted || revision.current !== startedAtRevision
+    // A single failed bootstrap (restarting API, blocked request) must not
+    // pin a signed-in member to the guest header until a full reload: the
+    // server still honors their session while the shell claims otherwise.
+    const attempt = (retried: boolean): void => {
+      void getCurrentMember(controller.signal).then(
+        (nextMember) => {
+          if (settled()) return
+          setMemberState(nextMember)
+          setStatus(nextMember ? 'authenticated' : 'anonymous')
+        },
+        () => {
+          if (settled()) return
+          if (!retried) {
+            retryTimer = setTimeout(() => attempt(true), 1500)
+            return
+          }
+          setMemberState(null)
+          setStatus('unavailable')
+        },
+      )
+    }
+    attempt(false)
+    return () => {
+      controller.abort()
+      if (retryTimer !== undefined) clearTimeout(retryTimer)
+    }
   }, [initialStatus])
 
   const value = useMemo(() => ({
