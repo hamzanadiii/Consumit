@@ -151,7 +151,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
       // scope searches its domain only.
       void Promise.all([
         scope === 'anime' ? Promise.resolve(null) : browserSearchCatalog(normalized, scope).catch(() => null),
-        scope === 'all' ? browserSearchAnime(normalized).catch(() => null) : Promise.resolve(null),
+        scope === 'movie' || scope === 'series' ? Promise.resolve(null) : browserSearchAnime(normalized).catch(() => null),
       ]).then(([catalog, anime]) => {
         if (requestIdRef.current !== requestId) return
         if (!catalog && !anime) {
@@ -220,7 +220,11 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               label="Search scope"
               onValueChange={(value) => {
                 setScope(value as SearchScope)
+                // Results belong to one scope; never show the previous
+                // scope's titles while (or after) the new one resolves.
+                setResults([])
                 setActiveIndex(-1)
+                setStatus('idle')
                 inputRef.current?.focus()
               }}
               options={SCOPES.map(({ label, value }) => ({ label, value }))}
@@ -293,7 +297,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
             <p className="px-5 py-8 text-sm text-[var(--fs-muted)]" role="status">
               Searching the catalog…
             </p>
-          ) : status === 'error' && results.length === 0 ? (
+          ) : status === 'error' ? (
             <div className="px-5 py-8">
               <p className="text-sm text-[var(--fs-danger)]" role="alert">
                 Search could not load. Your place here is safe.

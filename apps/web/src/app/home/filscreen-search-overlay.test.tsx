@@ -84,6 +84,36 @@ describe('filscreen command search', () => {
     expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
   })
 
+  it('searches only AniList under the Anime scope', async () => {
+    const user = userEvent.setup()
+    mocks.browserSearchAnime.mockResolvedValue({ items: [animeSummary], page: 1, totalPages: 1, totalResults: 1 })
+    render(<FilScreenSearchOverlay onClose={() => {}} open />)
+
+    await user.click(screen.getByRole('button', { name: 'Search scope All' }))
+    await user.click(screen.getByRole('option', { name: 'Anime' }))
+    await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'one piece')
+
+    await waitFor(() => expect(mocks.browserSearchAnime).toHaveBeenCalledWith('one piece'))
+    expect(mocks.browserSearchCatalog).not.toHaveBeenCalled()
+    expect(await screen.findByRole('option', { name: /One Piece/ })).toBeInTheDocument()
+  })
+
+  it('drops the previous scope results when the scope changes', async () => {
+    const user = userEvent.setup()
+    mocks.browserSearchCatalog.mockResolvedValue({ items: [movieSummary], page: 1, totalPages: 1, totalResults: 1 })
+    mocks.browserSearchAnime.mockResolvedValue({ items: [animeSummary], page: 1, totalPages: 1, totalResults: 1 })
+    render(<FilScreenSearchOverlay onClose={() => {}} open />)
+
+    await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'dune')
+    expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Search scope All' }))
+    await user.click(screen.getByRole('option', { name: 'Anime' }))
+
+    await waitFor(() => expect(screen.queryByRole('option', { name: /Dune: Part Two/ })).not.toBeInTheDocument())
+    expect(await screen.findByRole('option', { name: /One Piece/ })).toBeInTheDocument()
+  })
+
   it('toggles with Cmd+K and closes with Escape', async () => {
     const user = userEvent.setup()
     render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={[]} trendingSeries={[]} /></ShellStateProvider>)
