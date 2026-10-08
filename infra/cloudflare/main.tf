@@ -51,7 +51,7 @@ resource "cloudflare_ruleset" "cache" {
     {
       action            = "set_cache_settings"
       description       = "Never cache private or mutable APIs"
-      expression        = "http.request.method ne \"GET\" or (starts_with(http.request.uri.path, \"/v1/\") and (http.cookie contains \"consumit_session\" or not (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\"))))"
+      expression        = "starts_with(http.request.uri.path, \"/health/\") or http.request.method ne \"GET\" or (starts_with(http.request.uri.path, \"/v1/\") and (http.cookie contains \"consumit_session\" or not (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\"))))"
       action_parameters = { cache = false }
     },
   ]
@@ -66,6 +66,11 @@ resource "cloudflare_ruleset" "waf" {
     action      = "block"
     description = "Block common secret and traversal scans"
     expression  = "lower(http.request.uri.path) contains \"/.env\" or lower(http.request.uri.path) contains \"/.git\" or http.request.uri.path contains \"..\""
+    }, {
+    action      = "block"
+    description = "Open public registration only after launch gates pass"
+    enabled     = !var.public_registration_enabled
+    expression  = length(var.launch_tester_ips) == 0 ? "http.request.uri.path eq \"/v1/auth/register\"" : "http.request.uri.path eq \"/v1/auth/register\" and not ip.src in {${join(" ", sort(tolist(var.launch_tester_ips)))}}"
   }]
 }
 
@@ -79,13 +84,7 @@ resource "cloudflare_ruleset" "rate_limits" {
       action      = "block"
       description = "Authentication abuse"
       expression  = "starts_with(http.request.uri.path, \"/v1/auth/\")"
-      ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.auth_requests_per_minute, mitigation_timeout = 60 }
-    },
-    {
-      action      = "block"
-      description = "Playback and public embed resolution abuse"
-      expression  = "starts_with(http.request.uri.path, \"/v1/playback/\") or starts_with(http.request.uri.path, \"/v1/embed/\")"
-      ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.playback_requests_per_minute, mitigation_timeout = 60 }
+      ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 10, requests_per_period = 10, mitigation_timeout = 10 }
     },
   ]
 }

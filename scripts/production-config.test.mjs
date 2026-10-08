@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { assertProductionBackupConfig, assertProductionRuntimeConfig, productionEnvironmentIssues, productionProcessEnvironment } from './production-config.mjs'
+import { assertProductionDatabaseUrl } from './production-config.mjs'
 
 const fixture = () => ({ services: {
   api: { environment: { DATABASE_URL: 'postgresql://fixture@database.example/production' } },
@@ -12,6 +13,23 @@ const fixture = () => ({ services: {
 
 test('production backup targets the API database and runs as a dedicated verified batch job', () => {
   assert.doesNotThrow(() => assertProductionBackupConfig(fixture()))
+})
+
+test('explicit self-hosted databases require verified TLS and separate non-development roles', () => {
+  const password = 'f'.repeat(64)
+  const options = { mode: 'self-hosted', caFile: '/run/secrets/db-ca.crt' }
+  const url = `postgresql://consumit_app:${password}@postgres/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt`
+  assert.doesNotThrow(() => assertProductionDatabaseUrl(url, options))
+  for (const weak of [url.replace('verify-full', 'require'), url.replace('consumit_app', 'consumit'), url.replace(password, 'consumit-local'), url.replace('postgres/consumit', 'localhost/consumit'), url.replace('/run/secrets/db-ca.crt', '/tmp/other-ca')]) {
+    assert.throws(() => assertProductionDatabaseUrl(weak, options))
+  }
+})
+
+test('production strips inherited SES and AWS credentials rather than leaking another service identity', () => {
+  const env = productionProcessEnvironment({ PATH: 'runtime', AWS_ACCESS_KEY_ID: 'local', SES_REGION: 'us-east-1', MIGRATION_DATABASE_URL: 'local' }, { SES_REGION: 'ca-central-1' }, '/private/production')
+  assert.equal(env.AWS_ACCESS_KEY_ID, undefined)
+  assert.equal(env.MIGRATION_DATABASE_URL, undefined)
+  assert.equal(env.SES_REGION, 'ca-central-1')
 })
 
 test('a local fallback cannot silently replace the selected production backup database', () => {

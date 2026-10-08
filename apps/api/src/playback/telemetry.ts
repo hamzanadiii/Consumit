@@ -7,7 +7,7 @@ import { AggregationType, PeriodicExportingMetricReader } from '@opentelemetry/s
 export function startPlaybackTelemetry() {
   if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return { shutdown: async () => {} }
   const sdk = new NodeSDK({
-    serviceName: 'consumit-api',
+    serviceName: process.env.OTEL_SERVICE_NAME || 'consumit-api',
     autoDetectResources: false,
     traceExporter: new OTLPTraceExporter({ timeoutMillis: 3000 }),
     // Bucket boundaries match the dimensions used by the Web Vitals runbook.

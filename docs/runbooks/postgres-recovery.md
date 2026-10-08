@@ -7,7 +7,9 @@
 - Take and verify a named snapshot immediately before every production migration.
 - Complete a restore drill before accepting real member registrations and every quarter afterward.
 
-These are provider requirements, not application features. Production must not be declared ready until the selected PostgreSQL provider demonstrates all four controls.
+The approved self-hosted PostgreSQL 17 release implements these controls through
+pgBackRest and encrypted S3/Restic repositories. See [OVH + AWS recovery](./ovh-aws-production.md).
+Production must not be declared ready until real offsite drills demonstrate them.
 
 ## Restore drill
 

@@ -25,12 +25,16 @@ variable "origin_service" {
   default = "http://gateway:80"
 }
 
-variable "auth_requests_per_minute" {
-  type    = number
-  default = 10
+variable "public_registration_enabled" {
+  type    = bool
+  default = false
 }
 
-variable "playback_requests_per_minute" {
-  type    = number
-  default = 30
+variable "launch_tester_ips" {
+  type    = set(string)
+  default = []
+  validation {
+    condition     = alltrue([for ip in var.launch_tester_ips : can(cidrhost("${ip}/32", 0)) || can(cidrhost("${ip}/128", 0))])
+    error_message = "Provide exact IPv4 or IPv6 tester addresses, without CIDR ranges."
+  }
 }

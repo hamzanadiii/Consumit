@@ -25,6 +25,9 @@ import type { Identity } from './identity/identity.ts'
 import { createPostgresIdentityRepository } from './identity/postgres-repository.ts'
 import type { IdentityRepository } from './identity/repository.ts'
 import { createResendNotifier } from './identity/resend-notifier.ts'
+import { createSesNotifier } from './identity/ses-notifier.ts'
+import { readAwsCredentials } from './config/aws-credentials.ts'
+import { readFileSync } from 'node:fs'
 import { createValkeyAuthState } from './identity/valkey-auth-state.ts'
 import type { MemberData } from './member-data/member-data.ts'
 import { createPostgresMemberData } from './member-data/postgres-member-data.ts'
@@ -134,7 +137,7 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     && (!animeCatalog || (catalog === unavailableCatalogAdapter && Boolean(env.tmdbToken)))
   const needsDatabase = env.databaseUrl && (!identity || !memberData || needsPersistentCatalogCache)
   const db = needsDatabase ? createDbClient(env.databaseUrl!, {
-      ...(env.databaseSslCa ? { sslCa: env.databaseSslCa } : {}),
+      ...(env.databaseSslCaFile ? { sslCa: readFileSync(env.databaseSslCaFile, 'utf8') } : env.databaseSslCa ? { sslCa: env.databaseSslCa } : {}),
       sslMode: env.databaseSslMode,
     }) : null
   const catalogCacheStore = db && env.nodeEnv !== 'test' ? createPostgresCatalogCacheStore(db.prisma) : undefined
@@ -157,15 +160,20 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
     : env.nodeEnv !== 'test' && env.tmdbToken
       ? createTmdbCatalog({ cache: catalogCache, language: env.tmdbLanguage, region: env.tmdbRegion, token: env.tmdbToken })
       : catalog
-  if (!identity && db && env.valkeyUrl && env.authCodePepper && env.resendApiKey && env.authEmailFrom) {
+  const emailConfigured = env.emailProvider === 'ses' ? env.ses : env.resendApiKey
+  if (!identity && db && env.valkeyUrl && env.authCodePepper && emailConfigured && env.authEmailFrom) {
     const state = createValkeyAuthState(env.valkeyUrl, env.authCodePepper)
+    const notifier = env.emailProvider === 'ses' && env.ses
+      ? createSesNotifier({ from: env.authEmailFrom, region: env.ses.region, configurationSet: env.ses.configurationSet, credentials: readAwsCredentials(env.ses.credentialsFile) })
+      : createResendNotifier({ apiKey: env.resendApiKey!, from: env.authEmailFrom })
     resolvedIdentity = createIdentity({
-      notifier: createResendNotifier({ apiKey: env.resendApiKey, from: env.authEmailFrom }),
-      onNotificationError: (error) => app.log.error({ err: error }, 'authentication email was not delivered'),
+      notifier,
+      onNotificationError: () => app.log.error({ code: 'EMAIL_DELIVERY_UNAVAILABLE' }, 'authentication email was not delivered'),
       repository: createPostgresIdentityRepository(db.prisma),
       state,
     })
     closeIdentityResources = async () => {
+      if ('close' in notifier && typeof notifier.close === 'function') notifier.close()
       await Promise.allSettled([state.close(), db.close()])
     }
   }

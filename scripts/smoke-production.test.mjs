@@ -13,6 +13,7 @@ function fixture(overrides = {}) {
     const path = url.pathname
     if (overrides[path]) return overrides[path]()
     if (path === '/healthz') return new Response('ok')
+    if (path === '/health/ready') return new Response('{}', { headers: { 'cache-control': 'no-store, private' } })
     if (path === '/') return new Response('page', { headers: { 'x-content-type-options': 'nosniff' } })
     if (path === '/v1/titles/discover') return Response.json(catalog, { headers: { 'cache-control': 'public, max-age=300' } })
     if (path === '/v1/me/library') return Response.json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in.', requestId: 'fixture-request', retryable: false } }, { status: 401, headers: { 'cache-control': 'private, no-store' } })

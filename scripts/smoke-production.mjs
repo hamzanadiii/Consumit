@@ -10,6 +10,8 @@ export async function smokeProduction(baseUrl, playbackBody, fetcher = fetch) {
   }
 
   await request('/healthz')
+  const ready = await request('/health/ready')
+  if (!/no-store/.test(ready.headers.get('cache-control') ?? '') || /^(HIT|STALE|UPDATING|REVALIDATED)$/i.test(ready.headers.get('cf-cache-status') ?? '') || ready.headers.has('age')) throw new Error('API readiness was cached at the gateway or edge.')
   const web = await request('/')
   if (web.headers.get('x-content-type-options') !== 'nosniff') throw new Error('Web security headers are missing.')
   const catalog = await request('/v1/titles/discover?kind=movie')

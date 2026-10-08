@@ -66,7 +66,7 @@ Production images bake the source in at build time, so edits stay invisible unti
 bun run docker:dev:watch
 ```
 
-Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and production stacks share the same Postgres and Valkey volumes, so run only one at a time. Return to production-like images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart. For the containerized stack with playback enabled (same watch behavior, API served through the gateway), use `bun run docker:dev:playback` and open `http://localhost:8080` — without the playback file the API boots with zero providers and every `/v1/playback/resolve` returns 503.
+Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and default local image stacks share Postgres and Valkey volumes, so run only one at a time. The actual production wrapper uses the independent `consumit-production` project and fresh volumes. Return to production-like local images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart. For the containerized stack with playback enabled (same watch behavior, API served through the gateway), use `bun run docker:dev:playback` and open `http://localhost:8080` — without the playback file the API boots with zero providers and every `/v1/playback/resolve` returns 503.
 
 ## First frontend production release
 
@@ -80,8 +80,9 @@ the same commands directly through `scripts/production.mjs` without Bun.
 
 Before member traffic, verify `bun run production:smoke`, real email, HTTPS
 playback, alert delivery, and an offsite restore. See the
-[production runbook](./docs/runbooks/cloudflare-production.md) and
-[readiness audit](./docs/audits/deployment-readiness-2026-10-08.md).
+[OVH + AWS deployment runbook](./docs/runbooks/ovh-aws-production.md),
+[private setup wizard](./scripts/deploy-wizard.sh), and
+[release verification](./docs/audits/ovh-aws-release-2026-10-08.md).
 
 ## Project guide
 

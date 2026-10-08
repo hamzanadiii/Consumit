@@ -40,7 +40,7 @@ RUN apk add --no-cache xz xz-libs
 # (Existing root-owned volumes need a one-time host-side chown instead;
 # the image cannot repair a mounted volume's ownership.)
 RUN mkdir -p /var/lib/consumit/subtitles && chown bun:bun /var/lib/consumit/subtitles
-COPY --from=api-build --chown=bun:bun /app/apps/api/dist/index.js ./index.js
+COPY --from=api-build --chown=bun:bun /app/apps/api/dist/*.js ./
 USER bun
 EXPOSE 3001
 CMD ["bun", "index.js"]
@@ -48,8 +48,9 @@ CMD ["bun", "index.js"]
 FROM api-dependencies AS api-migrate
 COPY apps/api/prisma apps/api/prisma
 COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
+COPY apps/api/scripts apps/api/scripts
 WORKDIR /app/apps/api
-CMD ["bun", "run", "db:migrate:deploy"]
+CMD ["sh", "-c", "bun run db:migrate:deploy && bun scripts/migration-grants.ts"]
 
 FROM manifests AS web-dependencies
 RUN bun install --frozen-lockfile --filter @consumit/web --network-concurrency 16

@@ -41,6 +41,13 @@
     "production:smoke": "node scripts/production.mjs smoke",
     "backup:run": "node scripts/production.mjs backup",
     "backup:check": "node scripts/production.mjs backup-check",
+    "backup:physical": "node scripts/production.mjs physical-backup",
+    "backup:retention-drill": "node scripts/production.mjs retention-drill",
+    "backup:recover": "node scripts/recover-production.mjs",
+    "backup:offline": "node scripts/offline-recovery.mjs",
+    "aws:credit-check": "node scripts/production.mjs credit-check",
+    "aws:identity-check": "node scripts/production.mjs aws-identity-check",
+    "test:recovery": "node scripts/drill-postgres.mjs",
     "check": "bun run lint && bun run typecheck && bun run test && bun run build"
   },
   "engines": {

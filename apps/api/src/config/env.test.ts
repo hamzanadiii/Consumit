@@ -75,4 +75,19 @@ describe('API environment', () => {
       expect(() => loadEnv({ NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', AUTH_CODE_PEPPER })).toThrow(/new production secret/)
     }
   })
+  it('selects SES without requiring a Resend key and rejects weak self-hosted TLS credentials', () => {
+    const source = {
+      NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online',
+      AUTH_CODE_PEPPER: 'f'.repeat(64), AUTH_EMAIL_FROM: 'Consumit <auth@consumit.online>',
+      AUTH_EMAIL_PROVIDER: 'ses', SES_REGION: 'ca-central-1', SES_CONFIGURATION_SET: 'consumit-auth', SES_CREDENTIALS_FILE: '/run/secrets/ses-aws.json',
+      DATABASE_DEPLOYMENT: 'self-hosted', DATABASE_SSL_MODE: 'require', DATABASE_SSL_CA_FILE: '/run/secrets/db-ca.crt',
+      DATABASE_URL: `postgresql://consumit_app:${'a'.repeat(64)}@postgres/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt`,
+      TMDB_API_READ_TOKEN: 'fixture-token', VALKEY_URL: 'valkey://valkey:6379',
+    }
+    expect(loadEnv(source)).toMatchObject({ emailProvider: 'ses', ses: { region: 'ca-central-1' } })
+    expect(() => loadEnv({ ...source, DATABASE_SSL_CA_FILE: '/tmp/other-ca' })).toThrow(/certificate-verified/)
+    expect(() => loadEnv({ ...source, DATABASE_URL: source.DATABASE_URL.replace('verify-full', 'disable') })).toThrow(/certificate-verified/)
+    expect(() => loadEnv({ ...source, DATABASE_URL: source.DATABASE_URL.replace('a'.repeat(64), 'consumit-local') })).toThrow(/certificate-verified/)
+    expect(() => loadEnv({ ...source, SES_REGION: 'us-east-1' })).toThrow(/SES_REGION/)
+  })
 })

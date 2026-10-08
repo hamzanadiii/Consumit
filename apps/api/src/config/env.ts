@@ -6,6 +6,12 @@ const envSchema = z.object({
   AUTH_CODE_PEPPER: z.string().min(32).optional(),
   AUTH_EMAIL_FROM: z.string().trim().min(3).optional(),
   DATABASE_SSL_CA: z.string().optional(),
+  DATABASE_SSL_CA_FILE: z.string().min(1).optional(),
+  DATABASE_DEPLOYMENT: z.enum(['managed', 'self-hosted']).default('managed'),
+  AUTH_EMAIL_PROVIDER: z.enum(['resend', 'ses']).default('resend'),
+  SES_REGION: z.literal('ca-central-1').optional(),
+  SES_CONFIGURATION_SET: z.string().min(1).optional(),
+  SES_CREDENTIALS_FILE: z.string().min(1).optional(),
   DATABASE_SSL_MODE: z.enum(['disable', 'require']).default('disable'),
   DATABASE_URL: z.string().trim().min(1).optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -51,6 +57,9 @@ export type ApiEnv = {
   authCodePepper: string | undefined
   authEmailFrom: string | undefined
   databaseSslCa: string | undefined
+  databaseSslCaFile?: string
+  emailProvider?: 'resend' | 'ses'
+  ses?: { region: string; configurationSet: string; credentialsFile: string }
   databaseSslMode: 'disable' | 'require'
   databaseUrl: string | undefined
   nodeEnv: 'development' | 'test' | 'production'
@@ -72,7 +81,7 @@ export type ApiEnv = {
 }
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): ApiEnv {
-  const parsed = envSchema.safeParse(source)
+  const parsed = envSchema.safeParse(Object.fromEntries(Object.entries(source).filter(([, value]) => value !== '')))
   if (!parsed.success) {
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
@@ -112,7 +121,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       AUTH_CODE_PEPPER: value.AUTH_CODE_PEPPER,
       AUTH_EMAIL_FROM: value.AUTH_EMAIL_FROM,
       DATABASE_URL: value.DATABASE_URL,
-      RESEND_API_KEY: value.RESEND_API_KEY,
+      ...(value.AUTH_EMAIL_PROVIDER === 'ses'
+        ? { SES_REGION: value.SES_REGION, SES_CONFIGURATION_SET: value.SES_CONFIGURATION_SET, SES_CREDENTIALS_FILE: value.SES_CREDENTIALS_FILE }
+        : { RESEND_API_KEY: value.RESEND_API_KEY }),
       TMDB_API_READ_TOKEN: value.TMDB_API_READ_TOKEN,
       VALKEY_URL: value.VALKEY_URL,
     }
@@ -120,6 +131,19 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     if (missing.length) throw new Error(`Invalid API configuration: ${missing.join(', ')} required in production.`)
     if (value.DATABASE_SSL_MODE !== 'require') {
       throw new Error('Invalid API configuration: DATABASE_SSL_MODE=require is required in production.')
+    }
+    if (value.DATABASE_DEPLOYMENT === 'self-hosted') {
+      let valid = false
+      try {
+        const database = new URL(value.DATABASE_URL!)
+        valid = database.hostname === 'postgres' && database.pathname === '/consumit'
+          && database.username === 'consumit_app' && database.password.length >= 32
+          && !/consumit-local|replace[-_]|missing[-_]/i.test(database.password)
+          && value.DATABASE_SSL_CA_FILE === '/run/secrets/db-ca.crt'
+          && database.searchParams.get('sslmode') === 'verify-full'
+          && database.searchParams.get('sslrootcert') === value.DATABASE_SSL_CA_FILE
+      } catch { /* Never include a database URL in configuration errors. */ }
+      if (!valid) throw new Error('Invalid API configuration: self-hosted database requires dedicated credentials and certificate-verified TLS.')
     }
   }
   return {
@@ -131,6 +155,10 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,
     databaseSslCa: value.DATABASE_SSL_CA?.replaceAll('\\n', '\n'),
+    ...(value.DATABASE_SSL_CA_FILE ? { databaseSslCaFile: value.DATABASE_SSL_CA_FILE } : {}),
+    emailProvider: value.AUTH_EMAIL_PROVIDER,
+    ...(value.SES_REGION && value.SES_CONFIGURATION_SET && value.SES_CREDENTIALS_FILE
+      ? { ses: { region: value.SES_REGION, configurationSet: value.SES_CONFIGURATION_SET, credentialsFile: value.SES_CREDENTIALS_FILE } } : {}),
     databaseSslMode: value.DATABASE_SSL_MODE,
     databaseUrl: value.DATABASE_URL,
     nodeEnv: value.NODE_ENV,

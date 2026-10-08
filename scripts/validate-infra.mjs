@@ -17,7 +17,7 @@ if (!commandWorks('docker')) {
 const useTerraformContainer = !commandWorks('terraform')
 const terraformImage = process.env.CONSUMIT_TERRAFORM_IMAGE?.trim() || 'hashicorp/terraform:1.8.5'
 const projectRoot = process.cwd()
-const cloudflareDir = path.resolve(projectRoot, 'infra/cloudflare')
+let terraformDir = path.resolve(projectRoot, 'infra/cloudflare')
 
 const run = (command, args, cwd) => {
   const result = spawnSync(command, args, { cwd, stdio: 'inherit' })
@@ -25,12 +25,12 @@ const run = (command, args, cwd) => {
 }
 const runTerraform = (args) => {
   if (!useTerraformContainer) {
-    run('terraform', args, cloudflareDir)
+    run('terraform', args, terraformDir)
     return
   }
   run('docker', [
     'run', '--rm',
-    '--mount', `type=bind,source=${cloudflareDir.replaceAll('\\', '/')},target=/workspace`,
+    '--mount', `type=bind,source=${terraformDir.replaceAll('\\', '/')},target=/workspace`,
     '--workdir', '/workspace',
     terraformImage,
     ...args,
@@ -63,3 +63,8 @@ run('docker', ['run', '--rm', '--mount', `type=bind,source=${devGatewayConfig},t
 runTerraform(['fmt', '-check', '-recursive'])
 runTerraform(['init', '-backend=false'])
 runTerraform(['validate'])
+terraformDir = path.resolve(projectRoot, 'infra/aws')
+runTerraform(['fmt', '-check', '-recursive'])
+runTerraform(['init', '-backend=false', '-lockfile=readonly'])
+runTerraform(['validate'])
+run('docker', ['run', '--rm', '--entrypoint', 'promtool', '--mount', `type=bind,source=${path.resolve(projectRoot, 'infra/observability').replaceAll('\\', '/')},target=/etc/prometheus,readonly`, 'prom/prometheus:v3.14.0', 'check', 'rules', '/etc/prometheus/production-alerts.yml'])

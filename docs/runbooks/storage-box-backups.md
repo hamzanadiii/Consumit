@@ -1,5 +1,11 @@
 # PostgreSQL backups to Hetzner Storage Box
 
+Historical alternative, superseded by the owner's OVH + AWS plan on 2026-10-08.
+The current production Compose uses S3, private-CA PostgreSQL 17, pgBackRest WAL
+and Restic logical backups. Follow [the current deployment runbook](./ovh-aws-production.md).
+The remaining text records the earlier SFTP setup and synthetic drill context;
+its configuration does not describe the active production overlay.
+
 The production Compose profile (`compose.production.yaml`) uses encrypted Restic snapshots over SFTP. The database remains the primary store; the Storage Box is the offsite recovery copy. The base/development Compose backup service writes local custom-format dumps into a Docker volume only. Those local dumps are a convenience and do not satisfy this runbook's encryption or separate-failure-domain requirements.
 
 ## Setup

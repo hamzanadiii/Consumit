@@ -447,13 +447,40 @@ This is an interface inventory, not route-level implementation approval. Contrac
 
 ### Stage 1: simple production
 
-Cloudflare fronts one small VPS running the web app, API, and resolver; managed
-Postgres with backups provides durable member/product truth, and dedicated Valkey provides
-authentication state. Bounded process memory covers disposable cache and single-flight. Docker
-provides repeatable operation. Additional worker capacity and shared disposable cache arrive on
-measured need. Named infrastructure vendors remain candidates, not mandatory commitments.
+The approved first release uses the OVH Canada VPS for the original Next.js frontend,
+API, PostgreSQL 17, separate authentication/playback Valkey instances and monitoring.
+Cloudflare Free fronts the private gateway through Tunnel. Production uses a fresh,
+independent Compose project; developer volumes and data are preserved. AWS Canada
+Central supplies SES transactional email and encrypted S3 backups. See
+[ADR 0007](./adr/0007-ovh-aws-production.md) and the
+[deployment runbook](./runbooks/ovh-aws-production.md).
 
-Production database connections require certificate-verified TLS. The application owns TLS mode and its configured CA: the API validates its PostgreSQL URL and removes URL SSL parameters before the pg parser can override pool policy. The production backup selects that same database in a dedicated Restic image with PostgreSQL 18 tools and system certificate authorities, clears development cron/mount inheritance, and runs once under its timer. Its libpq policy is `verify-full` with system roots; weaker URI modes fail closed. See [the backup runbook](./runbooks/storage-box-backups.md) for URI configuration and the required real restore drill. Infrastructure validation evaluates the backup profile and rejects target divergence or inherited runtime behavior without logging connection credentials.
+Production database connections verify the private CA and the `postgres` server
+hostname. Plaintext host connections are rejected. Application, migration and
+read-only logical backup roles have separate passwords; the application cannot
+change schema or migration history. The API owns TLS configuration and removes
+URL SSL parameters before pg can override it. Production preflight accepts this
+explicit self-hosted configuration and rejects development credentials and weak
+URI TLS. Migration and backup clients also require `verify-full` and the mounted
+CA. A dedicated PostgreSQL 17/Restic image runs daily logical backups under its
+timer; pgBackRest archives WAL synchronously and creates daily encrypted full
+backups. S3 versioning and fourteen-day Governance retention protect overwritten
+and deleted versions. Only backup tools expire current repositories; bucket
+lifecycle expires noncurrent versions and expired delete markers. Restoration
+uses isolated databases with archiving disabled.
+
+SES implements the existing authentication notifier without changing responses
+or ten-minute code expiry. Sends have a five-second deadline and one SDK attempt,
+including ambiguous network failures. Separate private credentials feed SES,
+S3, an SNS-to-SQS feedback consumer and an hourly credit monitor. Recipient and
+code values never appear in failure logs or metric dimensions. Bounce and
+complaint suppression is enabled at the AWS account level. Safe feedback metrics
+reach the existing OTel collector. Alertmanager sends failure and recovery
+notifications to Telegram; a separate Cloudflare cron Worker checks HTTPS and
+uncached API readiness for complete VPS outages. The Free edge has one rate
+rule for `/v1/auth/`: ten requests per IP/colo in ten seconds, blocked for ten
+seconds. Application Valkey limits remain authoritative. A separate Free WAF
+launch gate blocks registration except configured tester IPs until verification.
 
 ### Stage 2: measured horizontal growth
 
@@ -532,7 +559,8 @@ missing integrations and database URLs that would weaken verified backup TLS;
 real HTTPS, email, notification and offsite restoration remain launch gates.
 
 Environment is Zod-validated at boot and fails fast in production when `DATABASE_URL`,
-`VALKEY_URL`, `APP_ORIGIN`, `AUTH_CODE_PEPPER`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, or required
+`VALKEY_URL`, `APP_ORIGIN`, `AUTH_CODE_PEPPER`, `AUTH_EMAIL_FROM`, the selected email
+adapter settings (SES in the approved release; Resend remains a development option), or required
 catalog settings are missing. `.env.example` stays current. Browser API traffic is same-origin;
 CORS is disabled and mutations require the exact configured Origin plus valid Fetch Metadata when
 present. Secrets never enter logs, responses, or client bundles. General bodies stay tightly
@@ -544,9 +572,10 @@ Login, register, verify, and reset routes get the strictest rate limits and iden
 
 ### Background work
 
-No background worker runs today; the former import worker was removed with the import
-integration. BullMQ remains deferred until a shared queue need such as resolver warming or
-telemetry ingestion is measured.
+The production SES feedback worker polls private SQS and exports safe aggregate
+outcomes; an hourly operator job checks AWS account credits and gross budgets.
+The former import worker remains removed. BullMQ stays deferred until another
+shared queue need such as resolver warming or telemetry ingestion is measured.
 
 ### Still enabled
 
