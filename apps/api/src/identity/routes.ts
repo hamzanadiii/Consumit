@@ -15,11 +15,13 @@ import {
   verifyEmailRequestSchema,
 } from '@consumit/contracts'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import { normalizeIP } from '@fastify/rate-limit'
 import type { ZodType } from 'zod'
 
 import type { ApiEnv } from '../config/env.ts'
 import { isAllowedOrigin } from '../http/csrf.ts'
 import { ApiError } from '../http/errors.ts'
+import { requestMember } from '../http/request-member.ts'
 import type { Identity } from './identity.ts'
 import { sessionCookieName, sessionCookieOptions } from './session.ts'
 
@@ -30,7 +32,7 @@ const accepted = acceptedResponseSchema.parse({
 // Credentials and challenge attempts are not authenticated by the incoming
 // cookie. Use the trusted client address so arbitrary cookies cannot create
 // fresh buckets for brute-force attempts or email delivery.
-const credentialKey = (request: FastifyRequest) => request.ip
+const credentialKey = (request: FastifyRequest) => normalizeIP(request.ip, 64)
 const credentialLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 10, timeWindow: '15 minutes' } } }
 const codeRequestLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 20, timeWindow: '1 hour' } } }
 const codeConfirmLimit = { config: { rateLimit: { keyGenerator: credentialKey, max: 30, timeWindow: '1 hour' } } }
@@ -147,7 +149,7 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: { env: ApiEnv
 
   app.get('/v1/me', async (request, reply) => {
     noSharedCache(reply)
-    const member = await identity.getSession(tokenOf(request))
+    const member = await requestMember(request, identity, cookieName)
     if (!member) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     return sessionMemberResponseSchema.parse({ member })
   })

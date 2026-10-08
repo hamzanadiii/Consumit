@@ -9,7 +9,7 @@ import { internalNextPath } from '@/lib/internal-next-path'
 
 export const metadata: Metadata = {
   title: 'Sign in · Consumit',
-  description: 'Return to your Consumit library and circle.',
+  description: 'Return to your private Consumit library and watch history.',
   robots: { follow: false, index: false },
 }
 

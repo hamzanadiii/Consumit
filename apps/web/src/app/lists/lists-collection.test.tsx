@@ -47,11 +47,11 @@ describe('profile lists collection', () => {
     expect(screen.getByRole('link', { name: 'Guilty pleasures, 1 title' })).toHaveAttribute('href', '/lists/guilty-pleasures')
   })
 
-  it('keeps an empty shelf honest with a real import destination', () => {
+  it('keeps an empty shelf honest with a real next step', () => {
     render(<ListsCollection lists={[]} />)
 
     expect(screen.getByText(/No lists yet/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'import your Letterboxd lists' })).toHaveAttribute('href', '/settings/imports/letterboxd')
+    expect(screen.queryByRole('link', { name: /import/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/Taste Match/i)).not.toBeInTheDocument()
   })
 

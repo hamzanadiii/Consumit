@@ -45,13 +45,13 @@ resource "cloudflare_ruleset" "cache" {
     {
       action            = "set_cache_settings"
       description       = "Cache public catalog reads without member cookies"
-      expression        = "http.request.method eq \"GET\" and starts_with(http.request.uri.path, \"/v1/titles/\") and not http.cookie contains \"consumit_session\""
+      expression        = "http.request.method eq \"GET\" and (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\")) and not http.cookie contains \"consumit_session\""
       action_parameters = { cache = true, edge_ttl = { mode = "respect_origin" } }
     },
     {
       action            = "set_cache_settings"
       description       = "Never cache private or mutable APIs"
-      expression        = "http.request.method ne \"GET\" or starts_with(http.request.uri.path, \"/v1/playback/\") or starts_with(http.request.uri.path, \"/v1/identity/\") or starts_with(http.request.uri.path, \"/v1/member/\") or starts_with(http.request.uri.path, \"/v1/progress/\") or starts_with(http.request.uri.path, \"/v1/imports/\")"
+      expression        = "http.request.method ne \"GET\" or (starts_with(http.request.uri.path, \"/v1/\") and (http.cookie contains \"consumit_session\" or not (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\"))))"
       action_parameters = { cache = false }
     },
   ]
@@ -78,7 +78,7 @@ resource "cloudflare_ruleset" "rate_limits" {
     {
       action      = "block"
       description = "Authentication abuse"
-      expression  = "starts_with(http.request.uri.path, \"/v1/identity/\")"
+      expression  = "starts_with(http.request.uri.path, \"/v1/auth/\")"
       ratelimit   = { characteristics = ["cf.colo.id", "ip.src"], period = 60, requests_per_period = var.auth_requests_per_minute, mitigation_timeout = 60 }
     },
     {

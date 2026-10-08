@@ -13,7 +13,6 @@ import {
   playbackEventsSchema,
   webVitalBatchSchema,
   progressWriteRequestSchema,
-  letterboxdImportSchema,
   passwordChangeRequestSchema,
   profileSchema,
   recoveryConfirmRequestSchema,
@@ -21,6 +20,8 @@ import {
   safeMemberSchema,
   setRatingRequestSchema,
   subtitlesResponseSchema,
+  subtitleCandidateSchema,
+  subtitleDiscoveryEventSchema,
   titleReviewsPageSchema,
   titleReviewsQuerySchema,
   titleReviewSchema,
@@ -37,6 +38,14 @@ import {
 } from './index'
 
 describe('catalog contracts', () => {
+  it('rejects hostile prepared subtitle URLs and incomplete provider events', () => {
+    const track = { id: 'one', provider: 'fixture', language: 'en', label: 'English' }
+    expect(subtitleCandidateSchema.safeParse({ ...track, preparedUrl: 'https://consumit.example/v1/subtitles/file/abcdef0123456789' }).success).toBe(true)
+    for (const preparedUrl of ['javascript:alert(1)', 'https://user:password@consumit.example/file', 'https://consumit.example\\@evil.example/file']) {
+      expect(subtitleCandidateSchema.safeParse({ ...track, preparedUrl }).success).toBe(false)
+    }
+    expect(subtitleDiscoveryEventSchema.safeParse({ type: 'provider', searchId: '09c82022-4e60-49b3-b9d7-21a65a4aef95', languages: [] }).success).toBe(false)
+  })
   it('builds canonical title and watch destinations', () => {
     expect(titleHref({ id: 550, kind: 'movie' })).toBe('/title/550')
     expect(titleHref({ id: 1399, kind: 'series' })).toBe('/series/1399')
@@ -108,18 +117,6 @@ describe('catalog contracts', () => {
     expect(updateProfileRequestSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false)
     expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, location: null, nextUsernameChangeAt: null, username: 'hamza_8', usernameChangedAt: null, visibility: 'private' }).success).toBe(true)
     expect(usernameAvailabilityResponseSchema.parse({ available: true, username: 'HAMZA_8' })).toEqual({ available: true, username: 'hamza_8' })
-  })
-
-  it('requires durable Letterboxd import progress and review data', () => {
-    expect(letterboxdImportSchema.safeParse({
-      confirmedAt: null,
-      createdAt: '2026-09-07T00:00:00.000Z',
-      failedReason: null,
-      id: 'import_1',
-      progress: { exact: 4, confident: 2, needsReview: 1, skipped: 3, total: 11, unmatched: 1 },
-      status: 'needs_review',
-      updatedAt: '2026-09-07T00:01:00.000Z',
-    }).success).toBe(true)
   })
 
   it('validates non-empty member record edits', () => {

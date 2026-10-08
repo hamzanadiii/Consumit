@@ -1,6 +1,6 @@
-import type { CatalogRef, CatalogTitleSummary } from '@consumit/contracts'
+import type { CatalogRef } from '@consumit/contracts'
 
-export const editorialCatalog = {
+const editorialCatalog = {
   movies: [
     { id: 693134, kind: 'movie' },
     { id: 329865, kind: 'movie' },
@@ -26,8 +26,4 @@ export const editorialRefs: readonly CatalogRef[] = [
 
 export function catalogKey(title: CatalogRef) {
   return `${title.kind}:${title.id}`
-}
-
-export function catalogMap(items: readonly CatalogTitleSummary[]) {
-  return new Map(items.map((item) => [catalogKey(item), item]))
 }

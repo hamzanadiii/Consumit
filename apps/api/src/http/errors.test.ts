@@ -9,6 +9,18 @@ afterEach(async () => {
 })
 
 describe('global error translation', () => {
+  it.each([
+    { payload: 'x'.repeat(1_048_577), type: 'application/json', status: 413 },
+    { payload: 'unsupported', type: 'application/xml', status: 415 },
+  ])('preserves a client error status of $status without exposing internals', async ({ payload, type, status }) => {
+    const app = await buildApp()
+    openApps.push(app)
+    const response = await app.inject({ method: 'POST', url: '/v1/auth/login',
+      headers: { origin: 'http://localhost:3000', 'content-type': type }, payload })
+    expect(response.statusCode).toBe(status)
+    expect(response.json()).toEqual({ error: expect.objectContaining({ code: 'BAD_REQUEST', retryable: false }) })
+    expect(response.headers['cache-control']).toContain('no-store')
+  })
   it('answers unknown routes with the stable envelope', async () => {
     const app = await buildApp()
     openApps.push(app)

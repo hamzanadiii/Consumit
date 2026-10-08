@@ -256,7 +256,7 @@ export const animeEpisodeSchema = z.object({
   airDate: z.iso.date().nullable(),
   duration: z.int().positive().nullable(),
 })
-/** Confident AniList match for a TMDB title. 404 carries no body match —
+/** Confident AniList match for a TMDB title. 404 carries no body match â€”
  *  the caller keeps the honest TMDB page. */
 export const animeMatchSchema = z.object({ anilistId: z.int().positive() })
 export type AnimeMatch = z.infer<typeof animeMatchSchema>
@@ -353,11 +353,6 @@ export const apiErrorCodeSchema = z.enum([
   'EMAIL_NOT_VERIFIED',
   'FORBIDDEN',
   'IDENTITY_NOT_CONFIGURED',
-  'IMPORT_INVALID_ARCHIVE',
-  'IMPORT_LIMIT_EXCEEDED',
-  'IMPORT_NOT_FOUND',
-  'IMPORT_NOT_READY',
-  'IMPORT_UNAVAILABLE',
   'INTERNAL',
   'INVALID_CREDENTIALS',
   'INVALID_VERIFICATION_CODE',
@@ -932,6 +927,31 @@ export type SubtitlePreference = z.infer<typeof subtitlePreferenceSchema>
 export const subtitlePreferenceResponseSchema = z.object({ preference: subtitlePreferenceSchema })
 export type SubtitlePreferenceResponse = z.infer<typeof subtitlePreferenceResponseSchema>
 export type SubtitlesResponse = z.infer<typeof subtitlesResponseSchema>
+/** Bounded public subtitle discovery documents, shared across API and player. */
+export const subtitleProviderStatusSchema = z.object({
+  id: z.string().min(1).max(64), name: z.string().min(1).max(160),
+  state: z.enum(['ready', 'skipped', 'no_match', 'failed', 'timeout']),
+  durationMs: z.number().finite().nonnegative(), found: z.int().min(0).max(100000),
+  reason: z.enum(['credentials_required', 'unsupported']).optional(),
+  failure: z.enum(['search', 'parse', 'download', 'conversion']).optional(),
+})
+export const subtitleDiscoveryEventSchema = z.object({
+  type: z.enum(['snapshot', 'provider', 'complete']), searchId: z.uuid(),
+  languages: z.array(z.object({ code: z.string().regex(/^[a-z]{2,3}$/), count: z.int().min(0).max(100000) })).max(256),
+  provider: subtitleProviderStatusSchema.optional(),
+}).refine((event) => event.type !== 'provider' || Boolean(event.provider), 'Provider events require a provider result.')
+export const subtitleCandidateSchema = z.object({
+  id: z.string().min(1).max(128), label: z.string().max(160), language: z.string().regex(/^[a-z]{2,3}$/),
+  provider: z.string().min(1).max(64), release: z.string().max(160).optional(),
+  hi: z.boolean().optional(), forced: z.boolean().optional(), sdh: z.boolean().optional(), machineTranslated: z.boolean().optional(),
+  preparedUrl: z.url().max(4096).refine((value) => /^https?:\/\/[^/?#@\\\s]+(?:[/?#]|$)/i.test(value)).optional(),
+})
+export const subtitleDiscoveryPageSchema = z.object({
+  tracks: z.array(subtitleCandidateSchema).max(20), total: z.int().min(0).max(100000), nextCursor: z.int().min(0).max(100000).nullable(),
+})
+export type SubtitleCandidate = z.infer<typeof subtitleCandidateSchema>
+export type SubtitleProviderStatus = z.infer<typeof subtitleProviderStatusSchema>
+export type SubtitleDiscoveryEvent = z.infer<typeof subtitleDiscoveryEventSchema>
 export type PlaybackRef = z.infer<typeof playbackRefSchema>
 export type PlaybackSource = z.infer<typeof playbackSourceSchema>
 export type PlaybackSession = z.infer<typeof playbackSessionSchema>
@@ -1034,69 +1054,8 @@ export const memberListDetailSchema = z.object({
 export type MemberListDetail = z.infer<typeof memberListDetailSchema>
 
 
-
-export const letterboxdImportStatusSchema = z.enum(['uploaded', 'processing', 'needs_review', 'ready', 'confirmed', 'failed'])
-export type LetterboxdImportStatus = z.infer<typeof letterboxdImportStatusSchema>
-
-export const letterboxdMatchStatusSchema = z.enum(['exact', 'confident', 'needs_review', 'unmatched', 'skipped'])
-export type LetterboxdMatchStatus = z.infer<typeof letterboxdMatchStatusSchema>
-
-export const letterboxdRowKindSchema = z.enum(['profile', 'watched', 'diary', 'rating', 'review', 'watchlist', 'favorite', 'list_item'])
-export type LetterboxdRowKind = z.infer<typeof letterboxdRowKindSchema>
-
-export const letterboxdImportProgressSchema = z.object({
-  confident: z.int().nonnegative(),
-  exact: z.int().nonnegative(),
-  needsReview: z.int().nonnegative(),
-  skipped: z.int().nonnegative(),
-  total: z.int().nonnegative(),
-  unmatched: z.int().nonnegative(),
-})
-
-export const letterboxdImportSchema = z.object({
-  confirmedAt: z.iso.datetime().nullable(),
-  createdAt: z.iso.datetime(),
-  failedReason: z.string().nullable(),
-  id: z.string().min(1),
-  progress: letterboxdImportProgressSchema,
-  status: letterboxdImportStatusSchema,
-  updatedAt: z.iso.datetime(),
-})
-export type LetterboxdImport = z.infer<typeof letterboxdImportSchema>
-
-export const letterboxdCandidateSchema = z.object({
-  id: z.int().positive(),
-  posterUrl: z.url().nullable(),
-  title: z.string().min(1),
-  year: z.int().min(1870).max(2200).nullable(),
-})
-
-export const letterboxdImportItemSchema = z.object({
-  candidates: z.array(letterboxdCandidateSchema),
-  id: z.string().min(1),
-  kind: letterboxdRowKindSchema,
-  selected: catalogRefSchema.nullable(),
-  sourceKey: z.string().min(1),
-  status: letterboxdMatchStatusSchema,
-  title: z.string().nullable(),
-  year: z.int().min(1870).max(2200).nullable(),
-})
-export type LetterboxdImportItem = z.infer<typeof letterboxdImportItemSchema>
-
-export const letterboxdImportDetailSchema = z.object({
-  import: letterboxdImportSchema,
-  items: z.array(letterboxdImportItemSchema),
-})
-export type LetterboxdImportDetail = z.infer<typeof letterboxdImportDetailSchema>
-
-export const letterboxdImportHistorySchema = z.object({ imports: z.array(letterboxdImportSchema) })
-export const letterboxdMatchSelectionSchema = z.object({ skip: z.boolean().optional(), tmdbId: z.int().positive().optional() })
-  .refine((value) => value.skip === true || value.tmdbId !== undefined, 'Choose a TMDB movie or skip this row.')
-export type LetterboxdMatchSelection = z.infer<typeof letterboxdMatchSelectionSchema>
-
 export const memberExportSchema = z.object({
   exportedAt: z.iso.datetime(),
-  imports: z.array(letterboxdImportSchema),
   library: memberLibrarySchema,
   watchHistory: z.array(watchHistoryEntrySchema),
   member: safeMemberSchema,

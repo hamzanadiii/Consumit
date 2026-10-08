@@ -116,27 +116,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  letterboxd-worker:
-    build:
-      context: .
-      target: api
-    command: ["bun", "worker.js"]
-    env_file:
-      - path: ./.env
-        required: false
-      - path: ./apps/api/.env
-        required: false
-    environment:
-      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
-      NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
-      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
-      TMDB_REGION: ${TMDB_REGION:-US}
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
-
   web:
     build:
       context: .
@@ -188,7 +167,7 @@ services:
   # provider-overrides file alongside. See infra/docker/backup.sh for the
   # manual run + restore drill. Local postgres stays as the drill target
   # and the offline fallback; Valkey intentionally has no backup (total
-  # loss only logs members out — see ARCHITECTURE.md).
+  # loss only logs members out â€” see ARCHITECTURE.md).
   backup:
     # pg_dump must be >= the server version (Neon runs PG18).
     image: postgres:18-alpine

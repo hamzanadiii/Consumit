@@ -151,7 +151,7 @@ export function ListsCollection({ catalogDetailsLimited = false, catalogUnavaila
                 {listCursor ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Filters and sorting apply to loaded lists. Load more to include older lists.</p> : null}
                 {visibleLists.length === 0 ? (
                   <div className="mt-6 border-y border-[var(--fs-line)] py-8 text-sm leading-6 text-[var(--fs-muted)]">
-                    {lists.length === 0 ? <>No lists yet. Create one here or <Link className="font-bold text-[var(--fs-accent)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/settings/imports/letterboxd">import your Letterboxd lists</Link>.</> : 'No lists match these filters. Try another search.'}
+                    {lists.length === 0 ? 'No lists yet. Save a title to a list from any title page.' : 'No lists match these filters. Try another search.'}
                   </div>
                 ) : (
                   <ul className="mt-6 grid gap-x-6 gap-y-8 xl:grid-cols-2">

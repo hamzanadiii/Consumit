@@ -97,7 +97,7 @@ describe('FilScreenShell', () => {
     expect(within(navigation).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
   })
 
-  it('keeps personal shortcuts and a guest avatar visible while sending guests through authentication', async () => {
+  it('keeps personal shortcuts visible with a shared guest avatar while sending archive guests through authentication', async () => {
     const user = userEvent.setup()
     render(<SessionProvider initialStatus="anonymous"><ShellStateProvider><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></ShellStateProvider></SessionProvider>)
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
@@ -108,8 +108,8 @@ describe('FilScreenShell', () => {
     }
     const guest = screen.getByRole('link', { name: 'Guest profile' })
     expect(guest).toHaveAttribute('href', '/library?section=profile')
-    expect(guest.textContent).toMatch(/^[A-Z]$/)
-    expect(window.sessionStorage.getItem('consumit.guest-character')).toBe(guest.textContent)
+    expect(guest).toHaveTextContent('G')
+    expect(window.sessionStorage.getItem('consumit.guest-character')).toBeNull()
     expect(screen.getByRole('button', { name: 'Search titles' }).nextElementSibling).toBe(guest)
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))

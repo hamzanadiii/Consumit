@@ -1,32 +1,29 @@
 # syntax=docker/dockerfile:1.7
 
-FROM oven/bun:1.4.0-alpine AS dependencies
+FROM oven/bun:1.4.0-alpine AS manifests
 WORKDIR /app
 
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/next-web/package.json apps/next-web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/media-relay/package.json packages/media-relay/package.json
 COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
-RUN bun install --frozen-lockfile
+COPY packages/next-ui/package.json packages/next-ui/package.json
+
+FROM manifests AS dependencies
+RUN bun install --frozen-lockfile --network-concurrency 16
 
 FROM dependencies AS source
 COPY . .
 
-FROM oven/bun:1.4.0-alpine AS api-dependencies
-WORKDIR /app
-COPY package.json bun.lock ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/web/package.json apps/web/package.json
-COPY packages/contracts/package.json packages/contracts/package.json
-COPY packages/media-relay/package.json packages/media-relay/package.json
-COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
-COPY packages/ui/package.json packages/ui/package.json
-RUN bun install --frozen-lockfile --filter @consumit/api
+FROM manifests AS api-dependencies
+RUN bun install --frozen-lockfile --filter @consumit/api --network-concurrency 16
 
-FROM source AS api-build
+FROM api-dependencies AS api-build
+COPY . .
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun --filter @consumit/api db:generate \
   && bun --filter @consumit/api build
 
@@ -44,7 +41,6 @@ RUN apk add --no-cache xz xz-libs
 # the image cannot repair a mounted volume's ownership.)
 RUN mkdir -p /var/lib/consumit/subtitles && chown bun:bun /var/lib/consumit/subtitles
 COPY --from=api-build --chown=bun:bun /app/apps/api/dist/index.js ./index.js
-COPY --from=api-build --chown=bun:bun /app/apps/api/dist/import-worker.js ./worker.js
 USER bun
 EXPOSE 3001
 CMD ["bun", "index.js"]
@@ -55,7 +51,11 @@ COPY apps/api/prisma.config.ts apps/api/prisma.config.ts
 WORKDIR /app/apps/api
 CMD ["bun", "run", "db:migrate:deploy"]
 
-FROM source AS web-build
+FROM manifests AS web-dependencies
+RUN bun install --frozen-lockfile --filter @consumit/web --network-concurrency 16
+
+FROM web-dependencies AS web-build
+COPY . .
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
     NEXT_TELEMETRY_DISABLED=1
@@ -74,6 +74,27 @@ USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
+FROM manifests AS next-web-dependencies
+RUN bun install --frozen-lockfile --filter @consumit/next-web --network-concurrency 16
+
+FROM next-web-dependencies AS next-web-build
+COPY . .
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3080
+ARG CONSUMIT_API_URL=http://api:3001
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} CONSUMIT_API_URL=${CONSUMIT_API_URL} NEXT_TELEMETRY_DISABLED=1
+RUN bun --filter @consumit/next-web build
+
+FROM node:24-alpine AS next-web
+WORKDIR /app
+ENV HOSTNAME=0.0.0.0 NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+COPY --from=next-web-build --chown=node:node /app/apps/next-web/.next/standalone ./
+COPY --from=next-web-build --chown=node:node /app/apps/next-web/.next/static ./apps/next-web/.next/static
+COPY --from=next-web-build --chown=node:node /app/apps/next-web/public ./apps/next-web/public
+USER node
+EXPOSE 3000
+CMD ["node", "apps/next-web/server.js"]
+
 FROM nginx:1.29-alpine AS gateway
 COPY infra/nginx/consumit.conf /etc/nginx/conf.d/default.conf
+COPY infra/nginx/request-limits.conf /etc/nginx/consumit-request-limits.conf
 EXPOSE 80

@@ -130,9 +130,11 @@ export {
 } from './profile/profile'
 export {
   PreferenceRow,
+  SettingsFact,
   SettingsRail,
   SettingsSection,
   type PreferenceRowProps,
+  type SettingsFactProps,
   type SettingsRailItem,
   type SettingsRailProps,
   type SettingsSectionProps,

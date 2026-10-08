@@ -10,7 +10,7 @@ import { FavoritesShelf } from './favorites-shelf'
 import { EditBannerButton, ProfileEditProvider } from './profile-edit'
 import { ProfileSectionNavigation, type ProfileSectionId } from './profile-section-navigation'
 import { FilScreenShell } from '../shared'
-import { AdPlaceholder } from '../shared/ad-placeholder'
+import { AdSlot } from '../shared/ad-slot'
 import { TitleCard } from '../shared/title-card'
 
 import { memberAvatarSrc } from '@/lib/avatar'
@@ -405,7 +405,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                 </div>
 
                 <aside aria-label={name + ' profile highlights'} className="min-w-0 space-y-7 lg:pt-1">
-                  {owner ? <AdPlaceholder placement="profile" position="early" shape="rectangle" /> : null}
+                  {owner ? <AdSlot placement="profile" position="early" shape="rectangle" /> : null}
                   {owner && savedPreview ? <SavedTitlesPreview preview={savedPreview} titleMap={titleMap} username={data.profile.username} /> : null}
                   <DiaryPreview data={data} titleMap={titleMap} />
                   <RecentListPreview data={data} listPosters={listPosters} />

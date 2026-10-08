@@ -7,6 +7,7 @@ import { cn } from '../lib/cn'
 export type SectionHeadingProps = Omit<ComponentProps<'div'>, 'children'> & {
   action?: ReactNode | undefined
   description?: ReactNode | undefined
+  icon?: ReactNode | undefined
   title: string
   variant?: 'editorial' | 'compact' | undefined
 }
@@ -15,6 +16,7 @@ export function SectionHeading({
   action,
   className,
   description,
+  icon,
   id,
   title,
   variant = 'editorial',
@@ -32,6 +34,7 @@ export function SectionHeading({
       <div className="min-w-0 flex-1">
         <h2 id={id} className={variant === 'compact' ? 'pt-2 text-xs font-medium uppercase tracking-[0.12em] text-copy' : 'font-display text-2xl leading-tight tracking-[-0.02em] text-ink'}>
           {title}
+          {icon ? <span aria-hidden="true" className="ml-2 inline-flex translate-y-[-1px] items-center align-middle">{icon}</span> : null}
         </h2>
         {description ? (
           <div className="mt-1.5 max-w-[62ch] text-xs leading-5 text-muted">

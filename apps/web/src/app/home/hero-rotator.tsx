@@ -141,6 +141,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   const fillRef = useRef<HTMLSpanElement>(null)
   const progressRef = useRef(0)
   const count = slides.length
+  const activeIndex = index % count
 
   const go = useCallback(
     (next: number) => {
@@ -177,7 +178,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
     )
     observer.observe(section)
     return () => observer.disconnect()
-  }, [])
+  }, [count])
 
   // Rotation yields while the member hovers, reads, or tabs through the
   // hero, then resumes on its own. Reduced motion never auto-advances.
@@ -208,7 +209,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
   if (count <= 1) {
     const only = slides[0] ?? hero
     return (
-      <section aria-label={label} className="mt-4">
+      <section aria-label={label} className="mt-4" ref={sectionRef}>
         <HeroArticle animate={!reducedMotion} eager hero={only} titleId="filscreen-hero-title" />
       </section>
     )
@@ -220,14 +221,16 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
       aria-roledescription="carousel"
       className="relative mt-4"
       onBlurCapture={() => setFocused(false)}
-      onFocusCapture={() => setFocused(true)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={(event) => setFocused(event.target instanceof HTMLElement && event.target.matches(':focus-visible'))}
+      onPointerDownCapture={() => setFocused(false)}
+      onKeyDownCapture={() => setFocused(true)}
+      onPointerEnter={(event) => { if (event.pointerType === 'mouse') setHovered(true) }}
+      onPointerLeave={() => setHovered(false)}
       ref={sectionRef}
     >
       <div aria-live={running ? 'off' : 'polite'} className="grid">
         {slides.map((item, position) => {
-          const active = position === index
+          const active = position === activeIndex
           const titleId = `filscreen-hero-title-${position}`
           return (
             <div
@@ -250,7 +253,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
       </div>
       <div aria-label="Choose a featured title" className="absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col gap-1" role="group">
         {slides.map((item, position) => {
-          const active = position === index
+          const active = position === activeIndex
           return (
             <button
               aria-current={active || undefined}

@@ -14,9 +14,12 @@ export default defineConfig([
     // Vendored minified signing code from the upstream player bundle.
     'packages/provider-sdk/src/adapters/aphrodite-gate.ts',
     'design/**',
+    'local/**',
+    '**/tmp-*/**',
+    '**/tmp-*',
   ]),
   {
-    files: ['apps/web/**/*.{js,jsx,ts,tsx}'],
+    files: ['apps/web/**/*.{js,jsx,ts,tsx}', 'apps/next-web/**/*.{js,jsx,ts,tsx}'],
     extends: [nextVitals, nextTypeScript],
   },
   {

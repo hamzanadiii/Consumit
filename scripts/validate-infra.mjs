@@ -1,5 +1,8 @@
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { parseEnv } from 'node:util'
+import { assertProductionBackupConfig, assertProductionRuntimeConfig, productionProcessEnvironment } from './production-config.mjs'
 
 function commandWorks(command) {
   const probe = spawnSync(command, ['version'], { stdio: 'ignore' })
@@ -34,8 +37,29 @@ const runTerraform = (args) => {
   ], projectRoot)
 }
 
-run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.production.yaml', 'config', '--quiet'])
+// Validate production syntax using the committed template, not developer secrets.
+const templateFile = path.resolve(projectRoot, '.env.production.example')
+const templateEnv = productionProcessEnvironment(process.env, parseEnv(readFileSync(templateFile, 'utf8')), templateFile)
+const productionArgs = ['compose', '--env-file', templateFile, '-f', 'compose.yaml', '-f', 'compose.playback.yaml', '-f', 'compose.production.yaml', '--profile', 'backup', 'config']
+const productionQuiet = spawnSync('docker', [...productionArgs, '--quiet'], { env: templateEnv, stdio: 'inherit' })
+if (productionQuiet.status !== 0) process.exit(productionQuiet.status ?? 1)
+const productionConfig = spawnSync('docker', [...productionArgs, '--format', 'json'], { env: templateEnv, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 })
+if (productionConfig.status !== 0) {
+  console.error('Production Compose could not be evaluated. Run its config --quiet check for diagnostics.')
+  process.exit(1)
+}
+// Parse privately: Compose output contains credentials and must never be logged.
+const evaluatedProduction = JSON.parse(productionConfig.stdout)
+assertProductionBackupConfig(evaluatedProduction)
+assertProductionRuntimeConfig(evaluatedProduction)
 run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.playback.yaml', '--profile', 'playback', 'config', '--quiet'])
+run('docker', ['compose', '-f', 'compose.yaml', '-f', 'compose.playback.yaml', 'config', '--quiet'])
+// Validate the actual image include paths and both gateway configurations.
+const gatewayImage = 'consumit-gateway-config-check:local'
+run('docker', ['build', '--target', 'gateway', '--tag', gatewayImage, '.'], projectRoot)
+run('docker', ['run', '--rm', '--entrypoint', 'nginx', gatewayImage, '-t'], projectRoot)
+const devGatewayConfig = path.resolve(projectRoot, 'infra/nginx/consumit.dev.conf').replaceAll('\\', '/')
+run('docker', ['run', '--rm', '--mount', `type=bind,source=${devGatewayConfig},target=/etc/nginx/conf.d/default.conf,readonly`, '--entrypoint', 'nginx', gatewayImage, '-t'], projectRoot)
 runTerraform(['fmt', '-check', '-recursive'])
 runTerraform(['init', '-backend=false'])
 runTerraform(['validate'])

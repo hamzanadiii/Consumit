@@ -53,7 +53,6 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       if (!member || member.status !== 'ACTIVE') return null
       return {
         exportedAt: exportedAt.toISOString(),
-        imports: [],
         library: { diary: [], favorites: [], lists: [], saved: [], watched: [] },
         watchHistory: [],
         member: {

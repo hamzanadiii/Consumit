@@ -102,10 +102,10 @@ export type PlayerOption = {
   language?: string | undefined
 }
 
-export type PlayerSubtitleCandidate = { id: string; label: string; language: string; provider: string; release?: string; hi?: boolean; forced?: boolean; sdh?: boolean; machineTranslated?: boolean; preparedUrl?: string }
+export type PlayerSubtitleCandidate = { id: string; label: string; language: string; provider: string; release?: string | undefined; hi?: boolean | undefined; forced?: boolean | undefined; sdh?: boolean | undefined; machineTranslated?: boolean | undefined; preparedUrl?: string | undefined }
 export type PlayerSubtitleDiscovery = {
   languages: readonly { code: string; count: number }[]
-  providers: readonly { id: string; name: string; state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; reason?: 'credentials_required' | 'unsupported' }[]
+  providers: readonly { id: string; name: string; state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; reason?: 'credentials_required' | 'unsupported' | undefined }[]
   loading: boolean
   error: string | null
 }
@@ -139,6 +139,9 @@ export type ConsumitPlayerProps = Omit<
   pauseLogoUrl?: string | undefined
   /** Pause-overlay synopsis, clamped to three lines. Shown while paused. */
   pauseOverview?: string | undefined
+  /** Pause-overlay title. Defaults to the full title; pass the bare
+   *  series/anime name to keep the paused headline stable across episodes. */
+  pauseTitle?: string | undefined
   chapters?: readonly ChapterCue[] | undefined
 
   audioOptions?: readonly PlayerOption[] | undefined
@@ -563,6 +566,7 @@ export function ConsumitPlayer({
   pauseFacts,
   pauseLogoUrl,
   pauseOverview,
+  pauseTitle,
   playbackRates = DEFAULT_RATES,
   posterSrc,
   preparing = false,
@@ -2038,10 +2042,10 @@ export function ConsumitPlayer({
                     className="mr-auto max-h-24 w-auto max-w-full object-contain object-left [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-36"
                     src={pauseLogoUrl}
                   />
-                  <span className="sr-only">{title}</span>
+                  <span className="sr-only">{pauseTitle ?? title}</span>
                 </>
               ) : (
-                <p className="font-display text-3xl leading-tight font-normal tracking-tight text-balance text-ink sm:text-5xl">{title}</p>
+                <p className="font-display text-4xl leading-tight font-normal tracking-tight text-balance text-ink">{pauseTitle ?? title}</p>
               )}
               {pauseFacts ? <p className="mt-2.5 text-sm tabular-nums text-copy">{pauseFacts}</p> : null}
               {pauseOverview ? <p className="mt-2.5 line-clamp-3 max-w-[62ch] text-sm leading-6 text-copy">{pauseOverview}</p> : null}
@@ -2296,19 +2300,6 @@ export function ConsumitPlayer({
               </div>
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5 sm:flex-none sm:gap-2">
-              {hasSource ? (
-                <PlayerIconButton
-                  active={activeMenu === 'quality'}
-                  disabled={!hasSource}
-                  expanded={activeMenu === 'quality'}
-                  label={`Change quality, current ${qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality}`}
-                  menuId="quality"
-                  onClick={() => toggleMenu('quality')}
-                  title={`Quality: ${qualityOptions.find((option) => option.value === selectedQuality)?.label ?? selectedQuality}`}
-                >
-                  <QualityIcon className="size-5" />
-                </PlayerIconButton>
-              ) : null}
               {showServerSection ? (
                 <PlayerIconButton
                   active={activeMenu === 'server'}

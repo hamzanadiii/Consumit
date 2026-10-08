@@ -18,6 +18,8 @@ The active product combines three jobs:
 
 ## Product principles
 
+Account recovery preserves entered details on request failure. Account creation never labels an edited username using an older availability response, and repeated verification-code requests cannot overlap verification. Unexpected page failures offer retry and Home; a broken root layout offers reload. Subtitle discovery that stops early reports a recoverable failure instead of continuing to check indefinitely.
+
 - **Taste before volume.** Explain why a recommendation fits instead of presenting an undifferentiated poster wall.
 - **Playback before promotion.** The path from a title to a playing source is the primary product path.
 - **Progress belongs to the member.** History and resume position remain stable when the playback source changes.
@@ -64,6 +66,7 @@ The active desktop references cover these personal streaming surfaces:
 15. Report Issue
 16. Title Reviews
 17. Personal Profile Archives (Activity, Watched, Diary, Reviews, Watchlist, History, Lists, Likes, and Tags)
+18. Legal documents (Terms of Service, Privacy Policy, and DMCA Notice)
 
 Other screen files may be present in the package. A file becomes active only when added to the manifest; the archived custom-player concept remains historical.
 
@@ -71,7 +74,9 @@ These screens describe the intended product surface, not an automatic first-rele
 
 ## Home composition
 
-Sidebar navigation shows Watchlist, Likes, Watched, History, and Lists to both members and guests. Signed-in choices open the existing private profile archives. Guest choices ask the visitor to sign in or create an account; sign-in retains the requested collection through `/library?section=…`. The top row beside Search shows the member avatar or a neutral Guest avatar. Members open Profile; guests open the same authentication entry with Profile retained as the destination. No guest account or member collection data is implied. The hero retains featured-title selection and automatic rotation without a Pause / Resume button.
+  Sidebar navigation shows Watchlist, Likes, Watched, History, and Lists to both members and guests. Signed-in choices open the existing private profile archives. Guest choices ask the visitor to sign in or create an account; sign-in retains the requested collection through `/library?section=…`. The top row beside Search shows the member avatar or a neutral Guest avatar. Members open Profile; guests open a guest profile carrying the shared guest character with a sign-in path to the full experience. No guest account or member collection data is implied. The hero retains featured-title selection and automatic rotation without a Pause / Resume button.
+
+Featured rotation pauses while the hero has keyboard focus or mouse hover, is offscreen, the tab is hidden, or reduced motion is requested. Touch selection and retained mouse focus allow rotation to continue after the pointer leaves. A changing featured-title set keeps a valid title visible, including when fewer candidates remain.
 
 Home at `/` keeps the FilScreen design: a near-black shell, collapsible left sidebar, compact catalog tabs (New, Series, Movies, Anime), search and member avatar. The backdrop hero rotates through enriched trending and popular titles, with Watch and title-detail actions. Continue watching is followed by Trending Movies, Trending Series, Trending Anime, Top Rated Movies, Top Rated Series, Award Winning Shows, and Mindf*ck Movies. Continue watching reads validated local progress, resolves titles in a bounded catalog batch, orders last-watched first, drops items at 95 percent completion, and offers per-title removal; it retains loading, empty, retry, and populated states. The server home builds curated shelves from real catalog feeds or explicit catalog-title batches. Computed Taste Match and personalized ranking return only when their signals and explanation are implemented. Live routes never fill sections with invented member evidence.
 
@@ -100,8 +105,8 @@ Anime title pages help members continue a story through Related anime: earlier s
 Private personal-rating filters in Watched, Watchlist, and Diary support Any rating, No rating, exact half-star choices, and inclusive star ranges on the existing 1–10 scale. Ranges apply to loaded records with honest counts and pagination. Existing exact-score Watched archives still include the member's paginated rated titles. Visitors cannot access these personal-rating choices.
 
 - The first-release product is movies, series and episodes, and anime. A manga reader is outside this product's current focus; it would need its own reader, content model, and licensing plan.
-- The first-release loop is discovery, one-tap Watch, personal viewing history/diary, reviews, and private collections. Keep the existing Letterboxd import as an optional migration path.
-- Ads and ad-serving infrastructure are deferred. Home, Movies/Series catalogs, title details, the owner's Profile overview, and Series/Anime Watch currently show layout-only advertisement placeholders for placement review, explicitly labelled Preview; these contain no advertising, scripts or tracking. Profile uses one 300×250 rectangle above the Watchlist preview in the highlights rail; Series/Anime Watch uses one banner above the player in the player column, leaving episode cards and playback controls untouched. Movie Watch and collection archives remain clear. Do not add an ad system to the Watch flow or make playback depend on an ad decision.
+- The first-release loop is discovery, one-tap Watch, personal viewing history/diary, reviews, and private collections.
+- Display advertising is live through Adsterra banner units on Home, Movies/Series catalogs, title details, Series/Anime Watch, and the owner's Profile overview: 728×90, 468×60, 320×50, or 300×250 chosen per slot by its actual container width, labelled Advertisement, with fixed dimensions reserved before loading. Blocked or unfilled creatives collapse the slot instead of leaving an empty box. Anime title pages place a banner after the hero and a 300×250 rectangle beside Overview on wide layouts, replacing that rectangle with a banner before Overview on narrower layouts. Series/Anime Watch places one independent live banner above the full player and episode-rail row, leaving episode cards and playback controls untouched. Movie Watch and collection archives remain clear. Playback never depends on an ad decision.
 - Watch rooms, co-watching rooms, and watch parties are excluded.
 - Private or direct messaging, follows, and circle activity are excluded.
 - Streaming-service choices are availability preferences, not connected billing accounts.
@@ -123,7 +128,7 @@ Private personal-rating filters in Watched, Watchlist, and Diary support Any rat
 - Series and Anime episode lists show the known title, summary, air date, runtime, and episode still. Anime details load for the visible episode page through a bounded batch; when no trusted episode still exists, the card labels its title-art fallback. The anime Watch pause overlay shows the matched title logo when available, with a text fallback, episode facts, and synopsis. Small screens keep the logo and episode context in the player header so the controls remain clear.
 - Computed Taste Match, overlap, and member scores stay hidden until their product logic is implemented. Personal profiles show real 1–10 rating bins and title-by-title ratings only to their owner.
 - Account creation requires an available Username and verified email before a member session is issued. OAuth is not part of the active identity experience.
-- Letterboxd history enters only through a member-uploaded ZIP or CSV with preview, TMDB match review, and explicit confirmation. Four ordered Favorites appear on the profile; Letterboxd likes and deleted exports are skipped.
+- History is native to Consumit: watch progress, diary entries, ratings, reviews, and lists are recorded as the member uses the product; there is no external history import. Four ordered Favorites appear on the profile.
 - Profile and List screens render stored member records. Profiles and lists are private; unsupported activity and engagement evidence stays hidden.
 - Signed-out navigation keeps public catalog destinations visible and replaces the member avatar with Sign in. A signed-in member sees their personal profile and account controls.
 - Global navigation, recommendations, reviews and promotions stay out of active playback.
@@ -151,7 +156,13 @@ Help Center answers describe shipped account, catalog, library, and playback beh
 
 Account settings and provider preferences already have an active desktop reference, despite also appearing in the package's historical “next” list.
 
+## Settings
+
+The Settings rail follows the section at the reading line as the member scrolls. Account opens the Account section on the same page. Language & subtitles presents up to three preferred subtitle languages in priority order: First choice, then numbered fallbacks. Members add an available language, remove a choice, or move a fallback up. Changing the first language changes automatic subtitle track choice; these preferences save immediately on this device. An empty list invites the member to choose a first language, and a full list explains that one must be removed before another can be added.
+
 ## Personal spaces
+
+A separately runnable frontend in `apps/next-web` presents the same member jobs through a streaming salon and a customizable private museum. The original frontend remains active. Its appearance controls and navigation are documented in [FRONTEND-NEXT.md](./FRONTEND-NEXT.md); the new presentation does not add public or social product scope.
 
 The Profile is the home for private Watchlist, Watch History, and personal taste archives. The owner opens saved titles at `/profile/{username}/watchlist` and completed watches at `/profile/{username}/history`; both retain the profile identity header and tabs. Watch History lets the owner watch again or deliberately log an exact movie or series/anime episode into Diary. The owner’s `/profile/{username}/lists` section contains list creation and private collections. Visitor access is rejected. The old `/watchlist`, `/library`, and `/lists` entry points redirect to the corresponding owner profile sections for existing bookmarks. Individual lists keep their `/lists/{slug}` detail and editing routes.
 

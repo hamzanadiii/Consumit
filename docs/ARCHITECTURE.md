@@ -1,5 +1,7 @@
 # Architecture foundation
 
+The independent frontend in `apps/next-web` uses `packages/next-ui` while preserving `apps/web` and `packages/ui`. Both retain the same first-party contracts and configured playback seams. Its additive Docker service, build-time API rewrite configuration, separate appearance storage, runtime-gated visual fixtures, and production origin constraints are documented in [FRONTEND-NEXT.md](./FRONTEND-NEXT.md).
+
 [ADR 0006](./adr/0006-provider-embed-fallback.md) activates configured provider frames as the final Watch tier after Direct and Relay. SDK and browser contracts distinguish `iframe`/`embed` from media formats and reject delivery mismatches. An independent resolver, cache and circuit scope handles Embed; owned sessions and manual switching retain canonical title/episode identity. No frame enters the native media engine or Worker grant path. Watch and Admin share the bounded sandboxed ProviderFrame surface. Document loading never becomes playback, progress, completion, viewing telemetry or cast evidence. Dual-audio frames expose requested-language guidance inside the external player boundary. Movie/series frames are TMDB keyed and anime frame lookup requires exact AniList identity.
 
 The Watch-page relay HLS engine accepts an internal stable lease getter, separate from the public playback contract. Background same-source renewal updates that getter while retaining the existing engine, controls and buffered movie. The XHR byte loader translates original fragment addresses through the newest bounded, verified VOD playlist graph. Complete non-URI timeline/rendition metadata and cached AES-128 key bytes must agree; incompatible recordings use ordinary recovery. Control reads omit credentials and retain finite size/time/document/reference limits. Capability expiry, provider adapters, progress ownership and the direct-first waterfall remain intact. Native/cast/live delivery retains its prior renewal behavior. [ADR 0005](./adr/0005-direct-first-worker-relay.md) and the [boundary audit](./audits/proxy-gapless-2026-10-03.md) record scope and verification.
@@ -18,7 +20,7 @@ The movie/TV relay integration uses compact opaque grants to reduce Free Worker 
 
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, Letterboxd worker, and direct-first playback foundation exist. The active personal product keeps profiles, lists, and reviews private. Social relationship tables are retained for historical data; their routes and product surfaces are retired.
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, and direct-first playback foundation exist. The active personal product keeps profiles, lists, and reviews private. Social relationship tables are retained for historical data; their routes and product surfaces are retired.
 
 ## System shape
 
@@ -129,7 +131,13 @@ Catalog cache reads use an in-process layer backed by Postgres so validated resu
 
 The web server revalidates public TMDB and AniList metadata GET responses through Next's Data Cache every 300 seconds, including metadata used by request-bound Home and Watch renders. These requests carry only `Accept`, never a member cookie or authorization header; member and playback endpoints remain uncached. This avoids repeated API work without sharing member HTML. Metadata reads have a bounded 12-second web deadline so the API's 10-second AniList request can finish. Public title-page ISR and private request-bound HTML retain their separate policies.
 
-Public GETs under `/v1/titles/` and `/v1/anime/` share a separate 600/minute metadata budget, keyed by session hash when present and client IP otherwise. SSR requests arrive from the web server's shared IP, so metadata fan-out must not consume the general 100/minute member-request bucket. Credential routes retain their tighter limits. Cached catalog results and the adapter's upstream limiter still control upstream work; this read budget is not an upstream quota. Actual API rate-limit responses remain 429 with `RATE_LIMITED` and `Retry-After`.
+Public GETs under `/v1/titles/` and `/v1/anime/` share a separate 600/minute metadata budget, keyed by an authenticated member ID or the normalized client IP (IPv6 /64). An arbitrary, expired, or wrong-environment cookie cannot create a new budget. Authentication reads are shared only within one request and are rechecked on every subsequent request. SSR requests arrive from the web server's shared IP, so metadata fan-out must not consume the general 100/minute member-request bucket. Credential routes retain tighter IP budgets. Production budgets use shared authentication Valkey state, survive API restarts, and fail closed during store outages. Cached catalog results and the adapter's upstream limiter still control upstream work; this read budget is not an upstream quota. Actual API rate-limit responses remain 429 with `RATE_LIMITED` and `Retry-After`.
+
+Subtitle discovery documents use bounded shared contracts. The browser handles fragmented NDJSON and requires a completion event with consistent search identity; malformed, oversized, interrupted, or timed-out streams release their reader and offer retry. Closing discovery cancels provider work. Compressed outbound control responses couple decoder and upstream teardown through a stream pipeline. Member subtitle preferences and API errors use private, no-store responses. Web document headers constrain base URLs, objects, framing, and form targets without forcing nonce-bound rendering on public title ISR; this is a scoped CSP, not a complete script policy.
+
+API readiness checks configured catalog/identity capabilities plus the local Postgres and shared request-limit store when mounted. Dependency probes run in parallel with a two-second bound, share one pending result, and cache it for one second. A local dependency failure returns 503 with safe status names; liveness stays independent. Readiness does not prove third-party catalog, email, or playback provider availability.
+
+Production and development gateways share the API's 1 MiB request-body ceiling through one Nginx policy include. Oversized requests stop before upstream work and return private, no-store JSON with a matching generated request reference. Infrastructure validation checks both configurations inside the built gateway image. Application Docker builds share their manifest-copy stage and install dependencies for their own workspace; the full `source` stage remains for development.
 
 ## Anime domain
 
@@ -175,7 +183,7 @@ The active personal-profile response contract reports `private` visibility. Prof
 
 Owner profile responses retain optional `social` follower/following counts for compatibility with deployed web builds from before the personal-profile consolidation. The API derives those counts from stored relations in the existing profile query; the current frontend does not consume them. This response compatibility does not restore social routes or visitor access. Rebuild the web image after shared contract changes: restarting an existing production container retains its compiled validators.
 
-Letterboxd upload handling is one deep module: ZIP/CSV parsing, resource limits, normalization, provenance, TMDB matching, review state, idempotent confirmation, and imported-data deletion stay behind the importer interface. Uploaded archive bytes are discarded after normalized staging. The worker claims PostgreSQL jobs with `FOR UPDATE SKIP LOCKED`; TMDB remains the title metadata authority and Letterboxd URLs are provenance keys only.
+The former history-import integration is removed: no upload route, parser, importer, or worker exists. Member records keep their `origin`/`sourceKey` provenance columns, so rows written by earlier imports stay readable and editable, and member-data detach rules still clear stale import links when a record is edited.
 
 ## Canonical provider contract
 
@@ -274,8 +282,7 @@ Use single-flight/request coalescing so one resolver refresh serves concurrent m
 
 ## Background work
 
-Keep non-user-blocking work out of HTTP requests. The active Letterboxd worker claims durable
-Postgres jobs directly. A later shared queue may run:
+Keep non-user-blocking work out of HTTP requests. The active product runs no background worker; a later shared queue may run:
 
 - Resolver refresh jobs
 - Metadata synchronization
@@ -440,11 +447,13 @@ This is an interface inventory, not route-level implementation approval. Contrac
 
 ### Stage 1: simple production
 
-Cloudflare fronts one small VPS running the web app, API, resolver, and Letterboxd worker; managed
+Cloudflare fronts one small VPS running the web app, API, and resolver; managed
 Postgres with backups provides durable member/product truth, and dedicated Valkey provides
 authentication state. Bounded process memory covers disposable cache and single-flight. Docker
 provides repeatable operation. Additional worker capacity and shared disposable cache arrive on
 measured need. Named infrastructure vendors remain candidates, not mandatory commitments.
+
+Production database connections require certificate-verified TLS. The application owns TLS mode and its configured CA: the API validates its PostgreSQL URL and removes URL SSL parameters before the pg parser can override pool policy. The production backup selects that same database in a dedicated Restic image with PostgreSQL 18 tools and system certificate authorities, clears development cron/mount inheritance, and runs once under its timer. Its libpq policy is `verify-full` with system roots; weaker URI modes fail closed. See [the backup runbook](./runbooks/storage-box-backups.md) for URI configuration and the required real restore drill. Infrastructure validation evaluates the backup profile and rejects target divergence or inherited runtime behavior without logging connection credentials.
 
 ### Stage 2: measured horizontal growth
 
@@ -513,23 +522,31 @@ Authenticate → rate-limit → validate (Zod, 400 with plain language) → auth
 
 ### Configuration
 
+The first frontend's production entry point is `scripts/production.mjs`.
+It prepares a private `.env.production`, discards inherited development
+integration settings, and combines base, playback and production Compose
+overlays in that order. API/web environment files are replaced rather than
+merged with developer files. Both public origins are `https://consumit.online`.
+Production startup rejects example authentication peppers. Preflight blocks
+missing integrations and database URLs that would weaken verified backup TLS;
+real HTTPS, email, notification and offsite restoration remain launch gates.
+
 Environment is Zod-validated at boot and fails fast in production when `DATABASE_URL`,
 `VALKEY_URL`, `APP_ORIGIN`, `AUTH_CODE_PEPPER`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, or required
 catalog settings are missing. `.env.example` stays current. Browser API traffic is same-origin;
 CORS is disabled and mutations require the exact configured Origin plus valid Fetch Metadata when
 present. Secrets never enter logs, responses, or client bundles. General bodies stay tightly
-bounded while the Letterboxd multipart route permits a 25 MiB archive under parser-level expanded
-size and row limits.
+bounded.
 
 ### Sensitive endpoints
 
-Login, register, verify, reset, and import routes get the strictest rate limits and identical responses for existing and non-existing accounts (no enumeration). Pending email codes live in Valkey with short expiry and bounded attempts. Passwords hash with Argon2id via the Bun runtime.
+Login, register, verify, and reset routes get the strictest rate limits and identical responses for existing and non-existing accounts (no enumeration). Pending email codes live in Valkey with short expiry and bounded attempts. Passwords hash with Argon2id via the Bun runtime.
 
 ### Background work
 
-The Letterboxd import worker is an active separate entry point and claims durable Postgres jobs
-with `FOR UPDATE SKIP LOCKED`, ownership checks, and lease renewal. BullMQ remains deferred until a
-different shared queue need such as resolver warming or telemetry ingestion is measured.
+No background worker runs today; the former import worker was removed with the import
+integration. BullMQ remains deferred until a shared queue need such as resolver warming or
+telemetry ingestion is measured.
 
 ### Still enabled
 

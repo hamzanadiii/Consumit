@@ -44,6 +44,7 @@ import { z } from 'zod'
 import type { ApiEnv } from '../config/env.ts'
 import { ApiError } from '../http/errors.ts'
 import { isAllowedOrigin } from '../http/csrf.ts'
+import { requestMember } from '../http/request-member.ts'
 import type { Identity } from '../identity/identity.ts'
 import { sessionCookieName } from '../identity/session.ts'
 import type { MemberData } from './member-data.ts'
@@ -59,7 +60,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
       if (required) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
       return undefined
     }
-    const member = await deps.identity.getSession(token)
+    const member = await requestMember(request, deps.identity, cookieName)
     if (!member && required) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     return member?.id
   }

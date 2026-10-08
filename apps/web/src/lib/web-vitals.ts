@@ -16,9 +16,9 @@ export function webVitalPageForPath(pathname: string): WebVitalPage {
   }
   if (startsWithRoute(pathname, '/profile')) return 'profile'
   if (startsWithRoute(pathname, '/lists')) return 'member'
-  if (['/library', '/settings', '/admin', '/imports'].some((route) => startsWithRoute(pathname, route))) return 'member'
+  if (['/library', '/settings', '/admin'].some((route) => startsWithRoute(pathname, route))) return 'member'
   if (['/sign-in', '/sign-up', '/verify-email', '/forgot-password', '/reset-password', '/onboarding'].some((route) => startsWithRoute(pathname, route))) return 'auth'
-  if (['/help', '/support', '/report-issue', '/api'].some((route) => startsWithRoute(pathname, route))) return 'support'
+  if (['/help', '/support', '/report-issue', '/api', '/terms', '/privacy', '/dmca', '/about'].some((route) => startsWithRoute(pathname, route))) return 'support'
   // Public profiles use /:username. Emit only the shared group, never that path.
   if (/^\/[^/]+$/.test(pathname) && usernameSchema.safeParse(pathname.slice(1)).success) return 'profile'
   return 'other'

@@ -17,4 +17,11 @@ describe('editorial components', () => {
     ).toBeInTheDocument()
   })
 
+  it('places a heading icon beside the title text', () => {
+    render(<SectionHeading title="Trending Movies" icon={<span data-testid="trending-flame" />} />)
+
+    const heading = screen.getByRole('heading', { level: 2, name: 'Trending Movies' })
+    expect(heading).toBeInTheDocument()
+    expect(heading.querySelector('[data-testid="trending-flame"]')).not.toBeNull()
+  })
 })

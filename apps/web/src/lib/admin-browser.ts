@@ -19,6 +19,8 @@ async function request<T>(path: string, options: RequestInit, schema?: ZodType<T
     response = await fetch(path, {
       ...options,
       credentials: 'same-origin',
+      cache: 'no-store',
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
       headers: { accept: 'application/json', ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers as Record<string, string> },
     })
   } catch (cause) {

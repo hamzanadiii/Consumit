@@ -1,6 +1,6 @@
 'use client'
 
-import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Search, Settings, Shield, Sun } from 'lucide-react'
+import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, Search, Settings, Shield, Sun } from 'lucide-react'
 import Image from 'next/image'
 import * as NextNav from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -42,41 +42,16 @@ export const CONTRACT_HTML =
   'STORY: member scans sidebar, tabs, hero Watch, and catalog details. ' +
   'FINISH: unreviewed and undocumented is unfinished-->'
 
+
 const SIDEBAR_ROW_CLASS =
   'fs-sidebar-item group flex min-h-11 shrink-0 cursor-pointer items-center gap-3 rounded-control px-3 text-sm whitespace-nowrap text-[var(--fs-secondary)] outline-none transition-all duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
 
 const SIDEBAR_ICON_CLASS =
   'grid place-items-center text-[var(--fs-muted)] transition-all duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none motion-reduce:transform-none'
 
-/** A per-tab guest character: one random letter, stable for the browser
- *  session via sessionStorage. Rendered as 'G' on the server and first paint
- *  so hydration never mismatches, then upgraded after mount. */
-const GUEST_CHARACTER_KEY = 'consumit.guest-character'
-function useGuestCharacter(): string {
-  const [character, setCharacter] = useState('G')
-  useEffect(() => {
-    let next: string
-    try {
-      const stored = window.sessionStorage.getItem(GUEST_CHARACTER_KEY)
-      if (stored && /^[A-Z]$/.test(stored)) {
-        next = stored
-      } else {
-        next = String.fromCharCode(65 + Math.floor(Math.random() * 26))
-        try {
-          window.sessionStorage.setItem(GUEST_CHARACTER_KEY, next)
-        } catch {
-          // Storage is optional; the letter still lasts for this mount.
-        }
-      }
-    } catch {
-      // Private browsing may block storage; fall through to a fresh pick.
-      next = String.fromCharCode(65 + Math.floor(Math.random() * 26))
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only sessionStorage sync; server render stays 'G' so hydration matches
-    setCharacter(next)
-  }, [])
-  return character
-}
+/** The single default guest character every visitor shares. One stable
+ *  letter for all guests: no storage, no hydration mismatch, no surprises. */
+const GUEST_CHARACTER = 'G'
 
 const MEMBER_ARCHIVES = [
   { section: 'watchlist', label: 'Watchlist', icon: Bookmark },
@@ -166,7 +141,6 @@ export function FilScreenShell({
   const showSidebarRef = useRef<HTMLButtonElement>(null)
   const searchTriggerRef = useRef<HTMLButtonElement>(null)
   const avatarSrc = member ? memberAvatarSrc(member.avatarUrl, member.id) : null
-  const guestCharacter = useGuestCharacter()
 
   function toggleSidebar() {
     const willCollapse = sidebarOpen
@@ -247,12 +221,8 @@ export function FilScreenShell({
               onClick={toggleSidebar}
               type="button"
             >
-              <span className="grid place-items-center transition-transform duration-300 ease-out group-active:scale-90 motion-reduce:transition-none" key={sidebarOpen ? 'open' : 'closed'}>
-                {sidebarOpen ? (
-                  <PanelLeftClose aria-hidden="true" className="size-[18px]" />
-                ) : (
-                  <PanelLeftOpen aria-hidden="true" className="size-[18px]" />
-                )}
+              <span className="grid place-items-center transition-transform duration-300 ease-out group-active:scale-90 motion-reduce:transition-none">
+                <Image alt="" className="size-[18px]" height={18} src="/assets/consumit-mark.svg" width={18} />
               </span>
             </button>
           </div>
@@ -311,7 +281,7 @@ export function FilScreenShell({
                   onClick={toggleSidebar}
                   type="button"
                 >
-                  <PanelLeftOpen aria-hidden="true" className="size-[18px]" />
+                  <Image alt="" className="size-[18px]" height={18} src="/assets/consumit-mark.svg" width={18} />
                 </button>
               ) : null}
               <nav aria-label="Catalog kinds" className="order-2 flex min-w-0 basis-full gap-2 overflow-x-auto border-b border-[var(--fs-line)] pb-2 sm:order-none sm:flex-1 sm:basis-auto sm:border-0 sm:pb-1" data-scrollrow>
@@ -379,7 +349,7 @@ export function FilScreenShell({
                 </Link>
               ) : (
                 <Link aria-label="Guest profile" title="Guest profile" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/library?section=profile">
-                  <Avatar className="size-11" name={guestCharacter} size="md" treatment="noir" />
+                  <Avatar className="size-11" name={GUEST_CHARACTER} size="md" treatment="noir" />
                 </Link>
               )}
             </div>

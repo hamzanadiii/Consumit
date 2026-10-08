@@ -2,7 +2,6 @@ import 'server-only'
 
 import {
   animeAiringScheduleSchema,
-  animeBatchSchema,
   animeFranchiseSchema,
   animeMatchSchema,
   animePageSchema,
@@ -10,7 +9,6 @@ import {
   animeTitleDetailSchema,
   apiErrorResponseSchema,
   type AnimeBrowseQuery,
-  type AnimeSeason,
 } from '@consumit/contracts'
 import { connection } from 'next/server'
 import { cache } from 'react'
@@ -84,10 +82,6 @@ export function getAnimeTrending(page = 1) {
   return request(`/v1/anime/trending?page=${page}`, animePageSchema)
 }
 
-export function getAnimeSeasonal(season: AnimeSeason, year: number, page = 1) {
-  return request(`/v1/anime/seasonal/${season}/${year}?page=${page}`, animePageSchema)
-}
-
 /** Server-driven anime discovery for the browse grid. */
 export function getAnimeBrowse(query: AnimeBrowseQuery) {
   const params = new URLSearchParams({ sort: query.sort, page: String(query.page) })
@@ -106,16 +100,8 @@ export const getCachedAnimeTitle = cache((anilistId: number) => (
   request(`/v1/anime/${anilistId}`, animeTitleDetailSchema, 'cached-public')
 ))
 
-export const getAnimeRelations = cache((anilistId: number) => (
-  request(`/v1/anime/${anilistId}/relations`, animeFranchiseSchema)
-))
-
 export const getCachedAnimeRelations = cache((anilistId: number) => (
   request(`/v1/anime/${anilistId}/relations`, animeFranchiseSchema, 'cached-public')
-))
-
-export const getAnimeAiring = cache((anilistId: number) => (
-  request(`/v1/anime/${anilistId}/airing`, animeAiringScheduleSchema)
 ))
 
 export const getCachedAnimeAiring = cache((anilistId: number) => (
@@ -125,10 +111,6 @@ export const getCachedAnimeAiring = cache((anilistId: number) => (
 export function searchAnime(query: string, page = 1) {
   const params = new URLSearchParams({ q: query.trim().slice(0, 100), page: String(page) })
   return request(`/v1/anime/search?${params}`, animeSearchResultSchema)
-}
-
-export function getAnimeBatch(ids: number[]) {
-  return request(`/v1/anime/batch?ids=${ids.join(',')}`, animeBatchSchema)
 }
 
 /** Confident AniList match for a TMDB title, or null when nothing matches.
@@ -148,10 +130,6 @@ async function matchAnimeTitle(
   } catch {
     return null
   }
-}
-
-export function getAnimeMatch(title: string, originalTitle: string | null, year: number | null) {
-  return matchAnimeTitle(title, originalTitle, year, 'request')
 }
 
 export function getCachedAnimeMatch(title: string, originalTitle: string | null, year: number | null) {

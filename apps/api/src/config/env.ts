@@ -77,6 +77,14 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  const appUrl = new URL(value.APP_ORIGIN)
+  if (!['http:', 'https:'].includes(appUrl.protocol) || appUrl.username || appUrl.password
+      || appUrl.pathname !== '/' || appUrl.search || appUrl.hash) {
+    throw new Error('Invalid API configuration: APP_ORIGIN must be an exact HTTP(S) origin without credentials, a path, query or fragment.')
+  }
+  if (value.NODE_ENV === 'production' && appUrl.protocol !== 'https:') {
+    throw new Error('Invalid API configuration: APP_ORIGIN requires HTTPS in production.')
+  }
   let relay: PlaybackRelayConfig | undefined
   if (value.PLAYBACK_RELAY_ENABLED === 'true') {
     if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RELAY_ORIGIN || !value.PLAYBACK_RELAY_SECRET || !value.PLAYBACK_RELAY_PROVIDERS) throw new Error('Relay requires playback, an origin, a secret, and approved providers.')
@@ -97,6 +105,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
   }
   if (value.NODE_ENV === 'production') {
+    if (/^(?:replace[-_]|consumit-local|missing[-_])/i.test(value.AUTH_CODE_PEPPER ?? '')) {
+      throw new Error('Invalid API configuration: AUTH_CODE_PEPPER must be a new production secret, not an example value.')
+    }
     const required = {
       AUTH_CODE_PEPPER: value.AUTH_CODE_PEPPER,
       AUTH_EMAIL_FROM: value.AUTH_EMAIL_FROM,
@@ -116,7 +127,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       ...(relay ? { relay } : {}),
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
     adminMetricsUrl: value.ADMIN_METRICS_URL,
-    appOrigin: value.APP_ORIGIN.replace(/\/$/, ''),
+    appOrigin: appUrl.origin,
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,
     databaseSslCa: value.DATABASE_SSL_CA?.replaceAll('\\n', '\n'),

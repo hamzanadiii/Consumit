@@ -1,0 +1,81 @@
+@import 'tailwindcss';
+@import '@consumit/next-ui/styles.css';
+@import './museum.css';
+@import './next.css';
+@source '../../../../packages/next-ui/src';
+
+/* Embeds size controls against the iframe itself, not the host page viewport. */
+[data-consumit-embed-player] {
+  container: consumit-embed / inline-size;
+}
+
+@container consumit-embed (max-width: 420px) {
+  [data-consumit-player] button[aria-label="Back 10 seconds"],
+  [data-consumit-player] button[aria-label="Forward 10 seconds"],
+  [data-consumit-player] button[aria-label^="Change quality"],
+  [data-consumit-player] button[aria-label^="Enter picture in picture"],
+  [data-consumit-player] input[aria-label="Volume"] {
+    display: none;
+  }
+
+  [data-consumit-player] [role="menu"] {
+    width: 100%;
+    max-width: 100%;
+    left: 0;
+    right: 0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--consumit-canvas);
+  /* Dense interface root: every rem-derived size renders at 87.5%, which
+     pairs with the retuned px shell tokens to land the approved ~80% feel. */
+  font-size: 14px;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgb(255 93 56 / 3%), transparent 28rem),
+    var(--consumit-canvas);
+  color: var(--consumit-ink);
+  font-family: var(--consumit-font-interface);
+  caret-color: var(--consumit-orange);
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--consumit-orange);
+  color: var(--consumit-canvas);
+}
+
+* {
+  scrollbar-color: var(--consumit-faint) var(--consumit-canvas);
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--consumit-canvas);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid var(--consumit-canvas);
+  border-radius: 999px;
+  background: var(--consumit-faint);
+}

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import type { SubtitleCandidate, SubtitleProviderStatus, SubtitleDiscoveryEvent } from '@consumit/contracts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { SubtitleCatalog } from './catalog.ts'
 import { toServedTracks } from './catalog.ts'
@@ -13,27 +14,11 @@ const TTL = 3600
 const PROVIDER_TIMEOUT_MS = 8500
 const PAGE_SIZE = 20
 
-export type DiscoveryTrack = {
-  id: string
-  language: string
-  label: string
-  provider: string
-  release?: string
-  hi?: boolean
-  forced?: boolean
-  sdh?: boolean
-  machineTranslated?: boolean
-  preparedUrl?: string
-}
+export type DiscoveryTrack = SubtitleCandidate
 type Candidate = { public: DiscoveryTrack; raw?: RawSubtitle; prepared?: ServedSubtitle }
 type Snapshot = { id: string; ref: SubtitleRef; candidates: Candidate[]; version?: number }
-export type ProviderOutcome = { id: string; name: string; state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; reason?: 'credentials_required' | 'unsupported'; failure?: 'search' | 'parse' | 'download' | 'conversion' }
-export type DiscoveryEvent = {
-  type: 'snapshot' | 'provider' | 'complete'
-  searchId: string
-  languages: { code: string; count: number }[]
-  provider?: ProviderOutcome
-}
+export type ProviderOutcome = SubtitleProviderStatus
+export type DiscoveryEvent = SubtitleDiscoveryEvent
 
 function publicTrack(raw: RawSubtitle, id: string): DiscoveryTrack {
   const flags = detectTrackFlags(`${raw.label} ${raw.url}`)

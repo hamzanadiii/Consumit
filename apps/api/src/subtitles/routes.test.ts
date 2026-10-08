@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createMemoryPlaybackStore } from '../playback/state.ts'
+import { createSubtitleDiscovery } from './discovery.ts'
+import { createStoreFileStore } from './storage.ts'
 
 import { buildApp } from '../app.ts'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
@@ -15,6 +18,28 @@ async function loginAs(identity: ReturnType<typeof createFakeIdentity>, email: s
 }
 
 describe('subtitle routes', () => {
+  it('cancels provider work when the browser disconnects from discovery', async () => {
+    const store = createMemoryPlaybackStore()
+    const discovery = createSubtitleDiscovery({ providers: [], store, files: createStoreFileStore(store), origin: 'https://consumit.example', query: async () => ({ type: 'movie', tmdbId: 550 }) })
+    const cancelled = vi.fn()
+    vi.spyOn(discovery, 'discover').mockImplementation(async function* (_ref, signal) {
+      yield { type: 'snapshot', searchId: '7cd198d8-5eab-4a80-b4e1-73b435fcd520', languages: [] }
+      await new Promise<void>((resolve) => {
+        const abort = () => { cancelled(); resolve() }
+        if (signal.aborted) abort()
+        else signal.addEventListener('abort', abort, { once: true })
+      })
+    })
+    const app = await buildApp({ subtitles: { ...createFakeSubtitleService(), discovery } })
+    try {
+      const origin = await app.listen({ host: '127.0.0.1', port: 0 })
+      const response = await fetch(`${origin}/v1/subtitles/discover?kind=movie&id=550`)
+      const reader = response.body!.getReader()
+      expect((await reader.read()).value).toBeDefined()
+      await reader.cancel()
+      await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce())
+    } finally { await app.close() }
+  })
   it('aggregates tracks for a title independently of streaming providers', async () => {
     const app = await buildApp({ subtitles: createFakeSubtitleService() })
     try {
@@ -89,9 +114,11 @@ describe('subtitle routes', () => {
       const headers = { origin: 'http://localhost:3000' }
       const empty = await app.inject({ method: 'GET', url: '/v1/subtitles/preferences?kind=movie&id=550', cookies })
       expect(empty.statusCode).toBe(200)
+      expect(empty.headers['cache-control']).toBe('private, no-store')
       expect(empty.json()).toEqual({ preference: { ref: { kind: 'movie', id: 550 }, trackId: null, offsetMs: 0 } })
       const saved = await app.inject({ method: 'PUT', url: '/v1/subtitles/preferences', cookies, headers, payload: { ref: { kind: 'movie', id: 550 }, trackId: 'sub-yify-test', offsetMs: 1500 } })
       expect(saved.statusCode).toBe(200)
+      expect(saved.headers['cache-control']).toBe('private, no-store')
       expect(saved.json()).toEqual({ preference: { ref: { kind: 'movie', id: 550 }, trackId: 'sub-yify-test', offsetMs: 1500 } })
       const recalled = await app.inject({ method: 'GET', url: '/v1/subtitles/preferences?kind=series&id=1396&season=1&episode=1', cookies })
       expect(recalled.json()).toEqual({ preference: { ref: { kind: 'series', id: 1396, season: 1, episode: 1 }, trackId: null, offsetMs: 0 } })

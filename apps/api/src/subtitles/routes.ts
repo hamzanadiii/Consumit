@@ -7,6 +7,7 @@ import { Readable } from 'node:stream'
 import type { ApiEnv } from '../config/env.ts'
 import { ApiError } from '../http/errors.ts'
 import { isAllowedOrigin } from '../http/csrf.ts'
+import { requestMember } from '../http/request-member.ts'
 import type { Identity } from '../identity/identity.ts'
 import { sessionCookieName } from '../identity/session.ts'
 import type { SubtitlePreferences } from './preferences.ts'
@@ -83,7 +84,7 @@ export function registerSubtitleRoutes(
     if (!preferenceDeps) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle preferences are unavailable on this server.', { retryable: true })
     const token = request.cookies?.[sessionCookieName(preferenceDeps.env)]
     if (!token) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
-    const member = await preferenceDeps.identity.getSession(token)
+    const member = await requestMember(request, preferenceDeps.identity, sessionCookieName(preferenceDeps.env))
     if (!member) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     return member.id
   }
@@ -135,12 +136,19 @@ export function registerSubtitleRoutes(
     const { kind, id, season, episode } = parsed.data
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 13_000)
+    // Stop provider work immediately when the browser closes discovery.
+    const cancel = () => controller.abort()
+    reply.raw.once('close', cancel)
     const stream = Readable.from((async function* () {
       try {
         for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal)) {
           yield `${JSON.stringify(event)}\n`
         }
-      } finally { clearTimeout(timer) }
+      } finally {
+        clearTimeout(timer)
+        reply.raw.off('close', cancel)
+        controller.abort()
+      }
     })())
     reply.header('cache-control', 'no-store')
     reply.header('x-accel-buffering', 'no')
@@ -210,7 +218,8 @@ export function registerSubtitleRoutes(
   // Per-member sync correction for one title/episode. Session-authenticated;
   // one row per member/content. Crowdsourced correction reads this table
   // later without ever rewriting shared files.
-  app.get('/v1/subtitles/preferences', async (request) => {
+  app.get('/v1/subtitles/preferences', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store')
     const memberId = await viewer(request)
     const query = preferenceRefQuerySchema.safeParse(request.query)
     if (!query.success) return invalidQuery('Use a title kind, a positive numeric id, and a valid season/episode.')
@@ -221,7 +230,8 @@ export function registerSubtitleRoutes(
     })
   })
 
-  app.put('/v1/subtitles/preferences', async (request) => {
+  app.put('/v1/subtitles/preferences', async (request, reply) => {
+    reply.header('cache-control', 'private, no-store')
     guardMutation(request)
     const memberId = await viewer(request)
     const parsed = subtitlePreferenceSchema.safeParse(request.body)

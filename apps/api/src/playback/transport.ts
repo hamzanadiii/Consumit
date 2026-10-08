@@ -2,7 +2,7 @@ import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import { request } from 'node:https'
 import { BlockList, isIP } from 'node:net'
-import type { Readable } from 'node:stream'
+import { pipeline, type Readable } from 'node:stream'
 import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 
@@ -97,8 +97,11 @@ export function createMediaTransport(): MediaTransport {
               reject(new Error('Unsupported provider document encoding.'))
               return
             }
-            decoder.on('error', () => res.destroy())
-            body = res.pipe(decoder)
+            // A consumer may stop after a bounded prefix or hit its body cap.
+            // pipeline closes the upstream socket too and propagates truncated
+            // or errored input to the decoded readable.
+            body = decoder
+            pipeline(res, decoder, () => { /* The body consumer observes stream errors. */ })
             resultHeaders.delete('content-encoding')
             resultHeaders.delete('content-length')
           }

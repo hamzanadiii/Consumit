@@ -6,9 +6,9 @@ import { getCatalogBatch, refsKey } from '@/lib/catalog-api'
 import { editorialRefs } from '@/lib/catalog-registry'
 
 export const metadata: Metadata = {
-  description: 'Bring your existing watch history into your Consumit library.',
+  description: 'Set up your Consumit library and start a watch history.',
   robots: { follow: false, index: false },
-  title: 'Bring Your History | Consumit',
+  title: 'Start Your History | Consumit',
 }
 
 export default async function OnboardingHistoryPage() {

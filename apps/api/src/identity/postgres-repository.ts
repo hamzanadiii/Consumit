@@ -88,7 +88,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       }
     },
     async exportMember(memberId, exportedAt) {
-      const [row, watched, diary, saved, favorites, lists, ratings, reviews, imports, watchHistory] = await Promise.all([
+      const [row, watched, diary, saved, favorites, lists, ratings, reviews, watchHistory] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
         prisma.watchedTitle.findMany({ where: { memberId } }),
         prisma.diaryEntry.findMany({ orderBy: { watchedOn: 'desc' }, where: { memberId } }),
@@ -97,22 +97,12 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         prisma.memberList.findMany({ include: { _count: { select: { items: true } } }, where: { memberId } }),
         prisma.rating.findMany({ where: { memberId } }),
         prisma.review.findMany({ orderBy: { reviewedOn: 'desc' }, where: { memberId } }),
-        prisma.importBatch.findMany({ orderBy: { createdAt: 'desc' }, where: { memberId } }),
         prisma.watchHistoryEntry.findMany({ orderBy: [{ completedAt: 'desc' }, { id: 'desc' }], where: { memberId } }),
       ])
       if (!row) return null
       const member = toRecord(row)
       return {
         exportedAt: exportedAt.toISOString(),
-        imports: imports.map((item) => ({
-          confirmedAt: item.confirmedAt?.toISOString() ?? null,
-          createdAt: item.createdAt.toISOString(),
-          failedReason: item.failedReason,
-          id: item.id,
-          progress: { confident: item.confidentCount, exact: item.exactCount, needsReview: item.reviewCount, skipped: item.skippedCount, total: item.totalCount, unmatched: item.unmatchedCount },
-          status: item.status.toLowerCase() as 'uploaded' | 'processing' | 'needs_review' | 'ready' | 'confirmed' | 'failed',
-          updatedAt: item.updatedAt.toISOString(),
-        })),
         library: {
           diary: diary.map((item) => ({ ...(item.episode > 0 ? { ...(item.catalogKind === 'SERIES' || item.season > 0 ? { season: item.season } : {}), episode: item.episode } : {}), entryId: item.id, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: calendarDay(item.watchedOn) })),
           favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), position: index + 1, sourceKey: item.sourceKey })),

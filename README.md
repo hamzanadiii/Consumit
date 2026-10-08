@@ -8,6 +8,8 @@ The project includes the shared interface system, core product screens, TMDB and
 
 ## Local development
 
+The independent second frontend runs on port 3080 with `bun run dev:next` or `bun run docker:next`. The original frontend remains available. See [the new frontend guide](./apps/next-web/README.md) and [its experience and delivery note](./docs/FRONTEND-NEXT.md).
+
 Use Bun 1.4.0 and Node 24 LTS (pinned in `.node-version`). The default loop is hybrid: data stores in Docker, app natively on the host for instant reload with no file-sync step and no restart.
 
 ```powershell
@@ -58,13 +60,28 @@ Build individual Consumit images with `docker build --target api`, `--target web
 
 ### Live updates in Docker
 
-Production images bake the source in at build time, so edits stay invisible until the next `docker compose up --build`. For development, run the dev overlay instead: it builds the `api`, `web`, and `letterboxd-worker` services from source and runs their watch-mode dev servers, syncing every saved change into the running containers (bind mounts alone are not used because Windows mounts do not reliably emit the file events the dev servers watch for). Edits reach `http://localhost:8080` within seconds, including Next.js hot updates through the gateway. Postgres, Valkey, migrations, and the gateway stay exactly as in production:
+Production images bake the source in at build time, so edits stay invisible until the next `docker compose up --build`. For development, run the dev overlay instead: it builds the `api` and `web` services from source and runs their watch-mode dev servers, syncing every saved change into the running containers (bind mounts alone are not used because Windows mounts do not reliably emit the file events the dev servers watch for). Edits reach `http://localhost:8080` within seconds, including Next.js hot updates through the gateway. Postgres, Valkey, migrations, and the gateway stay exactly as in production:
 
 ```powershell
 bun run docker:dev:watch
 ```
 
 Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and production stacks share the same Postgres and Valkey volumes, so run only one at a time. Return to production-like images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart. For the containerized stack with playback enabled (same watch behavior, API served through the gateway), use `bun run docker:dev:playback` and open `http://localhost:8080` — without the playback file the API boots with zero providers and every `/v1/playback/resolve` returns 503.
+
+## First frontend production release
+
+The production target is `apps/web` at `https://consumit.online`. Run
+`bun run production:prepare` to create ignored production configuration and
+fresh secrets, then fill the real service settings privately. Run
+`bun run production:check`, `bun run production:build`, and
+`bun run production:up` on the provisioned VPS. The production wrapper isolates
+developer configuration and includes playback and monitoring. Node 24 can run
+the same commands directly through `scripts/production.mjs` without Bun.
+
+Before member traffic, verify `bun run production:smoke`, real email, HTTPS
+playback, alert delivery, and an offsite restore. See the
+[production runbook](./docs/runbooks/cloudflare-production.md) and
+[readiness audit](./docs/audits/deployment-readiness-2026-10-08.md).
 
 ## Project guide
 

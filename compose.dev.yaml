@@ -2,9 +2,9 @@
 #
 # The base compose.yaml bakes source code into production images, so edits are
 # invisible until the next rebuild. This overlay instead builds the api, web,
-# and worker services from the `source` stage (repository + Linux dependencies)
+# and web services from the `source` stage (repository + Linux dependencies)
 # and runs their watch-mode dev servers. File changes are pushed into the
-# running containers with `develop.watch` sync — plain bind mounts are
+# running containers with `develop.watch` sync â€” plain bind mounts are
 # deliberately not used because Windows bind mounts do not reliably emit the
 # file events the dev servers watch for. Every saved change reaches
 # http://localhost:8080 within seconds. Postgres, Valkey, and the migrate job
@@ -88,69 +88,6 @@ services:
       # Writable so admin provider overrides persist to
       # providers.local.overrides.json and survive API restarts.
       - ./infra/playback:/app/infra/playback
-    develop:
-      watch:
-        - path: ./apps/api
-          target: /app/apps/api
-          action: sync
-          ignore:
-            - node_modules/
-            - generated/
-        - path: ./packages/contracts
-          target: /app/packages/contracts
-          action: sync
-          ignore:
-            - node_modules/
-        - path: ./packages/provider-sdk
-          target: /app/packages/provider-sdk
-          action: sync
-          ignore:
-            - node_modules/
-        - path: ./packages/media-relay
-          target: /app/packages/media-relay
-          action: sync
-          ignore:
-            - node_modules/
-        - path: ./package.json
-          action: rebuild
-        - path: ./bun.lock
-          action: rebuild
-        - path: ./apps/api/package.json
-          action: rebuild
-        - path: ./packages/contracts/package.json
-          action: rebuild
-        - path: ./Dockerfile
-          action: rebuild
-        - path: ./infra/docker/dev-entrypoint.sh
-          action: rebuild
-
-  letterboxd-worker:
-    build:
-      context: .
-      target: source
-    image: consumit-dev-source
-    working_dir: /app/apps/api
-    entrypoint: ["/bin/sh", "/app/infra/docker/dev-entrypoint.sh"]
-    # Absolute script path: the entrypoint runs from /app, so a relative
-    # path would resolve against the wrong directory.
-    command: ["bun", "--watch", "/app/apps/api/src/import-worker.ts"]
-    environment:
-      GENERATE_PRISMA: "1"
-      DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
-      DATABASE_SSL_MODE: disable
-    volumes:
-      - ./apps/api:/app/apps/api
-      - /app/apps/api/node_modules
-      - /app/apps/api/generated
-      - ./packages/contracts:/app/packages/contracts
-      - /app/packages/contracts/node_modules
-      # The API workspace (and its import worker) resolves provider-sdk and
-      # media-relay at install and import time; without these mounts a stale
-      # baked-in copy (or a missing workspace) breaks the dev server.
-      - ./packages/provider-sdk:/app/packages/provider-sdk
-      - /app/packages/provider-sdk/node_modules
-      - ./packages/media-relay:/app/packages/media-relay
-      - /app/packages/media-relay/node_modules
     develop:
       watch:
         - path: ./apps/api

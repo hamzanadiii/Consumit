@@ -1,0 +1,26 @@
+.slot {
+  width: 100%;
+  min-width: 0;
+}
+
+.label {
+  margin-bottom: 8px;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.stage {
+  margin-inline: auto;
+  overflow: hidden;
+  background: var(--fs-field);
+  border-radius: 8px;
+}
+
+.stage[data-ad-state='pending'] iframe { visibility: hidden; }
+
+.stage iframe {
+  display: block;
+  border: 0;
+}

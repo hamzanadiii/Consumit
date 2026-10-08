@@ -5,6 +5,7 @@ import { playbackRefSchema, providerRoleSchema, providerDeliveryModeSchema, type
 import type { ApiEnv } from '../config/env.ts'
 import { isAllowedOrigin } from '../http/csrf.ts'
 import { ApiError } from '../http/errors.ts'
+import { requestMember } from '../http/request-member.ts'
 import type { Identity } from '../identity/identity.ts'
 import type { IdentityRepository } from '../identity/repository.ts'
 import { sessionCookieName } from '../identity/session.ts'
@@ -59,7 +60,7 @@ export function registerAdminRoutes(
     if (typeof token !== 'string' || token.length === 0) {
       throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     }
-    const member = await identity.getSession(token)
+    const member = await requestMember(request, identity, cookieName)
     if (!member) throw new ApiError('UNAUTHENTICATED', 'Sign in to continue.')
     if (member.role !== 'admin') throw new ApiError('FORBIDDEN', 'Admin access required.')
     return member

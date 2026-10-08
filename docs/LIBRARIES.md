@@ -8,8 +8,9 @@
 
 ## Web application
 
-- Next.js 16.3.6 with the App Router and React 19.2.8. The lockfile contains compatible security updates; Next's lint configuration stays on the same 16.3 line.
+- Next.js 16.3.8 with the App Router and React 19.2.8. The framework and its lint configuration share the patched 16.3 line.
 - Tailwind CSS 4.3.3 for token-driven utility styling.
+- Web declares TypeScript, Node types, and Vitest directly so its isolated Docker dependency install contains the build and type-check tooling; root tooling versions remain aligned.
 - Lucide React 1.39.0 for consistent, typed, tree-shakable interface icons.
 - Self-hosted Charter and DejaVu Sans webfonts preserve the design typography without depending on client machines or a remote font service.
 
@@ -20,11 +21,11 @@
 - Playwright with branded Chrome verifies controlled H.264/AAC decoding and touch layouts. k6 supplies a local admission/load scenario. Physical Safari remains a separate release gate; see [PLAYBACK.md](./PLAYBACK.md).
 
 - Fastify 5.12.5 on Bun.
-- `@fastify/cookie`, `@fastify/helmet`, `@fastify/multipart`, and `@fastify/rate-limit` establish the same-origin HTTP boundary baseline.
+- `@fastify/cookie`, `@fastify/helmet`, and `@fastify/rate-limit` establish the same-origin HTTP boundary baseline.
 - API modules expose an app factory so tests do not need to bind a network port.
 - Native `fetch` is the TMDB transport. No provider wrapper is used, keeping retry, timeout, validation, and normalization policy inside the catalog adapter.
 - Prisma with its PostgreSQL adapter and `pg` owns durable records through one bounded process pool. `iovalkey` provides separate authentication and disposable playback state. Authentication is application-owned; `hash-wasm` supplies password hashing and native HTTP supplies the email transport.
-- `csv-parse` 7.0.3 and `yauzl` support bounded Letterboxd import processing. The worker consumes durable Postgres jobs; a separate queue framework is not installed.
+- A separate queue framework is not installed; the active product runs no background worker.
 
 ## Catalog contracts
 
@@ -35,7 +36,7 @@
 
 - `class-variance-authority` defines typed visual variants.
 - `clsx` and `tailwind-merge` combine caller classes without conflicting utilities.
-- Radix Dialog 1.1.23 provides focus management, Escape dismissal, focus restoration, and modal semantics for the global navigation's mobile panel. Other Radix primitives remain deferred until a named component needs them.
+- Navigation and player panels use the shipped Consumit controls. Unused Radix Dialog and Dropdown Menu dependencies are removed; introduce a primitive only when a named component consumes it.
 
 ## Quality
 

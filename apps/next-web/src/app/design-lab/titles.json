@@ -1,0 +1,90 @@
+{
+  "items": [
+    {
+      "id": 693134,
+      "kind": "movie",
+      "backdropUrl": "https://image.tmdb.org/t/p/w1280/eZ239CUp1d6OryZEBPnO2n87gMG.jpg",
+      "genreNames": [
+        "Science Fiction",
+        "Adventure"
+      ],
+      "logoUrl": "https://image.tmdb.org/t/p/w500/eYvF1LhPKuoBxOAmWjFTAK7EPWl.png",
+      "originalTitle": "Dune: Part Two",
+      "overview": "Follow the mythic journey of Paul Atreides as he unites with Chani and the Fremen while on a path of revenge against the conspirators who destroyed his family. Facing a choice between the love of his life and the fate of the known universe, Paul endeavors to prevent a terrible future only he can foresee.",
+      "popularity": 60.6114,
+      "posterUrl": "https://image.tmdb.org/t/p/w500/6izwz7rsy95ARzTR3poZ8H6c5pp.jpg",
+      "releaseDate": "2024-02-27",
+      "title": "Dune: Part Two",
+      "tmdbRating": 8.1,
+      "tmdbVoteCount": 8691,
+      "year": 2024
+    },
+    {
+      "id": 550,
+      "kind": "movie",
+      "backdropUrl": "https://image.tmdb.org/t/p/w1280/c6OLXfKAk5BKeR6broC8pYiCquX.jpg",
+      "genreNames": [
+        "Drama",
+        "Thriller"
+      ],
+      "logoUrl": "https://image.tmdb.org/t/p/w500/7Uqhv24pGJs4Ns31NoOPWFJGWNG.png",
+      "originalTitle": "Fight Club",
+      "overview": "A ticking-time-bomb insomniac and a slippery soap salesman channel primal male aggression into a shocking new form of therapy. Their concept catches on, with underground \"fight clubs\" forming in every town, until an eccentric gets in the way and ignites an out-of-control spiral toward oblivion.",
+      "popularity": 42.8339,
+      "posterUrl": "https://image.tmdb.org/t/p/w500/jSziioSwPVrOy9Yow3XhWIBDjq1.jpg",
+      "releaseDate": "1999-10-15",
+      "title": "Fight Club",
+      "tmdbRating": 8.4,
+      "tmdbVoteCount": 32982,
+      "year": 1999
+    },
+    {
+      "id": 129,
+      "kind": "movie",
+      "backdropUrl": "https://image.tmdb.org/t/p/w1280/dyJvKsNs2KP8qQnAXbRwDjblViy.jpg",
+      "genreNames": [
+        "Animation",
+        "Family",
+        "Fantasy"
+      ],
+      "logoUrl": "https://image.tmdb.org/t/p/w500/hkUi1Z15Ymj9GNamWQkzUhehLuy.png",
+      "originalTitle": "千と千尋の神隠し",
+      "overview": "A young girl, Chihiro, becomes trapped in a strange new world of spirits. When her parents undergo a mysterious transformation, she must call upon the courage she never knew she had to free her family.",
+      "popularity": 39.9545,
+      "posterUrl": "https://image.tmdb.org/t/p/w500/jUo8cNmU400WtZiJss45HNXlQ2e.jpg",
+      "releaseDate": "2001-07-20",
+      "title": "Spirited Away",
+      "tmdbRating": 8.5,
+      "tmdbVoteCount": 19004,
+      "year": 2001
+    },
+    {
+      "id": 157336,
+      "kind": "movie",
+      "backdropUrl": "https://image.tmdb.org/t/p/w1280/8sNiAPPYU14PUepFNeSNGUTiHW.jpg",
+      "genreNames": [
+        "Adventure",
+        "Drama",
+        "Science Fiction"
+      ],
+      "logoUrl": "https://image.tmdb.org/t/p/w500/4Hu4w5p0mwL2Wvyk3gqu2JRDGHl.png",
+      "originalTitle": "Interstellar",
+      "overview": "The adventures of a group of explorers who make use of a newly discovered wormhole to surpass the limitations on human space travel and conquer the vast distances involved in an interstellar voyage.",
+      "popularity": 67.2942,
+      "posterUrl": "https://image.tmdb.org/t/p/w500/yQvGrMoipbRoddT0ZR8tPoR7NfX.jpg",
+      "releaseDate": "2014-11-04",
+      "title": "Interstellar",
+      "tmdbRating": 8.49,
+      "tmdbVoteCount": 41404,
+      "year": 2014
+    }
+  ],
+  "meta": {
+    "fetchedAt": "2026-10-07T22:59:19.053Z",
+    "language": "en-US",
+    "region": "US",
+    "source": "tmdb",
+    "stale": false
+  },
+  "missing": []
+}

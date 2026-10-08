@@ -1,0 +1,69 @@
+/* Desktop refinement of the shipped FilScreen hero. Mobile keeps its existing rules. */
+@media (min-width: 1024px) {
+  .frame {
+    background: #121216;
+    height: 100%;
+  }
+
+  .shade {
+    background: linear-gradient(
+      90deg,
+      rgb(0 0 0 / 92%) 0%,
+      rgb(0 0 0 / 78%) 28%,
+      rgb(0 0 0 / 35%) 55%,
+      rgb(0 0 0 / 4%) 100%
+    );
+  }
+
+  .copy {
+    min-height: clamp(392px, 68svh, 588px);
+    max-width: min(720px, calc(100% - 104px));
+    padding: clamp(32px, 3.5vw, 56px);
+    gap: 14px;
+  }
+
+  .tagline {
+    max-width: 36ch;
+    font-size: clamp(24px, 1.8vw, 32px);
+    line-height: 1.3;
+  }
+
+  .overview {
+    max-width: 56ch;
+    color: rgb(255 255 255 / 84%);
+    line-height: 1.75;
+  }
+
+  .actions {
+    margin-top: 10px;
+    gap: 12px;
+  }
+
+  .selector {
+    border: 1px solid transparent;
+    border-radius: var(--consumit-radius-control, 5px);
+    transition: background-color 160ms ease, border-color 160ms ease;
+  }
+
+  .selector:hover {
+    background: rgb(255 255 255 / 8%);
+  }
+
+  .selector[aria-current='true'] {
+    border-color: rgb(255 255 255 / 40%);
+    background: rgb(0 0 0 / 28%);
+  }
+
+}
+
+@media (min-width: 1600px) {
+  .art {
+    object-position: center 35%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selector {
+    transition: none;
+  }
+}

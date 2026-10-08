@@ -8,25 +8,9 @@ import type { HeroDetail } from '../catalog/catalog-ui'
 import { AnimeTitleRail } from './anime-title-rail'
 import { ContinueRail } from './continue-rail'
 import { FilScreenHeroRotator } from './hero-rotator'
-import {
-  FilScreenShell,
-  SIDEBAR_STORAGE_KEY,
-  THEME_STORAGE_KEY,
-  THEME_STYLE,
-  CONTRACT_HTML,
-  type FilScreenTheme,
-} from './filscreen-shell'
+import { FilScreenShell } from './filscreen-shell'
 import { TitleRail } from '../shared/title-rail'
-import { AdPlaceholder } from '../shared/ad-placeholder'
-
-export {
-  FilScreenShell,
-  SIDEBAR_STORAGE_KEY,
-  THEME_STORAGE_KEY,
-  THEME_STYLE,
-  CONTRACT_HTML,
-  type FilScreenTheme,
-}
+import { AdSlot } from '../shared/ad-slot'
 
 export type FilScreenHomeProps = {
   awardWinningShows?: readonly CatalogTitleSummary[] | undefined
@@ -63,7 +47,7 @@ export function FilScreenHome({
         <ContinueRail />
       </section>
 
-      <div className="my-8 sm:my-10"><AdPlaceholder placement="home" position="early" /></div>
+      <div className="my-8 sm:my-10"><AdSlot placement="home" position="early" /></div>
 
       {trendingMovies && trendingMovies.length > 0 ? (
         <TitleRail
@@ -86,7 +70,7 @@ export function FilScreenHome({
       ) : null}
 
       {trendingSeries && trendingSeries.length > 0 ? (
-        <div className="my-8 sm:my-10"><AdPlaceholder placement="home" /></div>
+        <div className="my-8 sm:my-10"><AdSlot placement="home" /></div>
       ) : null}
 
       {trendingAnime && trendingAnime.length > 0 ? (
@@ -118,7 +102,7 @@ export function FilScreenHome({
       ) : null}
 
       {topRatedSeries && topRatedSeries.length > 0 ? (
-        <div className="my-8 sm:my-10"><AdPlaceholder placement="home" position="late" /></div>
+        <div className="my-8 sm:my-10"><AdSlot placement="home" position="late" /></div>
       ) : null}
 
       {awardWinningShows && awardWinningShows.length > 0 ? (

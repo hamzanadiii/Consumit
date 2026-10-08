@@ -5,6 +5,16 @@ const nextConfig: NextConfig = {
   ...(process.env.CONSUMIT_NEXT_DIST_DIR ? { distDir: process.env.CONSUMIT_NEXT_DIST_DIR } : {}),
   output: 'standalone',
   outputFileTracingRoot: `${process.cwd()}/../..`,
+  async headers() {
+    return [{ source: '/:path*', headers: [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+      // Public title ISR relies on Next's inline bootstrap. Restrict the
+      // document/navigation surfaces without forcing nonce-bound SSR.
+      { key: 'Content-Security-Policy', value: "base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'" },
+    ] }]
+  },
   images: {
     remotePatterns: [
       {

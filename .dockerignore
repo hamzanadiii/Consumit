@@ -13,6 +13,7 @@ apps/api/generated/
 .vscode
 coverage
 design
+local
 provider_example
 infra/playback/providers.local.json
 playwright-report
@@ -20,6 +21,12 @@ test-results
 node_modules
 tmp
 temp
+tmp-*
+**/tmp-*
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
 worker
 infra/playback/providers.local.overrides.json
 

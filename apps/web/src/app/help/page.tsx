@@ -42,10 +42,6 @@ const groups: readonly HelpGroup[] = [
         question: 'How do I control who can see my profile?',
         answer: <>Open <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link> to change your profile visibility. Your public profile details stay separate from your private account credentials.</>,
       },
-      {
-        question: 'Can I import my Letterboxd history?',
-        answer: <>Yes. In Settings, choose Letterboxd import to upload an export, review the title matches, and confirm which records to bring into Consumit. Consumit does not link to your Letterboxd account.</>,
-      },
     ],
   },
   {

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
-import type { IncomingMessage } from 'node:http'
+import { IncomingMessage } from 'node:http'
+import { Socket } from 'node:net'
 import type { RequestOptions } from 'node:https'
 import { gzipSync } from 'node:zlib'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,6 +27,20 @@ function response(status = 200, headers: Record<string, string> = { 'content-typ
   }
 }
 describe('provider network boundary', () => {
+  it('closes the upstream socket when a consumer stops a compressed response', async () => {
+    const upstream = new IncomingMessage(new Socket())
+    upstream.statusCode = 200
+    upstream.headers = { 'content-encoding': 'gzip' }
+    mocks.request.mockImplementation((_url: URL, _options: RequestOptions, callback: (value: IncomingMessage) => void) => Object.assign(new EventEmitter(), {
+      setTimeout: vi.fn(), destroy: vi.fn(),
+      end() { queueMicrotask(() => callback(upstream)) },
+    }))
+    const result = await fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)
+    result.body.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(upstream.destroyed).toBe(true)
+    upstream.destroy()
+  })
   it('shares one DNS lookup across concurrent callers without sharing cancellation', async () => {
     let answer!: (addresses: { address: string; family: number }[]) => void
     mocks.lookup.mockImplementation(() => new Promise((resolve) => { answer = resolve }))

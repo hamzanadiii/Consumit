@@ -180,8 +180,8 @@ export function FavoritesShelf({ favorites, owner, titles }: {
       ) : null}
       {owner && paletteOpen ? (
         <ProfileEditorDialog
-          description="Search the real catalog — movies, series, and anime."
           eyebrow="Favorites"
+          description="Search the real catalog — movies, series, and anime."
           footer={(
             <Button disabled={picking} onClick={closePalette} variant="secondary">Cancel</Button>
           )}

@@ -19,7 +19,7 @@ describe('provider management', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enable fixture' }))
     expect(enabled).toBe(false)
     expect(screen.getByText('Save to apply')).toBeInTheDocument()
-    expect(screen.getByRole('list', { name: 'movie provider order' })).toHaveTextContent('Disabled')
+    await waitFor(() => expect(screen.getByRole('list', { name: 'movie provider order' })).toHaveTextContent('Disabled'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(screen.getByRole('list', { name: 'movie provider order' })).toHaveTextContent('Proxy'))
     expect(enabled).toBe(true)

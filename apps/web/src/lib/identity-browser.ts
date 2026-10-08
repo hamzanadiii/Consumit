@@ -8,7 +8,6 @@ import {
   profileSchema,
   favoriteSelectionRequestSchema,
   memberLibraryCollectionPageSchema,
-  memberLibrarySnapshotSchema,
   memberProfileArchivePageSchema,
   memberRatingLookupResponseSchema,
   watchHistoryPageSchema,
@@ -22,7 +21,6 @@ import {
   titleReviewsPageSchema,
   updateDiaryEntryRequestSchema,
   updateMemberListContentRequestSchema,
-  updateMemberListRequestSchema,
   updateMemberReviewRequestSchema,
   updateProfileRequestSchema,
   usernameAvailabilityResponseSchema,
@@ -35,7 +33,6 @@ import {
   type CatalogRef,
   type MemberLibraryCollection,
   type MemberLibraryCollectionPage,
-  type MemberLibrarySnapshot,
   type MemberProfileArchiveKind,
   type MemberProfileArchivePage,
   type MemberRating,
@@ -48,7 +45,6 @@ import {
   type TitleReviewSort,
   type UpdateDiaryEntryRequest,
   type UpdateMemberListContentRequest,
-  type UpdateMemberListRequest,
   type UpdateMemberReviewRequest,
   type UpdateProfileRequest,
   type VerifyEmailRequest,
@@ -73,14 +69,18 @@ export class IdentityApiError extends Error {
 
 async function request<T>(path: string, options: RequestInit, schema?: ZodType<T>): Promise<T> {
   let response: Response
+  const deadline = AbortSignal.timeout(15_000)
   try {
     response = await fetch(path, {
       ...options,
       credentials: 'same-origin',
+      cache: 'no-store',
+      signal: options.signal ? AbortSignal.any([options.signal, deadline]) : deadline,
       headers: { accept: 'application/json', ...(options.body ? { 'content-type': 'application/json' } : {}), ...options.headers },
     })
-  } catch {
-    throw new IdentityApiError('The account service could not be reached.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })
+  } catch (cause) {
+    if (options.signal?.aborted) throw cause
+    throw new IdentityApiError(deadline.aborted ? 'The account service took too long to respond. Try again.' : 'The account service could not be reached. Check your connection and try again.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })
   }
   if (!response.ok) {
     const parsed = apiErrorResponseSchema.safeParse(await response.json().catch(() => null))
@@ -113,7 +113,6 @@ export const registerMember = (input: RegisterRequest): Promise<AcceptedResponse
 export const requestEmailVerification = (email: string): Promise<AcceptedResponse> => request('/v1/auth/verification/request', { body: body({ email }), method: 'POST' }, acceptedResponseSchema)
 export const verifyMemberEmail = async (input: VerifyEmailRequest): Promise<SafeMember> => (await request('/v1/auth/verify-email', { body: body(input), method: 'POST' }, sessionMemberResponseSchema)).member
 export const loginMember = async (input: LoginRequest): Promise<SafeMember> => (await request('/v1/auth/login', { body: body(input), method: 'POST' }, sessionMemberResponseSchema)).member
-export const getMemberProfile = () => request('/v1/me/profile', { method: 'GET' }, profileSchema)
 export const updateMemberProfile = (input: UpdateProfileRequest) => request('/v1/me/profile', { body: body(updateProfileRequestSchema.parse(input)), method: 'PATCH' }, profileSchema)
 export const getUsernameAvailability = (username: string) => request(`/v1/usernames/${encodeURIComponent(username)}/availability`, { method: 'GET' }, usernameAvailabilityResponseSchema)
 export const saveMemberFavorites = (favorites: readonly CatalogRef[]): Promise<void> => request('/v1/me/favorites', { body: body(favoriteSelectionRequestSchema.parse({ favorites })), method: 'PUT' })
@@ -137,7 +136,6 @@ export const listTitleReviews = (title: CatalogRef, page = 1, sort: TitleReviewS
 export const createDiaryEntry = (input: CreateDiaryEntryRequest) => request('/v1/me/diary', { body: body(createDiaryEntryRequestSchema.parse(input)), method: 'POST' }, diaryEntrySchema)
 export const updateDiaryEntry = (entryId: string, changes: UpdateDiaryEntryRequest): Promise<void> => request(`/v1/me/diary/${encodeURIComponent(entryId)}`, { body: body(updateDiaryEntryRequestSchema.parse(changes)), method: 'PATCH' })
 export const deleteDiaryEntry = (entryId: string): Promise<void> => request(`/v1/me/diary/${encodeURIComponent(entryId)}`, { method: 'DELETE' })
-export const getMemberLibrarySnapshot = (): Promise<MemberLibrarySnapshot> => request('/v1/me/library', { method: 'GET' }, memberLibrarySnapshotSchema)
 export const getMemberLibraryPage = (collection: MemberLibraryCollection, cursor?: string, limit = 30): Promise<MemberLibraryCollectionPage> => {
   const params = new URLSearchParams({ limit: String(limit) })
   if (cursor) params.set('cursor', cursor)
@@ -161,12 +159,10 @@ export const getMemberRatingsForTitles = (titles: readonly CatalogRef[]): Promis
 export const getMemberWatchHistoryPage = (cursor?: string): Promise<WatchHistoryPage> => request(`/v1/me/watch-history?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { method: 'GET' }, watchHistoryPageSchema)
 export const createMemberList = (input: CreateMemberListRequest): Promise<MemberListDetail> => request('/v1/me/lists', { body: body(createMemberListRequestSchema.parse(input)), method: 'POST' }, memberListDetailSchema)
 export const getMemberListDetail = (slug: string): Promise<MemberListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, { method: 'GET' }, memberListDetailSchema)
-export const updateMemberList = (listId: string, changes: UpdateMemberListRequest): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { body: body(updateMemberListRequestSchema.parse(changes)), method: 'PATCH' })
 export const updateMemberListContent = (listId: string, changes: UpdateMemberListContentRequest): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { body: body(updateMemberListContentRequestSchema.parse(changes)), method: 'PUT' })
 export const deleteMemberList = (listId: string): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' })
 
 export const logoutMember = (): Promise<void> => request('/v1/auth/logout', { method: 'POST' })
-export const logoutEverywhere = (): Promise<void> => request('/v1/auth/logout-all', { method: 'POST' })
 export const requestPasswordRecovery = (email: string): Promise<AcceptedResponse> => request('/v1/auth/recovery/request', { body: body({ email }), method: 'POST' }, acceptedResponseSchema)
 export const confirmPasswordRecovery = (input: RecoveryConfirmRequest): Promise<void> => request('/v1/auth/recovery/confirm', { body: body(input), method: 'POST' })
 export const changeMemberPassword = async (input: PasswordChangeRequest): Promise<void> => request('/v1/auth/password/change', { body: body(input), method: 'POST' })
@@ -175,7 +171,7 @@ export const deleteMemberAccount = (password: string): Promise<void> => request(
 export async function downloadMemberExport(): Promise<void> {
   let response: Response
   try {
-    response = await fetch('/v1/me/export', { credentials: 'same-origin', headers: { accept: 'application/json' } })
+    response = await fetch('/v1/me/export', { cache: 'no-store', credentials: 'same-origin', headers: { accept: 'application/json' }, signal: AbortSignal.timeout(30_000) })
   } catch {
     throw new IdentityApiError('The account service could not be reached.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })
   }

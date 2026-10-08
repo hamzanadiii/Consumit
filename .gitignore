@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.docker.example
+!.env.production.example
 
 # Dependencies and generated output
 node_modules/
@@ -26,6 +27,8 @@ test-results/
 *.log
 tmp/
 temp/
+tmp-*
+**/tmp-*
 
 # Editors and operating systems
 .idea/
@@ -36,6 +39,7 @@ temp/
 Thumbs.db
 
 /design/
+/local/
 /provider_example/
 /infra/playback/providers.local.json
 /infra/playback/providers.local.overrides.json

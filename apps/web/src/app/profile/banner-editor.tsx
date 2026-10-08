@@ -117,8 +117,8 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
 
   return (
     <ProfileEditorDialog
-      description="A wide cinematic backdrop for your profile. Only titles with wide artwork qualify."
       eyebrow="Profile"
+      description="A wide cinematic backdrop for your profile. Only titles with wide artwork qualify."
       footer={(
         <>
           {saveError ? <p className="mb-4 text-xs text-[var(--fs-danger)]" role="alert">{saveError}</p> : null}

@@ -22,8 +22,17 @@ async function advanceOneSlide() {
   })
 }
 
+function focusVisible(button: HTMLElement, visible: boolean) {
+  const matches = button.matches.bind(button)
+  vi.spyOn(button, 'matches').mockImplementation((selector) => selector === ':focus-visible' ? visible : matches(selector))
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.stubGlobal('PointerEvent', class extends MouseEvent {
+    readonly pointerType: string
+    constructor(type: string, options: PointerEventInit = {}) { super(type, options); this.pointerType = options.pointerType ?? 'mouse' }
+  })
 })
 
 afterEach(() => {
@@ -69,7 +78,7 @@ describe('filScreen hero rotator', () => {
   it('pauses while hovered', async () => {
     render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
 
-    fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
+    fireEvent.pointerEnter(screen.getByRole('region', { name: 'Featured titles' }), { pointerType: 'mouse' })
     await advanceOneSlide()
     expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
   })
@@ -80,12 +89,12 @@ describe('filScreen hero rotator', () => {
     render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
 
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
-    fireEvent.mouseEnter(screen.getByRole('region', { name: 'Featured titles' }))
+    fireEvent.pointerEnter(screen.getByRole('region', { name: 'Featured titles' }), { pointerType: 'mouse' })
     expect(cancelFrame).toHaveBeenCalled()
     const framesAtPause = requestFrame.mock.calls.length
     await advanceOneSlide()
     expect(requestFrame).toHaveBeenCalledTimes(framesAtPause)
-    fireEvent.mouseLeave(screen.getByRole('region', { name: 'Featured titles' }))
+    fireEvent.pointerLeave(screen.getByRole('region', { name: 'Featured titles' }))
     await act(async () => { await vi.advanceTimersByTimeAsync(2_032) })
     expect(screen.getByRole('heading', { name: 'Severance' })).toBeInTheDocument()
     requestFrame.mockRestore()
@@ -104,12 +113,45 @@ describe('filScreen hero rotator', () => {
   it('pauses while focus sits inside the hero, then resumes on blur', async () => {
     render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
 
+    focusVisible(screen.getByRole('button', { name: 'Show Severance' }), true)
     fireEvent.focus(screen.getByRole('button', { name: 'Show Severance' }))
     await advanceOneSlide()
     expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
     fireEvent.blur(screen.getByRole('button', { name: 'Show Severance' }))
     await advanceOneSlide()
     expect(screen.getByRole('heading', { name: 'Severance' })).toBeInTheDocument()
+  })
+
+  it('resumes after a pointer-selected title loses hover even while the button retains focus', async () => {
+    render(<FilScreenHeroRotator hero={hero} spotlight={[severance, second]} />)
+    const button = screen.getByRole('button', { name: 'Show Severance' })
+    focusVisible(button, false)
+    fireEvent.pointerEnter(screen.getByRole('region', { name: 'Featured titles' }), { pointerType: 'mouse' })
+    fireEvent.focus(button)
+    fireEvent.click(button)
+    fireEvent.pointerLeave(screen.getByRole('region', { name: 'Featured titles' }))
+    await advanceOneSlide()
+    expect(screen.getByRole('heading', { name: 'Second Feature' })).toBeInTheDocument()
+  })
+
+  it('always shows a valid title when refreshed candidates shrink the reel', () => {
+    const view = render(<FilScreenHeroRotator hero={hero} spotlight={[severance, second]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show Second Feature' }))
+    view.rerender(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
+    expect(screen.getAllByRole('heading')).toHaveLength(1)
+  })
+
+  it('does not latch a hover pause after a touch selection', async () => {
+    render(<FilScreenHeroRotator hero={hero} spotlight={[severance, second]} />)
+    const region = screen.getByRole('region', { name: 'Featured titles' })
+    const button = screen.getByRole('button', { name: 'Show Severance' })
+    focusVisible(button, false)
+    fireEvent.pointerEnter(region, { pointerType: 'touch' })
+    fireEvent.pointerDown(button, { pointerType: 'touch' })
+    fireEvent.focus(button)
+    fireEvent.click(button)
+    await advanceOneSlide()
+    expect(screen.getByRole('heading', { name: 'Second Feature' })).toBeInTheDocument()
   })
 
   it('never auto-advances for reduced motion while dots still select', async () => {

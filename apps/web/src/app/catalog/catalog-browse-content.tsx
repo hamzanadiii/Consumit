@@ -10,7 +10,7 @@ import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { BrowseHero } from '../shared/browse-hero'
 import { TitleCard } from '../shared/title-card'
-import { AdPlaceholder } from '../shared/ad-placeholder'
+import { AdSlot } from '../shared/ad-slot'
 import { useCatalogFeed } from './use-catalog-feed'
 
 function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: CatalogKind }) {
@@ -78,9 +78,9 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
         {page?.items.map((title, index) => (
           <Fragment key={`${title.kind}:${title.id}`}>
             <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" title={title} />
-            {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdPlaceholder placement="catalog" /></li> : null}
-            {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdPlaceholder placement="catalog" /></li> : null}
-            {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdPlaceholder placement="catalog" /></li> : null}
+            {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdSlot placement="catalog" /></li> : null}
+            {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdSlot placement="catalog" /></li> : null}
+            {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdSlot placement="catalog" /></li> : null}
           </Fragment>
         ))}
         {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
@@ -146,7 +146,7 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
           <BrowseSelect label="Sort by" onChange={(value) => setFeed(value === 'top-rated' ? 'top-rated' : 'popular')} options={[{ label: 'Popular', value: 'popular' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
         </div>
       </div>
-      {current.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdPlaceholder placement="catalog" position="early" /></div> : null}
+      {current.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdSlot placement="catalog" position="early" /></div> : null}
       <CatalogFeed initialPage={isDefault ? popular : undefined} key={`${kind}:${feed}:${genre}:${year}`} query={query} reset={reset} />
     </main>
   )

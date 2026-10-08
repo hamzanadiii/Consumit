@@ -52,7 +52,7 @@ export function AnimeTitleRail({ id, title, items, description, viewAllHref, ico
 
   return (
     <section aria-labelledby={`${id}-heading`} className="group/rail relative mt-8">
-      <SectionHeading id={`${id}-heading`} title={title} description={description} action={<div className="flex items-center gap-2">{icon}{viewAllHref ? (
+      <SectionHeading id={`${id}-heading`} title={title} description={description} icon={icon} action={viewAllHref ? (
           <Link
             className="flex min-h-10 items-center gap-1 text-xs text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={viewAllHref}
@@ -60,7 +60,7 @@ export function AnimeTitleRail({ id, title, items, description, viewAllHref, ico
             View All
             <ArrowUpRight aria-hidden="true" className="size-3.5" />
           </Link>
-        ) : null}</div>} />
+        ) : null} />
 
       <div className="relative mt-4">
         {canScrollLeft ? (

@@ -1,4 +1,36 @@
 services:
+  api:
+    env_file: !override
+      - path: ${CONSUMIT_PRODUCTION_ENV_FILE:-./.env.production}
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:-https://consumit.online}
+      DATABASE_SSL_MODE: require
+    volumes:
+      - type: bind
+        source: ${CONSUMIT_PROVIDER_CONFIG:-./infra/playback/providers.local.json}
+        target: /run/consumit/providers.json
+        read_only: true
+        bind:
+          create_host_path: false
+
+  web:
+    env_file: !override
+      - path: ${CONSUMIT_PRODUCTION_ENV_FILE:-./.env.production}
+    build:
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://consumit.online}
+
+  alertmanager:
+    volumes: !override
+      - type: bind
+        source: ${ALERTMANAGER_CONFIG:-./infra/secrets/alertmanager.yml}
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind:
+          create_host_path: false
+      - consumit-alertmanager:/alertmanager
+
   gateway:
     ports: !reset []
 
@@ -12,11 +44,16 @@ services:
 
   backup:
     profiles: ["backup"]
+    image: consumit-backup:local
+    command: !reset []
+    restart: "no"
     build:
       context: .
       dockerfile: infra/backup/Dockerfile
     environment:
-      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-missing-database-password}@postgres:5432/consumit
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: system
       RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-missing-restic-repository}
       RESTIC_PASSWORD_FILE: /run/secrets/restic_password
       BACKUP_HOST: ${BACKUP_HOST:-consumit-production}
@@ -24,7 +61,7 @@ services:
       BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
       BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-6}
       BACKUP_CHECK_SUBSET: ${BACKUP_CHECK_SUBSET:-5%}
-    volumes:
+    volumes: !override
       - type: bind
         source: ${RESTIC_PASSWORD_FILE:-./infra/secrets/missing-restic-password}
         target: /run/secrets/restic_password

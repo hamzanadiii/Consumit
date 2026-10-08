@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Consumit on TV</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --consumit-canvas: #09090b;
+    --consumit-ink: #f4f0e8;
+    --consumit-copy: #c9c4bc;
+    --consumit-accent: #ff5d38;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--consumit-canvas);
+    color: var(--consumit-ink);
+    font-family: Charter, 'Bitstream Charter', Georgia, serif;
+    overflow: hidden;
+  }
+  cast-media-player {
+    position: absolute;
+    inset: 0;
+    /* Keep the built-in progress/metadata chrome; theme it to the room. */
+    --background-color: var(--consumit-canvas);
+    --progress-color: var(--consumit-accent);
+    --splash-image: none;
+  }
+  #brand {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    pointer-events: none;
+  }
+  #brand[hidden] { display: none; }
+  #brand p {
+    margin: 0;
+    font-size: clamp(2rem, 6vw, 4rem);
+    letter-spacing: -0.025em;
+  }
+  #brand small {
+    display: block;
+    margin-top: 12px;
+    font-family: 'DejaVu Sans', Arial, sans-serif;
+    font-size: 14px;
+    color: var(--consumit-copy);
+  }
+</style>
+<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+</head>
+<body>
+  <cast-media-player id="player"></cast-media-player>
+  <div id="brand" role="status" aria-label="Consumit is ready to cast">
+    <div>
+      <p>Consumit</p>
+      <small>Pick a title on your device to start watching here.</small>
+    </div>
+  </div>
+  <script src="./receiver.js"></script>
+</body>
+</html>

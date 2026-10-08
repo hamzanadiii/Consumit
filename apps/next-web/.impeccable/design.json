@@ -1,0 +1,745 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T13:46:51.064Z",
+  "title": "Design System: Consumit Next",
+  "extensions": {
+    "colorMeta": {
+      "cinema-canvas": {
+        "role": "neutral",
+        "displayName": "Cinema Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0020 286.19)",
+          "oklch(25% 0.0020 286.19)",
+          "oklch(35% 0.0020 286.19)",
+          "oklch(45% 0.0020 286.19)",
+          "oklch(58% 0.0020 286.19)",
+          "oklch(70% 0.0020 286.19)",
+          "oklch(83% 0.0020 286.19)",
+          "oklch(95% 0.0020 286.19)"
+        ]
+      },
+      "cinema-nav": {
+        "role": "neutral",
+        "displayName": "Cinema Nav",
+        "tonalRamp": [
+          "oklch(15% 0.0020 286.22)",
+          "oklch(25% 0.0020 286.22)",
+          "oklch(35% 0.0020 286.22)",
+          "oklch(45% 0.0020 286.22)",
+          "oklch(58% 0.0020 286.22)",
+          "oklch(70% 0.0020 286.22)",
+          "oklch(83% 0.0020 286.22)",
+          "oklch(95% 0.0020 286.22)"
+        ]
+      },
+      "cinema-surface": {
+        "role": "neutral",
+        "displayName": "Cinema Surface",
+        "tonalRamp": [
+          "oklch(15% 0.0038 286.09)",
+          "oklch(25% 0.0038 286.09)",
+          "oklch(35% 0.0038 286.09)",
+          "oklch(45% 0.0038 286.09)",
+          "oklch(58% 0.0038 286.09)",
+          "oklch(70% 0.0038 286.09)",
+          "oklch(83% 0.0038 286.09)",
+          "oklch(95% 0.0038 286.09)"
+        ]
+      },
+      "cinema-field": {
+        "role": "neutral",
+        "displayName": "Cinema Field",
+        "tonalRamp": [
+          "oklch(15% 0.0038 286.08)",
+          "oklch(25% 0.0038 286.08)",
+          "oklch(35% 0.0038 286.08)",
+          "oklch(45% 0.0038 286.08)",
+          "oklch(58% 0.0038 286.08)",
+          "oklch(70% 0.0038 286.08)",
+          "oklch(83% 0.0038 286.08)",
+          "oklch(95% 0.0038 286.08)"
+        ]
+      },
+      "cinema-raised": {
+        "role": "neutral",
+        "displayName": "Cinema Raised",
+        "tonalRamp": [
+          "oklch(15% 0.0036 286.16)",
+          "oklch(25% 0.0036 286.16)",
+          "oklch(35% 0.0036 286.16)",
+          "oklch(45% 0.0036 286.16)",
+          "oklch(58% 0.0036 286.16)",
+          "oklch(70% 0.0036 286.16)",
+          "oklch(83% 0.0036 286.16)",
+          "oklch(95% 0.0036 286.16)"
+        ]
+      },
+      "cinema-hover": {
+        "role": "neutral",
+        "displayName": "Cinema Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0036 286.17)",
+          "oklch(25% 0.0036 286.17)",
+          "oklch(35% 0.0036 286.17)",
+          "oklch(45% 0.0036 286.17)",
+          "oklch(58% 0.0036 286.17)",
+          "oklch(70% 0.0036 286.17)",
+          "oklch(83% 0.0036 286.17)",
+          "oklch(95% 0.0036 286.17)"
+        ]
+      },
+      "cinema-ink": {
+        "role": "neutral",
+        "displayName": "Cinema Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0026 106.45)",
+          "oklch(25% 0.0026 106.45)",
+          "oklch(35% 0.0026 106.45)",
+          "oklch(45% 0.0026 106.45)",
+          "oklch(58% 0.0026 106.45)",
+          "oklch(70% 0.0026 106.45)",
+          "oklch(83% 0.0026 106.45)",
+          "oklch(95% 0.0026 106.45)"
+        ]
+      },
+      "cinema-copy": {
+        "role": "neutral",
+        "displayName": "Cinema Copy",
+        "tonalRamp": [
+          "oklch(15% 0.0041 106.48)",
+          "oklch(25% 0.0041 106.48)",
+          "oklch(35% 0.0041 106.48)",
+          "oklch(45% 0.0041 106.48)",
+          "oklch(58% 0.0041 106.48)",
+          "oklch(70% 0.0041 106.48)",
+          "oklch(83% 0.0041 106.48)",
+          "oklch(95% 0.0041 106.48)"
+        ]
+      },
+      "cinema-muted": {
+        "role": "neutral",
+        "displayName": "Cinema Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0057 106.54)",
+          "oklch(25% 0.0057 106.54)",
+          "oklch(35% 0.0057 106.54)",
+          "oklch(45% 0.0057 106.54)",
+          "oklch(58% 0.0057 106.54)",
+          "oklch(70% 0.0057 106.54)",
+          "oklch(83% 0.0057 106.54)",
+          "oklch(95% 0.0057 106.54)"
+        ]
+      },
+      "cinema-line": {
+        "role": "neutral",
+        "displayName": "Cinema Line",
+        "tonalRamp": [
+          "oklch(15% 0.0035 286.20)",
+          "oklch(25% 0.0035 286.20)",
+          "oklch(35% 0.0035 286.20)",
+          "oklch(45% 0.0035 286.20)",
+          "oklch(58% 0.0035 286.20)",
+          "oklch(70% 0.0035 286.20)",
+          "oklch(83% 0.0035 286.20)",
+          "oklch(95% 0.0035 286.20)"
+        ]
+      },
+      "cinema-field-border": {
+        "role": "neutral",
+        "displayName": "Cinema Field Border",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(25% 0.0000 89.88)",
+          "oklch(35% 0.0000 89.88)",
+          "oklch(45% 0.0000 89.88)",
+          "oklch(58% 0.0000 89.88)",
+          "oklch(70% 0.0000 89.88)",
+          "oklch(83% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "cinema-control-outline": {
+        "role": "neutral",
+        "displayName": "Cinema Control Outline",
+        "tonalRamp": [
+          "oklch(15% 0.0045 106.54)",
+          "oklch(25% 0.0045 106.54)",
+          "oklch(35% 0.0045 106.54)",
+          "oklch(45% 0.0045 106.54)",
+          "oklch(58% 0.0045 106.54)",
+          "oklch(70% 0.0045 106.54)",
+          "oklch(83% 0.0045 106.54)",
+          "oklch(95% 0.0045 106.54)"
+        ]
+      },
+      "coral": {
+        "role": "primary",
+        "displayName": "Coral",
+        "tonalRamp": [
+          "oklch(15% 0.1720 34.95)",
+          "oklch(25% 0.1720 34.95)",
+          "oklch(35% 0.1720 34.95)",
+          "oklch(45% 0.1720 34.95)",
+          "oklch(58% 0.1720 34.95)",
+          "oklch(70% 0.1720 34.95)",
+          "oklch(83% 0.1720 34.95)",
+          "oklch(95% 0.1720 34.95)"
+        ]
+      },
+      "coral-focus": {
+        "role": "primary",
+        "displayName": "Coral Focus",
+        "tonalRamp": [
+          "oklch(15% 0.1244 34.98)",
+          "oklch(25% 0.1244 34.98)",
+          "oklch(35% 0.1244 34.98)",
+          "oklch(45% 0.1244 34.98)",
+          "oklch(58% 0.1244 34.98)",
+          "oklch(70% 0.1244 34.98)",
+          "oklch(83% 0.1244 34.98)",
+          "oklch(95% 0.1244 34.98)"
+        ]
+      },
+      "paper-canvas": {
+        "role": "neutral",
+        "displayName": "Paper Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0070 88.64)",
+          "oklch(25% 0.0070 88.64)",
+          "oklch(35% 0.0070 88.64)",
+          "oklch(45% 0.0070 88.64)",
+          "oklch(58% 0.0070 88.64)",
+          "oklch(70% 0.0070 88.64)",
+          "oklch(83% 0.0070 88.64)",
+          "oklch(95% 0.0070 88.64)"
+        ]
+      },
+      "paper-nav": {
+        "role": "neutral",
+        "displayName": "Paper Nav",
+        "tonalRamp": [
+          "oklch(15% 0.0099 87.47)",
+          "oklch(25% 0.0099 87.47)",
+          "oklch(35% 0.0099 87.47)",
+          "oklch(45% 0.0099 87.47)",
+          "oklch(58% 0.0099 87.47)",
+          "oklch(70% 0.0099 87.47)",
+          "oklch(83% 0.0099 87.47)",
+          "oklch(95% 0.0099 87.47)"
+        ]
+      },
+      "paper-field": {
+        "role": "neutral",
+        "displayName": "Paper Field",
+        "tonalRamp": [
+          "oklch(15% 0.0045 78.30)",
+          "oklch(25% 0.0045 78.30)",
+          "oklch(35% 0.0045 78.30)",
+          "oklch(45% 0.0045 78.30)",
+          "oklch(58% 0.0045 78.30)",
+          "oklch(70% 0.0045 78.30)",
+          "oklch(83% 0.0045 78.30)",
+          "oklch(95% 0.0045 78.30)"
+        ]
+      },
+      "paper-ink": {
+        "role": "neutral",
+        "displayName": "Paper Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0078 84.59)",
+          "oklch(25% 0.0078 84.59)",
+          "oklch(35% 0.0078 84.59)",
+          "oklch(45% 0.0078 84.59)",
+          "oklch(58% 0.0078 84.59)",
+          "oklch(70% 0.0078 84.59)",
+          "oklch(83% 0.0078 84.59)",
+          "oklch(95% 0.0078 84.59)"
+        ]
+      },
+      "paper-copy": {
+        "role": "neutral",
+        "displayName": "Paper Copy",
+        "tonalRamp": [
+          "oklch(15% 0.0124 81.77)",
+          "oklch(25% 0.0124 81.77)",
+          "oklch(35% 0.0124 81.77)",
+          "oklch(45% 0.0124 81.77)",
+          "oklch(58% 0.0124 81.77)",
+          "oklch(70% 0.0124 81.77)",
+          "oklch(83% 0.0124 81.77)",
+          "oklch(95% 0.0124 81.77)"
+        ]
+      },
+      "paper-muted": {
+        "role": "neutral",
+        "displayName": "Paper Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0146 75.25)",
+          "oklch(25% 0.0146 75.25)",
+          "oklch(35% 0.0146 75.25)",
+          "oklch(45% 0.0146 75.25)",
+          "oklch(58% 0.0146 75.25)",
+          "oklch(70% 0.0146 75.25)",
+          "oklch(83% 0.0146 75.25)",
+          "oklch(95% 0.0146 75.25)"
+        ]
+      },
+      "paper-line": {
+        "role": "neutral",
+        "displayName": "Paper Line",
+        "tonalRamp": [
+          "oklch(15% 0.0151 80.70)",
+          "oklch(25% 0.0151 80.70)",
+          "oklch(35% 0.0151 80.70)",
+          "oklch(45% 0.0151 80.70)",
+          "oklch(58% 0.0151 80.70)",
+          "oklch(70% 0.0151 80.70)",
+          "oklch(83% 0.0151 80.70)",
+          "oklch(95% 0.0151 80.70)"
+        ]
+      },
+      "paper-field-border": {
+        "role": "neutral",
+        "displayName": "Paper Field Border",
+        "tonalRamp": [
+          "oklch(15% 0.0200 75.26)",
+          "oklch(25% 0.0200 75.26)",
+          "oklch(35% 0.0200 75.26)",
+          "oklch(45% 0.0200 75.26)",
+          "oklch(58% 0.0200 75.26)",
+          "oklch(70% 0.0200 75.26)",
+          "oklch(83% 0.0200 75.26)",
+          "oklch(95% 0.0200 75.26)"
+        ]
+      },
+      "paper-hover": {
+        "role": "neutral",
+        "displayName": "Paper Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0157 86.43)",
+          "oklch(25% 0.0157 86.43)",
+          "oklch(35% 0.0157 86.43)",
+          "oklch(45% 0.0157 86.43)",
+          "oklch(58% 0.0157 86.43)",
+          "oklch(70% 0.0157 86.43)",
+          "oklch(83% 0.0157 86.43)",
+          "oklch(95% 0.0157 86.43)"
+        ]
+      },
+      "paper-accent": {
+        "role": "primary",
+        "displayName": "Paper Accent",
+        "tonalRamp": [
+          "oklch(15% 0.1614 33.74)",
+          "oklch(25% 0.1614 33.74)",
+          "oklch(35% 0.1614 33.74)",
+          "oklch(45% 0.1614 33.74)",
+          "oklch(58% 0.1614 33.74)",
+          "oklch(70% 0.1614 33.74)",
+          "oklch(83% 0.1614 33.74)",
+          "oklch(95% 0.1614 33.74)"
+        ]
+      },
+      "dusk-canvas": {
+        "role": "neutral",
+        "displayName": "Dusk Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0097 52.98)",
+          "oklch(25% 0.0097 52.98)",
+          "oklch(35% 0.0097 52.98)",
+          "oklch(45% 0.0097 52.98)",
+          "oklch(58% 0.0097 52.98)",
+          "oklch(70% 0.0097 52.98)",
+          "oklch(83% 0.0097 52.98)",
+          "oklch(95% 0.0097 52.98)"
+        ]
+      },
+      "dusk-nav": {
+        "role": "neutral",
+        "displayName": "Dusk Nav",
+        "tonalRamp": [
+          "oklch(15% 0.0141 57.59)",
+          "oklch(25% 0.0141 57.59)",
+          "oklch(35% 0.0141 57.59)",
+          "oklch(45% 0.0141 57.59)",
+          "oklch(58% 0.0141 57.59)",
+          "oklch(70% 0.0141 57.59)",
+          "oklch(83% 0.0141 57.59)",
+          "oklch(95% 0.0141 57.59)"
+        ]
+      },
+      "dusk-field": {
+        "role": "neutral",
+        "displayName": "Dusk Field",
+        "tonalRamp": [
+          "oklch(15% 0.0140 57.62)",
+          "oklch(25% 0.0140 57.62)",
+          "oklch(35% 0.0140 57.62)",
+          "oklch(45% 0.0140 57.62)",
+          "oklch(58% 0.0140 57.62)",
+          "oklch(70% 0.0140 57.62)",
+          "oklch(83% 0.0140 57.62)",
+          "oklch(95% 0.0140 57.62)"
+        ]
+      },
+      "dusk-ink": {
+        "role": "neutral",
+        "displayName": "Dusk Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0250 75.27)",
+          "oklch(25% 0.0250 75.27)",
+          "oklch(35% 0.0250 75.27)",
+          "oklch(45% 0.0250 75.27)",
+          "oklch(58% 0.0250 75.27)",
+          "oklch(70% 0.0250 75.27)",
+          "oklch(83% 0.0250 75.27)",
+          "oklch(95% 0.0250 75.27)"
+        ]
+      },
+      "dusk-copy": {
+        "role": "neutral",
+        "displayName": "Dusk Copy",
+        "tonalRamp": [
+          "oklch(15% 0.0287 70.89)",
+          "oklch(25% 0.0287 70.89)",
+          "oklch(35% 0.0287 70.89)",
+          "oklch(45% 0.0287 70.89)",
+          "oklch(58% 0.0287 70.89)",
+          "oklch(70% 0.0287 70.89)",
+          "oklch(83% 0.0287 70.89)",
+          "oklch(95% 0.0287 70.89)"
+        ]
+      },
+      "dusk-muted": {
+        "role": "neutral",
+        "displayName": "Dusk Muted",
+        "tonalRamp": [
+          "oklch(15% 0.0361 71.50)",
+          "oklch(25% 0.0361 71.50)",
+          "oklch(35% 0.0361 71.50)",
+          "oklch(45% 0.0361 71.50)",
+          "oklch(58% 0.0361 71.50)",
+          "oklch(70% 0.0361 71.50)",
+          "oklch(83% 0.0361 71.50)",
+          "oklch(95% 0.0361 71.50)"
+        ]
+      },
+      "dusk-line": {
+        "role": "neutral",
+        "displayName": "Dusk Line",
+        "tonalRamp": [
+          "oklch(15% 0.0205 58.06)",
+          "oklch(25% 0.0205 58.06)",
+          "oklch(35% 0.0205 58.06)",
+          "oklch(45% 0.0205 58.06)",
+          "oklch(58% 0.0205 58.06)",
+          "oklch(70% 0.0205 58.06)",
+          "oklch(83% 0.0205 58.06)",
+          "oklch(95% 0.0205 58.06)"
+        ]
+      },
+      "dusk-field-border": {
+        "role": "neutral",
+        "displayName": "Dusk Field Border",
+        "tonalRamp": [
+          "oklch(15% 0.0353 61.90)",
+          "oklch(25% 0.0353 61.90)",
+          "oklch(35% 0.0353 61.90)",
+          "oklch(45% 0.0353 61.90)",
+          "oklch(58% 0.0353 61.90)",
+          "oklch(70% 0.0353 61.90)",
+          "oklch(83% 0.0353 61.90)",
+          "oklch(95% 0.0353 61.90)"
+        ]
+      },
+      "dusk-hover": {
+        "role": "neutral",
+        "displayName": "Dusk Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0200 60.65)",
+          "oklch(25% 0.0200 60.65)",
+          "oklch(35% 0.0200 60.65)",
+          "oklch(45% 0.0200 60.65)",
+          "oklch(58% 0.0200 60.65)",
+          "oklch(70% 0.0200 60.65)",
+          "oklch(83% 0.0200 60.65)",
+          "oklch(95% 0.0200 60.65)"
+        ]
+      },
+      "dusk-accent": {
+        "role": "primary",
+        "displayName": "Dusk Accent",
+        "tonalRamp": [
+          "oklch(15% 0.0920 64.90)",
+          "oklch(25% 0.0920 64.90)",
+          "oklch(35% 0.0920 64.90)",
+          "oklch(45% 0.0920 64.90)",
+          "oklch(58% 0.0920 64.90)",
+          "oklch(70% 0.0920 64.90)",
+          "oklch(83% 0.0920 64.90)",
+          "oklch(95% 0.0920 64.90)"
+        ]
+      },
+      "player-canvas": {
+        "role": "neutral",
+        "displayName": "Player Canvas",
+        "tonalRamp": [
+          "oklch(15% 0.0000 89.88)",
+          "oklch(25% 0.0000 89.88)",
+          "oklch(35% 0.0000 89.88)",
+          "oklch(45% 0.0000 89.88)",
+          "oklch(58% 0.0000 89.88)",
+          "oklch(70% 0.0000 89.88)",
+          "oklch(83% 0.0000 89.88)",
+          "oklch(95% 0.0000 89.88)"
+        ]
+      },
+      "player-menu": {
+        "role": "neutral",
+        "displayName": "Player Menu",
+        "tonalRamp": [
+          "oklch(15% 0.0038 286.12)",
+          "oklch(25% 0.0038 286.12)",
+          "oklch(35% 0.0038 286.12)",
+          "oklch(45% 0.0038 286.12)",
+          "oklch(58% 0.0038 286.12)",
+          "oklch(70% 0.0038 286.12)",
+          "oklch(83% 0.0038 286.12)",
+          "oklch(95% 0.0038 286.12)"
+        ]
+      },
+      "player-menu-border": {
+        "role": "neutral",
+        "displayName": "Player Menu Border",
+        "tonalRamp": [
+          "oklch(15% 0.0033 286.24)",
+          "oklch(25% 0.0033 286.24)",
+          "oklch(35% 0.0033 286.24)",
+          "oklch(45% 0.0033 286.24)",
+          "oklch(58% 0.0033 286.24)",
+          "oklch(70% 0.0033 286.24)",
+          "oklch(83% 0.0033 286.24)",
+          "oklch(95% 0.0033 286.24)"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "tonalRamp": [
+          "oklch(15% 0.0956 25.99)",
+          "oklch(25% 0.0956 25.99)",
+          "oklch(35% 0.0956 25.99)",
+          "oklch(45% 0.0956 25.99)",
+          "oklch(58% 0.0956 25.99)",
+          "oklch(70% 0.0956 25.99)",
+          "oklch(83% 0.0956 25.99)",
+          "oklch(95% 0.0956 25.99)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Cinematic display",
+        "purpose": "Featured text title fallback; catalog logos keep their own lettering."
+      },
+      "headline": {
+        "displayName": "Exhibition heading",
+        "purpose": "Favorite title exhibition."
+      },
+      "title": {
+        "displayName": "Discovery rail heading",
+        "purpose": "Discovery and Continue watching shelves."
+      },
+      "body": {
+        "displayName": "Member reading copy",
+        "purpose": "Profile biography and supporting reading."
+      },
+      "label": {
+        "displayName": "Interface label",
+        "purpose": "Controls, metadata, and captions."
+      },
+      "journal": {
+        "displayName": "Journal reading voice",
+        "purpose": "Charter journal headings."
+      }
+    },
+    "shadows": [
+      {
+        "name": "focused-artwork",
+        "value": "0 16px 32px #00000040",
+        "purpose": "Hover and keyboard focus on catalog covers."
+      },
+      {
+        "name": "favorite-exhibition",
+        "value": "0 22px 46px #00000045",
+        "purpose": "Gallery favorite frames; absent in Journal composition."
+      },
+      {
+        "name": "account-sheet",
+        "value": "0 20px 70px #00000050",
+        "purpose": "Account navigation overlay."
+      },
+      {
+        "name": "player-menu",
+        "value": "0 20px 60px #0008",
+        "purpose": "Playback menu separation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "shared-control-state",
+        "value": "150ms ease-out",
+        "purpose": "Shared button/input state feedback."
+      },
+      {
+        "name": "horizontal-nav-state",
+        "value": "180ms",
+        "purpose": "Navigation color and background feedback."
+      },
+      {
+        "name": "catalog-art-focus",
+        "value": "450ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "6px artwork lift; suppressed for quiet/reduced motion."
+      },
+      {
+        "name": "museum-art-focus",
+        "value": "500ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "8px favorite artwork lift in gallery; quiet/reduced motion suppresses movement."
+      },
+      {
+        "name": "navigation-pending",
+        "value": "1200ms ease-in-out infinite",
+        "purpose": "Bounded progress indication while navigating; reduced motion holds a static full line."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-header-and-journal",
+        "value": "1023px"
+      },
+      {
+        "name": "mobile-dock",
+        "value": "699px"
+      },
+      {
+        "name": "narrow-museum-grid",
+        "value": "599px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Shared primary action, including keyboard and disabled states.",
+      "html": "<button class=\"ds-button-primary\">Save changes</button>",
+      "css": ".ds-button-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;font:500 14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;letter-spacing:-.01em;border-radius:var(--consumit-radius-control,9px);cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out;border:0;background:var(--consumit-orange,#ff7857);color:var(--consumit-canvas,#111112);}.ds-button-primary:hover{filter:brightness(1.1);}.ds-button-primary:active{filter:brightness(.95)}.ds-button-primary:focus-visible{outline:2px solid var(--consumit-orange,#ff7857);outline-offset:2px}.ds-button-primary:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-button-primary{transition:none}}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Shared secondary action, including keyboard and disabled states.",
+      "html": "<button class=\"ds-button-secondary\">Edit banner</button>",
+      "css": ".ds-button-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;font:500 14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;letter-spacing:-.01em;border-radius:var(--consumit-radius-control,9px);cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out;border:1px solid var(--consumit-control-outline,#777774);background:transparent;color:var(--consumit-ink,#f5f5f3);}.ds-button-secondary:hover{background:var(--consumit-surface-raised,#272729);}.ds-button-secondary:active{filter:brightness(.95)}.ds-button-secondary:focus-visible{outline:2px solid var(--consumit-orange,#ff7857);outline-offset:2px}.ds-button-secondary:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-button-secondary{transition:none}}"
+    },
+    {
+      "name": "Ghost action",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Shared ghost action, including keyboard and disabled states.",
+      "html": "<button class=\"ds-button-ghost\">Cancel</button>",
+      "css": ".ds-button-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;font:500 14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;letter-spacing:-.01em;border-radius:var(--consumit-radius-control,9px);cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out;border:0;background:transparent;color:var(--consumit-copy,#d2d2cf);}.ds-button-ghost:hover{background:var(--consumit-surface,#1c1c1e);color:var(--consumit-ink,#f5f5f3);}.ds-button-ghost:active{filter:brightness(.95)}.ds-button-ghost:focus-visible{outline:2px solid var(--consumit-orange,#ff7857);outline-offset:2px}.ds-button-ghost:disabled{opacity:.45;cursor:default}@media(prefers-reduced-motion:reduce){.ds-button-ghost{transition:none}}"
+    },
+    {
+      "name": "Featured Watch",
+      "kind": "button",
+      "refersTo": "button-watch",
+      "description": "High-contrast action over cinematic art.",
+      "html": "<button class=\"ds-watch\"><svg aria-hidden=\"true\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\"><path d=\"m8 5 11 7-11 7V5Z\"/></svg>Watch</button>",
+      "css": ".ds-watch{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;font:500 14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;letter-spacing:-.01em;border-radius:var(--consumit-radius-control,9px);cursor:pointer;transition:background-color 150ms ease-out,border-color 150ms ease-out,color 150ms ease-out,opacity 150ms ease-out;height:48px;padding:0 22px;border:0;border-radius:9px;background:#f5f5f3;color:#111112}.ds-watch:hover{filter:brightness(1.1)}.ds-watch:active{filter:brightness(.95)}.ds-watch:focus-visible{outline:2px solid var(--fs-focus,#ff9c83);outline-offset:3px}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Semantic field with hover, focus, invalid, and disabled edges.",
+      "html": "<label class=\"ds-field-label\" for=\"ds-name\">Display name</label><input class=\"ds-field\" id=\"ds-name\" placeholder=\"Your name\" />",
+      "css": ".ds-field-label{display:block;margin-bottom:8px;color:var(--consumit-copy,#d2d2cf);font:600 12px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif}.ds-field{display:block;height:52px;width:100%;min-width:0;padding:0 16px;border:1px solid var(--consumit-control-outline,#777774);border-radius:8px;background:var(--consumit-field,#1b1b1d);color:var(--consumit-ink,#f5f5f3);font:14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;transition:border-color 150ms ease-out,box-shadow 150ms ease-out}.ds-field::placeholder{color:var(--consumit-muted,#a6a6a2)}.ds-field:hover{border-color:color-mix(in srgb,var(--consumit-ink,#f5f5f3) 60%,transparent)}.ds-field:focus-visible{outline:2px solid var(--consumit-orange,#ff7857);outline-offset:1px;border-color:var(--consumit-orange,#ff7857)}.ds-field[aria-invalid=true]{border-color:var(--consumit-danger,#b76d66)}.ds-field:disabled{opacity:.6;color:var(--consumit-muted,#a6a6a2);background:var(--consumit-surface,#1c1c1e);cursor:not-allowed}"
+    },
+    {
+      "name": "Main navigation",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "Horizontal named navigation with an inverted current pill.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><a aria-current=\"page\" href=\"#\">Home</a><a href=\"#\">Movies</a><a href=\"#\">Series</a><a href=\"#\">Anime</a></nav>",
+      "css": ".ds-nav{display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:var(--fs-shell,#111112)}.ds-nav a{display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 21px;border-radius:30px;color:var(--fs-secondary,#d2d2cf);font:650 14px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;text-decoration:none;transition:color 180ms,background 180ms}.ds-nav a:hover{background:var(--fs-hover,#29292b)}.ds-nav a[aria-current]{background:var(--fs-ink,#f5f5f3);color:var(--fs-shell,#111112)}.ds-nav a:focus-visible{outline:2px solid var(--fs-focus,#ff9c83);outline-offset:3px}"
+    },
+    {
+      "name": "Catalog poster caption",
+      "kind": "card",
+      "refersTo": "poster",
+      "description": "Artwork container and permanent title/metadata; schematic preview avoids external asset dependency.",
+      "html": "<article class=\"ds-poster\"><a class=\"ds-poster-link\" href=\"#\"><div class=\"ds-art\" role=\"img\" aria-label=\"Artwork preview\">Artwork</div></a><div class=\"ds-caption\"><strong>Title name</strong><span>2024 · Movie</span></div></article>",
+      "css": ".ds-poster{width:180px;font-family:'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif}.ds-poster-link{display:block;text-decoration:none;color:var(--fs-muted,#a6a6a2)}.ds-art{display:grid;place-items:center;aspect-ratio:2/3;border-radius:9px;background:var(--fs-field,#1b1b1d);font-size:12px;transition:transform .45s cubic-bezier(.16,1,.3,1),box-shadow .45s}.ds-poster:hover .ds-art,.ds-poster:focus-within .ds-art{transform:translateY(-6px);box-shadow:0 16px 32px #00000040}.ds-poster-link:focus-visible{outline:2px solid var(--fs-focus,#ff9c83);outline-offset:3px;border-radius:9px}.ds-caption{display:grid;gap:5px;padding-top:12px}.ds-caption strong{color:var(--fs-ink,#f5f5f3);font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-caption span{font-size:12px;color:var(--fs-muted,#a6a6a2)}@media(prefers-reduced-motion:reduce){.ds-art{transition:none}.ds-poster:hover .ds-art,.ds-poster:focus-within .ds-art{transform:none}}"
+    },
+    {
+      "name": "Atmosphere tile",
+      "kind": "custom",
+      "refersTo": "atmosphere-choice",
+      "description": "Radio selection with an accent edge and whole-tile keyboard focus.",
+      "html": "<label class=\"ds-atmosphere\"><input type=\"radio\" name=\"ds-room\" checked /><span class=\"ds-swatch\" aria-hidden=\"true\"><span></span><span></span><span></span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"m5 12 4 4L19 6\"/></svg></span><strong>Cinema</strong><span class=\"ds-atmosphere-copy\">Midnight, ivory, a little orange.</span></label>",
+      "css": ".ds-atmosphere{position:relative;display:block;max-width:240px;padding:12px;border:1px solid var(--fs-accent,#ff7857);border-radius:12px;cursor:pointer;font-family:'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;color:var(--fs-ink,#f5f5f3)}.ds-atmosphere input{position:absolute;width:1px;height:1px;opacity:0}.ds-atmosphere:focus-within{outline:2px solid var(--fs-focus,#ff9c83);outline-offset:3px}.ds-atmosphere:hover{background:var(--fs-hover,#29292b)}.ds-swatch{position:relative;display:flex;align-items:flex-end;gap:6px;min-height:100px;padding:14px;background:#0b0b0e;border-radius:7px}.ds-swatch>span{display:block;width:22%;height:38px;background:#f4f0e8;opacity:.7;border-radius:1px}.ds-swatch>span:nth-child(2){height:48px;opacity:.35}.ds-swatch>span:nth-child(3){background:#ff5d38;opacity:1}.ds-swatch svg{position:absolute;top:10px;right:10px;color:#f4f0e8}.ds-atmosphere strong{display:block;font-size:14px;margin-top:12px}.ds-atmosphere-copy{display:block;color:var(--fs-muted,#a6a6a2);font-size:12px;margin-top:5px}"
+    },
+    {
+      "name": "Compact catalog badge",
+      "kind": "chip",
+      "description": "Inherited factual metadata badge; it is not a heading or eyebrow.",
+      "html": "<span class=\"ds-badge\">PG-13</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;border-radius:3px;background:color-mix(in srgb,var(--consumit-nav,#161617) 85%,transparent);color:var(--consumit-copy,#d2d2cf);font:700 10px 'Manrope Variable',Manrope,'Noto Sans Arabic','Segoe UI',Tahoma,Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Streaming Salon and Personal Museum",
+    "overview": "Large cinematic artwork makes discovery immediate; permanently readable captions and a private journal make the same room personal. The interface uses charcoal, soft white, coral, clear Manrope typography, and calm sheets. Film logos keep their own lettering. Charter supplies the journal's reading voice.\n\nThis record describes the implemented world in `apps/next-web` and `packages/next-ui`. It does not replace the preserved frontend's root design authority. The stylesheet order is shared next-ui styles, museum styles, then next.css; the final cascade and scoped shell themes are authoritative. Legacy FilScreen hook names are compatibility selectors, not a direction to reproduce the original sidebar.",
+    "keyCharacteristics": [
+      "Expansive key art with clear Watch and title-detail actions.",
+      "Horizontal desktop wayfinding and four named mobile destinations.",
+      "Favorite artwork presented as a private museum with readable captions.",
+      "Cinema, Paper gallery, and Dusk atmospheres; Gallery and Journal compositions.",
+      "Focus movement that yields to Quiet motion and system motion preferences."
+    ],
+    "rules": [
+      {
+        "name": "The Room and Picture Rule",
+        "body": "Change the surrounding room through its atmosphere; keep photographic mastheads and the player on their dedicated contrast fields.",
+        "section": "colors"
+      },
+      {
+        "name": "The Permanent Caption Rule",
+        "body": "Poster title and supporting metadata stay visible at rest; focus emphasizes artwork without making the caption conditional.",
+        "section": "typography"
+      },
+      {
+        "name": "The Still Room Rule",
+        "body": "Quiet motion and the system reduced-motion preference suppress spatial poster movement and feature autoplay; information and focus cues remain available.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** use the final app cascade and next-ui presentation components as this frontend's source of truth.",
+      "**Do** preserve title captions, obvious current navigation, and visible keyboard focus.",
+      "**Do** let real key art supply the spectacle and keep player text on a reliable contrast field.",
+      "**Do** support all three atmospheres, both profile compositions, and motion preferences when extending a surface.",
+      "**Do** distinguish labeled preview fixtures from actual member records and unavailable states."
+    ],
+    "donts": [
+      "**Don't** apply this world's tokens to the preserved original frontend.",
+      "**Don't** turn compatibility FilScreen selectors into a requirement for the original sidebar.",
+      "**Don't** replace member history, lists, or ratings with invented social or personalized evidence.",
+      "**Don't** expose pending blank ad frames or retain an unfilled ad box as a visual motif.",
+      "**Don't** make a supplied but inaccessible reference image into a claimed approved visual comp."
+    ]
+  }
+}

@@ -334,7 +334,7 @@ describe('playback shell components', () => {
     expect(screen.getByRole('button', { name: 'Back 10 seconds' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Forward 10 seconds' })).toBeEnabled()
     expect(screen.getByRole('slider', { name: 'Volume' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Change quality/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Change quality/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Subtitles' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Settings/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change server' })).not.toBeInTheDocument()
@@ -344,7 +344,7 @@ describe('playback shell components', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('opens a standalone quality rail with nothing else inside', () => {
+  it('opens quality from the settings panel', () => {
     render(
       <ConsumitPlayer
         title="The Last City After Rain"
@@ -357,8 +357,10 @@ describe('playback shell components', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Change quality/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Quality/ }))
     const menu = screen.getByRole('menu', { name: 'Quality' })
+    expect(screen.getByRole('button', { name: 'Back to settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Close quality' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitemradio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true')
     expect(within(menu).queryByRole('group', { name: 'Server' })).not.toBeInTheDocument()
@@ -777,7 +779,8 @@ describe('playback shell components', () => {
   it('closes the quality rail from its close control', () => {
     prototypePlayer()
 
-    fireEvent.click(screen.getByRole('button', { name: /Change quality/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Quality/ }))
     expect(screen.getByRole('menu', { name: 'Quality' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Close quality' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -842,6 +845,20 @@ describe('playback shell components', () => {
     expect(overlay.querySelector('img')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/original/stowaway-logo.png')
     expect(overlay).toHaveTextContent('Stowaway')
     expect(overlay).toHaveTextContent('2021 · 1h 56m · ★ 6.0 · R')
+  })
+
+  it('keeps the pause headline on the bare series name when pauseTitle is set', () => {
+    const { container } = render(
+      <ConsumitPlayer
+        title="Demon Slayer: Kimetsu no Yaiba Infinity Castle · Movie 1"
+        src="/movie.mp4"
+        pauseTitle="Demon Slayer: Kimetsu no Yaiba Infinity Castle"
+        pauseFacts="2025 · 2h 35m"
+      />,
+    )
+    const overlay = container.querySelector('[data-consumit-player-pause]')!
+    expect(overlay).toHaveTextContent('Demon Slayer: Kimetsu no Yaiba Infinity Castle')
+    expect(overlay).not.toHaveTextContent('Movie 1')
   })
 
   it('shows the cast control only when a cast runtime is available', () => {

@@ -14,10 +14,16 @@ Provider failures call for repairing or disabling the affected provider.
 
 ## Connect a receiver
 
-1. Edit `infra/observability/alertmanager.yml`: replace the placeholder
+1. Run `node scripts/production.mjs prepare`, then edit the ignored
+   `infra/secrets/alertmanager.yml`: replace the placeholder
    `ops-webhook` URL with the team's live endpoint (chat webhook, PagerDuty,
    or any HTTP sink for the Alertmanager JSON payload).
-2. Recreate the overlay: `docker compose -f compose.yaml -f compose.playback.yaml --profile playback up -d alertmanager prometheus`.
+   Keep the host `infra/secrets` directory mode `0700` and this file mode
+   `0644`: the directory protects host access, and the unprivileged container
+   reads the individual read-only mount. Preparation sets these Unix modes.
+2. Set `ALERTMANAGER_CONFIG` to that file in `.env.production`. Run
+   `node scripts/production.mjs check`, then `node scripts/production.mjs up`
+   to deploy the production stack with the private receiver configuration.
 3. Verify delivery (below). Until step 3 passes, paging is not claimed —
    rule state in admin is monitoring, not notification.
 
@@ -25,10 +31,11 @@ Provider failures call for repairing or disabling the affected provider.
 
 1. `bun run infra:validate` — compose configs (including the playback
    overlay) must render, and Cloudflare Terraform must validate.
-2. In Prometheus (`:9090`), check Status → Runtime & Build Information shows
+2. Through a private administrative connection to Prometheus (container port
+   `9090`), check Status → Runtime & Build Information shows
    no config errors, and Alerts lists ProviderPlaybackFailure with its state.
 3. Trigger a test notification: post a firing test alert to Alertmanager
-   (`POST /api/v1/alerts` on `:9093`) and confirm it arrives at the
+   (`POST /api/v1/alerts` on private Alertmanager port `9093`) and confirm it arrives at the
    configured endpoint.
 4. Confirm `/-/healthy` on `:9093` and resolved notifications (`send_resolved: true`) arrive when the condition clears.
 

@@ -1,9 +1,8 @@
-import { subtitlePreferenceResponseSchema, subtitlesResponseSchema } from '@consumit/contracts'
+import { subtitleDiscoveryEventSchema, subtitleDiscoveryPageSchema, subtitlePreferenceResponseSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
+export type { SubtitleCandidate, SubtitleProviderStatus, SubtitleDiscoveryEvent } from '@consumit/contracts'
+import type { SubtitleDiscoveryEvent } from '@consumit/contracts'
 
 export type AggregatedSubtitle = { id: string; label: string; language: string; url: string }
-export type SubtitleCandidate = { id: string; label: string; language: string; provider: string; release?: string; hi?: boolean; forced?: boolean; sdh?: boolean; machineTranslated?: boolean; preparedUrl?: string }
-export type SubtitleProviderStatus = { id: string; name: string; state: 'ready' | 'skipped' | 'no_match' | 'failed' | 'timeout'; durationMs: number; found: number; reason?: 'credentials_required' | 'unsupported' }
-export type SubtitleDiscoveryEvent = { type: 'snapshot' | 'provider' | 'complete'; searchId: string; languages: { code: string; count: number }[]; provider?: SubtitleProviderStatus }
 
 export async function discoverSubtitles(
   ref: { kind: 'movie' | 'series' | 'anime'; id: number; season?: number; episode?: number },
@@ -13,48 +12,72 @@ export async function discoverSubtitles(
   const params = new URLSearchParams({ kind: ref.kind, id: String(ref.id) })
   if (ref.season) params.set('season', String(ref.season))
   if (ref.episode) params.set('episode', String(ref.episode))
-  const response = await fetch(`/v1/subtitles/discover?${params}`, { credentials: 'same-origin', signal })
+  const response = await fetch(`/v1/subtitles/discover?${params}`, { credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) })
   if (!response.ok || !response.body) throw new Error('Subtitle discovery is unavailable.')
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let pending = ''
-  for (;;) {
+  let searchId: string | undefined
+  let completed = false
+  const emit = (line: string) => {
+    if (!line.trim()) return
+    let body: unknown
+    try { body = JSON.parse(line) } catch { throw new Error('Subtitle discovery returned an invalid response. Try again.') }
+    const event = subtitleDiscoveryEventSchema.safeParse(body)
+    if (!event.success) throw new Error('Subtitle discovery returned an invalid response. Try again.')
+    if (completed || (searchId && event.data.searchId !== searchId)) throw new Error('Subtitle discovery returned an invalid response. Try again.')
+    searchId = event.data.searchId
+    completed = event.data.type === 'complete'
+    onEvent(event.data)
+  }
+  let bytes = 0
+  try { for (;;) {
     const { done, value } = await reader.read()
+    bytes += value?.byteLength ?? 0
+    if (bytes > 262_144) throw new Error('Subtitle discovery returned too much data. Try again.')
     pending += decoder.decode(value, { stream: !done })
     let lineEnd: number
     while ((lineEnd = pending.indexOf('\n')) !== -1) {
       const line = pending.slice(0, lineEnd)
       pending = pending.slice(lineEnd + 1)
-      if (!line) continue
-      const event = JSON.parse(line) as SubtitleDiscoveryEvent
-      if (event && ['snapshot', 'provider', 'complete'].includes(event.type) && Array.isArray(event.languages)) onEvent(event)
+      emit(line)
     }
-    if (done) break
-  }
+    if (done) {
+      emit(pending)
+      if (!completed) throw new Error('Subtitle discovery stopped before finishing. Try again.')
+      break
+    }
+  } } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
 }
 
 export async function pageSubtitles(searchId: string, language: string, cursor: number, langs: readonly string[], signal: AbortSignal) {
   const params = new URLSearchParams({ searchId, language, cursor: String(cursor), langs: langs.join(',') })
-  const response = await fetch(`/v1/subtitles/discover/page?${params}`, { credentials: 'same-origin', signal })
+  const response = await fetch(`/v1/subtitles/discover/page?${params}`, { credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]) })
   if (!response.ok) throw new Error('Subtitle tracks could not be loaded.')
-  return await response.json() as { tracks: SubtitleCandidate[]; total: number; nextCursor: number | null }
+  const parsed = subtitleDiscoveryPageSchema.safeParse(await response.json().catch(() => null))
+  if (!parsed.success) throw new Error('Subtitle tracks could not be loaded. Try again.')
+  return parsed.data
 }
 
 export async function searchSubtitles(searchId: string, query: string, cursor: number, signal: AbortSignal) {
   const params = new URLSearchParams({ searchId, q: query, cursor: String(cursor) })
-  const response = await fetch(`/v1/subtitles/discover/search?${params}`, { credentials: 'same-origin', signal })
+  const response = await fetch(`/v1/subtitles/discover/search?${params}`, { credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]) })
   if (!response.ok) throw new Error('Subtitle search could not be loaded.')
-  return await response.json() as { tracks: SubtitleCandidate[]; total: number; nextCursor: number | null }
+  const parsed = subtitleDiscoveryPageSchema.safeParse(await response.json().catch(() => null))
+  if (!parsed.success) throw new Error('Subtitle search could not be loaded. Try again.')
+  return parsed.data
 }
 
 export async function prepareSubtitle(searchId: string, candidateId: string, signal: AbortSignal): Promise<AggregatedSubtitle> {
   const response = await fetch('/v1/subtitles/discover/prepare', {
-    method: 'POST', credentials: 'same-origin', signal,
+    method: 'POST', credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ searchId, candidateId }),
   })
   if (!response.ok) throw new Error('This subtitle could not be prepared. Choose another track.')
-  return await response.json() as AggregatedSubtitle
+  const parsed = subtitleTrackSchema.safeParse(await response.json().catch(() => null))
+  if (!parsed.success) throw new Error('This subtitle could not be prepared. Choose another track.')
+  return parsed.data
 }
 
 export type SubtitlePreference = { trackId: string | null; offsetMs: number }

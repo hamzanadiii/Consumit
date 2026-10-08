@@ -7,6 +7,9 @@ services:
   prometheus:
     profiles: !reset []
 
+  alertmanager:
+    profiles: !reset []
+
   playback-valkey:
     profiles: !reset []
 

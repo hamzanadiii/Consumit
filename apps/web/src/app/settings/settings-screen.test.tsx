@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -70,31 +70,98 @@ describe('settings preferred subtitle languages', () => {
     renderSettings()
     const group = screen.getByRole('group', { name: 'Preferred subtitle languages' })
 
-    await user.click(within(group).getByRole('button', { name: /العربية/ }))
-    await user.click(within(group).getByRole('button', { name: /Français/ }))
-    await user.click(within(group).getByRole('button', { name: /Español/ }))
+    for (const language of ['العربية', 'Français', 'Español']) {
+      await user.click(within(group).getByRole('button', { name: /Add subtitle language/ }))
+      await user.click(screen.getByRole('option', { name: language }))
+    }
     expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'fr', 'es'])
-    expect(screen.getByText('3/3 · subtitles are fetched in these languages first, in order.')).toBeInTheDocument()
-    expect(within(group).getByRole('button', { name: /Deutsch/ })).toBeDisabled()
+    expect(screen.getByText(/Three languages selected/)).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: /Add subtitle language/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Español' })).toHaveFocus()
 
-    await user.click(within(group).getByRole('button', { name: /Français/ }))
+    await user.click(within(group).getByRole('button', { name: 'Remove Français' }))
     expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'es'])
-    expect(within(group).getByRole('button', { name: /Deutsch/ })).toBeEnabled()
+    expect(within(group).getByRole('button', { name: /Add subtitle language/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Remove Español' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Remove Español' }))
+    expect(screen.getByRole('button', { name: 'Remove العربية' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Remove العربية' }))
+    expect(within(group).getByRole('button', { name: /Add subtitle language/ })).toHaveFocus()
   }, 15_000)
+
+  it('reorders stored languages and updates the automatic track language', async () => {
+    window.localStorage.setItem('consumit.player.subtitle-languages', JSON.stringify(['en', 'ar', 'fr']))
+    const user = userEvent.setup()
+    renderSettings()
+    await user.click(await screen.findByRole('button', { name: 'Move العربية up' }))
+    expect(JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]')).toEqual(['ar', 'en', 'fr'])
+    expect(window.localStorage.getItem('consumit.player.subtitle-language')).toBe('ar')
+    expect(within(screen.getByRole('list', { name: 'Subtitle language priority' })).getAllByRole('listitem')[0]).toHaveTextContent('العربية')
+    expect(screen.getByRole('button', { name: 'Move العربية up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove العربية' })).toHaveFocus()
+  })
 })
 
 describe('settings honest playback surface', () => {
-  it('shows automatic recovery and player-owned tracks without dead controls', () => {
+  it('highlights the section being read and lets Account return to its own section', async () => {
+    render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
+    const rail = screen.getByRole('navigation', { name: 'Settings' })
+    const sections = document.querySelectorAll('[data-consumit-settings-section]')
+    sections.forEach((section, index) => vi.spyOn(section, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, (index - 2) * 500 + 60, 800, 450)))
+    fireEvent.scroll(window)
+    await waitFor(() => expect(within(rail).getByRole('link', { name: /Streaming & playback/ })).toHaveAttribute('aria-current'))
+    expect(within(rail).getByRole('link', { name: /Account/ })).not.toHaveAttribute('aria-current')
+    expect(within(rail).getByRole('link', { name: /Account/ })).toHaveAttribute('href', '#account')
+  })
+  it('states automatic recovery and player-owned tracks as facts without dead controls', () => {
     render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
 
-    expect(screen.getByText('Automatic')).toBeInTheDocument()
+    expect(screen.getByText('Automatic source recovery.')).toBeInTheDocument()
     expect(screen.getByText(/switches to the next working source without losing your position/)).toBeInTheDocument()
-    expect(screen.getAllByText('Not available')).toHaveLength(2)
+    expect(screen.getByText('Quality and tracks stay with the player.')).toBeInTheDocument()
+    expect(screen.queryByText('Not available')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Edit preferences' })).not.toBeInTheDocument()
     expect(screen.queryByText('Autoplay next episode')).not.toBeInTheDocument()
     expect(screen.queryByText('Playback quality')).not.toBeInTheDocument()
     expect(screen.queryByText('Hide spoilers')).not.toBeInTheDocument()
   })
+
+  it('numbers the rail and the section headings in the same order', () => {
+    render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
+
+    const rail = screen.getByRole('navigation', { name: 'Settings' })
+    expect(within(rail).getByRole('link', { name: /Account/ })).toHaveTextContent('01')
+    expect(within(rail).getByRole('link', { name: /Data & security/ })).toHaveTextContent('06')
+    expect(screen.getByRole('heading', { name: 'Privacy & social' })).toHaveTextContent('02')
+    expect(screen.getByRole('heading', { name: 'Data & security' })).toHaveTextContent('06')
+  })
+})
+
+describe('settings unsaved changes bar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.updateMemberProfile.mockImplementation(async (input: Record<string, unknown>) => ({ ...profile, ...input }))
+  })
+
+  it('appears when the profile form changes, discards, and saves from the bar', async () => {
+    const user = userEvent.setup()
+    render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
+
+    expect(screen.queryByText('You have unsaved changes to your profile.')).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Display name'), '!')
+    expect(screen.getByText('You have unsaved changes to your profile.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(screen.queryByText('You have unsaved changes to your profile.')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Display name')).toHaveValue('Hamza')
+
+    await user.type(screen.getByLabelText('Display name'), '!')
+    await user.click(screen.getByRole('button', { name: /^Save$/ }))
+    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({ displayName: 'Hamza!' })))
+    expect(screen.queryByText('You have unsaved changes to your profile.')).not.toBeInTheDocument()
+    expect(await screen.findByText('Profile saved.')).toBeInTheDocument()
+  }, 15_000)
 })
 
 describe('settings avatar portrait picker', () => {

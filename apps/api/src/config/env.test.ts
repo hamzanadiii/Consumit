@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
+  it.each(['https://member:password@example.com', 'https://example.com/path', 'https://example.com?query=1', 'https://example.com#fragment', 'ftp://example.com'])('rejects an unsafe application origin: %s', (APP_ORIGIN) => {
+    expect(() => loadEnv({ NODE_ENV: 'test', APP_ORIGIN })).toThrow(/origin/i)
+  })
+  it('requires HTTPS for the production application origin', () => {
+    expect(() => loadEnv({ NODE_ENV: 'production', APP_ORIGIN: 'http://example.com' })).toThrow(/HTTPS/)
+  })
   it('keeps relay disabled and requires explicit exact-host permission and complete configuration', () => {
     expect(loadEnv({ NODE_ENV: 'test' }).playback?.relay).toBeUndefined()
     expect(() => loadEnv({ PLAYBACK_RELAY_ENABLED: 'true' })).toThrow('Relay requires')
@@ -51,7 +57,7 @@ describe('API environment', () => {
   })
 
   it('requires the complete secure production foundation', () => {
-    expect(() => loadEnv({ NODE_ENV: 'production' })).toThrow(/required in production/)
+    expect(() => loadEnv({ NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online' })).toThrow(/required in production/)
     expect(() => loadEnv({
       APP_ORIGIN: 'https://consumit.online',
       AUTH_CODE_PEPPER: 'a-secure-pepper-with-more-than-32-characters',
@@ -63,5 +69,10 @@ describe('API environment', () => {
       TMDB_API_READ_TOKEN: 'tmdb-token',
       VALKEY_URL: 'valkeys://localhost:6379/0',
     })).not.toThrow()
+  })
+  it('rejects example authentication peppers in production without disclosing them', () => {
+    for (const AUTH_CODE_PEPPER of ['replace-with-at-least-32-random-characters', 'consumit-local-pepper-at-least-32-characters']) {
+      expect(() => loadEnv({ NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', AUTH_CODE_PEPPER })).toThrow(/new production secret/)
+    }
   })
 })

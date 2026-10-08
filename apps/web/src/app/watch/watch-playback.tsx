@@ -714,7 +714,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
           preparationMeta={episodeMeta ?? [title.year, formatRuntime(title.kind === 'movie' ? title.runtimeMinutes : title.episodeRuntimeMinutes)].filter(Boolean).join(' · ')}
           onPreviousEpisode={prevHref ? () => router.push(prevHref) : undefined}
           onNextEpisode={nextHref ? () => router.push(nextHref) : undefined}
-          pauseFacts={pauseFacts} pauseOverview={pauseOverview} pauseLogoUrl={title.logoUrl ?? undefined}
+          pauseFacts={pauseFacts} pauseOverview={pauseOverview} pauseLogoUrl={title.logoUrl ?? undefined} pauseTitle={title.title}
           onBack={() => router.push(titleHref(title))}
           {...(memberId ? { subtitleDelayMs: syncedDelay ?? undefined, onSubtitleDelayMsChange: persistDelay } : {})}
           onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)} onRetry={() => void start()}

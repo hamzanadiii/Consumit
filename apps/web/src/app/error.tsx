@@ -1,24 +1,27 @@
 'use client'
 
-import { RotateCcw } from 'lucide-react'
+import { ArrowLeft, RotateCcw } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect } from 'react'
 
-import { Button, ErrorState } from '@consumit/ui'
+import { Button, buttonVariants, ErrorState } from '@consumit/ui'
 
 import { FilScreenShell } from './home/filscreen-shell'
 
-export default function Error({ error, reset }: { error: Error; reset: () => void }) {
+export default function Error({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   useEffect(() => {
     console.error(error)
   }, [error])
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem]">
+      <main className="mx-auto flex min-h-[60vh] w-full max-w-[90rem] items-center py-10">
         <ErrorState
-          action={<Button onClick={reset}><RotateCcw aria-hidden="true" /> Try again</Button>}
-          description="Consumit could not load this catalog view. Your library and watch history are safe."
-          title="The catalog missed its cue"
+          action={<div className="flex flex-wrap gap-3"><Button onClick={retry}><RotateCcw aria-hidden="true" /> Try again</Button><Link className={buttonVariants({ variant: 'secondary' })} href="/"><ArrowLeft aria-hidden="true" /> Back to Home</Link></div>}
+          className="w-full"
+          description="This page could not load. Try again, or return to Home to keep browsing."
+          detail={error.digest ? `Reference: ${error.digest}` : undefined}
+          title="Let's get you back to watching"
         />
       </main>
     </FilScreenShell>

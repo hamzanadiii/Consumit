@@ -21,6 +21,9 @@ export function FilScreenFooter() {
         <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-1">
           <Link className={LINK_CLASS} href="/about">About</Link>
           <Link className={LINK_CLASS} href="/help">Help center</Link>
+          <Link className={LINK_CLASS} href="/terms">Terms</Link>
+          <Link className={LINK_CLASS} href="/privacy">Privacy</Link>
+          <Link className={LINK_CLASS} href="/dmca">DMCA</Link>
           <Link className={LINK_CLASS} href="/about#catalog-credit">Catalog credits <ArrowUpRight aria-hidden="true" className="size-3.5" /></Link>
         </nav>
       </div>

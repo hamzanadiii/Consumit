@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders as render } from '@/test/render'
 import type { MemberProfileData } from '@consumit/contracts'
@@ -31,7 +31,7 @@ describe('profile archive routing', () => {
   it.each([[ListsRedirect, '/profile/hamza/lists'], [WatchlistRedirect, '/profile/hamza/watchlist'], [LibraryRedirect, '/profile/hamza/history']] as const)('redirects legacy entry points into the member profile', async (page, destination) => {
     await expect(page()).rejects.toThrow(`redirect:${destination}`)
   })
-  it.each(['watchlist', 'likes', 'films', 'history', 'lists', 'profile'])('keeps the requested %s destination through guest sign-in and opens only the signed-in member archive', async section => {
+  it.each(['watchlist', 'likes', 'films', 'history', 'lists'])('keeps the requested %s destination through guest sign-in and opens only the signed-in member archive', async section => {
     const props = { searchParams: Promise.resolve({ section }) }
     mocks.session.mockResolvedValue({ status: 'anonymous' })
     await expect(LibraryRedirect(props)).rejects.toThrow(`redirect:/sign-in?next=${encodeURIComponent(`/library?section=${section}`)}`)
@@ -39,6 +39,14 @@ describe('profile archive routing', () => {
     expect(mocks.archive).not.toHaveBeenCalled()
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'hamza' } })
     await expect(LibraryRedirect(props)).rejects.toThrow(`redirect:/profile/hamza${section === 'profile' ? '' : `/${section}`}`)
+  })
+  it('shows guests their guest profile with a sign-in path instead of redirecting', async () => {
+    mocks.session.mockResolvedValue({ status: 'anonymous' })
+    render(await LibraryRedirect({ searchParams: Promise.resolve({ section: 'profile' }) }))
+    const view = within(document.querySelector('[data-consumit-guest-profile]') as HTMLElement)
+    expect(view.getByRole('heading', { level: 1, name: 'Browsing as a guest.' })).toBeInTheDocument()
+    expect(view.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in?next=%2Flibrary%3Fsection%3Dprofile')
+    expect(view.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', '/sign-up')
   })
   it.each(['network', '//evil.example', ['history', 'likes']])('rejects invalid library sections without loading a member session', async section => {
     await expect(LibraryRedirect({ searchParams: Promise.resolve({ section }) })).rejects.toThrow('not-found')

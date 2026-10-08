@@ -1,8 +1,8 @@
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
-import multipart from '@fastify/multipart'
 import rateLimit from '@fastify/rate-limit'
 import Fastify from 'fastify'
+import { Valkey } from 'iovalkey'
 import type { Catalog } from './catalog/catalog.ts'
 import { registerCatalogRoutes } from './catalog/routes.ts'
 import { unavailableCatalogAdapter } from './catalog/unavailable-catalog.ts'
@@ -18,6 +18,7 @@ import { apiRateLimitKey, isCatalogRead } from './http/rate-limit.ts'
 import { registerHealthRoutes } from './http/health.ts'
 import { generateRequestId, loggerOptions, registerRequestContext } from './http/request-context.ts'
 import { createIdentity } from './identity/service.ts'
+import { sessionCookieName } from './identity/session.ts'
 import { registerIdentityRoutes } from './identity/routes.ts'
 import { unavailableIdentity } from './identity/unavailable-identity.ts'
 import type { Identity } from './identity/identity.ts'
@@ -25,10 +26,6 @@ import { createPostgresIdentityRepository } from './identity/postgres-repository
 import type { IdentityRepository } from './identity/repository.ts'
 import { createResendNotifier } from './identity/resend-notifier.ts'
 import { createValkeyAuthState } from './identity/valkey-auth-state.ts'
-import { createLetterboxdImporter, type LetterboxdImporter } from './imports/letterboxd/importer.ts'
-import { createPostgresLetterboxdImportRepository } from './imports/letterboxd/postgres-repository.ts'
-import { registerLetterboxdImportRoutes } from './imports/letterboxd/routes.ts'
-import { unavailableLetterboxdImporter } from './imports/letterboxd/unavailable-importer.ts'
 import type { MemberData } from './member-data/member-data.ts'
 import { createPostgresMemberData } from './member-data/postgres-member-data.ts'
 import { registerMemberDataRoutes } from './member-data/routes.ts'
@@ -84,7 +81,6 @@ type BuildAppOptions = {
   animeCanonicalEpisodeArt?: CanonicalEpisodeArt
   env?: ApiEnv
   identity?: Identity
-  letterboxdImporter?: LetterboxdImporter
   memberData?: MemberData
   providerConfigStore?: ProviderConfigStore
   repository?: IdentityRepository
@@ -92,7 +88,7 @@ type BuildAppOptions = {
   subtitlePreferences?: SubtitlePreferences
 }
 
-export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, animeCanonicalEpisodeArt, env = loadEnv(), identity, letterboxdImporter, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
+export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, animeCanonicalEpisodeArt, env = loadEnv(), identity, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
     // Matches requestTimeout: subtitle aggregation may legitimately work
@@ -107,12 +103,23 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
 
   await app.register(helmet)
   await app.register(cookie)
-  await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1, parts: 2 } })
+  // Credential and public budgets survive restarts and apply across API
+  // instances. Never silently fall back to per-process limits in production.
+  const requestLimits = env.nodeEnv === 'production' && env.valkeyUrl
+    ? new Valkey(env.valkeyUrl, { lazyConnect: true, connectTimeout: 3000, commandTimeout: 2000, maxRetriesPerRequest: 1, enableOfflineQueue: false, retryStrategy: (attempt) => Math.min(attempt * 200, 1000) })
+    : undefined
+  if (requestLimits) {
+    requestLimits.on('error', () => { /* Request errors use the API error boundary. */ })
+    try { await requestLimits.connect() } catch (error) { requestLimits.disconnect(); throw error }
+    app.addHook('onClose', async () => { requestLimits.disconnect() })
+  }
   await app.register(rateLimit, {
+    ...(requestLimits ? { redis: requestLimits, nameSpace: 'consumit:http-limits:v1:' } : {}),
+    skipOnError: false,
     errorResponseBuilder: () => rateLimitExceeded(),
     // Public catalog fan-out has a separate bounded bucket; it cannot
     // consume the general member budget. Credential routes remain stricter.
-    keyGenerator: (request) => apiRateLimitKey(request),
+    keyGenerator: (request) => apiRateLimitKey(request, resolvedIdentity, sessionCookieName(env)),
     max: (request) => isCatalogRead(request) ? 600 : 100,
     timeWindow: '1 minute',
   })
@@ -122,11 +129,10 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
 
   let closeIdentityResources: (() => Promise<void>) | undefined
   let resolvedIdentity = identity ?? unavailableIdentity
-  let resolvedImporter = letterboxdImporter ?? unavailableLetterboxdImporter
   let resolvedMemberData = memberData ?? unavailableMemberData
   const needsPersistentCatalogCache = env.nodeEnv !== 'test'
     && (!animeCatalog || (catalog === unavailableCatalogAdapter && Boolean(env.tmdbToken)))
-  const needsDatabase = env.databaseUrl && (!identity || !letterboxdImporter || !memberData || needsPersistentCatalogCache)
+  const needsDatabase = env.databaseUrl && (!identity || !memberData || needsPersistentCatalogCache)
   const db = needsDatabase ? createDbClient(env.databaseUrl!, {
       ...(env.databaseSslCa ? { sslCa: env.databaseSslCa } : {}),
       sslMode: env.databaseSslMode,
@@ -163,10 +169,6 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
       await Promise.allSettled([state.close(), db.close()])
     }
   }
-  if (!letterboxdImporter && db) {
-    resolvedImporter = createLetterboxdImporter({ catalog: resolvedCatalog, repository: createPostgresLetterboxdImportRepository(db.prisma) })
-    closeIdentityResources ??= async () => db.close()
-  }
   if (!memberData && db) resolvedMemberData = createPostgresMemberData(db.prisma)
 
   app.addHook('onClose', async () => {
@@ -176,11 +178,14 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   registerHealthRoutes(app, {
     catalogConfigured: resolvedCatalog !== unavailableCatalogAdapter,
     identityConfigured: resolvedIdentity !== unavailableIdentity,
+    probes: {
+      ...(db ? { database: () => db.prisma.$queryRaw`SELECT 1` } : {}),
+      ...(requestLimits ? { rateLimits: () => requestLimits.ping() } : {}),
+    },
   })
   registerWebVitalsRoutes(app)
   registerIdentityRoutes(app, { env, identity: resolvedIdentity })
   const repository = overrideRepository ?? (identity === undefined && db ? createPostgresIdentityRepository(db.prisma) : undefined)
-  registerLetterboxdImportRoutes(app, { env, identity: resolvedIdentity, importer: resolvedImporter })
   registerMemberDataRoutes(app, { env, identity: resolvedIdentity, memberData: resolvedMemberData })
   const rawAnimeCatalog = animeCatalog ?? createAnilistCatalog()
   const resolvedAnimeCatalog = catalogCacheStore && env.nodeEnv !== 'test'

@@ -8,6 +8,26 @@ export type DbClient = {
   prisma: PrismaClient
 }
 
+const connectionSslParameters = new Set(['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat'])
+
+function configuredConnectionUrl(databaseUrl: string): string {
+  let url: URL
+  try {
+    url = new URL(databaseUrl)
+    if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname) throw new Error('Invalid connection URL')
+  } catch {
+    // URL parser errors can include connection credentials.
+    throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.')
+  }
+  // pg applies URL SSL fields after the explicit pool options. Remove them
+  // before parsing so application TLS/CA policy cannot be overridden, and
+  // URL certificate paths cannot cause unexpected filesystem reads.
+  for (const key of new Set(url.searchParams.keys())) {
+    if (connectionSslParameters.has(key.toLowerCase())) url.searchParams.delete(key)
+  }
+  return url.toString()
+}
+
 /**
  * One process-scoped database client. Modules receive this instead of
  * creating pools: connection count stays bounded no matter how the API
@@ -21,7 +41,7 @@ export function createDbClient(databaseUrl: string, options: { sslCa?: string; s
   }
   const pool = new pg.Pool({
     connectionTimeoutMillis: 5_000,
-    connectionString: databaseUrl,
+    connectionString: configuredConnectionUrl(databaseUrl),
     idle_in_transaction_session_timeout: 30_000,
     lock_timeout: 5_000,
     max: 10,
