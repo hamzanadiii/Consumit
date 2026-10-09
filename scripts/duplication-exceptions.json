@@ -15,8 +15,6 @@
   "apps/next-web/src/app/legal/legal-document.tsx": "Legal layout binds each frontend shell; public copy remains route-owned.",
   "apps/web/src/app/support/support-shell.tsx": "Support composition binds each frontend reduced theme and navigation.",
   "apps/next-web/src/app/support/support-shell.tsx": "Support composition binds each frontend reduced theme and navigation.",
-  "apps/web/src/app/embed/embed-data.ts": "Retired embed integration is retained with each frontend embed source types; no public API is mounted.",
-  "apps/next-web/src/app/embed/embed-data.ts": "Retired embed integration is retained with each frontend embed source types; no public API is mounted.",
   "apps/web/src/app/catalog/member-action-panel.tsx": "Export adapter injects each frontend LogDialog and RatingWidget into shared member actions.",
   "apps/next-web/src/app/catalog/member-action-panel.tsx": "Export adapter injects each frontend LogDialog and RatingWidget into shared member actions.",
   "packages/ui/src/index.ts": "Public export surface binds each frontend presentation namespace; shared implementations are export adapters.",

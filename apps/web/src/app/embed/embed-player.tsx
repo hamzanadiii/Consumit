@@ -10,19 +10,8 @@ import { listEmbedProviders, recoverEmbedSession, resolveEmbedSession, switchEmb
 import { fetchAggregatedSubtitles, type AggregatedSubtitle } from '@/lib/subtitles-browser'
 import { createPlaybackEvents } from '@/lib/playback-events'
 
-export interface EmbedSource {
-  url: string
-  type: 'hls' | 'dash' | 'native'
-  quality: string
-  provider: string
-  headers: Record<string, string>
-}
-
-export interface EmbedSub {
-  url: string
-  label: string
-  format: 'vtt' | 'srt'
-}
+import type { EmbedSource, EmbedSub } from '@consumit/web-core/shared/embed-types'
+export type { EmbedSource, EmbedSub } from '@consumit/web-core/shared/embed-types'
 
 export type EmbedPlayerEventName = 'play' | 'pause' | 'seeked' | 'ended' | 'timeupdate'
 

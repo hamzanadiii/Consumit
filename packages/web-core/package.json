@@ -50,7 +50,9 @@
     "./client/filscreen-footer": "./src/features/home/filscreen-footer.tsx",
     "./client/embed-empty": "./src/features/embed/embed-empty.tsx",
     "./client/member-action-panel": "./src/features/catalog/member-action-panel.tsx",
-    "./client/on-demand-link": "./src/features/shared/on-demand-link.tsx"
+    "./client/on-demand-link": "./src/features/shared/on-demand-link.tsx",
+    "./server/embed-data": "./src/features/embed/embed-data.ts",
+    "./shared/embed-types": "./src/features/embed/embed-types.ts"
   },
   "scripts": {
     "lint": "eslint .",
