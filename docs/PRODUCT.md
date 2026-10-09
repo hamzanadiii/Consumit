@@ -4,6 +4,8 @@ On the Watch page, matching HLS proxy movies renew access privately while the mo
 
 When a configured server supplies multiple fixed renditions, members select their resolution in the existing player Quality menu without adding server rows. Miami exposes its available 2160p, 1080p, 720p and 480p playlists this way; LookMovie exposes its available movie resolutions under one server, including 1080p, 720p and 480p on checked titles; Citadel exposes its 720p and 480p renditions under one server. Switching retains position and play intent; failure keeps the current stream with a notice. Fixed playlist choices do not imply adaptive Auto quality.
 
+Guests can still watch without creating an account. When their browser needs verification, Watch shows the verification step with Cancel and retry before resolving a source. Verified browsers do not repeat it for each fragment or normal source renewal. TV playback pairs through a one-time handoff while progress remains with the sender.
+
 ## Product definition
 
 If automatic startup cannot create a playback session, Watch offers Choose another server in its existing error panel. Server discovery is lazy and retryable; selecting a configured server starts that exact source with the same title or episode and saved native position. A failed choice remains selected for Try again, while Auto restores the normal delivery waterfall. External frames retain their existing progress limitations.

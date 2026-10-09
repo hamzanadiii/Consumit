@@ -51,7 +51,7 @@ resource "cloudflare_ruleset" "cache" {
     {
       action            = "set_cache_settings"
       description       = "Never cache private or mutable APIs"
-      expression        = "starts_with(http.request.uri.path, \"/health/\") or http.request.method ne \"GET\" or (starts_with(http.request.uri.path, \"/v1/\") and (http.cookie contains \"consumit_session\" or not (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\"))))"
+      expression        = "starts_with(http.request.uri.path, \"/media/\") or starts_with(http.request.uri.path, \"/health/\") or http.request.method ne \"GET\" or (starts_with(http.request.uri.path, \"/v1/\") and (http.cookie contains \"consumit_session\" or not (starts_with(http.request.uri.path, \"/v1/titles/\") or starts_with(http.request.uri.path, \"/v1/anime/\"))))"
       action_parameters = { cache = false }
     },
   ]

@@ -32,6 +32,16 @@ test('production strips inherited SES and AWS credentials rather than leaking an
   assert.equal(env.SES_REGION, 'ca-central-1')
 })
 
+test('production verification uses only the selected private environment', () => {
+  const inherited = { PATH: 'runtime', TURNSTILE_SECRET_KEY: 'local-secret', NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'local-widget' }
+  const absent = productionProcessEnvironment(inherited, {}, '/private/production')
+  assert.equal(absent.TURNSTILE_SECRET_KEY, undefined)
+  assert.equal(absent.NEXT_PUBLIC_TURNSTILE_SITE_KEY, undefined)
+  const configured = productionProcessEnvironment(inherited, { TURNSTILE_SECRET_KEY: 'private-secret' }, '/private/production')
+  assert.equal(configured.TURNSTILE_SECRET_KEY, 'private-secret')
+  assert.equal(configured.PATH, 'runtime')
+})
+
 test('a local fallback cannot silently replace the selected production backup database', () => {
   const config = fixture()
   config.services.backup.environment.DATABASE_URL = 'postgresql://fixture@postgres/local'
@@ -83,6 +93,7 @@ test('production preflight rejects templates and reports field names without cre
 test('a complete production environment can pass preflight with relay disabled', () => {
   assert.deepEqual(productionEnvironmentIssues({
     APP_ORIGIN: 'https://consumit.online', NEXT_PUBLIC_SITE_URL: 'https://consumit.online',
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'fixture-site-key', TURNSTILE_SECRET_KEY: 'fixture-secret',
     AUTH_CODE_PEPPER: 'fixture-production-pepper-at-least-32-characters', AUTH_EMAIL_FROM: 'Consumit <auth@consumit.online>',
     DATABASE_URL: 'postgresql://fixture@managed.postgres.test/production?sslmode=verify-full', DATABASE_SSL_MODE: 'require',
     RESEND_API_KEY: 'fixture-email-key', TMDB_API_READ_TOKEN: 'fixture-catalog-token',

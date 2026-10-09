@@ -7,6 +7,8 @@ services:
       args:
         NEXT_PUBLIC_SITE_URL: http://localhost:3080
         CONSUMIT_API_URL: http://api:3001
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        NEXT_PUBLIC_CAST_RECEIVER_ID: ${NEXT_PUBLIC_CAST_RECEIVER_ID:-}
     ports:
       - "127.0.0.1:3080:3000"
     env_file:

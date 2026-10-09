@@ -19,12 +19,16 @@ export function assertProductionDatabaseUrl(value, options = {}) {
 
 export function productionEnvironmentIssues(env) {
   const issues = []
+  for (const key of ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY']) {
+    if (/^[123]x0+[A-Z]+$/i.test(env[key] ?? '')) issues.push(`${key} must use a production widget, not a public test key.`)
+  }
   for (const key of ['APP_ORIGIN', 'NEXT_PUBLIC_SITE_URL']) {
     if (env[key] !== 'https://consumit.online') issues.push(`${key} must equal https://consumit.online.`)
   }
+  if (env.PLAYBACK_RELAY_ENABLED === 'true' && env.PLAYBACK_RELAY_ORIGIN !== env.APP_ORIGIN) issues.push('Protected relay must use APP_ORIGIN.')
   const selfHosted = env.DATABASE_DEPLOYMENT === 'self-hosted'
   const emailKeys = env.AUTH_EMAIL_PROVIDER === 'ses' ? ['SES_REGION', 'SES_CONFIGURATION_SET', 'SES_FEEDBACK_QUEUE_URL'] : ['RESEND_API_KEY']
-  for (const key of ['AUTH_CODE_PEPPER', 'AUTH_EMAIL_FROM', 'DATABASE_URL', ...emailKeys, 'TMDB_API_READ_TOKEN', 'RESTIC_REPOSITORY', ...(selfHosted ? ['AWS_BACKUP_BUCKET', 'MIGRATION_DATABASE_URL', 'BACKUP_DATABASE_URL'] : ['CLOUDFLARE_TUNNEL_TOKEN'])]) {
+  for (const key of ['NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'TURNSTILE_SECRET_KEY', 'AUTH_CODE_PEPPER', 'AUTH_EMAIL_FROM', 'DATABASE_URL', ...emailKeys, 'TMDB_API_READ_TOKEN', 'RESTIC_REPOSITORY', ...(selfHosted ? ['AWS_BACKUP_BUCKET', 'MIGRATION_DATABASE_URL', 'BACKUP_DATABASE_URL'] : ['CLOUDFLARE_TUNNEL_TOKEN'])]) {
     if (!env[key] || /replace[-_]|missing[-_]|database\.example/i.test(env[key])) issues.push(`${key} needs its real production value.`)
   }
   if (env.AUTH_CODE_PEPPER && (env.AUTH_CODE_PEPPER.length < 32 || /^consumit-local/i.test(env.AUTH_CODE_PEPPER))) issues.push('AUTH_CODE_PEPPER needs a new secret of at least 32 characters.')
@@ -53,7 +57,7 @@ export function productionEnvironmentIssues(env) {
 export function productionProcessEnvironment(inherited, configured, file) {
   // Bun may export the local .env before calling Node. The production file
   // owns all configuration keys, including absent optional relay credentials.
-  const env = Object.fromEntries(Object.entries(inherited).filter(([key]) => !/^(?:COMPOSE_|APP_|NEXT_PUBLIC_|CONSUMIT_|CLOUDFLARE_|AUTH_|DATABASE_|MIGRATION_|SES_|AWS_|TELEGRAM_|RESEND_|TMDB_|VALKEY_|PLAYBACK_|RESTIC_|STORAGE_BOX_|BACKUP_|ALERTMANAGER_|SUBDL_|JIMAKU_|OPENSUBTITLES_|OTEL_|ADMIN_METRICS_|SUPPORT_EMAIL$|TRUSTED_PROXIES$)/.test(key)))
+  const env = Object.fromEntries(Object.entries(inherited).filter(([key]) => !/^(?:COMPOSE_|APP_|NEXT_PUBLIC_|CONSUMIT_|CLOUDFLARE_|AUTH_|DATABASE_|MIGRATION_|SES_|AWS_|TELEGRAM_|RESEND_|TMDB_|VALKEY_|PLAYBACK_|TURNSTILE_|RESTIC_|STORAGE_BOX_|BACKUP_|ALERTMANAGER_|SUBDL_|JIMAKU_|OPENSUBTITLES_|OTEL_|ADMIN_METRICS_|SUPPORT_EMAIL$|TRUSTED_PROXIES$)/.test(key)))
   return { ...env, ...configured, CONSUMIT_PRODUCTION_ENV_FILE: file }
 }
 

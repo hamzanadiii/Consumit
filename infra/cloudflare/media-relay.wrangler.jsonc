@@ -2,12 +2,26 @@
   "name": "consumit-media-relay",
   "main": "../../packages/media-relay/src/worker.ts",
   "compatibility_date": "2026-09-28",
-  "workers_dev": true,
-  "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } },
+  "workers_dev": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
   "vars": {
     "RELAY_ENABLED": "false",
-    "APP_ORIGIN": "https://consumit.example",
+    "APP_ORIGIN": "https://consumit.online",
     "RELAY_PROVIDERS": "{}",
     "RELAY_DISCOVERY_PROVIDERS": "{}"
-  }
+  },
+  "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "consumit.online/media/*",
+      "zone_name": "consumit.online"
+    }
+  ]
 }

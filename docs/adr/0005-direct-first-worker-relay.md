@@ -1,5 +1,14 @@
 # Start direct and trial Workers for necessary relay traffic
 
+## Owner-bound relay amendment (2026-10-08)
+
+The approved cleanup/security plan preserves guest watching and Workers Free while replacing transferable unbound capabilities. Version-two encrypted grants carry anonymous playback owner, session UUID and browser/cast audience. Browser media and API-compiled control documents require matching HttpOnly playback-cookie proof on the application origin. Missing Origin is acceptable only with that proof; incorrect origins and cross-site requests fail closed. Every nested capability keeps the same owner and audience. Exact-host and public-network enforcement, bounded lifetime, direct-first delivery and buffered renewal remain unchanged.
+
+Production guests obtain four-hour verification through Turnstile before source resolution. Origin/CORS alone never authorizes playback. An authenticated sender pairs a TV using a single-use 60-second Valkey handoff and a separate receiver cookie; the TV receives no member or browser credential. Administrator previews use the same browser authorization with their existing short lifetime.
+
+Worker routes own `https://consumit.online/media/*`; production development/preview URLs are disabled and the gateway denies an origin bypass. Deploy issuer, both browser integrations and edge together; old unbound version-one grants are rejected and existing playback must resolve again. This supersedes earlier compatibility notes about accepting old grants until expiry. No paid relay or DRM is introduced; direct provider URLs remain exposed and authorized retransmission remains possible.
+
+
 [ADR 0006](./0006-provider-embed-fallback.md) supersedes provider-embed deferral and the two-tier timeout budget. Direct/Relay ownership and independent Worker approval remain in force.
 
 Relay session issuance reserves five seconds below the strict thirty-minute capability limit. A live RiveZephyr comparison on 2026-10-04 found that Admin's ninety-second preview grant succeeded while a Watch grant exactly at the maximum was rejected by a slightly slower edge clock. The shorter cutoff is published in both the session and grant; the edge's lifetime, expiry, origin and host validation remains unchanged. This applies to estimated expiry and known long-lived relay sources. See [the RiveZephyr audit](../audits/rivezephyr-watch-2026-10-04.md).

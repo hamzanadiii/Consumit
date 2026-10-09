@@ -13,6 +13,10 @@ COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/next-ui/package.json packages/next-ui/package.json
 
+COPY packages/playback-core/package.json packages/playback-core/package.json
+COPY packages/web-core/package.json packages/web-core/package.json
+COPY packages/ui-core/package.json packages/ui-core/package.json
+
 FROM manifests AS dependencies
 RUN bun install --frozen-lockfile --network-concurrency 16
 
@@ -57,6 +61,9 @@ RUN bun install --frozen-lockfile --filter @consumit/web --network-concurrency 1
 
 FROM web-dependencies AS web-build
 COPY . .
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ARG NEXT_PUBLIC_CAST_RECEIVER_ID
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY} NEXT_PUBLIC_CAST_RECEIVER_ID=${NEXT_PUBLIC_CAST_RECEIVER_ID}
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
     NEXT_TELEMETRY_DISABLED=1
@@ -80,6 +87,9 @@ RUN bun install --frozen-lockfile --filter @consumit/next-web --network-concurre
 
 FROM next-web-dependencies AS next-web-build
 COPY . .
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ARG NEXT_PUBLIC_CAST_RECEIVER_ID
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY} NEXT_PUBLIC_CAST_RECEIVER_ID=${NEXT_PUBLIC_CAST_RECEIVER_ID}
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:3080
 ARG CONSUMIT_API_URL=http://api:3001
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} CONSUMIT_API_URL=${CONSUMIT_API_URL} NEXT_TELEMETRY_DISABLED=1
