@@ -453,7 +453,7 @@ describe('playback shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Subtitle sync offset/ }))
     const menu = screen.getByRole('menu', { name: 'Subtitle sync' })
-    expect(within(menu).getByText('Click a line when you hear it spoken')).toBeInTheDocument()
+    expect(within(menu).getByText('Select a line when you hear it spoken.')).toBeInTheDocument()
     expect(within(menu).getByText('0ms')).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: 'Close subtitle sync' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -844,17 +844,23 @@ describe('playback shell components', () => {
     expect(overlay).toHaveTextContent('2021 · 1h 56m · ★ 6.0 · R')
   })
 
-  it('shows the cast control only when a cast runtime is available', () => {
+  it('opens Cast without a discovered TV and connects only on explicit selection', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
-    expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
     const onCastClick = vi.fn()
-    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
     const button = screen.getByRole('button', { name: 'Cast to TV' })
+    expect(button).toBeEnabled()
     fireEvent.click(button)
+    expect(screen.getByRole('menu', { name: 'Cast to TV' })).toBeInTheDocument()
+    expect(screen.getByText(/TV casting is being set up/)).toBeInTheDocument()
+    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    expect(onCastClick).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose TV' }))
     expect(onCastClick).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu', { name: 'Cast to TV' })).not.toBeInTheDocument()
     rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
-    expect(screen.getByRole('button', { name: 'Disconnect from TV' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect from TV' }))
+    expect(onCastClick).toHaveBeenCalledTimes(2)
   })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()

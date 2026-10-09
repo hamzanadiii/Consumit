@@ -4,8 +4,8 @@
  * The TV never holds member identity: the sender keeps the playback session,
  * polls cast status, and writes progress and telemetry through the existing
  * sender-side infrastructure. The Cast Web Sender SDK (`cast.framework.*`)
- * loads lazily and only when a Cast runtime exists, so browsers without one
- * never pay for it and never see a cast button.
+ * loads only for configured receivers. The player still offers connection
+ * guidance when this browser cannot discover a TV.
  *
  * Reference: https://developers.google.com/cast/docs/web_sender/integrate
  */
@@ -43,6 +43,7 @@ export type CastSdk = {
     CastContext: {
       getInstance(): {
         setOptions(options: { receiverApplicationId: string; autoJoinPolicy?: string }): void
+        getCastState?(): string
         getCurrentSession(): CastSession | null
         requestSession(): Promise<void>
         addEventListener(type: string, listener: (event: { sessionState?: string; castState?: string }) => void): void
@@ -59,7 +60,7 @@ export type CastSdk = {
     RemotePlayerController: new (player: unknown) => {
       playOrPause(): void
       seek(): void
-      setVolumeLevel(level: number, ...rest: unknown[]): void
+      setVolumeLevel(): void
       muteOrUnmute(): void
       addEventListener(type: string, listener: () => void): void
     }
@@ -129,10 +130,11 @@ export function createCastSender(options: {
   const loadScript = options.loadScript ?? defaultLoadScript
   const listeners = new Set<() => void>()
   let sdk = options.sdk ?? null
+  let initialization: Promise<boolean> | null = null
   let initialized = false
   let available = false
   let status: CastStatus | null = null
-  let controller: { playOrPause(): void; seek(): void; setVolumeLevel(level: number, ...rest: unknown[]): void; muteOrUnmute(): void } | null = null
+  let controller: { playOrPause(): void; seek(): void; setVolumeLevel(): void; muteOrUnmute(): void } | null = null
   let player: { currentTime: number; duration: number; isPaused: boolean; volumeLevel: number; isMuted: boolean; isConnected: boolean } | null = null
 
   function emit() { for (const listener of [...listeners]) listener() }
@@ -141,7 +143,7 @@ export function createCastSender(options: {
     if (!player || !player.isConnected) return null
     return {
       connected: true,
-      deviceName: null,
+      deviceName: session()?.getCastDevice()?.friendlyName ?? null,
       position: Number.isFinite(player.currentTime) ? player.currentTime : 0,
       duration: Number.isFinite(player.duration) ? player.duration : 0,
       playing: !player.isPaused,
@@ -176,11 +178,9 @@ export function createCastSender(options: {
 
   function watchSession() {
     if (!sdk || initialized) return
-    initialized = true
     const context = sdk.framework.CastContext.getInstance()
     const types = sdk.framework.CastContextEventType
     const states = sdk.framework.SessionState
-    context.setOptions({ receiverApplicationId: receiverId, autoJoinPolicy: 'ORIGIN_SCOPED' })
     context.addEventListener(types.SESSION_STATE_CHANGED, (event) => {
       if (event.sessionState === states.SESSION_STARTED || event.sessionState === states.SESSION_RESUMED) {
         const device = session()?.getCastDevice() ?? null
@@ -194,9 +194,15 @@ export function createCastSender(options: {
       }
     })
     context.addEventListener(types.CAST_STATE_CHANGED, (event) => {
-      available = event.castState !== undefined && event.castState !== 'NO_DEVICES_AVAILABLE'
+      available = isAvailable(event.castState)
       emit()
     })
+    context.setOptions({ receiverApplicationId: receiverId, autoJoinPolicy: 'ORIGIN_SCOPED' })
+    initialized = true
+  }
+
+  function isAvailable(state: string | undefined) {
+    return state === 'NOT_CONNECTED' || state === 'CONNECTING' || state === 'CONNECTED'
   }
 
   return {
@@ -204,17 +210,23 @@ export function createCastSender(options: {
     get status() { return status },
     async ensure() {
       if (!receiverId) return false
-      if (!sdk) {
-        const loaded = await loadScript()
-        if (!loaded || typeof loaded !== 'object' || !('framework' in loaded)) return false
-        sdk = loaded as CastSdk
-      }
-      watchSession()
-      return true
+      if (!initialization) initialization = (async () => {
+        if (!sdk) {
+          const loaded = await loadScript()
+          if (!loaded || typeof loaded !== 'object' || !('framework' in loaded)) return false
+          sdk = loaded as CastSdk
+        }
+        watchSession()
+        const state = sdk.framework.CastContext.getInstance().getCastState?.()
+        if (state !== undefined) available = isAvailable(state)
+        emit()
+        return true
+      })().catch(() => false).finally(() => { initialization = null })
+      return initialization
     },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     async requestSession() {
-      if (!sdk) throw new Error('Cast is unavailable on this device.')
+      if (!sdk || !initialized) throw new Error('Cast is unavailable on this device.')
       await sdk.framework.CastContext.getInstance().requestSession()
     },
     endSession(stopReceiver = true) {
@@ -239,7 +251,7 @@ export function createCastSender(options: {
     },
     playOrPause() { controller?.playOrPause() },
     seekTo(seconds) { if (player && controller && Number.isFinite(seconds) && seconds >= 0) { player.currentTime = seconds; controller.seek() } },
-    setVolume(level) { controller?.setVolumeLevel(Math.min(1, Math.max(0, level))) },
+    setVolume(level) { if (player && controller && Number.isFinite(level)) { player.volumeLevel = Math.min(1, Math.max(0, level)); controller.setVolumeLevel() } },
     setMuted(muted) { if (player && player.isMuted !== muted) controller?.muteOrUnmute() },
   }
 }

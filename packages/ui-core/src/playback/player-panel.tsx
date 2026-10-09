@@ -5,8 +5,9 @@ import { ArrowLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /** Shared first-party player panels; the backdrop and transport remain visible. */
-export function PlayerPanel({ title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
+export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
   title: string
+  heading?: string
   meta?: ReactNode
   onBack?: (() => void) | undefined
   backLabel?: string
@@ -18,7 +19,7 @@ export function PlayerPanel({ title, meta, onBack, backLabel = 'Back to settings
     <div {...props} className={cn('consumit-player-panel fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-canvas sm:absolute sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card', className)} data-player-panel ref={panel} role="menu">
       <header className="consumit-player-panel-header sticky top-0 z-10 flex min-h-[52px] items-center gap-2 border-b border-border bg-canvas px-3 py-1.5">
         {onBack ? <button aria-label={backLabel} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" className="size-5" /></button> : null}
-        <h3 className="min-w-0 flex-1 text-base font-semibold text-ink">{title}</h3>
+        <h3 className="min-w-0 flex-1 text-base font-semibold text-ink">{heading}</h3>
         {meta ? <span className="text-xs tabular-nums text-muted">{meta}</span> : null}
         <button aria-label={`Close ${title.toLowerCase()}`} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
       </header>

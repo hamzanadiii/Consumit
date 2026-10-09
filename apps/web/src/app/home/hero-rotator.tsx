@@ -180,8 +180,8 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
     return () => observer.disconnect()
   }, [count])
 
-  // Rotation yields while the member hovers, reads, or tabs through the
-  // hero, then resumes on its own. Reduced motion never auto-advances.
+  // Rotation yields while the member points at a control or tabs through
+  // the hero, then resumes on its own. Reduced motion never auto-advances.
   // One shared clock drives the fill bar and the slide advance together,
   // so they can never drift apart. Pausing freezes both mid-frame and
   // resuming continues from the exact same position.
@@ -224,7 +224,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
       onFocusCapture={(event) => setFocused(event.target instanceof HTMLElement && event.target.matches(':focus-visible'))}
       onPointerDownCapture={() => setFocused(false)}
       onKeyDownCapture={() => setFocused(true)}
-      onPointerEnter={(event) => { if (event.pointerType === 'mouse') setHovered(true) }}
+      onPointerOver={(event) => { if (event.pointerType === 'mouse') setHovered(event.target instanceof Element && !!event.target.closest('a, button')) }}
       onPointerLeave={() => setHovered(false)}
       ref={sectionRef}
     >

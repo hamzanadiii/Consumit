@@ -26,7 +26,9 @@
     "./signals/signals": "./src/signals/signals.tsx",
     "./title/title": "./src/title/title.tsx",
     "./playback/player-presentation": "./src/playback/player-presentation.tsx",
-    "./playback/playback": "./src/playback/playback.tsx"
+    "./playback/playback": "./src/playback/playback.tsx",
+    "./playback/subtitle-panels": "./src/playback/subtitle-panels.tsx",
+    "./playback/cast-panel": "./src/playback/cast-panel.tsx"
   },
   "scripts": {
     "lint": "eslint .",

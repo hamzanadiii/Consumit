@@ -14,7 +14,7 @@ Verification is enabled when an explicit API Turnstile secret is configured; pro
 
 Both frontends can proxy `/media/*` using a development-only `CONSUMIT_RELAY_URL` pointing to a local Worker fixture. Configure that Worker with a loopback HTTP `APP_ORIGIN` and an explicit comma-separated `DEVELOPMENT_ORIGINS` list for the local frontend origins (including their ports). The API binds grants to the validated resolve Origin. Production ignores the development origin list. Same-origin proxies carry only the local anonymous playback cookie; upstream providers never receive it.
 
-`bun run dev:web`, `bun run dev:next` and frontend builds prepare Cast assets from `packages/web-core/public/cast`. Set `NEXT_PUBLIC_CAST_RECEIVER_ID` before the image build, and configure the custom Cast receiver ID only after the HTTPS receiver URL is registered. Keep the direct-cast behavior; protected relay casting always requires a new sender-issued handoff.
+`bun run dev:web`, `bun run dev:next` and frontend builds prepare Cast assets from `packages/web-core/public/cast`. Set `NEXT_PUBLIC_CAST_RECEIVER_ID` before the image build, and configure the custom Cast receiver ID only after the HTTPS receiver URL is registered. Keep the direct-cast behavior; protected relay casting always requires a new sender-issued handoff. The player connection panel stays accessible before discovery and reports unfinished setup when the build-time receiver ID is empty. Device checks do not open the picker; Choose TV does. Use a registered owned HTTPS receiver for the protected handoff, then verify pairing and playback on actual hardware before public launch.
 
 ## Coordinated cutover
 

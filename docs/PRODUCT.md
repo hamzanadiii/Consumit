@@ -6,6 +6,8 @@ When a configured server supplies multiple fixed renditions, members select thei
 
 Guests can still watch without creating an account. When their browser needs verification, Watch shows the verification step with Cancel and retry before resolving a source. Verified browsers do not repeat it for each fragment or normal source renewal. TV playback pairs through a one-time handoff while progress remains with the sender.
 
+Cast stays visible and opens connection guidance before a TV is found. Choose TV opens device selection when casting is ready; unavailable browsers and unfinished TV setup offer an honest retry state. Pairing preserves the sender’s position and play intent.
+
 ## Product definition
 
 If automatic startup cannot create a playback session, Watch offers Choose another server in its existing error panel. Server discovery is lazy and retryable; selecting a configured server starts that exact source with the same title or episode and saved native position. A failed choice remains selected for Try again, while Auto restores the normal delivery waterfall. External frames retain their existing progress limitations.

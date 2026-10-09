@@ -5,7 +5,7 @@ import type { ControllerEvent } from './playback-controller'
 import type { MediaPreferences } from './media-preferences'
 import type { EngineDeliveryFailure } from './media-engine'
 
-export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance' | 'shortcuts'
+export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance' | 'shortcuts' | 'cast'
 
 export type CaptionSize = 'small' | 'medium' | 'large' | 'xlarge'
 export type CaptionBackground = 'cinematic' | 'boxed' | 'subtle'
@@ -146,12 +146,11 @@ export type ConsumitPlayerProps = Omit<
   serverBusy?: boolean | undefined
   onServerRequest?: (() => void) | undefined
   onRetry?: (() => void) | undefined
-  /** Chromecast output. The button renders only when a Cast runtime and a
-   *  configured receiver exist; the caller owns session, progress, and
-   *  telemetry while casting. */
+  /** Cast remains discoverable; the caller owns TV sessions and progress. */
   castAvailable?: boolean | undefined
   castConnected?: boolean | undefined
   onCastClick?: (() => void) | undefined
+  onCastCheck?: (() => Promise<'ready' | 'unconfigured' | 'unavailable'>) | undefined
   resumeAt?: number | undefined
   resumePlaying?: boolean | undefined
   onSourceError?: ((reason: 'network' | 'media' | 'gone' | 'expired', deliveryFailure?: EngineDeliveryFailure) => void) | undefined

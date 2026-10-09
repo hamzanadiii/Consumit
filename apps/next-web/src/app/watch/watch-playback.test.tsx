@@ -569,6 +569,38 @@ describe('watch request lifecycle', () => {
     expect(mocks.cast.loadMedia.mock.calls[0]?.[0]?.customData).toMatchObject({ sessionId: session.id, providerId: 'primary' })
     expect(view.container.querySelector('[data-consumit-casting]')).toHaveTextContent('Living Room TV')
   })
+  it('casts the saved position and paused intent despite an empty receiver startup', async () => {
+    mocks.request.mockReset().mockResolvedValue(session)
+    mocks.list.mockReset().mockResolvedValue([])
+    mocks.cast.available = true
+    mocks.cast.requestSession.mockImplementation(async () => {
+      mocks.cast.status = { connected: true, deviceName: 'Living Room TV', position: 0, duration: 0, playing: false, volume: 0.9, muted: false }
+      mocks.cast.emit()
+    })
+    render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
+    await waitForSourceResolved()
+    act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-pause').click(); screen.getByRole('button', { name: 'simulate-cast' }).click() })
+    await waitFor(() => expect(mocks.cast.loadMedia).toHaveBeenCalledWith(expect.objectContaining({ position: 42, playing: false })))
+  })
+  it('keeps local playback when the TV rejects a cast load', async () => {
+    mocks.request.mockReset().mockResolvedValue(session)
+    mocks.list.mockReset().mockResolvedValue([])
+    mocks.cast.available = true
+    mocks.cast.requestSession.mockImplementation(async () => {
+      mocks.cast.status = { connected: true, deviceName: 'Living Room TV', position: 0, duration: 0, playing: false, volume: 0.9, muted: false }
+      mocks.cast.emit()
+    })
+    mocks.cast.loadMedia.mockRejectedValueOnce(new Error('Receiver rejected media'))
+    mocks.cast.endSession.mockImplementation(() => { mocks.cast.status = null; mocks.cast.emit() })
+    const view = render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
+    await waitForSourceResolved()
+    act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-pause').click(); screen.getByRole('button', { name: 'simulate-cast' }).click() })
+    expect(await screen.findByText('Couldn’t reach the TV. Try again.')).toBeInTheDocument()
+    expect(screen.getByTestId('player')).toBeInTheDocument()
+    expect(view.container.querySelector('[data-consumit-casting]')).not.toBeInTheDocument()
+    expect(mocks.cast.endSession).toHaveBeenCalledWith(true)
+    expect(mocks.cast.loadMedia).toHaveBeenCalledWith(expect.objectContaining({ position: 42, playing: false }))
+  })
   it('resumes the phone at the TV position after disconnect', async () => {
     const initial = { ...session, source: { ...session.source, id: 'source-1', providerId: 'primary', type: 'native', src: 'https://media.example/orig.m3u8' } }
     mocks.request.mockReset().mockResolvedValue(initial)

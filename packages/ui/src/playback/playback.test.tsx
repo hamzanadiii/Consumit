@@ -10,11 +10,28 @@ const chapters = [
   { startTime: 3600, title: 'What the river kept' },
 ]
 
+it('reports decoded dimensions separately from a requested quality, including cropped video', () => {
+  const { container } = render(<ConsumitPlayer title="Quality fixture" src="/fixture.mp4" selectedQuality="720" qualityOptions={[{ value: '720', label: '720p' }]} />)
+  const video = container.querySelector('video')!
+  Object.defineProperty(video, 'videoHeight', { configurable: true, value: 534 })
+  Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1282 })
+  fireEvent.loadedMetadata(video)
+  fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+  fireEvent.click(screen.getByRole('button', { name: /^Quality\s*534p$/ }))
+  const menu = screen.getByRole('menu', { name: 'Quality' })
+  expect(within(menu).getByRole('status')).toHaveTextContent('Playing at 1282 × 534')
+  expect(within(menu).getByRole('menuitemradio', { name: '720p' })).toHaveAttribute('aria-checked', 'true')
+})
+
 it('keeps focused transport controls visible across playback start and pointer movement', () => {
   vi.useFakeTimers()
   try {
     const view = render(<ConsumitPlayer title="Focus fixture" src="/fixture.mp4" autoHideMs={100} />)
     const play = screen.getByRole('button', { name: 'Play' })
+    // jsdom retains mouse modality from earlier tests; explicitly model the
+    // keyboard focus used by this contract rather than depend on test order.
+    const matches = play.matches.bind(play)
+    const focusVisible = vi.spyOn(play, 'matches').mockImplementation(selector => selector === ':focus-visible' || matches(selector))
     act(() => play.focus())
     fireEvent.play(view.container.querySelector('video')!)
     fireEvent.mouseMove(screen.getByLabelText('Focus fixture player controls'))
@@ -24,6 +41,7 @@ it('keeps focused transport controls visible across playback start and pointer m
     act(() => play.blur())
     act(() => vi.advanceTimersByTime(150))
     expect(view.container.querySelector('[data-consumit-player]')).toHaveAttribute('data-controls-visible', 'false')
+    focusVisible.mockRestore()
   } finally { vi.useRealTimers() }
 })
 
@@ -455,7 +473,7 @@ describe('playback shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Subtitle sync offset/ }))
     const menu = screen.getByRole('menu', { name: 'Subtitle sync' })
-    expect(within(menu).getByText('Click a line when you hear it spoken')).toBeInTheDocument()
+    expect(within(menu).getByText('Select a line when you hear it spoken.')).toBeInTheDocument()
     expect(within(menu).getByText('0ms')).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: 'Close subtitle sync' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -861,17 +879,23 @@ describe('playback shell components', () => {
     expect(overlay).not.toHaveTextContent('Movie 1')
   })
 
-  it('shows the cast control only when a cast runtime is available', () => {
+  it('opens Cast without a discovered TV and connects only on explicit selection', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
-    expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
     const onCastClick = vi.fn()
-    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
     const button = screen.getByRole('button', { name: 'Cast to TV' })
+    expect(button).toBeEnabled()
     fireEvent.click(button)
+    expect(screen.getByRole('menu', { name: 'Cast to TV' })).toBeInTheDocument()
+    expect(screen.getByText(/TV casting is being set up/)).toBeInTheDocument()
+    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    expect(onCastClick).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose TV' }))
     expect(onCastClick).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu', { name: 'Cast to TV' })).not.toBeInTheDocument()
     rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
-    expect(screen.getByRole('button', { name: 'Disconnect from TV' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect from TV' }))
+    expect(onCastClick).toHaveBeenCalledTimes(2)
   })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()

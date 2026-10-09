@@ -79,3 +79,17 @@ test('volume slider appears on hover and keyboard focus', async ({ page }, info)
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.volume)).toBe(0.55)
 })
+
+
+test('syncing a real cue keeps playback position and persists the offset', async ({ page }) => {
+  await expect(page.locator('[data-consumit-player-caption]')).toBeVisible()
+  const before = await page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)
+  await page.getByRole('button', { name: 'Subtitles', exact: true }).click()
+  await page.getByRole('button', { name: 'Sync subtitle to audio', exact: true }).click()
+  const sync = page.getByRole('menu', { name: 'Subtitle sync', exact: true })
+  await sync.getByRole('button', { name: 'First caption', exact: true }).click()
+  expect(await page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeCloseTo(before, 1)
+  await expect.poll(() => page.evaluate(() => Number(localStorage.getItem('consumit.player.subtitle-delay')))).toBeCloseTo(-1000, 0)
+  await sync.getByRole('button', { name: 'Reset subtitle sync offset' }).click()
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('consumit.player.subtitle-delay'))).toBe('0')
+})

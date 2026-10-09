@@ -196,20 +196,6 @@ export const subscribeHydration = () => () => undefined
 export const clientHydrationSnapshot = () => true
 export const serverHydrationSnapshot = () => false
 
-/**
- * FilScreen-flavored option chip for quality and speed: a real bordered chip
- * that reads selected through the signal-orange glow and ink contrast.
- */
-export function settingsChipClass(selected: boolean, wide = false) {
-  return cn(
-    'min-h-10 rounded-control text-sm tabular-nums outline-none transition-all motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:opacity-40',
-    wide ? 'px-3.5' : 'min-w-11 px-2.5',
-    selected
-      ? 'border border-orange bg-orange/20 font-bold text-orange'
-      : 'border border-white/15 bg-white/5 text-copy hover:border-white/30 hover:bg-white/10 hover:text-ink',
-  )
-}
-
 export function QualityIcon({ className }: { className?: string }) {
   return (
     <svg

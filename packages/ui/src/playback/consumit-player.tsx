@@ -1,8 +1,10 @@
 'use client'
 import { usePlayerController } from '@consumit/playback-core/use-player-controller'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { ArrowLeft, Captions, Cast, Check, ChevronRight, Gauge, Heart, Loader2, Maximize, Minimize, Minus, Moon, Music, Search, Upload, PictureInPicture2, Plus, RotateCcw, RotateCw, Server, Settings, SkipForward, SkipBack, TriangleAlert, Volume2, VolumeX, Wand2 } from 'lucide-react'
+import { ArrowLeft, Captions, Cast, Check, ChevronRight, Gauge, Heart, Loader2, Maximize, Minimize, Moon, Music, Search, Upload, PictureInPicture2, RotateCcw, RotateCw, Server, Settings, SkipForward, SkipBack, TriangleAlert, Volume2, VolumeX, TimerReset } from 'lucide-react'
 import { cn } from '../lib/cn'
+import { CastPanel } from '@consumit/ui-core/playback/cast-panel'
+import { SubtitleAppearance, SubtitleSync } from '@consumit/ui-core/playback/subtitle-panels'
 import { Toggle } from '../selection/selection'
 import { PlayerAdjustment, PlayerPanel, PlayerSettingRow } from './player-panel'
 import { createVolumeBoost } from './volume-boost'
@@ -14,7 +16,7 @@ import { type ControllerSnapshot } from './playback-controller'
 import { clampSubtitleDelayMs, computeSyncDelayMs, cueTextAt, fetchVttCues, formatSubtitleDelayMs, nativeLanguageName, parseVttCues, readStoredSubtitleDelayMs, readStoredSubtitleLanguages, SUBTITLE_DELAY_KEY, type SubtitleCue } from './subtitle-sync'
 import type { PlayerMenuId, CaptionSize, CaptionBackground, CaptionPosition, CaptionFont, PlayerOption, PlayerSubtitleCandidate, ConsumitPlayerProps } from '@consumit/playback-core/player-types'
 export type { PlayerMenuId, CaptionSize, CaptionBackground, CaptionPosition, CaptionFont, PlayerOption, PlayerSubtitleCandidate, PlayerSubtitleDiscovery, ConsumitPlayerProps } from '@consumit/playback-core/player-types'
-import { DEFAULT_SUBTITLES, DEFAULT_AUDIO, DEFAULT_QUALITIES, DEFAULT_RATES, SEEK_STEP, CAPTION_SIZE_KEY, CAPTION_BACKGROUND_KEY, CAPTION_POSITION_KEY, CAPTION_FONT_KEY, CAPTION_SIZES, CAPTION_BACKGROUNDS, CAPTION_POSITIONS, CAPTION_FONTS, readStoredCaption, captionSizeClass, captionFontClass, hasCursiveRtlScript, captionBackgroundClass, readStoredNumber, readStoredString, storeValue, FAVORITE_SERVERS_KEY, readFavoriteServers, regionFlag, regionName, dedupePlayerOptions, settingsRowClass, SubtitleTrackLabel, subtitleCandidateDetail, useNextPlaybackCore, subscribeHydration, clientHydrationSnapshot, serverHydrationSnapshot, settingsChipClass, QualityIcon, PlayerIconButton } from './player-presentation'
+import { DEFAULT_SUBTITLES, DEFAULT_AUDIO, DEFAULT_QUALITIES, DEFAULT_RATES, SEEK_STEP, CAPTION_SIZE_KEY, CAPTION_BACKGROUND_KEY, CAPTION_POSITION_KEY, CAPTION_FONT_KEY, CAPTION_SIZES, CAPTION_BACKGROUNDS, CAPTION_POSITIONS, CAPTION_FONTS, readStoredCaption, captionSizeClass, captionFontClass, hasCursiveRtlScript, captionBackgroundClass, readStoredNumber, readStoredString, storeValue, FAVORITE_SERVERS_KEY, readFavoriteServers, regionFlag, regionName, dedupePlayerOptions, settingsRowClass, SubtitleTrackLabel, subtitleCandidateDetail, useNextPlaybackCore, subscribeHydration, clientHydrationSnapshot, serverHydrationSnapshot, QualityIcon, PlayerIconButton } from './player-presentation'
 
 export function ConsumitPlayer({
   autoPlay,
@@ -28,6 +30,7 @@ export function ConsumitPlayer({
   castAvailable = false,
   castConnected = false,
   onCastClick,
+  onCastCheck,
   chapters,
   children,
   className,
@@ -199,6 +202,8 @@ export function ConsumitPlayer({
   const hasSource = mounted && Boolean(mediaSrc || children)
   const showTopBar = backHref != null || onBack != null || topMeta != null
 
+  const [decodedWidth, setDecodedWidth] = useState(0)
+  const [decodedHeight, setDecodedHeight] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [bufferedEnd, setBufferedEnd] = useState(0)
@@ -709,6 +714,8 @@ export function ConsumitPlayer({
     if (!video) return
 
     const syncClock = () => {
+      setDecodedWidth(video.videoWidth || 0)
+      setDecodedHeight(video.videoHeight || 0)
       setCurrentTime(video.currentTime || 0)
       setDuration(Number.isFinite(video.duration) ? video.duration : 0)
     }
@@ -725,6 +732,8 @@ export function ConsumitPlayer({
     syncBuffered()
     const onEnterPip = () => setIsPip(true)
     const onLeavePip = () => setIsPip(false)
+    video.addEventListener('resize', syncClock)
+    video.addEventListener('emptied', syncClock)
     video.addEventListener('loadedmetadata', syncClock)
     video.addEventListener('durationchange', syncClock)
     video.addEventListener('timeupdate', syncClock)
@@ -733,6 +742,8 @@ export function ConsumitPlayer({
     video.addEventListener('enterpictureinpicture', onEnterPip)
     video.addEventListener('leavepictureinpicture', onLeavePip)
     return () => {
+      video.removeEventListener('resize', syncClock)
+      video.removeEventListener('emptied', syncClock)
       video.removeEventListener('loadedmetadata', syncClock)
       video.removeEventListener('durationchange', syncClock)
       video.removeEventListener('timeupdate', syncClock)
@@ -1830,7 +1841,7 @@ export function ConsumitPlayer({
                   onClick={() => toggleMenu('sync')}
                   title={`Sync: ${formatSubtitleDelayMs(subtitleDelayMs)}`}
                 >
-                  <Wand2 aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                  <TimerReset aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
               ) : null}
               <PlayerIconButton
@@ -1843,17 +1854,17 @@ export function ConsumitPlayer({
               >
                 <Settings aria-hidden="true" className="size-5" strokeWidth={1.75} />
               </PlayerIconButton>
-              {castAvailable ? (
-                <PlayerIconButton
+              <PlayerIconButton
                   active={castConnected}
                   disabled={!hasSource}
                   label={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
-                  onClick={() => onCastClick?.()}
+                  expanded={activeMenu === 'cast'}
+                  menuId={castConnected ? undefined : 'cast'}
+                  onClick={() => castConnected ? onCastClick?.() : toggleMenu('cast')}
                   title={castConnected ? 'Casting — select to disconnect' : 'Cast to TV'}
                 >
                   <Cast aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
-              ) : null}
               <span className="contents">
                 <PlayerIconButton
                   active={isPip}
@@ -1875,12 +1886,19 @@ export function ConsumitPlayer({
             </div>
           </div>
         </div>
+        {activeMenu === 'cast' ? (
+          <div className="contents" ref={menuRef}>
+            <PlayerPanel aria-label="Cast to TV" id="consumit-player-menu-cast" onClose={closeMenu} title="Cast to TV">
+              <CastPanel available={castAvailable} onCheck={onCastCheck} onConnect={onCastClick ? () => { closeMenu(); onCastClick() } : undefined} />
+            </PlayerPanel>
+          </div>
+        ) : null}
         {activeMenu === 'settings' ? (
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Settings options" id="consumit-player-menu-settings" onClose={closeMenu} title="Settings">
               <div className="p-3">
                 <div className="space-y-1">
-                  <PlayerSettingRow icon={<QualityIcon className="size-5" />} label="Quality" value={qualityOptions.find((option) => option.value === selectedQuality)?.label ?? 'Auto'} onClick={() => setActiveMenu('quality')} />
+                  <PlayerSettingRow icon={<QualityIcon className="size-5" />} label="Quality" value={decodedHeight > 0 ? `${selectedQuality === 'auto' ? 'Auto · ' : ''}${decodedHeight}p` : qualityOptions.find((option) => option.value === selectedQuality)?.label ?? 'Auto'} onClick={() => setActiveMenu('quality')} />
                   <PlayerSettingRow icon={<Server className="size-5" />} label="Server" value={serverAuto ? 'Auto' : currentServerLabel ?? orderedServerOptions?.[0]?.label ?? 'Unavailable'} disabled={!onServerRequest && !dedupedServerOptions?.length} onClick={() => toggleMenu('server')} />
                   <PlayerSettingRow icon={<Captions className="size-5" />} label="Subtitles" value={captionsOn ? (subtitleOptions.find((option) => option.value === selectedSubtitle)?.label || 'On') : 'Off'} onClick={() => toggleMenu('subtitles')} />
                   <PlayerSettingRow icon={<Music className="size-5" />} label="Audio" value={selectedAudioLabel} onClick={() => setActiveMenu('audio')} />
@@ -1942,6 +1960,7 @@ export function ConsumitPlayer({
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Quality" id="consumit-player-menu-quality" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Quality">
               <div className="p-3">
+                {decodedHeight > 0 ? <p className="px-2 pb-2 text-xs text-copy" role="status">Playing at {decodedWidth} × {decodedHeight}</p> : null}
                 <div className="space-y-1" role="group" aria-label="Quality options">
                   {qualityOptions.map((option) => {
                     const selected = selectedQuality === option.value
@@ -2042,93 +2061,7 @@ export function ConsumitPlayer({
         {activeMenu === 'sync' ? (
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Subtitle sync" backLabel="Back to subtitles" id="consumit-player-menu-sync" onClose={closeMenu} onBack={() => toggleMenu('subtitles')} title="Subtitle sync">
-              <div className="space-y-3 p-3">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-sm text-copy">Current offset</p>
-                  <p aria-live="polite" className="text-sm font-bold tabular-nums text-orange">
-                    {formatSubtitleDelayMs(subtitleDelayMs)}
-                  </p>
-                </div>
-                <p className="px-1 text-sm leading-6 text-copy">
-                  Click a line when you hear it spoken
-                </p>
-                <div
-                  className="flex h-40 flex-col gap-1 overflow-y-auto overscroll-contain rounded-control border border-white/10 bg-white/[0.03] p-1.5"
-                  onMouseEnter={() => setSyncHovering(true)}
-                  onMouseLeave={() => setSyncHovering(false)}
-                  onTouchStart={() => setSyncHovering(true)}
-                  ref={syncListRef}
-                  role="group"
-                  aria-label="Subtitle lines"
-                >
-                  {syncCueWindow.visible.length === 0 ? (
-                    <p className="grid h-full place-items-center text-center text-sm text-muted">
-                      {captionsOn ? 'No subtitles loaded' : 'Subtitles are off'}
-                    </p>
-                  ) : (
-                    syncCueWindow.visible.map((cue, index) => {
-                      const isActive = index === syncCueWindow.activeIndex
-                      return (
-                        <button
-                          className={cn(
-                            'group flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-2 text-left text-xs outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange',
-                            isActive
-                              ? 'bg-orange/15 text-ink shadow-[inset_0_0_0_1px_var(--color-orange)]'
-                              : 'text-copy hover:bg-white/10 hover:text-ink',
-                          )}
-                          key={`${cue.startTime}-${index}`}
-                          onClick={() => syncToCue(cue)}
-                          type="button"
-                        >
-                          <span className="line-clamp-2 min-w-0 flex-1">{cue.text}</span>
-                          <span
-                            className={cn(
-                              'shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-opacity',
-                              isActive ? 'bg-orange text-canvas opacity-100' : 'bg-white/10 opacity-0 group-hover:opacity-100',
-                            )}
-                          >
-                            Sync
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-                <div className="flex items-center justify-center gap-1.5" role="group" aria-label="Fine tune offset">
-                  <button
-                    aria-label="Shift subtitles backwards 50 milliseconds"
-                    className={settingsChipClass(false)}
-                    onClick={() => { adjustSubtitleDelayMs(-50); flashSyncStatus('Adjusted −50ms') }}
-                    type="button"
-                  >
-                    <Minus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">50 ms</span>
-                  </button>
-                  <button
-                    aria-label="Reset subtitle sync offset"
-                    className={settingsChipClass(subtitleDelayMs === 0, true)}
-                    onClick={() => { chooseSubtitleDelayMs(0); flashSyncStatus('Offset reset') }}
-                    type="button"
-                  >
-                    <RotateCcw aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">Reset</span>
-                  </button>
-                  <button
-                    aria-label="Shift subtitles forwards 50 milliseconds"
-                    className={settingsChipClass(false)}
-                    onClick={() => { adjustSubtitleDelayMs(50); flashSyncStatus('Adjusted +50ms') }}
-                    type="button"
-                  >
-                    <Plus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">50 ms</span>
-                  </button>
-                </div>
-                {syncStatus ? (
-                  <p aria-live="polite" className="rounded-control bg-orange/15 px-3 py-2 text-center text-xs font-bold text-orange" role="status">
-                    {syncStatus}
-                  </p>
-                ) : null}
-              </div>
+              <SubtitleSync delay={subtitleDelayMs} cues={syncCueWindow.visible} activeIndex={syncCueWindow.activeIndex} captionsOn={captionsOn} status={syncStatus} listRef={syncListRef} onHover={setSyncHovering} onCue={syncToCue} onAdjust={(delta) => { adjustSubtitleDelayMs(delta); flashSyncStatus(delta < 0 ? 'Adjusted −50ms' : 'Adjusted +50ms') }} onReset={() => { chooseSubtitleDelayMs(0); flashSyncStatus('Offset reset') }} />
             </PlayerPanel>
           </div>
         ) : null}
@@ -2195,75 +2128,8 @@ export function ConsumitPlayer({
         ) : null}
         {activeMenu === 'appearance' ? (
           <div className="contents" ref={menuRef}>
-            <PlayerPanel aria-label="Subtitle appearance" backLabel="Back to subtitles" id="consumit-player-menu-appearance" onBack={() => setActiveMenu('subtitles')} onClose={closeMenu} title="Subtitle appearance">
-              <div className="space-y-3 p-3">
-                  <div aria-label="Caption size" className="space-y-1.5 px-1" role="group">
-                    <p className="text-xs font-medium text-copy">Size</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['small', 'medium', 'large', 'xlarge'] as const).map((size) => (
-                        <button
-                          aria-pressed={captionSize === size}
-                          className={settingsChipClass(captionSize === size, true)}
-                          key={size}
-                          onClick={() => chooseCaptionSize(size)}
-                          type="button"
-                        >
-                          {size === 'small' ? 'Small' : size === 'medium' ? 'Medium' : size === 'large' ? 'Large' : 'XL'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div aria-label="Caption style" className="space-y-1.5 px-1" role="group">
-                    <p className="text-xs font-medium text-copy">Style</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['cinematic', 'boxed', 'subtle'] as const).map((style) => (
-                        <button
-                          aria-pressed={captionBackground === style}
-                          className={settingsChipClass(captionBackground === style, true)}
-                          key={style}
-                          onClick={() => chooseCaptionBackground(style)}
-                          type="button"
-                        >
-                          {style === 'cinematic' ? 'Cinematic' : style === 'boxed' ? 'Boxed' : 'Subtle'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 px-1">
-                    <div aria-label="Caption position" className="space-y-1.5" role="group">
-                      <p className="text-xs font-medium text-copy">Position</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(['bottom', 'top'] as const).map((position) => (
-                          <button
-                            aria-pressed={captionPosition === position}
-                            className={settingsChipClass(captionPosition === position, true)}
-                            key={position}
-                            onClick={() => chooseCaptionPosition(position)}
-                            type="button"
-                          >
-                            {position === 'bottom' ? 'Bottom' : 'Top'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div aria-label="Caption font" className="space-y-1.5" role="group">
-                      <p className="text-xs font-medium text-copy">Font</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(['filscreen', 'sans'] as const).map((font) => (
-                          <button
-                            aria-pressed={captionFont === font}
-                            className={settingsChipClass(captionFont === font, true)}
-                            key={font}
-                            onClick={() => chooseCaptionFont(font)}
-                            type="button"
-                          >
-                            {font === 'filscreen' ? 'FilScreen' : 'Sans'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-              </div>
+            <PlayerPanel aria-label="Subtitle appearance" backLabel="Back to subtitles" id="consumit-player-menu-appearance" onBack={() => setActiveMenu('subtitles')} onClose={closeMenu} title="Subtitle appearance" heading="Appearance">
+              <SubtitleAppearance size={captionSize} background={captionBackground} position={captionPosition} font={captionFont} onSize={chooseCaptionSize} onBackground={chooseCaptionBackground} onPosition={chooseCaptionPosition} onFont={chooseCaptionFont} />
             </PlayerPanel>
           </div>
         ) : null}

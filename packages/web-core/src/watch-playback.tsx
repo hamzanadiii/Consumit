@@ -279,16 +279,18 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const castSender = useMemo(() => createCastSender({}), [])
   const [castAvailable, setCastAvailable] = useState(false)
   const [castStatus, setCastStatus] = useState<CastStatus | null>(null)
+  const castStarting = useRef(false)
+  const updateCastStatus = useRef<() => void>(() => undefined)
   const wasCasting = useRef(false)
   const tvPlaying = useRef(false)
-  const loadCastMedia = useCallback(async (target: PlaybackSession) => {
-    await loadWatchCastMedia(castSender, target, { title: name, artwork: episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined, audioLanguage, position: clock.current.position, playing: clock.current.playing })
+  const loadCastMedia = useCallback(async (target: PlaybackSession, playback = { position: clock.current.position, playing: clock.current.playing }, signal?: AbortSignal) => {
+    await loadWatchCastMedia(castSender, target, { title: name, artwork: episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined, audioLanguage, position: playback.position, playing: playback.playing }, signal)
   }, [castSender, name, episode, title, audioLanguage])
   useEffect(() => {
     let cancelled = false
     void castSender.ensure().then((ready) => { if (!cancelled && ready) setCastAvailable(castSender.available) })
-    const unsubscribe = castSender.subscribe(() => {
-      if (cancelled) return
+    const update = () => {
+      if (cancelled || castStarting.current) return
       setCastAvailable(castSender.available)
       const status = castSender.status
       setCastStatus(status)
@@ -312,12 +314,20 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
         clock.current.playing = true
         setResume({ position: clock.current.position, playing: true })
       }
-    })
+    }
+    updateCastStatus.current = update
+    const unsubscribe = castSender.subscribe(update)
     return () => {
       cancelled = true
       unsubscribe()
     }
   }, [castSender, completePlayback])
+  const checkCast = useCallback(async () => {
+    if (!process.env.NEXT_PUBLIC_CAST_RECEIVER_ID) return 'unconfigured' as const
+    const ready = await castSender.ensure()
+    setCastAvailable(castSender.available)
+    return ready ? 'ready' as const : 'unavailable' as const
+  }, [castSender])
   const handleCastClick = useCallback(() => {
     if (!session || requestRef.current) return
     if (castSender.status) {
@@ -325,17 +335,20 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       castSender.endSession(true)
       return
     }
+    const playback = { position: clock.current.position, playing: clock.current.playing }
+    castStarting.current = true
     const controller = new AbortController(); requestRef.current = controller
     setBusy(true); setError(null)
     void (async () => {
       try {
         await castSender.requestSession()
-        if (controller.signal.aborted) return
-        await loadCastMedia(session)
+        controller.signal.throwIfAborted()
+        await loadCastMedia(session, playback, controller.signal)
       } catch {
+        castSender.endSession(true)
         if (!controller.signal.aborted) showNotice('Couldn’t reach the TV. Try again.')
       }
-      finally { finishRequest(controller, async () => { handleCastClick() }) }
+      finally { castStarting.current = false; updateCastStatus.current(); finishRequest(controller, async () => { handleCastClick() }) }
     })()
   }, [session, castSender, loadCastMedia, showNotice, finishRequest])
 
@@ -687,7 +700,7 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
             onQualityChange: (value: string) => { void switchQuality(value) },
           } : {})}
           {...(title.kind !== 'anime' ? { separateAudioTracks, separateAudioLoading, separateAudioError, onAudioRequest: requestAudio, onSeparateAudioSelect: selectSeparateAudio } : {})}
-          castAvailable={castAvailable} castConnected={false} onCastClick={() => handleCastClick()}
+          castAvailable={castAvailable} castConnected={false} onCastCheck={checkCast} onCastClick={() => handleCastClick()}
           subtitleDiscovery={{ languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
           onSubtitlePage={loadSubtitlePage} onSubtitleSearch={searchSubtitleCandidates} onSubtitleCandidateSelect={selectSubtitleCandidate}
           topMeta={[episodeMeta, qualityMeta].filter(Boolean).join(' · ') || undefined}

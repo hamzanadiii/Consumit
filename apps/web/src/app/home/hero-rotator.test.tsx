@@ -75,12 +75,12 @@ describe('filScreen hero rotator', () => {
     expect(screen.getByRole('heading', { name: 'Second Feature' })).toBeInTheDocument()
   })
 
-  it('pauses while hovered', async () => {
+  it('keeps rotating while the pointer rests over the artwork', async () => {
     render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
 
     fireEvent.pointerEnter(screen.getByRole('region', { name: 'Featured titles' }), { pointerType: 'mouse' })
     await advanceOneSlide()
-    expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Severance' })).toBeInTheDocument()
   })
 
   it('cancels the animation clock while paused and retains elapsed progress', async () => {
@@ -89,7 +89,7 @@ describe('filScreen hero rotator', () => {
     render(<FilScreenHeroRotator hero={hero} spotlight={[severance]} />)
 
     await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
-    fireEvent.pointerEnter(screen.getByRole('region', { name: 'Featured titles' }), { pointerType: 'mouse' })
+    fireEvent.pointerOver(screen.getByRole('button', { name: 'Show Severance' }), { pointerType: 'mouse' })
     expect(cancelFrame).toHaveBeenCalled()
     const framesAtPause = requestFrame.mock.calls.length
     await advanceOneSlide()
