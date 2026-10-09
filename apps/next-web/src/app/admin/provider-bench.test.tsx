@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProviderBench } from './provider-bench'
 import { inspectionReport } from './admin-report'
-import type { ProviderInspection } from '@/lib/admin-browser'
+import type { ProviderInspection } from '@consumit/web-core/client/admin-browser'
 
 afterEach(() => vi.unstubAllGlobals())
 const candidates = ['alpha', 'beta', 'gamma', 'delta'].map(id => ({ id, mediaKinds: ['movie'], regions: ['US'], upstreamGroup: id, mediaHosts: ['media.example'], configured: false, separateAudio: false }))

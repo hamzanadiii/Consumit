@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/identity-browser', () => ({
+vi.mock('@consumit/web-core/client/identity-browser', () => ({
   clearMemberRating: mocks.clearMemberRating,
   getMemberTitleState: mocks.getMemberTitleState,
   IdentityApiError: mocks.IdentityApiError,

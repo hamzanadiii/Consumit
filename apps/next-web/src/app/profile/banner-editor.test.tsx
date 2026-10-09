@@ -17,11 +17,11 @@ vi.mock('next/navigation', () => ({usePathname: () => '/',
   useRouter: () => ({ refresh: mocks.refresh }),
 }))
 
-vi.mock('@/lib/catalog-browser', () => ({
+vi.mock('@consumit/web-core/client/catalog-browser', () => ({
   browserSearchCatalog: mocks.browserSearchCatalog,
 }))
 
-vi.mock('@/lib/identity-browser', () => ({
+vi.mock('@consumit/web-core/client/identity-browser', () => ({
   updateMemberProfile: mocks.updateMemberProfile,
 }))
 

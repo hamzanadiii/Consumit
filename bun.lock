@@ -57,6 +57,7 @@
       "dependencies": {
         "@consumit/contracts": "workspace:*",
         "@consumit/next-ui": "workspace:*",
+        "@consumit/web-core": "workspace:*",
         "lucide-react": "^1.39.0",
         "next": "16.3.8",
         "react": "^19.2.8",
@@ -85,6 +86,7 @@
       "dependencies": {
         "@consumit/contracts": "workspace:*",
         "@consumit/ui": "workspace:*",
+        "@consumit/web-core": "workspace:*",
         "lucide-react": "^1.39.0",
         "next": "16.3.8",
         "react": "^19.2.8",
@@ -125,6 +127,8 @@
       "name": "@consumit/next-ui",
       "version": "0.0.0",
       "dependencies": {
+        "@consumit/playback-core": "workspace:*",
+        "@consumit/ui-core": "workspace:*",
         "@fontsource-variable/manrope": "^5.3.0",
         "@fontsource/dejavu-sans": "^5.3.0",
         "charter-webfont": "^4.1.0",
@@ -134,6 +138,31 @@
         "hls.js": "^1.7.2",
         "lucide-react": "^1.39.0",
         "tailwind-merge": "^3.6.0",
+      },
+      "devDependencies": {
+        "@testing-library/dom": "^10.4.1",
+        "@testing-library/jest-dom": "^7.0.1",
+        "@testing-library/react": "^16.3.3",
+        "@testing-library/user-event": "^14.6.7",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.5",
+        "@vitejs/plugin-react": "^6.1.1",
+        "jsdom": "^30.0.1",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "vite": "^8.2.2",
+      },
+      "peerDependencies": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+      },
+    },
+    "packages/playback-core": {
+      "name": "@consumit/playback-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "dashjs": "^5.2.1",
+        "hls.js": "^1.7.2",
       },
       "devDependencies": {
         "@testing-library/dom": "^10.4.1",
@@ -165,6 +194,8 @@
       "name": "@consumit/ui",
       "version": "0.0.0",
       "dependencies": {
+        "@consumit/playback-core": "workspace:*",
+        "@consumit/ui-core": "workspace:*",
         "@fontsource/dejavu-sans": "^5.3.0",
         "charter-webfont": "^4.1.0",
         "class-variance-authority": "^0.7.1",
@@ -173,6 +204,68 @@
         "hls.js": "^1.7.2",
         "lucide-react": "^1.39.0",
         "tailwind-merge": "^3.6.0",
+      },
+      "devDependencies": {
+        "@testing-library/dom": "^10.4.1",
+        "@testing-library/jest-dom": "^7.0.1",
+        "@testing-library/react": "^16.3.3",
+        "@testing-library/user-event": "^14.6.7",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.5",
+        "@vitejs/plugin-react": "^6.1.1",
+        "jsdom": "^30.0.1",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "vite": "^8.2.2",
+      },
+      "peerDependencies": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+      },
+    },
+    "packages/ui-core": {
+      "name": "@consumit/ui-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@consumit/playback-core": "workspace:*",
+        "@fontsource/dejavu-sans": "^5.3.0",
+        "charter-webfont": "^4.1.0",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "dashjs": "^5.2.1",
+        "hls.js": "^1.7.2",
+        "lucide-react": "^1.39.0",
+        "tailwind-merge": "^3.6.0",
+      },
+      "devDependencies": {
+        "@testing-library/dom": "^10.4.1",
+        "@testing-library/jest-dom": "^7.0.1",
+        "@testing-library/react": "^16.3.3",
+        "@testing-library/user-event": "^14.6.7",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.5",
+        "@vitejs/plugin-react": "^6.1.1",
+        "jsdom": "^30.0.1",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "vite": "^8.2.2",
+      },
+      "peerDependencies": {
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+      },
+    },
+    "packages/web-core": {
+      "name": "@consumit/web-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@consumit/contracts": "workspace:*",
+        "@consumit/playback-core": "workspace:*",
+        "@consumit/ui-core": "workspace:*",
+        "lucide-react": "^1.39.0",
+        "next": "16.3.8",
+        "server-only": "^0.0.1",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@testing-library/dom": "^10.4.1",
@@ -302,11 +395,17 @@
 
     "@consumit/next-web": ["@consumit/next-web@workspace:apps/next-web"],
 
+    "@consumit/playback-core": ["@consumit/playback-core@workspace:packages/playback-core"],
+
     "@consumit/provider-sdk": ["@consumit/provider-sdk@workspace:packages/provider-sdk"],
 
     "@consumit/ui": ["@consumit/ui@workspace:packages/ui"],
 
+    "@consumit/ui-core": ["@consumit/ui-core@workspace:packages/ui-core"],
+
     "@consumit/web": ["@consumit/web@workspace:apps/web"],
+
+    "@consumit/web-core": ["@consumit/web-core@workspace:packages/web-core"],
 
     "@csstools/color-helpers": ["@csstools/color-helpers@6.1.1", "", {}, "sha512-gLNsunvwf3mCi5u5o46/Z/JcJMnhbHSaZ69rkgPzNM3J4s8hWwpPUQB6/tt0EDFyCiWzxANlx+2LJwpYj4zS1w=="],
 
@@ -1653,6 +1752,8 @@
     "secure-json-parse": ["secure-json-parse@4.1.0", "", {}, "sha512-l4KnYfEyqYJxDwlNVyRfO2E4NTHfMKAWdUuA8J0yve2Dz/E/PdBepY03RvyJpssIpRFwJoCD55wA+mEDs6ByWA=="],
 
     "semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
+
+    "server-only": ["server-only@0.0.1", "", {}, "sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA=="],
 
     "set-cookie-parser": ["set-cookie-parser@2.7.2", "", {}, "sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw=="],
 

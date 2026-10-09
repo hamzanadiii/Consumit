@@ -4,8 +4,8 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "dev": "next dev --port 3080",
-    "build": "next build",
+    "dev": "node ../../scripts/prepare-web-assets.mjs next-web && next dev --port 3080",
+    "build": "node ../../scripts/prepare-web-assets.mjs next-web && next build",
     "start": "next start --port 3080",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -18,7 +18,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.3.6",
-    "@consumit/next-ui": "workspace:*"
+    "@consumit/next-ui": "workspace:*",
+    "@consumit/web-core": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

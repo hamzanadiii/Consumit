@@ -8,8 +8,8 @@ import { DiaryCollection } from './diary-collection'
 import { ProfileArchiveScreen } from './profile-archive-screen'
 
 const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), refresh: vi.fn(), archive: vi.fn(), ratings: vi.fn(), catalog: vi.fn() }))
-vi.mock('@/lib/identity-browser', () => ({ updateDiaryEntry: mocks.update, deleteDiaryEntry: mocks.remove, getProfileArchivePage: mocks.archive, getMemberRatingsForTitles: mocks.ratings }))
-vi.mock('@/lib/catalog-browser', () => ({ browserCatalogBatches: mocks.catalog }))
+vi.mock('@consumit/web-core/client/identity-browser', () => ({ updateDiaryEntry: mocks.update, deleteDiaryEntry: mocks.remove, getProfileArchivePage: mocks.archive, getMemberRatingsForTitles: mocks.ratings }))
+vi.mock('@consumit/web-core/client/catalog-browser', () => ({ browserCatalogBatches: mocks.catalog }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }))
 const entries: DiaryEntry[] = [
   { entryId: 'one', id: movieSummary.id, kind: 'movie', watchedOn: '2026-01-01', rewatch: false, tags: ['new-year'], origin: 'native', sourceKey: null },

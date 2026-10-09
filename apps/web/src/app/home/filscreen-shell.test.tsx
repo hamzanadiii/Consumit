@@ -18,7 +18,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/',
 }))
 
-vi.mock('@/lib/identity-browser', () => ({
+vi.mock('@consumit/web-core/client/identity-browser', () => ({
   logoutMember: mocks.logoutMember,
 }))
 

@@ -2,7 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { IdentityApiError } from '@/lib/identity-browser'
+import { IdentityApiError } from '@consumit/web-core/client/identity-browser'
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
@@ -23,7 +23,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }))
 
-vi.mock('@/lib/identity-browser', () => ({
+vi.mock('@consumit/web-core/client/identity-browser', () => ({
   confirmPasswordRecovery: vi.fn(),
   getUsernameAvailability: mocks.getUsernameAvailability,
   IdentityApiError: class IdentityApiError extends Error {

@@ -48,7 +48,8 @@
     "aws:credit-check": "node scripts/production.mjs credit-check",
     "aws:identity-check": "node scripts/production.mjs aws-identity-check",
     "test:recovery": "node scripts/drill-postgres.mjs",
-    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+    "check": "bun run code:check && bun run lint && bun run typecheck && bun run test && bun run build",
+    "code:check": "node scripts/check-code-quality.mjs"
   },
   "engines": {
     "bun": ">=1.4.0",

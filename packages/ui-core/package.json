@@ -1,0 +1,64 @@
+{
+  "name": "@consumit/ui-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./auth/auth": "./src/auth/auth.tsx",
+    "./button/button": "./src/button/button.tsx",
+    "./cards/content-cards": "./src/cards/content-cards.tsx",
+    "./finish/finish": "./src/finish/finish.tsx",
+    "./identity/avatar-image": "./src/identity/avatar-image.tsx",
+    "./identity/identity": "./src/identity/identity.tsx",
+    "./identity/initials": "./src/identity/initials.ts",
+    "./input/input": "./src/input/input.tsx",
+    "./label/label": "./src/label/label.tsx",
+    "./lib/cn": "./src/lib/cn.ts",
+    "./library/library": "./src/library/library.tsx",
+    "./media/media": "./src/media/media.tsx",
+    "./onboarding/onboarding": "./src/onboarding/onboarding.tsx",
+    "./playback/player-panel": "./src/playback/player-panel.tsx",
+    "./profile/profile": "./src/profile/profile.tsx",
+    "./selection/selection": "./src/selection/selection.tsx",
+    "./settings/settings": "./src/settings/settings.tsx",
+    "./signals/rating-input": "./src/signals/rating-input.tsx",
+    "./signals/signals": "./src/signals/signals.tsx",
+    "./title/title": "./src/title/title.tsx",
+    "./playback/player-presentation": "./src/playback/player-presentation.tsx",
+    "./playback/playback": "./src/playback/playback.tsx"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource/dejavu-sans": "^5.3.0",
+    "charter-webfont": "^4.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "dashjs": "^5.2.1",
+    "hls.js": "^1.7.2",
+    "lucide-react": "^1.39.0",
+    "tailwind-merge": "^3.6.0",
+    "@consumit/playback-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vite": "^8.2.2"
+  }
+}

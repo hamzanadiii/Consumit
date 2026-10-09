@@ -6,7 +6,7 @@ import { renderWithProviders as render } from '@/test/render'
 import { WatchlistCollection } from './watchlist-collection'
 
 const mocks = vi.hoisted(() => ({ browserCatalogBatches: vi.fn() }))
-vi.mock('@/lib/catalog-browser', () => ({ browserCatalogBatches: mocks.browserCatalogBatches }))
+vi.mock('@consumit/web-core/client/catalog-browser', () => ({ browserCatalogBatches: mocks.browserCatalogBatches }))
 vi.mock('../catalog/save-title-button', () => ({ SaveTitleButton: ({ title, onSavedChange }: { title: string; onSavedChange?: (saved: boolean) => void }) => <button onClick={() => onSavedChange?.(false)} type="button">Remove {title}</button> }))
 const items = [movieSummary, seriesSummary].map(({ id, kind }) => ({ id, kind, origin: 'native' as const, sourceKey: null }))
 

@@ -37,9 +37,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     // This independent frontend proxies the same configured first-party API.
     const api = (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
-    return [{ destination: `${api}/v1/:path*`, source: '/v1/:path*' }]
+    const relay = process.env.NODE_ENV === 'development' || process.env.PLAYBACK_FIXTURE_PROXY === '1' ? process.env.CONSUMIT_RELAY_URL : undefined
+    return [...(relay ? [{ source: '/media/:path*', destination: `${relay.replace(/\/$/, '')}/media/:path*` }] : []), { destination: `${api}/v1/:path*`, source: '/v1/:path*' }]
   },
-  transpilePackages: ['@consumit/contracts', '@consumit/next-ui'],
+  transpilePackages: ['@consumit/web-core', '@consumit/playback-core', '@consumit/ui-core', '@consumit/contracts', '@consumit/next-ui'],
   // Development only: accept HMR and dev-asset requests when browsing
   // through the Docker gateway origin instead of the dev server directly.
   ...(process.env.NODE_ENV !== 'production'

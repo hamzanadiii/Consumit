@@ -3,11 +3,11 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { browserAnimeBrowse } from '@/lib/anime-browser'
+import { browserAnimeBrowse } from '@consumit/web-core/client/anime-browser'
 
 import { AnimeBrowseContent } from './anime-browse-content'
 
-vi.mock('@/lib/anime-browser', () => ({ browserAnimeBrowse: vi.fn() }))
+vi.mock('@consumit/web-core/client/anime-browser', () => ({ browserAnimeBrowse: vi.fn() }))
 
 const animeSummary: AnimeTitleSummary = {
   anilistId: 21,

@@ -7,7 +7,7 @@ import { renderWithProviders } from '@/test/render'
 import { AnimeDetailScreen, AnimeHeroTitle, indexStreamingMeta } from './anime-detail-screen'
 
 const batch = vi.hoisted(() => vi.fn<(_id: number, _numbers: number[]) => Promise<(AnimeEpisode | null)[]>>(async () => []))
-vi.mock('@/lib/anime-browser', () => ({ browserAnimeEpisodes: batch }))
+vi.mock('@consumit/web-core/client/anime-browser', () => ({ browserAnimeEpisodes: batch }))
 
 vi.mock('next/navigation', () => ({usePathname: () => '/',
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),

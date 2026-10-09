@@ -39,17 +39,17 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/lib/catalog-api', () => ({
+vi.mock('@consumit/web-core/server/catalog-api', () => ({
   CatalogApiError: mocks.CatalogApiError,
   getCatalogTitle: mocks.getCatalogTitle,
 }))
 
-vi.mock('@/lib/anime-api', () => ({
+vi.mock('@consumit/web-core/server/anime-api', () => ({
   AnimeApiError: mocks.AnimeApiError,
   getAnimeTitle: mocks.getAnimeTitle,
 }))
 
-vi.mock('@/lib/member-server', () => ({
+vi.mock('@consumit/web-core/server/member-server', () => ({
   MemberApiError: mocks.MemberApiError,
   getTitleReviews: mocks.getTitleReviews,
 }))

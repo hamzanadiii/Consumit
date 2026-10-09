@@ -12,9 +12,9 @@ import userEvent from '@testing-library/user-event'
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), profile: vi.fn(), library: vi.fn(), archive: vi.fn(), list: vi.fn(), catalog: vi.fn(), ratings: vi.fn() }))
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`) }, notFound: () => { throw new Error('not-found') }, useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }), usePathname: () => '/profile/hamza/lists' }))
-vi.mock('@/lib/identity-server', () => ({ getServerSession: mocks.session }))
-vi.mock('@/lib/member-server', () => ({ getPublicProfile: mocks.profile, getMemberLibrarySnapshot: mocks.library, getPublicProfileArchivePage: mocks.archive, getMemberList: mocks.list, getMemberRatingsForTitles: mocks.ratings, MemberApiError: class extends Error {} }))
-vi.mock('@/lib/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
+vi.mock('@consumit/web-core/server/identity-server', () => ({ getServerSession: mocks.session }))
+vi.mock('@consumit/web-core/server/member-server', () => ({ getPublicProfile: mocks.profile, getMemberLibrarySnapshot: mocks.library, getPublicProfileArchivePage: mocks.archive, getMemberList: mocks.list, getMemberRatingsForTitles: mocks.ratings, MemberApiError: class extends Error {} }))
+vi.mock('@consumit/web-core/server/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
 const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
 const ownList = { id: 'private-list', slug: 'private-list', name: 'My private collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }
 

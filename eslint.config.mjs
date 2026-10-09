@@ -19,9 +19,10 @@ export default defineConfig([
     '**/tmp-*',
   ]),
   {
-    files: ['apps/web/**/*.{js,jsx,ts,tsx}', 'apps/next-web/**/*.{js,jsx,ts,tsx}'],
+    files: ['apps/web/**/*.{js,jsx,ts,tsx}', 'apps/next-web/**/*.{js,jsx,ts,tsx}', 'packages/web-core/**/*.{js,jsx,ts,tsx}'],
     extends: [nextVitals, nextTypeScript],
   },
+  { files: ['packages/web-core/**/*.{js,jsx,ts,tsx}'], rules: { '@next/next/no-html-link-for-pages': 'off' } },
   {
     files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

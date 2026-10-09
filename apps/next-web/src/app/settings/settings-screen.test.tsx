@@ -21,7 +21,7 @@ vi.mock('next/navigation', () => ({usePathname: () => '/',
   useRouter: () => ({ push: vi.fn(), refresh: mocks.refresh }),
 }))
 
-vi.mock('@/lib/identity-browser', () => ({
+vi.mock('@consumit/web-core/client/identity-browser', () => ({
   changeMemberPassword: mocks.changeMemberPassword,
   deleteMemberAccount: mocks.deleteMemberAccount,
   downloadMemberExport: mocks.downloadMemberExport,

@@ -4,9 +4,9 @@ import type { PlaybackSession } from '@consumit/contracts'
 import { EmbedPlayer } from './embed-player'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), recover: vi.fn(), providers: vi.fn(), switch: vi.fn(), subtitles: vi.fn() }))
-vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, dash: true, native: true, nativeHls: true }) }))
-vi.mock('@/lib/embed-playback-browser', () => ({ resolveEmbedSession: mocks.resolve, recoverEmbedSession: mocks.recover, listEmbedProviders: mocks.providers, switchEmbedSession: mocks.switch }))
-vi.mock('@/lib/subtitles-browser', () => ({ fetchAggregatedSubtitles: mocks.subtitles }))
+vi.mock('@consumit/web-core/client/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, dash: true, native: true, nativeHls: true }) }))
+vi.mock('@consumit/web-core/client/embed-playback-browser', () => ({ resolveEmbedSession: mocks.resolve, recoverEmbedSession: mocks.recover, listEmbedProviders: mocks.providers, switchEmbedSession: mocks.switch }))
+vi.mock('@consumit/web-core/client/subtitles-browser', () => ({ fetchAggregatedSubtitles: mocks.subtitles }))
 vi.mock('@consumit/next-ui', () => ({
   readQualityPreference: () => undefined,
   ConsumitPlayer: ({ source, resumeAt, resumePlaying, onSourceError, onTimeUpdate, onPause, onPlay }: {

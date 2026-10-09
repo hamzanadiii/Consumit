@@ -1,0 +1,125 @@
+/* Consumit TV receiver (CAF). Static file, no build step.
+ *
+ * The TV never holds member identity: the sender passes session context
+ * (ids, title, artwork, position, provider headers) in LOAD customData, and
+ * keeps progress, history, and telemetry on its own session. This app only
+ * plays media, injects provider request headers, and reports player status
+ * back through the standard Cast media channel.
+ *
+ * Reference: https://developers.google.com/cast/docs/web_receiver/basic
+ */
+(function () {
+  'use strict';
+
+  var context = cast.framework.CastReceiverContext.getInstance();
+  var playerManager = context.getPlayerManager();
+  var brand = document.getElementById('brand');
+
+  /** Provider request headers for the current LOAD, set by the interceptor. */
+  var upstreamHeaders = {};
+  var protectedRelay = false;
+
+  function validHeaderUrl(value) {
+    if (value === undefined || value === null) return true;
+    if (typeof value !== 'string' || value.length > 4096 || /[\r\n]/.test(value)) return false;
+    try {
+      return new URL(value).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  function headersForLoad(customData) {
+    var headers = {};
+    var source = (customData && customData.headers) || {};
+    if (validHeaderUrl(source.referer)) headers.Referer = source.referer;
+    if (validHeaderUrl(source.origin)) headers.Origin = source.origin;
+    return headers;
+  }
+
+  var PlaybackConfig = cast.framework.PlaybackConfig;
+  if (PlaybackConfig) {
+    var playbackConfig = new PlaybackConfig();
+    // Provider streams may require referer/origin hints. These handlers run
+    // per manifest/segment request; unknown shapes fail open (no headers)
+    // so playback still attempts and the sender fallback covers a 403.
+    var inject = function (requestInfo) {
+      try {
+        if (protectedRelay) {
+          var requested = new URL(requestInfo.url, window.location.href);
+          if (requested.origin !== window.location.origin || !/^\/(media\/|v1\/playback\/relay-manifest)/.test(requested.pathname)) throw new Error('Invalid TV media.');
+          requestInfo.withCredentials = true;
+          requestInfo.headers = {};
+          return;
+        }
+        requestInfo.withCredentials = false;
+        requestInfo.headers = requestInfo.headers || {};
+        for (var name in upstreamHeaders) {
+          if (Object.prototype.hasOwnProperty.call(upstreamHeaders, name)) {
+            requestInfo.headers[name] = upstreamHeaders[name];
+          }
+        }
+      } catch {
+        if (protectedRelay) throw new Error('TV authorization failed.');
+        /* Fail open: the sender recovery ladder covers denied requests. */
+      }
+    };
+    playbackConfig.manifestRequestHandler = inject;
+    playbackConfig.segmentRequestHandler = inject;
+    playbackConfig.licenseRequestHandler = function (requestInfo) { if (protectedRelay) inject(requestInfo); };
+  }
+
+  playerManager.setMessageInterceptor(
+    cast.framework.messages.MessageType.LOAD,
+    async function (loadRequestData) {
+      var customData = (loadRequestData.media && loadRequestData.media.customData) || loadRequestData.customData || {};
+      protectedRelay = customData.delivery === 'relay';
+      upstreamHeaders = protectedRelay ? {} : headersForLoad(customData);
+      if (protectedRelay) {
+        if (typeof customData.handoffToken !== 'string' || !/^[a-f0-9]{64}$/.test(customData.handoffToken)) throw new Error('TV handoff required.');
+        var response = await fetch('/v1/playback/cast/claim', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ handoffToken: customData.handoffToken }), signal: AbortSignal.timeout(5000) });
+        if (!response.ok) throw new Error('TV handoff failed.');
+        var source = await response.json();
+        var authorized = new URL(source.src);
+        if (authorized.origin !== window.location.origin || !/^\/(media\/|v1\/playback\/relay-manifest)/.test(authorized.pathname)) throw new Error('Invalid TV source.');
+        loadRequestData.media.contentId = source.src;
+        loadRequestData.media.contentType = source.type === 'hls' ? 'application/x-mpegURL' : 'video/mp4';
+        delete customData.handoffToken;
+      }
+      if (typeof customData.playing === 'boolean') loadRequestData.autoplay = customData.playing;
+      var position = Number(customData.position);
+      if (Number.isFinite(position) && position > 0) {
+        loadRequestData.currentTime = position;
+      }
+      if (brand) brand.hidden = true;
+      return loadRequestData;
+    },
+  );
+
+  playerManager.addEventListener(
+    cast.framework.events.category.CORE,
+    function (event) {
+      if (!brand) return;
+      // Show the brand card only when nothing is loaded or after teardown.
+      if (
+        event.type === cast.framework.events.EventType.MEDIA_STATUS &&
+        event.status &&
+        event.status.playerState === 'IDLE' &&
+        event.status.idleReason === 'FINISHED'
+      ) {
+        brand.hidden = false;
+      }
+    },
+  );
+
+  context.addEventListener(
+    cast.framework.system.EventType.SHUTDOWN,
+    function () {
+      upstreamHeaders = {};
+    },
+  );
+
+  context.start(
+    playbackConfig ? { playbackConfig: playbackConfig } : undefined,
+  );
+})();

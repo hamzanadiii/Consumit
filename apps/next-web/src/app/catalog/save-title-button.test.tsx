@@ -8,7 +8,7 @@ import { SaveTitleButton } from './save-title-button'
 const setMemberSaved = vi.hoisted(() => vi.fn())
 const getMemberTitleState = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/identity-browser', () => ({ getMemberTitleState, setMemberSaved }))
+vi.mock('@consumit/web-core/client/identity-browser', () => ({ getMemberTitleState, setMemberSaved }))
 
 const member = {
   createdAt: '2026-09-07T12:00:00.000Z',

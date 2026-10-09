@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 
 const distDir = process.env.CONSUMIT_NEXT_DIST_DIR ?? '.next-playback-prod'
 const outputDir = path.resolve(process.cwd(), distDir)
-const standaloneApp = path.join(outputDir, 'standalone', 'apps', 'web')
+const standaloneApp = path.join(outputDir, 'standalone', 'apps', process.env.PLAYBACK_FRONTEND === 'next-web' ? 'next-web' : 'web')
 const standaloneDist = path.join(standaloneApp, path.basename(outputDir))
 const serverPath = path.join(standaloneApp, 'server.js')
 

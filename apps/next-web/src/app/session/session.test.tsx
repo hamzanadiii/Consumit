@@ -6,7 +6,7 @@ import { SessionProvider, useSession } from './session'
 
 const getCurrentMember = vi.hoisted(() => vi.fn())
 
-vi.mock('@/lib/identity-browser', () => ({ getCurrentMember }))
+vi.mock('@consumit/web-core/client/identity-browser', () => ({ getCurrentMember }))
 
 const member = {
   avatarStyle: 'dusk',

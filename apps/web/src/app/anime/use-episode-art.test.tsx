@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEpisodeArt } from './use-episode-art'
 
 const mocks = vi.hoisted(() => ({ fetchEpisode: vi.fn() }))
-vi.mock('@/lib/anime-browser', () => ({ browserAnimeEpisode: (...args: unknown[]) => mocks.fetchEpisode(...args) }))
+vi.mock('@consumit/web-core/client/anime-browser', () => ({ browserAnimeEpisode: (...args: unknown[]) => mocks.fetchEpisode(...args) }))
 
 const ART = { title: 'Ballad', description: 'A past.', thumbnail: 'https://media.kitsu.app/x.jpeg' }
 

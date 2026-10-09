@@ -15,13 +15,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({usePathname: () => '/', useRouter: () => ({ push: vi.fn(), refresh: mocks.refresh }) }))
 
-vi.mock('@/lib/catalog-browser', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/catalog-browser')>()),
+vi.mock('@consumit/web-core/client/catalog-browser', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@consumit/web-core/client/catalog-browser')>()),
   browserSearchCatalog: mocks.browserSearchCatalog,
 }))
 
-vi.mock('@/lib/identity-browser', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity-browser')>()),
+vi.mock('@consumit/web-core/client/identity-browser', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@consumit/web-core/client/identity-browser')>()),
   saveMemberFavorites: mocks.saveMemberFavorites,
 }))
 

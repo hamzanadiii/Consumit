@@ -3,12 +3,12 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { browserDiscoverCatalog } from '@/lib/catalog-browser'
+import { browserDiscoverCatalog } from '@consumit/web-core/client/catalog-browser'
 import { movieSummary } from '@/test/catalog-fixtures'
 
 import { CatalogBrowseContent } from './catalog-browse-content'
 
-vi.mock('@/lib/catalog-browser', () => ({ browserDiscoverCatalog: vi.fn() }))
+vi.mock('@consumit/web-core/client/catalog-browser', () => ({ browserDiscoverCatalog: vi.fn() }))
 
 const page: CatalogPage = {
   items: [movieSummary],

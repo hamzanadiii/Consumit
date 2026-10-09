@@ -23,7 +23,9 @@
     "dashjs": "^5.2.1",
     "hls.js": "^1.7.2",
     "lucide-react": "^1.39.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "@consumit/playback-core": "workspace:*",
+    "@consumit/ui-core": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.2.8",

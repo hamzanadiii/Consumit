@@ -7,7 +7,7 @@ import { FilScreenShell } from './consumit-shell'
 
 const mocks = vi.hoisted(() => ({ logout: vi.fn(), push: vi.fn(), refresh: vi.fn() }))
 vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }) }))
-vi.mock('@/lib/identity-browser', () => ({ logoutMember: mocks.logout }))
+vi.mock('@consumit/web-core/client/identity-browser', () => ({ logoutMember: mocks.logout }))
 vi.mock('./filscreen-search-overlay', () => ({ FilScreenSearchOverlay: ({ onClose }: { onClose: () => void }) => <div role="dialog" aria-label="Search titles"><button onClick={onClose}>Close search</button></div> }))
 const member = { avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', email: 'sample@example.com', emailVerified: true, id: 'sample-member', role: 'member', username: 'alex' } as const
 function view(authenticated = true, path = '/') { return render(<SessionProvider initialMember={authenticated ? member : null} initialStatus={authenticated ? 'authenticated' : 'anonymous'}><ShellStateProvider><FilScreenShell currentPathname={path}><p>Screen content</p></FilScreenShell></ShellStateProvider></SessionProvider>) }

@@ -4,6 +4,8 @@ import { Readable } from 'node:stream'
 import { buildApp } from '../../apps/api/src/app'
 import { loadEnv } from '../../apps/api/src/config/env'
 import { createFakeCatalog } from '../../apps/api/src/catalog/fake-catalog'
+import { createPlaybackRelay } from '../../apps/api/src/playback/relay'
+import { createRelayWorker } from '../../packages/media-relay/src/worker'
 import { createPlayback } from '../../apps/api/src/playback/playback'
 import { createMemoryPlaybackStore } from '../../apps/api/src/playback/state'
 import { createSubtitleService } from '../../apps/api/src/subtitles/subtitles'
@@ -36,7 +38,7 @@ const fixtureServer = Bun.serve({
 })
 
 // Isolated controlled-media server. Never loaded by the production entry point.
-const titles: CatalogMovieDetail[] = [1, 2, 3, 4, 5, 6].map((id) => ({
+const titles: CatalogMovieDetail[] = [1, 2, 3, 4, 5, 6, 7, 8].map((id) => ({
   id, kind: 'movie', title: `Playback reference ${id}`, originalTitle: `Playback reference ${id}`,
   overview: 'Generated color bars and tone for playback verification.', genreNames: [],
   backdropUrl: null, posterUrl: null, logoUrl: null, popularity: 0, releaseDate: '2026-09-09',
@@ -67,7 +69,7 @@ const transport: MediaTransport = async (url, _hosts, headers) => {
   }), body: Readable.from([file.subarray(start, end + 1)]) }
 }
 const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => {
-  const staticAdapter = createStaticProvider(id, titles.filter((title) => title.id !== 4).map((title) => ({ ref: { kind: title.kind, id: title.id }, sources: [{
+  const staticAdapter = createStaticProvider(id, titles.filter((title) => ![4, 7, 8].includes(title.id)).map((title) => ({ ref: { kind: title.kind, id: title.id }, sources: [{
     key: 'main', url: `${fixtureOrigin}/${title.id === 3 && id === 'primary' ? 'missing.mp4' : title.id === 2 ? 'master.m3u8' : 'reference.mp4'}?provider=${id}`,
     type: title.id === 2 ? 'hls' : 'native', language: 'original',
     expiresAt: '2099-01-01T00:00:00.000Z', headers: {},
@@ -93,7 +95,26 @@ const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => {
 providers.push(...configuredProviders([{
   id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: [fixtureHost], upstreamGroup: 'vixsrc',
 }], { transport }))
-let playback = createPlayback({ providers, store, region: 'US' })
+const relaySecret = 'deterministic-relay-fixture-secret-only-32-chars'
+const relayHosts = { 'fixture-relay': ['fixture.example'] }
+providers.push({
+  adapter: createStaticProvider('fixture-relay', [7, 8].map(id => ({ ref: { kind: 'movie', id }, sources: [{
+    key: 'main', url: `https://fixture.example/${id === 7 ? 'master.m3u8' : 'reference.mp4'}`,
+    type: id === 7 ? 'hls' : 'native', language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [],
+  }] }))),
+  deliveryMode: 'relay', enabled: true, approvedRegions: ['US'], mediaKinds: ['movie'], mediaHosts: ['fixture.example'],
+  upstreamGroup: 'fixture-relay', concurrency: 2, requestsPerMinute: 30,
+})
+const relay = createPlaybackRelay({ origin: 'http://127.0.0.1:27911', secret: relaySecret, providers: relayHosts }, transport)
+const worker = createRelayWorker({ fetch: async (input, init) => {
+  const request = new Request(input, init)
+  if (request.headers.has('cookie') || request.headers.has('authorization')) throw new Error('Fixture credentials reached upstream.')
+  const target = new URL(request.url)
+  if (target.hostname !== 'fixture.example') throw new Error('Unknown fixture relay host.')
+  return fetch(`http://127.0.0.1:18560${target.pathname}`, { headers: request.headers, signal: request.signal })
+} })
+const createFixturePlayback = () => createPlayback({ providers, store, region: 'US', relay, relayOrigin: 'http://127.0.0.1:27911' })
+let playback = createFixturePlayback()
 const subtitleRaws = [
   ...Array.from({ length: 25 }, (_, i) => ({ provider: 'fixture-subtitles', lang: 'en', label: `English release ${i + 1}`, format: 'srt' as const, url: `https://subs.example/en-${i + 1}.srt` })),
   ...['اَلْعَرَبِيَّةُ', 'Albanian'].map((label, i) => ({ provider: 'fixture-subtitles', lang: 'ar', label, format: 'srt' as const, url: `https://subs.example/ar-${i + 1}.srt` })),
@@ -120,12 +141,24 @@ const app = await buildApp({
     listProviders: (...args) => playback.listProviders(...args),
     switchProvider: (...args) => playback.switchProvider(...args),
     events: (...args) => playback.events(...args),
+    relayManifest: (...args) => playback.relayManifest(...args),
+    castSource: (...args) => playback.castSource!(...args),
   },
+})
+app.get('/media/*', { config: { rateLimit: false } }, async (request, reply) => {
+  const headers = new Headers()
+  for (const [name, value] of Object.entries(request.headers)) if (typeof value === 'string') headers.set(name, value)
+  const response = await worker.fetch(new Request(`http://127.0.0.1:18559${request.url}`, { headers }), {
+    RELAY_ENABLED: 'true', RELAY_SECRET: relaySecret, APP_ORIGIN: 'http://127.0.0.1:27911', RELAY_PROVIDERS: JSON.stringify(relayHosts),
+  })
+  reply.code(response.status)
+  for (const [name, value] of response.headers) reply.header(name, value)
+  return reply.send(Buffer.from(await response.arrayBuffer()))
 })
 app.post('/__fixtures/reset', { config: { rateLimit: false } }, async () => {
   await store.close()
   await warmSubtitleFiles()
-  playback = createPlayback({ providers, store, region: 'US' })
+  playback = createFixturePlayback()
   return { ok: true }
 })
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void app.close().then(() => { fixtureServer.stop(); process.exit(0) }))

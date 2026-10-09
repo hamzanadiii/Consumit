@@ -1,0 +1,48 @@
+{
+  "name": "@consumit/playback-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./ad-controller": "./src/playback/ad-controller.ts",
+    "./audio-menu": "./src/playback/audio-menu.ts",
+    "./media-engine": "./src/playback/media-engine.ts",
+    "./media-preferences": "./src/playback/media-preferences.ts",
+    "./media-source": "./src/playback/media-source.ts",
+    "./playback-controller-next": "./src/playback/playback-controller-next.ts",
+    "./playback-controller": "./src/playback/playback-controller.ts",
+    "./relay-lease": "./src/playback/relay-lease.ts",
+    "./separate-audio": "./src/playback/separate-audio.ts",
+    "./subtitle-sync": "./src/playback/subtitle-sync.ts",
+    "./volume-boost": "./src/playback/volume-boost.ts",
+    "./player-types": "./src/playback/player-types.ts",
+    "./use-player-controller": "./src/playback/use-player-controller.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dashjs": "^5.2.1",
+    "hls.js": "^1.7.2"
+  },
+  "peerDependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "vite": "^8.2.2"
+  }
+}

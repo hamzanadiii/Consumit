@@ -20,11 +20,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, refresh: vi.fn() }),
 }))
 
-vi.mock('@/lib/catalog-browser', () => ({
+vi.mock('@consumit/web-core/client/catalog-browser', () => ({
   browserSearchCatalog: mocks.browserSearchCatalog,
 }))
 
-vi.mock('@/lib/anime-browser', () => ({
+vi.mock('@consumit/web-core/client/anime-browser', () => ({
   browserSearchAnime: mocks.browserSearchAnime,
 }))
 

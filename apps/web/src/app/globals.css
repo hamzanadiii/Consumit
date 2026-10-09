@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @import '@consumit/ui/styles.css';
+@source '../../../../packages/ui-core/src';
+@source '../../../../packages/web-core/src';
 @source '../../../../packages/ui/src';
 
 /* Embeds size controls against the iframe itself, not the host page viewport. */

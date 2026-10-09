@@ -53,3 +53,9 @@ worker/.dev.vars
 *.tfvars
 !*.tfvars.example
 infra/secrets/
+
+# Generated from the shared TV receiver; prepared before dev/build.
+/apps/web/public/cast/receiver.js
+/apps/web/public/cast/receiver.html
+/apps/next-web/public/cast/receiver.js
+/apps/next-web/public/cast/receiver.html

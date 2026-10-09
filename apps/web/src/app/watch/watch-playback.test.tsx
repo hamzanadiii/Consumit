@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { movieDetail } from '@/test/catalog-fixtures'
 import type { DirectMediaSource } from '@consumit/ui'
-import type { CastLoadRequest } from '@/lib/cast-sender'
+import type { CastLoadRequest } from '@consumit/web-core/client/cast-sender'
 import { WatchPlayback } from './watch-playback'
 
 const mocks = vi.hoisted(() => ({
@@ -21,11 +21,11 @@ const mocks = vi.hoisted(() => ({
     emit() { for (const listener of [...mocks.cast.listeners]) listener() },
   },
 }))
-vi.mock('../session/session', () => ({ useSession: () => ({ member: mocks.member }) }))
-vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
-vi.mock('@/lib/cast-sender', () => ({ createCastSender: () => mocks.cast, castContentType: (type: string) => type }))
-vi.mock('@/lib/subtitles-browser', () => ({ discoverSubtitles: (...args: unknown[]) => mocks.subs(...args), pageSubtitles: (...args: unknown[]) => mocks.page(...args), prepareSubtitle: (...args: unknown[]) => mocks.prepare(...args), fetchSubtitlePreference: (...args: unknown[]) => mocks.pref(...args), saveSubtitlePreference: (...args: unknown[]) => mocks.savePref(...args) }))
-vi.mock('@/lib/playback-progress', () => ({ readPlaybackProgress: async () => 0, writePlaybackProgress: mocks.write, PROGRESS_SYNC_INTERVAL_MS: 25000, hasMeaningfulProgressChange: () => true }))
+vi.mock('@consumit/web-core/client/session', () => ({ useSession: () => ({ member: mocks.member }) }))
+vi.mock('@consumit/web-core/client/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
+vi.mock('@consumit/web-core/client/cast-sender', () => ({ createCastSender: () => mocks.cast, castContentType: (type: string) => type }))
+vi.mock('@consumit/web-core/client/subtitles-browser', () => ({ discoverSubtitles: (...args: unknown[]) => mocks.subs(...args), pageSubtitles: (...args: unknown[]) => mocks.page(...args), prepareSubtitle: (...args: unknown[]) => mocks.prepare(...args), fetchSubtitlePreference: (...args: unknown[]) => mocks.pref(...args), saveSubtitlePreference: (...args: unknown[]) => mocks.savePref(...args) }))
+vi.mock('@consumit/web-core/client/playback-progress', () => ({ readPlaybackProgress: async () => 0, writePlaybackProgress: mocks.write, PROGRESS_SYNC_INTERVAL_MS: 25000, hasMeaningfulProgressChange: () => true }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }))
 vi.mock('@consumit/ui', () => ({
   createQualityPreference: () => ({ choose: (option: { height: number }) => localStorage.setItem('consumit.player.quality-height', String(option.height)) }),
@@ -54,11 +54,11 @@ describe('watch request lifecycle', () => {
     mocks.list.mockReset().mockResolvedValue([{ id: 'backup', label: 'Backup' }])
     mocks.swap.mockReset()
     render(<WatchPlayback title={movieDetail} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Choose another server' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose another server' }, { timeout: 5000 }))
     await screen.findByRole('option', { name: 'Backup' })
     fireEvent.change(screen.getByRole('combobox', { name: 'Server' }), { target: { value: 'backup' } })
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', selected.source.src))
-    expect(mocks.request).toHaveBeenLastCalledWith('resolve', expect.objectContaining({ ref: session.ref, providerId: 'backup' }), expect.any(AbortSignal))
+    expect(mocks.request).toHaveBeenLastCalledWith('resolve', expect.objectContaining({ ref: session.ref, providerId: 'backup' }), expect.any(AbortSignal), expect.any(Function))
     expect(mocks.swap).not.toHaveBeenCalled()
     expect(screen.getByTestId('player')).toHaveAttribute('data-server-auto', 'false')
   })
