@@ -609,3 +609,5 @@ Playback preferences are semantic resolution height (nullable for Auto) and cano
 10. Non-blocking work moves to queues.
 11. Provider failure is a designed operating state.
 12. Operational complexity follows measured demand.
+
+AniList catalog cover selections request `extraLarge` and `large`; mapping selects the largest valid HTTP(S) cover with a safe large fallback. Catalog cache generation `anilist:v2` refreshes old mapped covers without deleting data. Landscape banners remain the upstream AniList banner; unrelated or uncertain TMDb artwork is never substituted.

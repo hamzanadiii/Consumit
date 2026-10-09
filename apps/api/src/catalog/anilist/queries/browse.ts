@@ -12,7 +12,7 @@ export const browseQuery = `query ($page: Int, $perPage: Int, $sort: [MediaSort]
       episodes
       duration
       genres
-      coverImage { large color }
+      coverImage { extraLarge large color }
       bannerImage
       averageScore
       popularity

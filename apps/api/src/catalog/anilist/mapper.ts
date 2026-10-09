@@ -1,7 +1,7 @@
 import type { AnimeTitleSummary, AnimeTitleDetail, AnimeCharacter, AnimeStaff, AnimeFranchiseRelation, AnimeTitle, AnimeImageAsset, AnimeSeason, AnimeFormat, AnimeStatus, AnimeRelationType } from '@consumit/contracts'
 
 type AnilistTitle = { romaji: string | null; english: string | null; native: string | null }
-type AnilistImage = { large: string | null; color: string | null }
+type AnilistImage = { extraLarge?: string | null; large: string | null; color: string | null }
 type AnilistMedia = {
   id: number
   idMal: number | null
@@ -68,7 +68,7 @@ export function mapTitle(raw: AnilistMedia): AnimeTitle {  return {
 
 export function mapImage(raw: AnilistImage | null): AnimeImageAsset {
   return {
-    url: toHttpUrl(raw?.large),
+    url: toHttpUrl(raw?.extraLarge) ?? toHttpUrl(raw?.large),
     color: raw?.color ?? null,
   }
 }

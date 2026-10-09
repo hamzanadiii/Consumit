@@ -30,6 +30,11 @@ const media = {
 }
 
 describe('AniList mapper', () => {
+  it('prefers the largest valid cover with a safe large fallback', () => {
+    expect(mapTitleSummary({ ...media, coverImage: { extraLarge: 'https://images.example/extra.jpg', large: 'https://images.example/large.jpg', color: null } }).coverImage.url).toBe('https://images.example/extra.jpg')
+    expect(mapTitleSummary({ ...media, coverImage: { extraLarge: 'javascript:alert(1)', large: 'https://images.example/large.jpg', color: null } }).coverImage.url).toBe('https://images.example/large.jpg')
+  })
+
   it('preserves status semantics and never substitutes a color for an image URL', () => {
     const summary = mapTitleSummary(media)
 

@@ -439,3 +439,5 @@ Component 17 is UI-shell-only. TMDB may supply its title, metadata, and poster o
 - **Don't** present deterministic Taste Match, member activity, ratings, reviews, or progress as live member data.
 - **Don't** let TMDB attribution imply endorsement or treat catalog metadata and artwork as permission to play a title.
 - **Don't** put provider ranking, health, entitlement, streaming-adapter, or switching logic inside Component 17, and keep provider frames outside Component 17; Watch composes them through ProviderFrame under ADR 0006.
+
+The Watch header uses one fixed 24px title with 32px line height during preparation, pause and play, on desktop and mobile. Anime shows only the anime name on the first line and episode identity/title below it; long names truncate without resizing. Preparation does not duplicate the textual title when the header is present.

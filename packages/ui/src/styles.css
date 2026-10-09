@@ -405,7 +405,6 @@ video::cue {
     transform-origin: left;
     animation: consumit-stream-pending 1.8s ease-in-out infinite;
   }
-  [data-consumit-player][data-preparing='true'] [data-player-title],
   [data-consumit-player][data-preparing='true'] [data-player-controls],
   [data-consumit-player][data-player-core][data-preparing='true'] [data-player-episode-navigation] { visibility: hidden; }
   [data-consumit-player][data-preparing='true'] [data-player-header] { z-index: 1; }
@@ -626,3 +625,7 @@ video::cue {
 .consumit-player-cast-recheck { margin-top: 8px; border: 1px solid var(--color-border); color: var(--color-ink); }
 .consumit-player-cast-recheck:disabled { color: var(--color-muted); cursor: default; }
 .consumit-player-cast-action:focus-visible, .consumit-player-cast-recheck:focus-visible { outline: 2px solid var(--color-orange); outline-offset: 2px; }
+
+/* Watch keeps the title scale stable through preparation, pause and play. */
+[data-consumit-player] [data-player-title] > p[data-player-heading],
+.consumit-player-preparation-title { font-size: 24px; line-height: 32px; }

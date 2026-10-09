@@ -1470,14 +1470,8 @@ export function ConsumitPlayer({
               ) : null}
             </div>
             <div className="min-w-0 flex-1 text-center" data-player-title>
-              {!isPlaying && hasSource && !hasError && pauseLogoUrl ? (
-                <>
-                  <img alt="" aria-hidden="true" className="mx-auto max-h-6 w-auto max-w-full object-contain [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:hidden" src={pauseLogoUrl} />
-                  <span className="sr-only sm:hidden">{title}</span>
-                </>
-              ) : null}
-              <p className={cn('truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md', !isPlaying && hasSource && !hasError && pauseLogoUrl && 'hidden sm:block')}>{title}</p>
-              {topMeta ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta}</p> : null}
+              <p data-player-heading className="truncate font-display font-normal tracking-[-0.02em] text-ink drop-shadow-md" title={title}>{title}</p>
+              {topMeta ?? (startupPending ? preparationMeta : undefined) ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta ?? preparationMeta}</p> : null}
             </div>
             <div className="pointer-events-auto hidden shrink-0 items-center gap-2 lg:flex" data-player-episode-navigation>
               {isFullscreen && onPreviousEpisode ? <PlayerIconButton label="Previous episode" onClick={onPreviousEpisode}><SkipBack aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
@@ -1507,8 +1501,8 @@ export function ConsumitPlayer({
                   />
                   <span className="sr-only">{title}</span>
                 </>
-              ) : <p className="consumit-player-preparation-title font-display text-ink">{title}</p>}
-              {preparationMeta ?? topMeta ? <p className="mt-3 text-sm text-copy">{preparationMeta ?? topMeta}</p> : null}
+              ) : !showTopBar ? <p className="consumit-player-preparation-title font-display text-ink">{title}</p> : null}
+              {!showTopBar && (preparationMeta ?? topMeta) ? <p className="mt-3 text-sm text-copy">{preparationMeta ?? topMeta}</p> : null}
               <div aria-hidden="true" className="consumit-player-preparation-steps" data-stage={hasSource ? 'connecting' : 'resolving'}>
                 <span /><span /><span />
               </div>

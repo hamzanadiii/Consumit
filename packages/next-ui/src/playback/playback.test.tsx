@@ -159,7 +159,7 @@ describe('playback shell components', () => {
   it('presents pending resolution without inventing playback readiness and clears it on failure', () => {
     const { container, rerender } = render(<ConsumitPlayer preparing posterSrc="/poster.jpg" title="Sea of Names" topMeta="S1 · E2 — The crossing" backHref="/title/1" />)
     expect(screen.getByRole('status')).toHaveTextContent('Finding your stream…')
-    expect(screen.getByRole('status')).toHaveTextContent('S1 · E2 — The crossing')
+    expect(container.querySelector('[data-player-title]')).toHaveTextContent('S1 · E2 — The crossing')
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/title/1')
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
     rerender(<ConsumitPlayer title="Sea of Names" status="No source available" statusTone="unavailable" />)

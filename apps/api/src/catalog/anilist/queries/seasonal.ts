@@ -12,7 +12,7 @@ export const seasonalQuery = `query ($season: MediaSeason, $seasonYear: Int, $pa
       episodes
       duration
       genres
-      coverImage { large color }
+      coverImage { extraLarge large color }
       bannerImage
       averageScore
       popularity

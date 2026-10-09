@@ -175,7 +175,7 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     eventsRef.current = events
     return () => { events.close(); eventsRef.current = null }
   }, [sessionId, isFrame])
-  const name = episode ? `${title.title} · ${episode.title}` : title.title
+  const name = title.title
 
   const save = useCallback(async (keepalive = false, force = false) => {
     if (frameActive.current) return
@@ -703,7 +703,7 @@ return function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
           castAvailable={castAvailable} castConnected={false} onCastCheck={checkCast} onCastClick={() => handleCastClick()}
           subtitleDiscovery={{ languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
           onSubtitlePage={loadSubtitlePage} onSubtitleSearch={searchSubtitleCandidates} onSubtitleCandidateSelect={selectSubtitleCandidate}
-          topMeta={[episodeMeta, qualityMeta].filter(Boolean).join(' · ') || undefined}
+          topMeta={(title.kind === 'anime' ? episodeMeta : [episodeMeta, qualityMeta].filter(Boolean).join(' · ')) || undefined}
           preparing={!session && !error}
           preparationMeta={episodeMeta ?? [title.year, formatRuntime(title.kind === 'movie' ? title.runtimeMinutes : title.episodeRuntimeMinutes)].filter(Boolean).join(' · ')}
           onPreviousEpisode={prevHref ? () => router.push(prevHref) : undefined}

@@ -410,3 +410,5 @@ Add queues, worker separation, analytics storage, multiple instances, canaries, 
 - Verify accessibility, responsiveness, and failure behavior in proportion to risk.
 - Update product, domain, or architecture docs only when the underlying decision changes.
 - Finish one coherent slice before expanding the next.
+
+Anime artwork and heading (2026-10-09): Watch now separates the anime name from the episode title and keeps the header at a fixed 24px through preparation and playback. AniList covers prefer `extraLarge` with a safe large fallback and a new catalog cache generation. Both frontend builds, workspace lint/types, focused AniList and Watch tests, both player suites and desktop/mobile heading checks pass. The original frontend/API images rebuilt and are healthy; a fresh local browser confirms the heading and largest cover selection. Landscape banners remain upstream-limited. See [the audit](./audits/anime-artwork-and-heading-2026-10-09.md).
