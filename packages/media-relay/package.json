@@ -3,6 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "exports": { ".": "./src/grants.ts", "./manifest": "./src/manifest.ts", "./provider-headers": "./src/provider-headers.ts" },
-  "scripts": { "build": "bun build src/worker.ts --target browser --outfile dist/worker.js", "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run" }
+  "exports": {
+    ".": "./src/grants.ts",
+    "./manifest": "./src/manifest.ts",
+    "./provider-headers": "./src/provider-headers.ts",
+    "./authorization": "./src/authorization.ts",
+    "./policy": "./src/policy.ts"
+  },
+  "scripts": {
+    "build": "bun build src/worker.ts --target browser --outfile dist/worker.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
 }

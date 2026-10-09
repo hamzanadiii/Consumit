@@ -10,16 +10,17 @@ import { supportsRequestedAudio } from './audio-policy.ts'
 import { createSeparateAudio } from './separate-audio.ts'
 import type { PlaybackRelay } from './relay.ts'
 
-type SessionRecord = { owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; excludedAt?: Record<string, number>; group: string; fallbackAt?: number[]; restartFallback?: boolean }
+type SessionRecord = { owner: string; origin?: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; excludedAt?: Record<string, number>; group: string; fallbackAt?: number[]; restartFallback?: boolean }
 function withPreferences(input: ResolvePlaybackRequest, preferences?: PlaybackPreferences): ResolvePlaybackRequest {
   if (!preferences) return input
   return { ...input, preferences: { ...input.preferences, ...preferences }, ...(preferences.audioLanguage ? { audioLanguage: preferences.audioLanguage } : {}) }
 }
 export interface Playback {
-  relayManifest(token: string, origin: string, signal: AbortSignal): Promise<string>
+  relayManifest(token: string, origin: string | undefined, scope: { owner: string; audience: 'browser' | 'cast' }, signal: AbortSignal): Promise<string>
+  castSource?(owner: string, id: string, sourceId: string, castOwner: string): Promise<{ src: string; expiresAt: string; type: string }>
   listAudio(owner: string, id: string, sourceId: string, signal: AbortSignal): Promise<import('@consumit/contracts').SeparateAudioTrack[]>
   prepareAudio(owner: string, id: string, sourceId: string, trackId: string, signal: AbortSignal): Promise<import('@consumit/contracts').SeparateAudioSource>
-  resolve(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackSession>
+  resolve(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal, origin?: string): Promise<PlaybackSession>
   recover(owner: string, id: string, failure: PlaybackFailureRequest, refresh: boolean, signal: AbortSignal): Promise<PlaybackSession>
   listProviders(input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackProvider[]>
   switchProvider(owner: string, id: string, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences): Promise<PlaybackSession>
@@ -93,14 +94,14 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     if (record.owner !== owner || Date.parse(record.session.expiresAt) <= Date.now()) throw new ApiError('NOT_FOUND', 'Playback session not found.')
     const validDelivery = record.session.source.delivery === 'embed' ? record.session.source.type === 'iframe' && providers.some(provider => provider.deliveryMode === 'embed' && provider.adapter.id === record.session.source.providerId && provider.mediaKinds.includes(record.input.ref.kind) && allowedMediaUrl(record.session.source.src, provider.mediaHosts, provider.mediaHostPatterns))
       : record.session.source.delivery === 'direct' ? !isRelayMediaUrl(record.session.source.src)
-      : record.session.source.delivery === 'relay' && relay && await relay.accepts(record.session.source.src, record.session.source.providerId)
+      : record.session.source.delivery === 'relay' && relay && await relay.accepts(record.session.source.src, record.session.source.providerId, { owner, session: id, audience: 'browser' })
     if (!validDelivery) {
       throw new ApiError('NOT_FOUND', 'This playback session needs a new source. Start playback again.', { retryable: true })
     }
     return record
   }
 
-  async function save(owner: string, input: ResolvePlaybackRequest, resolved: ResolvedSource, previous?: SessionRecord, delivery: PlaybackSession['source']['delivery'] = 'direct') {
+  async function save(owner: string, input: ResolvePlaybackRequest, resolved: ResolvedSource, previous?: SessionRecord, delivery: PlaybackSession['source']['delivery'] = 'direct', origin = previous?.origin ?? relayOrigin ?? audioOrigin ?? '') {
     const { source, registration } = resolved
     const qualityHint = source.qualityHint ?? (source.height ? `${source.height}p` : undefined)
     const qualityHeights = [...new Set((resolved.qualitySources ?? []).flatMap(candidate => candidate.height === undefined ? [] : [candidate.height]))].sort((a, b) => b - a)
@@ -112,7 +113,8 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     const cutoff = Date.now() + MAX_GRANT_MS - (delivery === 'relay' ? 5000 : 0)
     const expiry = delivery === 'relay' && source.expiryEstimated === true ? cutoff
       : Math.min(Date.parse(source.expiresAt) - 5000, cutoff)
-    const src = delivery === 'relay' ? await relay?.issue(resolved, expiry, relayOrigin ?? audioOrigin ?? '') : source.url
+    const sessionId = previous?.session.id ?? randomUUID()
+    const src = delivery === 'relay' ? await relay?.issue(resolved, expiry, origin, { owner, session: sessionId, audience: 'browser' }) : source.url
     if (!src || (registration.deliveryMode ?? 'direct') !== delivery) throw unavailable(input)
     // Captions aggregate across every provider that answered, plus the tracks
     // the member already had: a video fallback never takes the subtitles down
@@ -130,22 +132,27 @@ export function createPlayback({ providers, store, region, providerOrders, audio
       .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
     const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
-      id: previous?.session.id ?? randomUUID(), ref: input.ref,
+      id: sessionId, ref: input.ref,
       source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
       fallbackCount: windowedFallbacks.length,
       capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.some((track) => track.format === 'vtt') },
     }
     playbackSessionSchema.parse(session)
-    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: registration.upstreamGroup, excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
+    await store.set(`session:${session.id}`, JSON.stringify({ owner, origin, input, session, group: registration.upstreamGroup, excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
     selected.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region, delivery, surface: owner.startsWith('embed') ? 'embed' : 'watch', action: previous ? previous.session.source.providerId === registration.adapter.id ? 'refresh' : 'switch' : 'resolve' })
     return session
   }
 
   return {
-    async relayManifest(token: string, origin: string, signal: AbortSignal) {
+    async relayManifest(token: string, origin: string | undefined, scope: { owner: string; audience: 'browser' | 'cast' }, signal: AbortSignal) {
       if (!relay) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This relay is unavailable.')
-      return relay.manifest(token, origin, signal)
+      return relay.manifest(token, origin, scope, signal)
+    },
+    async castSource(owner, id, sourceId, castOwner) {
+      const record = await read(owner, id)
+      if (!relay || record.session.source.delivery !== 'relay' || record.session.source.id !== sourceId) throw new ApiError('CONFLICT', 'The stream changed. Try casting again.', { retryable: true })
+      return { ...await relay.cast(record.session.source.src, owner, id, castOwner), type: record.session.source.type }
     },
     async listAudio(owner, id, sourceId, signal) {
       const record = await read(owner, id)
@@ -161,7 +168,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     },
     providerStatus(kind) { return providers.flatMap(provider => resolverFor(provider.deliveryMode ?? 'direct')?.status(kind).filter(state => state.id === provider.adapter.id) ?? []) },
     async resetProviderCircuit(providerId, kind) { await Promise.all([resolver.reset(providerId, kind), relayResolver?.reset(providerId, kind), embedResolver.reset(providerId, kind)]) },
-    async resolve(owner, input, signal) {
+    async resolve(owner, input, signal, origin) {
       if (input.providerId) {
         const target = providers.find(provider => provider.adapter.id === input.providerId && provider.enabled && suppliesVideo(provider)
           && provider.approvedRegions.includes(region) && provider.mediaKinds.includes(input.ref.kind) && supportsRequestedAudio(provider, input)
@@ -170,17 +177,17 @@ export function createPlayback({ providers, store, region, providerOrders, audio
         const delivery = target.deliveryMode ?? 'direct'
         const result = await resolverFor(delivery)?.resolve(input, signal, [], target.adapter.id, true)
         if (!result || signal.aborted) throw unavailable(input)
-        return save(owner, input, result, undefined, delivery)
+        return save(owner, input, result, undefined, delivery, origin)
       }
       const result = await resolver.resolve(input, signal)
       if (signal.aborted) throw unavailable(input)
-      if (result) return save(owner, input, result)
+      if (result) return save(owner, input, result, undefined, 'direct', origin)
       const relayed = await relayResolver?.resolve(input, signal)
       if (signal.aborted) throw unavailable(input)
-      if (relayed) return save(owner, input, relayed, undefined, 'relay')
+      if (relayed) return save(owner, input, relayed, undefined, 'relay', origin)
       const framed = await embedResolver.resolve(input, signal)
       if (!framed || signal.aborted) throw unavailable(input)
-      return save(owner, input, framed, undefined, 'embed')
+      return save(owner, input, framed, undefined, 'embed', origin)
     },
     async listProviders(input) {
       // Watch requests this fixed snapshot only when opening Server. No

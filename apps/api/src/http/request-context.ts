@@ -13,6 +13,8 @@ const REDACTED_PATHS = [
   'req.body.currentPassword',
   'req.body.newPassword',
   'req.body.token',
+  'req.body.handoffToken',
+  'req.body.turnstileToken',
   'req.body.code',
   'req.body.email',
   '*.password',

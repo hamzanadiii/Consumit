@@ -34,7 +34,7 @@ describe('operator video delivery choice', () => {
     provider.deliveryMode = 'relay'
     const proxy = await playback.resolve('viewer', input, signal)
     expect(proxy.source.delivery).toBe('relay')
-    expect(proxy.source.src.startsWith('https://edge.example/media/')).toBe(true)
+    expect(proxy.source.src.startsWith('https://watch.example/media/')).toBe(true)
     const switched = await playback.switchProvider('viewer', direct.id, 'primary', signal)
     expect(switched.source.delivery).toBe('relay')
     expect(switched.id).toBe(direct.id)

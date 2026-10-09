@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
 import { createGrantCodec } from '@consumit/media-relay'
@@ -37,25 +38,25 @@ describe('playback session API', () => {
   it('serves signed control playlists without relaying asset bytes or accepting caller URLs', async () => {
     const origin = 'http://localhost:3000', secret = 'test-manifest-secret-at-least-32-characters'
     const signer = await createGrantCodec(secret)
-    const grant = { version: 1 as const, provider: 'stormboron', url: 'https://rotating.example/master.m3u8', origin, expires: Date.now() + 60000, headers: {}, headerHost: 'rotating.example', kind: 'hls' as const, depth: 0, recipe: 'storm-boron-v1' as const, hosts: ['rotating.example'] }
+    const grant = { version: 2 as const, owner: createHash('sha256').update('a'.repeat(64)).digest('hex'), session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', audience: 'browser' as const, provider: 'stormboron', url: 'https://rotating.example/master.m3u8', origin, expires: Date.now() + 60000, headers: {}, headerHost: 'rotating.example', kind: 'hls' as const, depth: 0, recipe: 'storm-boron-v1' as const, hosts: ['rotating.example'] }
     const transport = vi.fn(async (url: string) => ({ status: 200, url, headers: new Headers(), body: Readable.from([url.endsWith('master.m3u8') ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nvariant.m3u8\n' : '#EXTM3U\n#EXTINF:6,\nsegment.ts\n']) }))
     const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { stormboron: ['static.example'] }, discovery: { stormboron: 'storm-boron-v1' } }, transport)
     const app = await buildApp({ env: loadEnv({ NODE_ENV: 'test' }), playback: createPlayback({ providers: [], store: createMemoryPlaybackStore(), region: 'US', relay }) })
     apps.push(app)
     const token = await signer.seal(grant), url = `/v1/playback/relay-manifest?grant=${token}`
-    const root = await app.inject({ url })
+    const root = await app.inject({ url, headers: { cookie: 'consumit-playback=' + 'a'.repeat(64) } })
     expect(root.statusCode).toBe(200)
     expect(root.headers['cache-control']).toBe('private, no-store')
     expect(root.headers['content-type']).toContain('application/vnd.apple.mpegurl')
     const child = root.body.split('\n').find(line => line.startsWith(origin))!
     expect(new URL(child).pathname).toBe('/v1/playback/relay-manifest')
-    const variant = await app.inject({ url: new URL(child).pathname + new URL(child).search, headers: { origin } })
+    const variant = await app.inject({ url: new URL(child).pathname + new URL(child).search, headers: { origin, cookie: 'consumit-playback=' + 'a'.repeat(64) } })
     expect(variant.statusCode).toBe(200)
-    expect(variant.body).toContain('https://edge.example/media/')
+    expect(variant.body).toContain(origin + '/media/')
     expect((await app.inject({ url, headers: { origin: 'https://other.example' } })).statusCode).toBe(403)
-    expect((await app.inject({ url: url + '&url=https://other.example' })).statusCode).toBe(403)
-    expect((await app.inject({ url: `/v1/playback/relay-manifest?grant=${await signer.seal({ ...grant, kind: 'auto' })}` })).statusCode).toBe(503)
-    expect((await app.inject({ url: url.slice(0, -12) + 'x'.repeat(12) })).statusCode).toBe(503)
+    expect((await app.inject({ headers: { cookie: 'consumit-playback=' + 'a'.repeat(64) }, url: url + '&url=https://other.example' })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { cookie: 'consumit-playback=' + 'a'.repeat(64) }, url: `/v1/playback/relay-manifest?grant=${await signer.seal({ ...grant, kind: 'auto' })}` })).statusCode).toBe(403)
+    expect((await app.inject({ headers: { cookie: 'consumit-playback=' + 'a'.repeat(64) }, url: url.slice(0, -12) + 'x'.repeat(12) })).statusCode).toBe(403)
     expect(transport).toHaveBeenCalledTimes(2)
   })
   it('retains changed quality and audio intent through refresh and fallback without selecting audio-only providers', async () => {

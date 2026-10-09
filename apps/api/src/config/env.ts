@@ -16,6 +16,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().trim().min(1).optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  TURNSTILE_SECRET_KEY: z.string().min(20).optional(),
   PLAYBACK_ENABLED: z.enum(['true', 'false']).default('false'),
   PLAYBACK_RELAY_ENABLED: z.enum(['true', 'false']).default('false'),
   PLAYBACK_RELAY_ORIGIN: z.url().optional(),
@@ -52,6 +53,7 @@ export type ApiEnv = {
      *  traffic; they only report to logs and the admin health endpoint. */
     probeIntervalMs: number
   }
+  turnstileSecret?: string
   adminMetricsUrl: string | undefined
   appOrigin: string
   authCodePepper: string | undefined
@@ -98,7 +100,8 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   if (value.PLAYBACK_RELAY_ENABLED === 'true') {
     if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RELAY_ORIGIN || !value.PLAYBACK_RELAY_SECRET || !value.PLAYBACK_RELAY_PROVIDERS) throw new Error('Relay requires playback, an origin, a secret, and approved providers.')
     const url = new URL(value.PLAYBACK_RELAY_ORIGIN)
-    if (url.protocol !== 'https:' || url.origin !== value.PLAYBACK_RELAY_ORIGIN || url.username || url.password) throw new Error('Relay requires an exact HTTPS origin.')
+    if (value.NODE_ENV === 'production' && url.origin !== appUrl.origin) throw new Error('Production relay must use APP_ORIGIN.')
+    if ((url.protocol !== 'https:' && !(value.NODE_ENV !== 'production' && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) || url.origin !== value.PLAYBACK_RELAY_ORIGIN || url.username || url.password) throw new Error('Relay requires an exact HTTPS origin.')
     relay = { origin: url.origin, secret: value.PLAYBACK_RELAY_SECRET, providers: parseRelayProviders(value.PLAYBACK_RELAY_PROVIDERS), ...(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS ? { discovery: parseRelayDiscovery(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS) } : {}) }
   }
   if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_MEDIA_CONFIG) throw new Error('Playback requires PLAYBACK_MEDIA_CONFIG.')
@@ -113,7 +116,11 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     const authUrl = new URL(value.VALKEY_URL)
     if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
   }
+  if (value.NODE_ENV === 'production' && value.PLAYBACK_ENABLED === 'true' && (!value.TURNSTILE_SECRET_KEY || !value.PLAYBACK_VALKEY_URL)) throw new Error('Production playback requires TURNSTILE_SECRET_KEY and shared PLAYBACK_VALKEY_URL.')
   if (value.NODE_ENV === 'production') {
+    if (/^(?:[123]x0+[A-Z]+|replace[-_]|missing[-_])/i.test(value.TURNSTILE_SECRET_KEY ?? '')) {
+      throw new Error('Invalid API configuration: TURNSTILE_SECRET_KEY must be a production key, not a public test or example key.')
+    }
     if (/^(?:replace[-_]|consumit-local|missing[-_])/i.test(value.AUTH_CODE_PEPPER ?? '')) {
       throw new Error('Invalid API configuration: AUTH_CODE_PEPPER must be a new production secret, not an example value.')
     }
@@ -150,6 +157,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
       ...(relay ? { relay } : {}),
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
+    ...(value.TURNSTILE_SECRET_KEY ? { turnstileSecret: value.TURNSTILE_SECRET_KEY } : {}),
     adminMetricsUrl: value.ADMIN_METRICS_URL,
     appOrigin: appUrl.origin,
     authCodePepper: value.AUTH_CODE_PEPPER,

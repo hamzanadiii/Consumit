@@ -3,6 +3,7 @@ import { ApiError } from '../http/errors.ts'
 
 export interface PlaybackStore {
   get(key: string): Promise<string | null>
+  take(key: string): Promise<string | null>
   set(key: string, value: string, ttlSeconds: number): Promise<void>
   claim(key: string, value: string, ttlSeconds: number): Promise<boolean>
   release(key: string, value: string): Promise<void>
@@ -16,6 +17,11 @@ export function createMemoryPlaybackStore(now = Date.now): PlaybackStore {
       const record = records.get(key)
       if (!record || record.expires <= now()) { records.delete(key); return null }
       return record.value
+    },
+    async take(key) {
+      const record = records.get(key)
+      records.delete(key)
+      return record && record.expires > now() ? record.value : null
     },
     async set(key, value, ttl) {
       for (const [id, record] of records) if (record.expires <= now()) records.delete(id)
@@ -44,6 +50,10 @@ export function createValkeyPlaybackStore(url: string): PlaybackStore {
     async get(key) {
       try { if (client.status !== 'ready') await ready; return await client.get(`consumit:playback:v1:${key}`) }
       catch { throw new ApiError('PLAYBACK_UNAVAILABLE', 'Playback sessions are temporarily unavailable. Try again.', { retryable: true }) }
+    },
+    async take(key) {
+      try { if (client.status !== 'ready') await ready; return await client.getdel(`consumit:playback:v1:${key}`) }
+      catch { throw new ApiError('PLAYBACK_UNAVAILABLE', 'Playback authorization is temporarily unavailable.', { retryable: true }) }
     },
     async set(key, value, ttl) {
       try { if (client.status !== 'ready') await ready; await client.set(`consumit:playback:v1:${key}`, value, 'EX', Math.max(1, Math.ceil(ttl))) }

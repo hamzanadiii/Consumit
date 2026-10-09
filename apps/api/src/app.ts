@@ -1,3 +1,5 @@
+import { createPlaybackVerification } from './playback/verification.ts'
+import { requestMember } from './http/request-member.ts'
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
@@ -242,7 +244,9 @@ export async function buildApp({ catalog = unavailableCatalogAdapter, animeCatal
   }
   const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders, audioOrigin: env.appOrigin,
     ...(env.playback?.relay ? { relay: createPlaybackRelay(env.playback.relay), relayOrigin: env.appOrigin } : {}) })
-  registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
+  registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production', store: playbackStore,
+    verification: env.turnstileSecret ? createPlaybackVerification(playbackStore, { secret: env.turnstileSecret, hostname: new URL(env.appOrigin).hostname }) : undefined,
+    isMember: async request => Boolean(await requestMember(request, resolvedIdentity, sessionCookieName(env))) })
   // Synthetic probes run in-process on a stagger (off in tests and when the
   // interval is zero). Past one instance every host probes; the reads are
   // idempotent and the 30-minute cadence makes duplication negligible.

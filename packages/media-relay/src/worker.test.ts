@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createGrantCodec, MAX_GRANT_MS, mediaGrantUrl, type RelayGrant } from './grants.ts'
 import { createRelayWorker, type RelayEnv } from './worker.ts'
@@ -5,10 +6,11 @@ import { createRelayWorker, type RelayEnv } from './worker.ts'
 const now = 1_800_000_000_000
 const secret = 'a'.repeat(48)
 const origin = 'https://watch.example'
-const edge = 'https://edge.example'
+const edge = origin
+const cookie = '__Host-consumit-playback=' + 'a'.repeat(64)
 const env: RelayEnv = { RELAY_ENABLED: 'true', RELAY_SECRET: secret, APP_ORIGIN: origin,
   RELAY_PROVIDERS: JSON.stringify({ owned: ['media.example', 'audio.example'] }) }
-const base: RelayGrant = { version: 1, provider: 'owned', url: 'https://media.example/master.m3u8', expires: now + 60_000,
+const base: RelayGrant = { version: 2, owner: createHash('sha256').update('a'.repeat(64)).digest('hex'), session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', audience: 'browser', provider: 'owned', url: 'https://media.example/master.m3u8', expires: now + 60_000,
   origin, headers: { Referer: origin }, headerHost: 'media.example', kind: 'hls', depth: 0 }
 // The native workerd constructor rejects incomplete/oversized bodies. The
 // standard-stream fixture exercises that contract outside the edge runtime.
@@ -21,7 +23,7 @@ class FixedLengthFixture extends TransformStream<Uint8Array, Uint8Array> {
 }
 async function request(grant: Partial<RelayGrant> = {}, init: RequestInit = {}) {
   const codec = await createGrantCodec(secret)
-  return new Request(mediaGrantUrl(edge, await codec.seal({ ...base, ...grant }, now)), init)
+  return new Request(mediaGrantUrl(edge, await codec.seal({ ...base, ...grant }, now)), { ...init, headers: { cookie, ...Object.fromEntries(new Headers(init.headers)) } })
 }
 function setup(response: Response | ((url: string) => Response)) {
   const fetcher = vi.fn<typeof fetch>(async input => typeof response === 'function' ? response(String(input)) : response)
@@ -29,13 +31,13 @@ function setup(response: Response | ((url: string) => Response)) {
   return { fetcher, report, worker: createRelayWorker({ fetch: fetcher, now: () => now, report }) }
 }
 describe('media grants', () => {
-  it('continues accepting object grants issued before the compact wire format', async () => {
+  it('rejects grants issued before the owner-bound protocol cutover', async () => {
     const encoder = new TextEncoder()
     const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', encoder.encode(secret)), 'AES-GCM', false, ['encrypt'])
     const iv = crypto.getRandomValues(new Uint8Array(12))
     const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode('consumit-media-v1') }, key, encoder.encode(JSON.stringify(base)))
     const token = Buffer.concat([iv, new Uint8Array(encrypted)]).toString('base64url')
-    expect(await (await createGrantCodec(secret)).open(token, now)).toEqual(base)
+    await expect((await createGrantCodec(secret)).open(token, now)).rejects.toThrow()
   })
   it('hides URLs and headers, rejects forgery, expiry, wrong keys and unbounded lifetime', async () => {
     const codec = await createGrantCodec(secret)
@@ -51,6 +53,23 @@ describe('media grants', () => {
   })
 })
 describe('Worker delivery boundary', () => {
+  it('rejects copied links, duplicate cookies and cross-site use before fetching media', async () => {
+    const { worker, fetcher } = setup(new Response('media'))
+    const valid = await request({ kind: 'native', url: 'https://media.example/movie.mp4' })
+    for (const headers of [{}, { cookie: '__Host-consumit-playback=' + 'b'.repeat(64) }, { cookie, 'sec-fetch-site': 'cross-site' }, { cookie: cookie + '; ' + cookie }]) {
+      expect((await worker.fetch(new Request(valid.url, { headers }), env)).status).toBe(403)
+    }
+    expect(fetcher).not.toHaveBeenCalled()
+    expect((await worker.fetch(valid, env)).status).toBe(200)
+    expect(new Headers(fetcher.mock.calls[0]![1]!.headers).has('cookie')).toBe(false)
+  })
+  it('requires receiver proof for a cast grant and rejects browser proof for it', async () => {
+    const { worker, fetcher } = setup(new Response('media'))
+    const cast = await request({ audience: 'cast', kind: 'native', url: 'https://media.example/movie.mp4' })
+    expect((await worker.fetch(cast, env)).status).toBe(403)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect((await worker.fetch(new Request(cast.url, { headers: { cookie: '__Host-consumit-cast=' + 'a'.repeat(64) } }), env)).status).toBe(200)
+  })
   it('requires independent recipe opt-in, an exact signed scope and public DNS before fetching a rotating host', async () => {
     const settings={...env,RELAY_PROVIDERS:JSON.stringify({'wecollege-miami':['moon.zenoak.top']}),RELAY_DISCOVERY_PROVIDERS:JSON.stringify({'wecollege-miami':'wecollege-city-v1'})}
     const grant={provider:'wecollege-miami',url:'https://new-title.example/part.ts',kind:'auto' as const,headerHost:'moon.zenoak.top',recipe:'wecollege-city-v1' as const,hosts:['new-title.example']}
@@ -234,7 +253,7 @@ describe('Worker delivery boundary', () => {
     expect(result.headers.get('set-cookie')).toBeNull()
     const output = await result.text()
     expect(output).not.toContain('media.example')
-    const urls = output.match(/https:\/\/edge\.example\/media\/[A-Za-z0-9_-]+/g)!
+    const urls = output.match(/https:\/\/watch\.example\/media\/[A-Za-z0-9_-]+/g)!
     expect(urls).toHaveLength(5)
     const codec = await createGrantCodec(secret)
     const children = await Promise.all(urls.map(url => codec.open(new URL(url).pathname.slice(7), now)))
@@ -282,7 +301,7 @@ describe('Worker delivery boundary', () => {
     const { worker, fetcher, report } = setup(new Response(new Uint8Array([1, 2, 3]), { status: 206, headers: {
       'content-type': 'video/mp4', 'content-length': '3', 'content-range': 'bytes 0-2/999', 'accept-ranges': 'bytes', 'set-cookie': 'secret', 'access-control-allow-origin': '*',
     } }))
-    const result = await worker.fetch(await request({ kind: 'native', url: 'https://media.example/video.mp4' }, { headers: { Range: 'bytes=0-2', Cookie: 'member-secret', Authorization: 'member-secret' } }), env)
+    const result = await worker.fetch(await request({ kind: 'native', url: 'https://media.example/video.mp4' }, { headers: { Range: 'bytes=0-2', Cookie: cookie + '; member=member-secret', Authorization: 'member-secret' } }), env)
     expect(result.status).toBe(206)
     expect(new Uint8Array(await result.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
     expect(result.headers.get('content-range')).toBe('bytes 0-2/999')
@@ -301,7 +320,7 @@ describe('Worker delivery boundary', () => {
     expect(result.status).toBe(200)
     expect(new Headers(fetcher.mock.calls[1]![1]!.headers).get('referer')).toBeNull()
     const codec = await createGrantCodec(secret)
-    const child = (await result.text()).match(/https:\/\/edge.example\/media\/([A-Za-z0-9_-]+)/)![1]!
+    const child = (await result.text()).match(/https:\/\/watch.example\/media\/([A-Za-z0-9_-]+)/)![1]!
     expect((await codec.open(child, now)).url).toBe('https://audio.example/part.ts')
     const denied = setup(new Response(null, { status: 302, headers: { location: 'https://evil.example/a' } }))
     expect((await denied.worker.fetch(await request(), env)).status).toBe(502)

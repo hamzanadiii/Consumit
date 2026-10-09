@@ -69,27 +69,27 @@ describe('separate direct and relay provider tiers', () => {
     expect(createPlaybackRelay(configured).permits(resolved)).toBe(false)
     const relay = createPlaybackRelay({ ...configured, discovery: { stormboron: 'storm-boron-v1' } })
     expect(relay.permits(resolved)).toBe(true)
-    const url = await relay.issue(resolved, Date.now() + 60000, 'https://watch.example')
+    const url = await relay.issue(resolved, Date.now() + 60000, 'https://watch.example', { owner: 'viewer', session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', audience: 'browser' as const })
     expect(url).not.toBeNull()
     const grant = await (await createGrantCodec(secret)).open(new URL(url!).searchParams.get('grant')!)
     expect(grant).toMatchObject({ recipe: 'storm-boron-v1', hosts: ['another-title.example'] })
-    expect(await relay.accepts(url!, 'stormboron')).toBe(true)
+    expect(await relay.accepts(url!, 'stormboron', { owner: 'viewer', session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', audience: 'browser' as const })).toBe(true)
     registration.deliveryMode = 'direct'
     expect(relay.permits(resolved)).toBe(false)
   })
   it('compiles large leased playlists in the control plane and sends all media bytes to Worker capabilities', async () => {
     const signer=await createGrantCodec(secret),origin='https://watch.example'
-    const grant={version:1 as const,provider:'stormboron',url:'https://rotating.example/title.m3u8',origin,expires:Date.now()+60000,headers:{},headerHost:'rotating.example',kind:'hls' as const,depth:0,recipe:'storm-boron-v1' as const,hosts:['rotating.example']}
+    const grant={version:2 as const,owner: 'viewer', session: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', audience: 'browser' as const,provider:'stormboron',url:'https://rotating.example/title.m3u8',origin,expires:Date.now()+60000,headers:{},headerHost:'rotating.example',kind:'hls' as const,depth:0,recipe:'storm-boron-v1' as const,hosts:['rotating.example']}
     const manifest='#EXTM3U\n'+Array.from({length:1200},(_,i)=>`#EXTINF:6,\n${i}.ts\n`).join('')
     const transport=vi.fn(async(url:string)=>({status:200,url,headers:new Headers(),body:Readable.from([manifest])}))
     const relay=createPlaybackRelay({origin:'https://edge.example',secret,providers:{stormboron:['media.example']},discovery:{stormboron:'storm-boron-v1'}},transport)
-    const text=await relay.manifest(await signer.seal(grant),origin,signal)
+    const text=await relay.manifest(await signer.seal(grant),origin,grant,signal)
     const urls=text.split('\n').filter(line=>line.startsWith('https://'))
     expect(urls).toHaveLength(1200)
-    expect(urls.every(url=>url.startsWith('https://edge.example/media/'))).toBe(true)
+    expect(urls.every(url=>url.startsWith('https://watch.example/media/'))).toBe(true)
     expect((await signer.open(new URL(urls[0]!).pathname.slice(7))).kind).toBe('auto')
     expect(transport).toHaveBeenCalledTimes(1)
-    await expect(relay.manifest(await signer.seal({...grant,kind:'auto'}),origin,signal)).rejects.toThrow()
+    await expect(relay.manifest(await signer.seal({...grant,kind:'auto'}),origin,grant,signal)).rejects.toThrow()
     expect(transport).toHaveBeenCalledTimes(1)
   })
   it('exhausts direct before distinct relay providers, renews relay, and exhausts that tier', async () => {

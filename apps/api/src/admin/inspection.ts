@@ -1,5 +1,6 @@
+import { playbackCookieName } from '@consumit/media-relay/authorization'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { playbackRefSchema } from '@consumit/contracts'
 import { suppliesVideo, validatedSources, type ProviderRegistration } from '@consumit/provider-sdk'
@@ -60,6 +61,11 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
     const provider = roster.find((row) => row.adapter.id === input.providerId && !isProviderRemoved(row))
     if (!provider || !suppliesVideo(provider) || !provider.mediaKinds.includes(input.ref.kind)) throw new ApiError('BAD_REQUEST', 'Choose a video provider that serves this title kind.')
     if (!provider.approvedRegions.includes(deps.region)) throw new ApiError('BAD_REQUEST', `Provider is not configured for ${deps.region}.`)
+    const cookieName = playbackCookieName(deps.origin.startsWith('https:'))
+    const existing = request.cookies[cookieName]
+    const token = existing && /^[a-f0-9]{64}$/.test(existing) ? existing : randomBytes(32).toString('hex')
+    reply.setCookie(cookieName, token, { httpOnly: true, secure: deps.origin.startsWith('https:'), sameSite: 'lax', path: '/', maxAge: 4 * 3600 })
+    const previewOwner = createHash('sha256').update(token).digest('hex')
     const owner = randomUUID()
     if (!await deps.store.claim(`admin-test:${input.providerId}`, owner, 20)) throw new ApiError('CONFLICT', 'Wait 20 seconds before testing this provider again.', { retryable: true })
     const groupKey = `admin-inspect-group:${provider.upstreamGroup}`
@@ -82,7 +88,7 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
       const registration = { ...provider, enabled: true }
       const preview = proxy ? valid.find(source => deps.relay?.permits({ source, registration })) : valid[0]
       const expiry = preview ? proxy ? Math.min(Date.parse(preview.expiresAt) - 5000, Date.now() + 90_000) : Date.parse(preview.expiresAt) : 0
-      const previewSrc = preview ? proxy ? await deps.relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, deps.origin) : preview.url : undefined
+      const previewSrc = preview ? proxy ? await deps.relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, deps.origin, { owner: previewOwner, session: owner, audience: 'browser' }) : preview.url : undefined
       reply.header('cache-control', 'private, no-store')
       return {
         providerId: input.providerId, ok: valid.length > 0 && (!proxy || Boolean(previewSrc)), elapsedMs: elapsed(), region: deps.region,

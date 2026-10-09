@@ -359,6 +359,7 @@ export const apiErrorCodeSchema = z.enum([
   'NOT_FOUND',
   'PASSWORD_INVALID',
   'PLAYBACK_UNAVAILABLE',
+  'PLAYBACK_VERIFICATION_REQUIRED',
   'RATE_LIMITED',
   'SUBTITLES_NOT_FOUND',
   'SUBTITLES_UNAVAILABLE',
@@ -800,6 +801,7 @@ export const separateAudioListSchema = z.object({ tracks: z.array(separateAudioT
 export const separateAudioSourceSchema = separateAudioTrackSchema.extend({ src: z.url().max(4096).refine(url => url.startsWith('https://')), duration: z.number().positive().max(86400), expiresAt: z.iso.datetime() })
 export type SeparateAudioSource = z.infer<typeof separateAudioSourceSchema>
 export const resolvePlaybackRequestSchema = z.object({
+  turnstileToken: z.string().min(1).max(2048).optional(),
   ref: playbackRefSchema,
   capabilities: playbackCapabilitiesSchema,
   audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).default('en'),

@@ -39,7 +39,7 @@ describe('provider inspection bench', () => {
     s.candidate.deliveryMode = 'direct'
     const response = await s.call({ providerId: 'configured', ref, scope: 'scout' })
     expect(response.json()).toMatchObject({ ok: true, delivery: 'relay', preview: { delivery: 'relay' } })
-    expect(String(response.json().preview.src).startsWith('https://edge.example/media/')).toBe(true)
+    expect(String(response.json().preview.src).startsWith('http://localhost:3000/media/')).toBe(true)
   })
   it('fails closed for an unapproved relay recipe in scout without enabling it', async () => {
     const s = await setup(); await s.promote(); s.candidate.deliveryMode = 'relay'
@@ -56,7 +56,7 @@ describe('provider inspection bench', () => {
     const approved = await setup(undefined, true); await approved.promote(); approved.configured.deliveryMode = 'relay'
     const response = await approved.call({ providerId: 'configured', ref })
     expect(response.json()).toMatchObject({ ok: true, code: 'resolved', preview: { delivery: 'relay', type: 'hls' } })
-    expect(String(response.json().preview.src).startsWith('https://edge.example/media/')).toBe(true)
+    expect(String(response.json().preview.src).startsWith('http://localhost:3000/media/')).toBe(true)
     expect(Date.parse(response.json().preview.expiresAt) - Date.now()).toBeLessThanOrEqual(90_000)
     expect(approved.configured.enabled).toBe(false)
   })

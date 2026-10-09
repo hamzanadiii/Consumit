@@ -1,6 +1,9 @@
 /** Opaque, authenticated, expiring media capabilities. No member identity. */
 export type RelayGrant = {
-  version: 1
+  version: 2
+  owner: string
+  session: string
+  audience: 'browser' | 'cast'
   provider: string
   url: string
   expires: number
@@ -43,7 +46,7 @@ function validGrant(value: unknown, now: number, allowExpired = false): value is
       || !grant.hosts.length || grant.hosts.length > 8 || grant.hosts.some(host => !exactMediaHost(host))
       || !relayDestination(grant.url ?? '', grant.hosts)) return false
   }
-  if (grant.version !== 1 || !/^[a-z0-9-]{1,40}$/.test(grant.provider ?? '') || typeof grant.url !== 'string'
+  if (grant.version !== 2 || !/^[A-Za-z0-9:_-]{1,128}$/.test(grant.owner ?? '') || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(grant.session ?? '') || !['browser', 'cast'].includes(grant.audience ?? '') || !/^[a-z0-9-]{1,40}$/.test(grant.provider ?? '') || typeof grant.url !== 'string'
       || !Number.isSafeInteger(grant.expires) || (!allowExpired && grant.expires! <= now) || grant.expires! > now + MAX_GRANT_MS
       || !['hls', 'native', 'auto'].includes(grant.kind ?? '') || !Number.isInteger(grant.depth) || grant.depth! < 0 || grant.depth! > 5
       || typeof grant.origin !== 'string' || typeof grant.headerHost !== 'string' || !exactMediaHost(grant.headerHost)
@@ -62,8 +65,8 @@ export async function createGrantCodec(secret: string) {
       const iv = crypto.getRandomValues(new Uint8Array(12))
       // Compact wire representation keeps full binding while reducing the
       // repeated JSON/encoding work for long VOD playlists on Workers Free.
-      const compact = [grant.version, grant.provider, grant.url, grant.expires, grant.origin, grant.headers, grant.headerHost, grant.kind, grant.depth, ...(grant.recipe ? [grant.recipe, grant.hosts] : [])]
-      const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode('consumit-media-v1') }, key, encoder.encode(JSON.stringify(compact)))
+      const compact = [grant.version, grant.provider, grant.url, grant.expires, grant.origin, grant.headers, grant.headerHost, grant.kind, grant.depth, grant.owner, grant.session, grant.audience, ...(grant.recipe ? [grant.recipe, grant.hosts] : [])]
+      const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode('consumit-media-v2') }, key, encoder.encode(JSON.stringify(compact)))
       const bytes = new Uint8Array(iv.length + data.byteLength)
       bytes.set(iv); bytes.set(new Uint8Array(data), iv.length)
       const token = encode(bytes)
@@ -74,13 +77,13 @@ export async function createGrantCodec(secret: string) {
       if (token.length > 3600) throw new Error('Invalid grant.')
       const bytes = decode(token)
       if (bytes.length < 29) throw new Error('Invalid grant.')
-      const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: encoder.encode('consumit-media-v1') }, key, bytes.slice(12))
+      const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: encoder.encode('consumit-media-v2') }, key, bytes.slice(12))
       const parsed: unknown = JSON.parse(decoder.decode(data))
-      // Keep previously issued object grants valid until their expiry.
-      const value: unknown = Array.isArray(parsed) && [9, 11].includes(parsed.length) ? {
+      // Version one grants are deliberately rejected after the coordinated cutover.
+      const value: unknown = Array.isArray(parsed) && [12, 14].includes(parsed.length) ? {
         version: parsed[0], provider: parsed[1], url: parsed[2], expires: parsed[3], origin: parsed[4],
-        headers: parsed[5], headerHost: parsed[6], kind: parsed[7], depth: parsed[8],
-        ...(parsed.length === 11 ? { recipe: parsed[9], hosts: parsed[10] } : {}),
+        headers: parsed[5], headerHost: parsed[6], kind: parsed[7], depth: parsed[8], owner: parsed[9], session: parsed[10], audience: parsed[11],
+        ...(parsed.length === 14 ? { recipe: parsed[12], hosts: parsed[13] } : {}),
       } : parsed
       if (!validGrant(value, now, allowExpired)) throw new Error('Invalid grant.')
       return value

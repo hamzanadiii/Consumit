@@ -1,20 +1,14 @@
-import { createGrantCodec, exactMediaHost, relayDestination, type GrantCodec, type RelayGrant } from './grants.ts'
+import { cookieOwnsGrant } from './authorization.ts'
+import { parseRelayProviders, parseRelayDiscovery } from './policy.ts'
+import { createGrantCodec, relayDestination, type GrantCodec, type RelayGrant } from './grants.ts'
 import { bingeFetchUrl, decodeRelayManifest } from './bingebang.ts'
 import { mediaHeaders } from './provider-headers.ts'
 import { createPublicHostCheck } from './public-host.ts'
 import { rewriteRelayManifest } from './manifest.ts'
 
-export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string }
+export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string; DEVELOPMENT_ORIGINS?: string }
 type Dependencies = { fetch?: typeof fetch; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number }) => void }
 const MAX_MANIFEST_BYTES = 512 * 1024
-function policies(raw: string): Record<string, string[]> {
-  const value: unknown = JSON.parse(raw)
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid relay policy.')
-  const entries = Object.entries(value)
-  if (entries.length > 64 || entries.some(([id, hosts]) => !/^[a-z0-9-]{1,40}$/.test(id) || !Array.isArray(hosts)
-      || !hosts.length || hosts.length > 100 || hosts.some(host => typeof host !== 'string' || !exactMediaHost(host)))) throw new Error('Invalid relay policy.')
-  return Object.fromEntries(entries)
-}
 async function boundedManifest(response: Response, limit = MAX_MANIFEST_BYTES) {
   const reader = response.body?.getReader()
   if (!reader) throw new Error('Missing manifest.')
@@ -63,11 +57,15 @@ export function createRelayWorker(deps: Dependencies = {}) {
   let cached: { secret: string; codec: Promise<GrantCodec> } | undefined
   return {
     async fetch(request: Request, env: RelayEnv): Promise<Response> {
-      const headers = new Headers({ 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', vary: 'Origin' })
+      const headers = new Headers({ 'cache-control': 'private, no-store', 'cross-origin-resource-policy': 'same-origin', 'x-content-type-options': 'nosniff', vary: 'Origin' })
       const fail = (status: number) => new Response('Media unavailable.', { status, headers })
       if (env.RELAY_ENABLED !== 'true') return fail(503)
-      if (request.headers.get('origin') && request.headers.get('origin') !== env.APP_ORIGIN) return fail(403)
-      headers.set('access-control-allow-origin', env.APP_ORIGIN)
+      if (request.headers.get('sec-fetch-site') === 'cross-site') return fail(403)
+      const local = (value: string) => { try { const url = new URL(value); return url.origin === value && url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname) } catch { return false } }
+      const development = local(env.APP_ORIGIN)
+      const origins = development ? [env.APP_ORIGIN, ...(env.DEVELOPMENT_ORIGINS ?? '').split(',').filter(local)] : [env.APP_ORIGIN]
+      if (request.headers.get('origin') && !origins.includes(request.headers.get('origin')!)) return fail(403)
+      headers.set('access-control-allow-origin', request.headers.get('origin') ?? env.APP_ORIGIN)
       headers.set('access-control-allow-methods', 'GET, HEAD, OPTIONS')
       headers.set('access-control-allow-headers', 'Range')
       headers.set('access-control-expose-headers', 'Content-Length, Content-Range, Accept-Ranges')
@@ -80,16 +78,17 @@ export function createRelayWorker(deps: Dependencies = {}) {
         if (!cached || cached.secret !== env.RELAY_SECRET) cached = { secret: env.RELAY_SECRET, codec: createGrantCodec(env.RELAY_SECRET) }
         codec = await cached.codec
         grant = await codec.open(path.pathname.slice(7), now())
-        staticHosts = policies(env.RELAY_PROVIDERS)[grant.provider] ?? []
+        if ((!development && path.origin !== env.APP_ORIGIN) || !await cookieOwnsGrant(request.headers.get('cookie'), grant, !development)) return fail(403)
+        staticHosts = parseRelayProviders(env.RELAY_PROVIDERS)[grant.provider] ?? []
         hosts = staticHosts
         if (grant.recipe) {
-          const discovery = JSON.parse(env.RELAY_DISCOVERY_PROVIDERS ?? '{}') as Record<string, string>
+          const discovery = parseRelayDiscovery(env.RELAY_DISCOVERY_PROVIDERS ?? '{}')
           const reviewed = grant.provider === 'stormboron' && grant.recipe === 'storm-boron-v1'
             || ['wecollege-miami', 'wecollege-boise'].includes(grant.provider) && grant.recipe === 'wecollege-city-v1'
           if (!staticHosts.length || !reviewed || discovery[grant.provider] !== grant.recipe || !grant.hosts?.length) return fail(403)
           hosts = grant.hosts
         }
-        if (grant.origin !== env.APP_ORIGIN || !relayDestination(grant.url, hosts)) return fail(403)
+        if (!origins.includes(grant.origin) || !relayDestination(grant.url, hosts)) return fail(403)
       } catch { return fail(403) }
       const range = request.headers.get('range')
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) return fail(416)
@@ -130,7 +129,7 @@ export function createRelayWorker(deps: Dependencies = {}) {
         if (manifest && range) { await response!.body?.cancel(); clearTimeout(timer); status = 416; report(); return fail(416) }
         if (manifest && request.method !== 'HEAD' && status === 200) {
           const text = decodeRelayManifest(await boundedManifest(response!, grant.provider === 'bingebangymovies' ? 1024 * 1024 : MAX_MANIFEST_BYTES), grant.provider, url)
-          const rewritten = await rewriteRelayManifest(text, url, grant, hosts, codec, path.origin, now())
+          const rewritten = await rewriteRelayManifest(text, url, grant, hosts, codec, grant.origin, now())
           clearTimeout(timer)
           headers.set('content-type', 'application/vnd.apple.mpegurl')
           bytes = new TextEncoder().encode(rewritten).length

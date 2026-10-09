@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
+  it('rejects public Turnstile bypass keys in production', () => {
+    for (const TURNSTILE_SECRET_KEY of ['1x0000000000000000000000000000000AA', '2x0000000000000000000000000000000AA', 'replace-with-private-production-secret']) {
+      expect(() => loadEnv({ NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', TURNSTILE_SECRET_KEY })).toThrow(/production key/)
+      expect(loadEnv({ NODE_ENV: 'test', TURNSTILE_SECRET_KEY }).turnstileSecret).toBe(TURNSTILE_SECRET_KEY)
+    }
+  })
   it.each(['https://member:password@example.com', 'https://example.com/path', 'https://example.com?query=1', 'https://example.com#fragment', 'ftp://example.com'])('rejects an unsafe application origin: %s', (APP_ORIGIN) => {
     expect(() => loadEnv({ NODE_ENV: 'test', APP_ORIGIN })).toThrow(/origin/i)
   })
