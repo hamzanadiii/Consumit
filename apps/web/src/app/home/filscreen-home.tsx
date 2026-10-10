@@ -7,10 +7,14 @@ import type { ReactNode } from 'react'
 import type { HeroDetail } from '../catalog/catalog-ui'
 import { AnimeTitleRail } from './anime-title-rail'
 import { ContinueRail } from './continue-rail'
+import { NewEpisodesRail } from './new-episodes-rail'
+import { BecauseYouWatchedRail } from './because-you-watched-rail'
+import { CommunityCards } from '../experience/community-cards'
 import { FilScreenHeroRotator } from './hero-rotator'
 import { FilScreenShell } from './filscreen-shell'
 import { TitleRail } from '../shared/title-rail'
 import { AdSlot } from '../shared/ad-slot'
+import { AdSupportCard } from '../shared/ad-support-card'
 
 export type FilScreenHomeProps = {
   awardWinningShows?: readonly CatalogTitleSummary[] | undefined
@@ -43,11 +47,13 @@ export function FilScreenHome({
     <FilScreenShell activeKindTab="new" pageHeading="Consumit home">
       <FilScreenHeroRotator hero={hero} spotlight={spotlight} />
 
-      <section aria-labelledby="filscreen-continue-title" className="mt-8">
-        <ContinueRail />
-      </section>
+      <ContinueRail />
 
+      <NewEpisodesRail />
+      <BecauseYouWatchedRail />
+      <CommunityCards dismissible />
       <div className="my-8 sm:my-10"><AdSlot placement="home" position="early" /></div>
+      <AdSupportCard />
 
       {trendingMovies && trendingMovies.length > 0 ? (
         <TitleRail

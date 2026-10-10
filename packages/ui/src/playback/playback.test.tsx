@@ -10,11 +10,109 @@ const chapters = [
   { startTime: 3600, title: 'What the river kept' },
 ]
 
+it('offers an exact metadata intro and seeks to its end without guessing', async () => {
+  const request = vi.fn().mockResolvedValue([{ kind: 'intro', start: 10, end: 90 }])
+  const view = render(<ConsumitPlayer src="/fixture.mp4" title="Exact intro" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const video = view.container.querySelector('video')!
+  Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
+  video.currentTime = 20
+  fireEvent.loadedMetadata(video)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Skip intro' })).toBeVisible())
+  expect(request).toHaveBeenCalledWith(1440, expect.any(AbortSignal))
+  fireEvent.click(screen.getByRole('button', { name: 'Skip intro' }))
+  expect(video.currentTime).toBe(90)
+  video.currentTime = 95; fireEvent.timeUpdate(video)
+  expect(screen.queryByRole('button', { name: 'Skip intro' })).not.toBeInTheDocument()
+})
+
+it('keeps skip intro hidden when timing metadata is missing or fails', async () => {
+  const request = vi.fn().mockResolvedValue([])
+  const view = render(<ConsumitPlayer src="/fixture.mp4" title="Missing intro" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const video = view.container.querySelector('video')!
+  Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
+  video.currentTime = 20; fireEvent.loadedMetadata(video)
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('button', { name: 'Skip intro' })).not.toBeInTheDocument()
+  request.mockRejectedValue(new Error('unavailable'))
+  Object.defineProperty(video, 'duration', { configurable: true, value: 1500 }); fireEvent.durationChange(video)
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Skip intro' })).not.toBeInTheDocument()
+})
+
+it('cancels stale timings and waits for new source metadata before requesting again', async () => {
+  let finish!: (segments: Array<{ kind: 'intro'; start: number; end: number }>) => void
+  const request = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue([])
+  const view = render(<ConsumitPlayer src="/first.mp4" title="First cut" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const video = view.container.querySelector('video')!
+  Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
+  video.currentTime = 20; fireEvent.loadedMetadata(video)
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+  const signal = request.mock.calls[0]![1] as AbortSignal
+  view.rerender(<ConsumitPlayer src="/second.mp4" title="Second cut" autoSkip={false} onSkipSegmentsRequest={request} />)
+  expect(signal.aborted).toBe(true)
+  expect(request).toHaveBeenCalledTimes(1)
+  await act(async () => finish([{ kind: 'intro', start: 10, end: 90 }]))
+  expect(screen.queryByRole('button', { name: 'Skip intro' })).not.toBeInTheDocument()
+  fireEvent.loadedMetadata(video)
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(2))
+  expect(screen.queryByRole('button', { name: 'Skip intro' })).not.toBeInTheDocument()
+})
+
+it('prefers the source exact intro and offers its button while paused even with auto-skip enabled', async () => {
+  const request = vi.fn().mockResolvedValue([{ kind: 'intro', start: 10, end: 90 }])
+  const source = { src: '/fixture.mp4', type: 'native' as const, skipSegments: [{ kind: 'intro' as const, start: 10, end: 85 }] }
+  const view = render(<ConsumitPlayer source={source} title="Provider intro" autoSkip onSkipSegmentsRequest={request} />)
+  const video = view.container.querySelector('video')!
+  Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
+  video.currentTime = 20; fireEvent.loadedMetadata(video)
+  expect(request).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Skip intro' }))
+  expect(video.currentTime).toBe(85)
+})
+
+it('groups ISO aliases into one subtitle language while retaining both tracks', () => {
+  render(<ConsumitPlayer title="Aliases" src="/fixture.mp4" subtitleOptions={[{ value: 'one', label: 'English', language: 'en' }, { value: 'two', label: 'English', language: 'eng' }, { value: 'off', label: 'Off' }]} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+  const menu = screen.getByRole('menu', { name: 'Subtitles' })
+  expect(within(menu).getAllByRole('button', { name: /English.*\d/ })).toHaveLength(1)
+  fireEvent.click(within(menu).getByRole('button', { name: /English.*2/ }))
+  expect(within(menu).getAllByRole('menuitemradio', { name: 'English' })).toHaveLength(2)
+})
+
+it('pages original subtitle alias codes under one group while keeping regional variants distinct', async () => {
+  const page = vi.fn(async (code: string, cursor: number) => ({ tracks: [{ id: `${code}:${cursor}`, label: 'English', language: code, provider: `provider-${code}-${cursor}` }], total: 3, nextCursor: code === 'eng' && cursor === 0 ? 1 : null }))
+  render(<ConsumitPlayer title="Paged aliases" src="/fixture.mp4" subtitleDiscovery={{ languages: [{ code: 'en', count: 1 }, { code: 'eng', count: 2 }, { code: 'en-US', count: 1 }], providers: [], loading: false, error: null }} onSubtitlePage={page} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+  const menu = screen.getByRole('menu', { name: 'Subtitles' })
+  fireEvent.click(within(menu).getByRole('button', { name: /^English\s*3$/ }))
+  await waitFor(() => expect(page).toHaveBeenCalledTimes(2))
+  expect(page).toHaveBeenCalledWith('en', 0)
+  expect(page).toHaveBeenCalledWith('eng', 0)
+  expect(within(menu).getByRole('button', { name: /American English/ })).toBeInTheDocument()
+  fireEvent.click(await within(menu).findByRole('button', { name: 'Load more tracks' }))
+  await waitFor(() => expect(page).toHaveBeenCalledTimes(3))
+  expect(page).toHaveBeenLastCalledWith('eng', 1)
+  expect(within(menu).getByRole('button', { name: /provider-eng-1/ })).toBeInTheDocument()
+})
+
+it('shows standard quality in settings for a cropped 1080p recording', () => {
+  const { container } = render(<ConsumitPlayer title="Cropped" src="/fixture.mp4" selectedQuality="1080" qualityOptions={[{ value: '1080', label: '1080p' }]} />)
+  const video = container.querySelector('video')!
+  Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1921 })
+  Object.defineProperty(video, 'videoHeight', { configurable: true, value: 802 })
+  fireEvent.loadedMetadata(video)
+  fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+  expect(screen.getByRole('button', { name: /Quality/ })).toHaveTextContent('1080p')
+  expect(screen.getByRole('button', { name: /Quality/ })).not.toHaveTextContent('802p')
+})
+
 it('keeps focused transport controls visible across playback start and pointer movement', () => {
   vi.useFakeTimers()
   try {
     const view = render(<ConsumitPlayer title="Focus fixture" src="/fixture.mp4" autoHideMs={100} />)
     const play = screen.getByRole('button', { name: 'Play' })
+    fireEvent.keyDown(document, { key: 'Tab' })
     act(() => play.focus())
     fireEvent.play(view.container.querySelector('video')!)
     fireEvent.mouseMove(screen.getByLabelText('Focus fixture player controls'))
@@ -159,7 +257,7 @@ describe('playback shell components', () => {
   it('presents pending resolution without inventing playback readiness and clears it on failure', () => {
     const { container, rerender } = render(<ConsumitPlayer preparing posterSrc="/poster.jpg" title="Sea of Names" topMeta="S1 · E2 — The crossing" backHref="/title/1" />)
     expect(screen.getByRole('status')).toHaveTextContent('Finding your stream…')
-    expect(screen.getByRole('status')).toHaveTextContent('S1 · E2 — The crossing')
+    expect(container.querySelector('[data-player-title]')).toHaveTextContent('S1 · E2 — The crossing')
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/title/1')
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
     rerender(<ConsumitPlayer title="Sea of Names" status="No source available" statusTone="unavailable" />)
@@ -455,7 +553,7 @@ describe('playback shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Subtitle sync offset/ }))
     const menu = screen.getByRole('menu', { name: 'Subtitle sync' })
-    expect(within(menu).getByText('Click a line when you hear it spoken')).toBeInTheDocument()
+    expect(within(menu).getByText('Select a line when you hear it spoken.')).toBeInTheDocument()
     expect(within(menu).getByText('0ms')).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: 'Close subtitle sync' }))
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -597,6 +695,30 @@ describe('playback shell components', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('searches available subtitle tracks without needing a discovery provider', () => {
+    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'ar', label: 'Arabic', language: 'ar' }, { value: 'off', label: 'Off' }]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+    const menu = screen.getByRole('menu', { name: 'Subtitles' })
+    fireEvent.change(within(menu).getByRole('searchbox'), { target: { value: 'English' } })
+    expect(within(menu).getByRole('menuitemradio', { name: 'English' })).toBeInTheDocument()
+    expect(within(menu).queryByText('Searching tracks…')).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('menuitemradio', { name: 'العربية' })).not.toBeInTheDocument()
+  })
+
+  it('keeps local subtitles usable when language discovery fails and offers a direct retry', async () => {
+    const page = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ tracks: [], total: 0, nextCursor: null })
+    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'off', label: 'Off' }]} onSubtitlePage={page} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+    const menu = screen.getByRole('menu', { name: 'Subtitles' })
+    fireEvent.click(within(menu).getByRole('button', { name: /English.*1/ }))
+    expect(await within(menu).findByText('These tracks could not load.')).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitemradio', { name: 'English' })).toBeEnabled()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Try this language again' }))
+    await waitFor(() => expect(within(menu).queryByText('These tracks could not load.')).not.toBeInTheDocument())
+    expect(page).toHaveBeenCalledTimes(2)
+    expect(within(menu).getByRole('group', { name: 'Subtitle tools' })).toBeInTheDocument()
   })
 
   it('lists subtitle tracks PROVE-embed style with native names and a menu count', () => {
@@ -861,17 +983,23 @@ describe('playback shell components', () => {
     expect(overlay).not.toHaveTextContent('Movie 1')
   })
 
-  it('shows the cast control only when a cast runtime is available', () => {
+  it('opens Cast without a discovered TV and connects only on explicit selection', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
-    expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
     const onCastClick = vi.fn()
-    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
     const button = screen.getByRole('button', { name: 'Cast to TV' })
+    expect(button).toBeEnabled()
     fireEvent.click(button)
+    expect(screen.getByRole('menu', { name: 'Cast to TV' })).toBeInTheDocument()
+    expect(screen.getByText(/TV casting is being set up/)).toBeInTheDocument()
+    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    expect(onCastClick).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Choose TV' }))
     expect(onCastClick).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu', { name: 'Cast to TV' })).not.toBeInTheDocument()
     rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
-    expect(screen.getByRole('button', { name: 'Disconnect from TV' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect from TV' }))
+    expect(onCastClick).toHaveBeenCalledTimes(2)
   })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()

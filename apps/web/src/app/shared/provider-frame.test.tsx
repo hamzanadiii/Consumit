@@ -29,4 +29,12 @@ describe('ProviderFrame recovery', () => {
     expect(screen.getByRole('link', { name: 'Open player in new tab' })).toHaveAttribute('rel', 'noopener noreferrer')
     expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation')
   })
+
+  it('frames a player that refuses a sandbox as a plain iframe', () => {
+    render(<ProviderFrame src="https://megaplay.buzz/videojs/stream/s-2/2142/sub" title="External player" frameSandbox="none" />)
+    const frame = screen.getByTitle('External player external player')
+    expect(frame).not.toHaveAttribute('sandbox')
+    expect(frame).toHaveAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture')
+    expect(screen.getByRole('link', { name: 'Open player in new tab' })).toHaveAttribute('rel', 'noopener noreferrer')
+  })
 })

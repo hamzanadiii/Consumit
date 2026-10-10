@@ -13,7 +13,7 @@ The private access record through which a member authenticates and controls secu
 _Avoid_: Member, profile
 
 **Profile**:
-A member's private expression of taste, including favorites, diary entries, ratings, reviews, and personal collections.
+A member’s expression of taste, private until explicitly published. A public profile shares identity, bio, favorites, all ratings and reviews, and individually public lists; personal activity, location, watched archives, watchlist, likes, tags, history and progress stay private.
 _Avoid_: Account page
 
 **Username**:
@@ -25,8 +25,12 @@ An archived social-discovery concept for followed members; it is outside the act
 _Avoid_: Friend list, network, chat
 
 **Follow**:
-An archived one-way social relationship; it is outside the active product.
+A one-way relationship to a public member profile. Sign-in is required to follow; becoming private retains the relationship but hides the member from public relationship lists and counts.
 _Avoid_: Friend request, connection
+
+**Network**:
+The single profile tab that groups a member's Followers and Following collections, each selectable within the tab. It is distinct from the retired Circle feed.
+_Avoid_: Friends, Circle feed, mutuals
 
 **Taste**:
 A member's evolving preference profile, expressed through favorites, ratings, reviews, watch history, and personal lists.
@@ -105,7 +109,7 @@ An external, configured source that makes a title available for playback through
 _Avoid_: Host, scraper, streaming service
 
 **Provider Role**:
-An Admin assignment of Video source, Audio source, or Both. Video source and Both can supply the main stream and its bundled audio. Audio source excludes a provider from video selection and permits reviewed separate-audio discovery. Apogee supports optional added audio for exact movies and series episodes. A role is operator intent; it does not establish delivery health or compatibility with another recording.
+An Admin assignment of Video source, Audio source, or Both. Video source and Both can supply the main stream and its bundled audio. Audio source excludes a provider from video selection. Audio source and Both opt the provider into separate-audio discovery for the titles it serves. A role is operator intent; it does not establish delivery health or compatibility with another recording.
 
 **Provider Delivery Tier**:
 A provider's explicitly configured route: Direct, Relay, or Embed. Direct and Relay use Consumit controls; Embed uses an external provider's player inside Watch and has no supported progress synchronization.
@@ -179,3 +183,31 @@ _Avoid_: Subbed, dubbed, version
 **Canonical Episode**:
 The definitive episode number for an anime as defined by AniList, used as the stable identity for progress tracking and provider mapping regardless of how individual providers number episodes.
 _Avoid_: Episode number, absolute episode
+
+**Tracked Title**:
+A series or anime currently in a member's Watchlist, Favorites, or both. Removing it from both ends tracking; saving it again starts a new tracking period.
+_Avoid_: Followed show, subscription
+
+**Episode Release**:
+A dated airing of an exact episode. An airing date does not establish that the episode can play on Consumit. Series retain their season and episode; anime retain their canonical episode.
+_Avoid_: Available episode, playable release
+
+**Playback Checked**:
+Recent evidence that an exact episode decoded video, played, sought, and resumed in a particular playback environment. Evidence can expire or be invalidated; it does not promise permanent playback availability.
+_Avoid_: Verified availability, guaranteed playback
+
+**Episode Notification**:
+A private historical reminder created after a new tracked episode passes a playback check, for a member who enabled reminders before its release. Reading or watching the episode does not remove the reminder.
+_Avoid_: Airing alert, push notification
+
+**People search**:
+Discovery of active public members by username or display name, distinct from catalog title search.
+_Avoid_: Account search, directory of all accounts
+
+**Viewing Preferences**:
+A viewer’s preferred audio, subtitles, quality, and next-episode behavior. A source may lack a preferred option without changing that preference. Enabled subtitles discover and select available languages in the viewer’s saved priority order; temporary fallback or missing tracks do not turn the saved preference off.
+_Avoid_: Saved track IDs, guaranteed languages
+
+**Welcome Guide**:
+An optional introduction that lets guests and members choose Viewing Preferences, pick Favorites, and learn how to use Consumit. Dismissing the guide does not mean playback preferences were chosen.
+_Avoid_: Required setup, automatic Favorites

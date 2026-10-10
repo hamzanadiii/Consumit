@@ -156,7 +156,7 @@ function SignupStepHeader({ current }: { current: 1 | 2 | 3 }) {
   )
 }
 
-export function SignUpScreen({ titles = [] }: { titles?: readonly CatalogTitleSummary[] }) {
+export function SignUpScreen({ titles = [], nextPath = '/' }: { titles?: readonly CatalogTitleSummary[]; nextPath?: string }) {
   const router = useRouter()
   const session = useSession()
   const [email, setEmail] = useState('')
@@ -239,7 +239,7 @@ export function SignUpScreen({ titles = [] }: { titles?: readonly CatalogTitleSu
       } else {
         session.setMember(member)
       }
-      router.push('/onboarding')
+      router.push(nextPath === '/' ? '/onboarding' : `/onboarding?${new URLSearchParams({ next: nextPath })}`)
       router.refresh()
     } catch (caught) {
       setError(errorMessage(caught))

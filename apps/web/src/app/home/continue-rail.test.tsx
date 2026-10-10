@@ -30,11 +30,9 @@ afterEach(() => {
 })
 
 describe('continue rail from device progress', () => {
-  it('renders an honest empty state when nothing is in progress', async () => {
-    render(<ContinueRail />)
-
-    expect(await screen.findByText(/nothing in progress yet/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Explore movies' })).toBeInTheDocument()
+  it('omits the entire section when nothing is in progress', () => {
+    const { container } = render(<ContinueRail />)
+    expect(container).toBeEmptyDOMElement()
   })
 
   it('resolves stored progress to titles with resume destinations', async () => {
@@ -54,17 +52,35 @@ describe('continue rail from device progress', () => {
     )
   })
 
-  it('keeps progress safe and offers retry when the catalog fails', async () => {
+  it('hides a failed catalog load without losing progress and recovers on the next visit', async () => {
     seedProgress()
-    const user = userEvent.setup()
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')))
-    render(<ContinueRail />)
-
-    const retry = await screen.findByRole('button', { name: 'Try again' })
-    expect(screen.getByText(/could not load, but nothing was lost/i)).toBeInTheDocument()
+    const { container, unmount } = render(<ContinueRail />)
+    await act(async () => {})
+    expect(container).toBeEmptyDOMElement()
+    expect(window.localStorage.getItem('consumit.progress:guest:movie:693134:0:0')).not.toBeNull()
+    unmount()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(batch)))
-    await user.click(retry)
+    render(<ContinueRail />)
     expect(await screen.findByRole('link', { name: 'Continue Dune: Part Two' })).toBeInTheDocument()
+  })
+
+  it('stays absent until its stored titles resolve', async () => {
+    seedProgress()
+    let resolveFetch!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { resolveFetch = resolve })))
+    const { container } = render(<ContinueRail />)
+    expect(container).toBeEmptyDOMElement()
+    await act(async () => { resolveFetch(Response.json(batch)) })
+    expect(await screen.findByRole('heading', { name: 'Continue watching' })).toBeInTheDocument()
+  })
+
+  it('stays absent when none of the stored titles can be resolved', async () => {
+    seedProgress()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ...batch, items: [] })))
+    const { container } = render(<ContinueRail />)
+    await act(async () => {})
+    expect(container).toBeEmptyDOMElement()
   })
 
   it('ignores a late batch response after unmount', async () => {
@@ -95,7 +111,7 @@ describe('continue rail from device progress', () => {
     )
     render(<ContinueRail />)
 
-    expect(await screen.findByText(/nothing in progress yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Continue watching' })).not.toBeInTheDocument()
   })
 
   it('drops titles watched to 95 percent as finished', async () => {
@@ -105,7 +121,7 @@ describe('continue rail from device progress', () => {
     )
     render(<ContinueRail />)
 
-    expect(await screen.findByText(/nothing in progress yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Continue watching' })).not.toBeInTheDocument()
   })
 
   it('shows overflow titles beyond the old five-card cap', async () => {
@@ -207,7 +223,7 @@ describe('continue rail from device progress', () => {
     expect(window.localStorage.getItem('consumit.progress:guest:movie:2:0:0')).not.toBeNull()
   })
 
-  it('shows the empty state after removing the last title', async () => {
+  it('removes the section after removing the last title', async () => {
     const user = userEvent.setup()
     seedProgress()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(batch)))
@@ -217,7 +233,7 @@ describe('continue rail from device progress', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Continue watching' }))
     await user.click(screen.getByRole('button', { name: 'Remove Dune: Part Two from Continue watching' }))
 
-    expect(await screen.findByText(/nothing in progress yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Continue watching' })).not.toBeInTheDocument()
     expect(window.localStorage.getItem('consumit.progress:guest:movie:693134:0:0')).toBeNull()
   })
 })

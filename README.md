@@ -8,7 +8,7 @@ The project includes the shared interface system, core product screens, TMDB and
 
 ## Local development
 
-The independent second frontend runs on port 3080 with `bun run dev:next` or `bun run docker:next`. The original frontend remains available. See [the new frontend guide](./apps/next-web/README.md) and [its experience and delivery note](./docs/FRONTEND-NEXT.md).
+Consumit has one frontend in `apps/web`, using the shared components in `packages/ui`.
 
 Use Bun 1.4.0 and Node 24 LTS (pinned in `.node-version`). The default loop is hybrid: data stores in Docker, app natively on the host for instant reload with no file-sync step and no restart.
 
@@ -68,7 +68,7 @@ bun run docker:dev:watch
 
 Stop it with `Ctrl+C`, then `docker compose -f compose.yaml -f compose.dev.yaml down`. The dev and default local image stacks share Postgres and Valkey volumes, so run only one at a time. The actual production wrapper uses the independent `consumit-production` project and fresh volumes. Return to production-like local images with `docker compose up --build`. Dependency, Dockerfile, or lockfile changes trigger an automatic image rebuild; anything else syncs live with no restart. For the containerized stack with playback enabled (same watch behavior, API served through the gateway), use `bun run docker:dev:playback` and open `http://localhost:8080` — without the playback file the API boots with zero providers and every `/v1/playback/resolve` returns 503.
 
-## First frontend production release
+## Frontend production release
 
 The production target is `apps/web` at `https://consumit.online`. Run
 `bun run production:prepare` to create ignored production configuration and

@@ -1,19 +1,73 @@
 import { z } from 'zod'
-import type { ProviderSource } from '../index.ts'
+import type { FrameSandbox } from '@consumit/contracts'
+import type { ProviderInput, ProviderSource } from '../index.ts'
 import type { AnimeTitleVariantsResolver } from './animeparadise.ts'
-import { adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
+import { adapter, document, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 
-export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'] as const
+export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe'] as const
 export type FrameId = typeof FRAME_IDS[number]
+/** Published players that refuse any sandboxed frame (browser-verified
+ *  2026-10-08: MegaPlay plays and VsEmbed loads its player only without one,
+ *  while every sandbox, including pop-ups and top navigation, is refused).
+ *  They are framed as plain iframes; the rest keep the standard sandbox. */
+const SANDBOX_REFUSING = new Set<FrameId>(['megaplayframe', 'vsembedframe'])
 const serversSchema = z.object({ servers: z.array(z.object({ dataLink: z.string().max(4096), dataType: z.string().max(16) })).max(32) })
 const searchSchema = z.object({ data: z.array(z.object({ slug: z.string().min(1).max(100), anilistId: z.number() })).max(100) })
 const lanesSchema = z.object({ servers: z.array(z.object({ id: z.string(), subTypes: z.array(z.string()).default([]) })).max(32) })
 const embedsSchema = z.object({ embeds: z.array(z.object({ status: z.string(), url: z.string().max(4096) })).max(32) })
 
+/** VidRift keys its catalog by the same subtitles its player consumes; a
+ *  200 WEBVTT answer for any reviewed language means the title is cataloged
+ *  and its in-frame lanes will play. */
+const VIDRIFT_SUB_LANGS = ['en', 'es', 'fr', 'de', 'pt', 'ar'] as const
+
 function frameUrl(value: string, host: string, path: RegExp) {
   const url = new URL(value)
   if (url.protocol !== 'https:' || url.hostname !== host || url.port || url.username || url.password || !path.test(url.pathname)) throw new ProviderFailure('malformed')
   return url.href
+}
+
+/** TMDB-id embed shapes for the movie/series frame family. CineSrc's TV
+ *  embed is a series picker in-frame, so its URL carries no season or
+ *  episode and the member chooses the exact episode inside the player. */
+function movieSeriesFrameUrl(id: FrameId, ref: ProviderInput['ref']): string {
+  if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
+  if (id === 'vidcoreioframe') {
+    return ref.kind === 'movie'
+      ? `https://vidcore.io/movie/${ref.id}`
+      : `https://vidcore.io/tv/${ref.id}/${ref.season}/${ref.episode}`
+  }
+  if (id === 'cinesrcframe') return `https://cinesrc.st/embed/${ref.kind === 'movie' ? 'movie' : 'tv'}/${ref.id}`
+  if (id === 'vidriftframe') {
+    return ref.kind === 'movie'
+      ? `https://embed.vidrift.net/embed/movie/${ref.id}`
+      : `https://embed.vidrift.net/embed/tv/${ref.id}/${ref.season}/${ref.episode}`
+  }
+  const path = ref.kind === 'movie' ? `/embed/movie/${ref.id}` : `/embed/tv/${ref.id}/${ref.season}/${ref.episode}`
+  return id === 'apiplayerframe' ? `https://apiplayer.ru${path}` : id === 'embedapiframe' ? `https://watch.embed-api.stream${path}`
+    : `https://vsembed.ru/embed/${ref.kind === 'movie' ? 'movie' : 'tv'}?tmdb=${ref.id}${ref.kind === 'series' ? `&season=${ref.season}&episode=${ref.episode}` : ''}`
+}
+
+/** Page-liveness markers; a player shell must be present before the frame
+ *  becomes a source. Page liveness is not playback evidence. */
+function pageShellMatches(id: FrameId, text: string): boolean {
+  if (id === 'apiplayerframe') return /jw-server-list/i.test(text)
+  if (id === 'embedapiframe') return /embeddable movie and tv player/i.test(text)
+  if (id === 'vidcoreioframe') return text.length >= 10_000 && /vidcore/i.test(text)
+  if (id === 'cinesrcframe') return /streaming servers/i.test(text)
+  return true
+}
+
+async function vidriftCatalogued(http: ProviderHttp, ref: ProviderInput['ref'], embedUrl: string, signal: AbortSignal): Promise<boolean> {
+  const id = String(ref.id)
+  const settled = await Promise.allSettled(VIDRIFT_SUB_LANGS.map(async (lang) => {
+    const url = ref.kind === 'movie'
+      ? `https://embed.vidrift.net/api/subtitles/movie/${encodeURIComponent(id)}/${lang}`
+      : `https://embed.vidrift.net/api/subtitles/tv/${encodeURIComponent(id)}/${ref.season}/${ref.episode}/${lang}`
+    const response = await http(url, { 'user-agent': userAgent, accept: '*/*', referer: embedUrl }, signal)
+    return response.status >= 200 && response.status < 300 && response.text.includes('WEBVTT')
+  }))
+  return settled.some((result) => result.status === 'fulfilled' && result.value)
 }
 
 /** Third-party controls stay inside the frame. Page liveness is not playback evidence. */
@@ -55,12 +109,17 @@ export function createFrameProvider(id: FrameId, http: ProviderHttp, titles?: An
       }
     } else {
       if (ref.kind === 'anime') throw new ProviderFailure('empty')
-      const path = ref.kind === 'movie' ? `/embed/movie/${ref.id}` : `/embed/tv/${ref.id}/${ref.season}/${ref.episode}`
-      url = id === 'apiplayerframe' ? `https://apiplayer.ru${path}` : id === 'embedapiframe' ? `https://watch.embed-api.stream${path}`
-        : `https://vsembed.ru/embed/${ref.kind === 'movie' ? 'movie' : 'tv'}?tmdb=${ref.id}${ref.kind === 'series' ? `&season=${ref.season}&episode=${ref.episode}` : ''}`
+      url = movieSeriesFrameUrl(id, ref)
     }
-    const page = await document(http, url, signal, { accept: 'text/html' })
-    if (id === 'apiplayerframe' && !/jw-server-list/i.test(page.text) || id === 'embedapiframe' && !/embeddable movie and tv player/i.test(page.text)) throw new ProviderFailure('empty')
-    return [{ key: 'frame', url, type: 'iframe', language, expiresAt: new Date(now() + 1_800_000).toISOString(), headers: {}, subtitles: [] } satisfies ProviderSource]
+    // VidRift bot-walls the embed page to datacenter fetches, so its
+    // keyless subtitle API doubles as the catalog gate instead.
+    if (id === 'vidriftframe') {
+      if (!(await vidriftCatalogued(http, ref, url, signal))) throw new ProviderFailure('empty')
+    } else {
+      const page = await document(http, url, signal, { accept: 'text/html' })
+      if (!pageShellMatches(id, page.text)) throw new ProviderFailure('empty')
+    }
+    const frameSandbox: FrameSandbox | undefined = SANDBOX_REFUSING.has(id) ? 'none' : undefined
+    return [{ key: 'frame', url, type: 'iframe', language, expiresAt: new Date(now() + 1_800_000).toISOString(), headers: {}, subtitles: [], ...(frameSandbox ? { frameSandbox } : {}) } satisfies ProviderSource]
   })
 }

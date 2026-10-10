@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod'
-import type { PlaybackRef, ProviderRole, ProviderDeliveryMode } from '@consumit/contracts'
+import type { FrameSandbox, PlaybackRef, ProviderRole, ProviderDeliveryMode } from '@consumit/contracts'
 
 export class AdminApiError extends Error {
   readonly code: string
@@ -203,7 +203,7 @@ export type ScoutCandidate = { id: string; mediaKinds: ProviderKind[]; regions: 
 export type ProviderInspection = { providerId: string; ok: boolean; code: string; elapsedMs: number; region: string; rejectedSources: number;
   delivery?: 'direct' | 'relay' | 'embed';
   sources: { key: string; type: string; language: string; host: string; qualityHint?: string; subtitleCount: number }[];
-  preview?: { src: string; type: 'hls' | 'dash' | 'native' | 'iframe'; qualityHint?: string; expiresAt: string; delivery?: 'direct' | 'relay' | 'embed' } }
+  preview?: { src: string; type: 'hls' | 'dash' | 'native' | 'iframe'; qualityHint?: string; frameSandbox?: FrameSandbox; expiresAt: string; delivery?: 'direct' | 'relay' | 'embed' } }
 export async function listScoutCandidates(signal?: AbortSignal): Promise<{ candidates: ScoutCandidate[] }> {
   return request('/v1/admin/providers/scout', { method: 'GET', ...(signal ? { signal } : {}) })
 }

@@ -32,6 +32,7 @@ import type {
 import { avatarStyleSchema, MAX_MEMBER_FAVORITES, memberRatingCursorSchema } from '@consumit/contracts'
 
 import { PrismaClient } from '../../generated/prisma/client.js'
+import { requireActiveTrackingMember, syncReleaseTracking } from '../releases/tracking.ts'
 import type { MemberData } from './member-data.ts'
 
 /** Stored CatalogKind rows. ANIME keeps AniList ids in their own namespace:
@@ -164,8 +165,7 @@ function profileView(profile: { avatarStyle: string; avatarUrl: string | null; b
     nextUsernameChangeAt: next && next > new Date() ? next.toISOString() : null,
     username: profile.username,
     usernameChangedAt: profile.usernameChangedAt?.toISOString() ?? null,
-    // Personal profiles remain private, including rows from the public-profile era.
-    visibility: 'private' as const,
+    visibility: profile.visibility === 'public' ? 'public' as const : 'private' as const,
   }
 }
 
@@ -254,7 +254,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       })
       const page = rows.slice(0, limit)
       const last = page.at(-1)
-      return { collection, items: page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: 'private' })), nextCursor: rows.length > limit && last ? libraryCursor(collection, { id: last.id, updatedAt: last.updatedAt.toISOString() }) : null }
+      return { collection, items: page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const })), nextCursor: rows.length > limit && last ? libraryCursor(collection, { id: last.id, updatedAt: last.updatedAt.toISOString() }) : null }
     }
 
     return empty()
@@ -286,10 +286,10 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
     })
     if (!row || row.member.status !== 'ACTIVE' || !row.member.profile) return null
     const viewerIsOwner = row.memberId === viewerMemberId
-    if (!viewerIsOwner) return null
+    if (!viewerIsOwner && (row.visibility !== 'public' || row.member.profile.visibility !== 'public')) return null
     return {
       items: row.items.map((item) => ({ id: item.tmdbId, kind: kind(item.catalogKind), note: item.note, origin: origin(item.origin), position: item.position, sourceKey: item.sourceKey })),
-      list: { description: row.description, id: row.id, itemCount: row.items.length, name: row.name, origin: origin(row.origin), slug: row.slug, visibility: 'private' },
+      list: { description: row.description, id: row.id, itemCount: row.items.length, name: row.name, origin: origin(row.origin), slug: row.slug, visibility: row.visibility === 'public' ? 'public' as const : 'private' as const },
       owner: { displayName: row.member.profile.displayName, username: row.member.profile.username },
 
       viewerIsOwner,
@@ -342,7 +342,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       const alias = current ? null : await prisma.usernameAlias.findUnique({ select: { memberId: true }, where: { username } })
       const memberId = current?.memberId ?? alias?.memberId
       if (!memberId || memberId !== viewerMemberId) return null
-      const [member, ratingCounts] = await Promise.all([
+      const [member, ratingCounts, followers, following] = await Promise.all([
         prisma.member.findFirst({
           include: {
             diaryEntries: { orderBy: [{ watchedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
@@ -355,13 +355,15 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
           where: { id: memberId, status: 'ACTIVE' },
         }),
         prisma.rating.groupBy({ by: ['value'], _count: { _all: true }, where: { memberId } }),
+        prisma.follow.count({ where: { followingId: memberId, follower: { status: 'ACTIVE', profile: { is: { visibility: 'public' } } } } }),
+        prisma.follow.count({ where: { followerId: memberId, following: { status: 'ACTIVE', profile: { is: { visibility: 'public' } } } } }),
       ])
       if (!member?.profile) return null
       return {
         canonicalUsername: member.profile.username,
         diary: member.diaryEntries.map((item) => ({ ...diaryEpisodeFields(item), entryId: item.id, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: day(item.watchedOn) })),
         favorites: member.favorites.map((item, index) => ({ id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
-        lists: member.lists.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: 'private' })),
+        lists: member.lists.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const })),
         profile: profileView(member.profile, member.createdAt),
         reviews: member.reviews.map((item) => ({ body: item.body, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), reviewedOn: item.reviewedOn ? day(item.reviewedOn) : null, reviewId: item.id, sourceKey: item.sourceKey, tags: item.tags })),
         ratingDistribution: Array.from({ length: 10 }, (_, index) => {
@@ -369,8 +371,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
           return { count: ratingCounts.find((row) => row.value === value)?._count._all ?? 0, value }
         }),
 
-        // Older deployed web builds require these counts during profile validation.
-        social: { followers: member._count.followers, following: member._count.following },
+        social: { followers, following },
         statistics: { diaryEntries: member._count.diaryEntries, lists: member._count.lists, reviews: member._count.reviews, watched: member._count.watchedTitles },
       }
     },
@@ -460,7 +461,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         })
         const hasMore = rows.length > pageSize
         const page = rows.slice(0, pageSize)
-        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: 'private' as const }))
+        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const }))
         const last = page.at(-1)
         return { collection, items, nextCursor: next(hasMore, last ? { id: last.id, updatedAt: last.updatedAt.toISOString() } : null) }
       }
@@ -518,8 +519,11 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
     
     async setFavorites(memberId, favorites): Promise<void> {
       await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`
+        await requireActiveTrackingMember(tx, memberId)
         await tx.favorite.deleteMany({ where: { memberId } })
         if (favorites.length) await tx.favorite.createMany({ data: favorites.map((favorite, index) => ({ catalogKind: storedKind(favorite.kind), memberId, origin: 'NATIVE', position: index + 1, tmdbId: favorite.id })) })
+        await syncReleaseTracking(tx, memberId)
       })
     },
     
@@ -630,15 +634,20 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
     async setSaved(memberId, title, saved): Promise<void> {
       const catalogKind = storedKind(title.kind)
       const key = { catalogKind, memberId, tmdbId: title.id } as const
-      if (saved) {
-        await prisma.savedTitle.upsert({
-          create: { ...key, origin: 'NATIVE' },
-          update: { importBatchId: null, origin: 'NATIVE', sourceKey: null },
-          where: { memberId_catalogKind_tmdbId: key },
-        })
-      } else {
-        await prisma.savedTitle.deleteMany({ where: key })
-      }
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`
+        if (saved) {
+          await requireActiveTrackingMember(tx, memberId)
+          await tx.savedTitle.upsert({
+            create: { ...key, origin: 'NATIVE' },
+            update: { importBatchId: null, origin: 'NATIVE', sourceKey: null },
+            where: { memberId_catalogKind_tmdbId: key },
+          })
+        } else {
+          await tx.savedTitle.deleteMany({ where: key })
+        }
+        await syncReleaseTracking(tx, memberId)
+      })
     },
     async setWatched(memberId, title, watched): Promise<void> {
       const catalogKind = storedKind(title.kind)

@@ -5,6 +5,7 @@ import { movieDetail } from '@/test/catalog-fixtures'
 import type { DirectMediaSource } from '@consumit/ui'
 import type { CastLoadRequest } from '@/lib/cast-sender'
 import { WatchPlayback } from './watch-playback'
+import { readExperience } from '@/lib/experience-storage'
 
 const mocks = vi.hoisted(() => ({
   playerSources: vi.fn((source: DirectMediaSource | undefined) => source),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   },
 }))
 vi.mock('../session/session', () => ({ useSession: () => ({ member: mocks.member }) }))
+vi.mock('../experience/experience-provider', () => ({ useExperience: () => ({ ready: true, owner: mocks.member?.id ?? null, preferences: readExperience(null), patch: async () => {}, retry: async () => {} }) }))
 vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
 vi.mock('@/lib/cast-sender', () => ({ createCastSender: () => mocks.cast, castContentType: (type: string) => type }))
 vi.mock('@/lib/subtitles-browser', () => ({ discoverSubtitles: (...args: unknown[]) => mocks.subs(...args), pageSubtitles: (...args: unknown[]) => mocks.page(...args), prepareSubtitle: (...args: unknown[]) => mocks.prepare(...args), fetchSubtitlePreference: (...args: unknown[]) => mocks.pref(...args), saveSubtitlePreference: (...args: unknown[]) => mocks.savePref(...args) }))
@@ -34,8 +36,8 @@ vi.mock('@consumit/ui', () => ({
   readStoredSubtitleLanguages: () => JSON.parse(window.localStorage.getItem('consumit.player.subtitle-languages') ?? '[]') as string[],
   Button: ({ children, loading, onClick }: { children: ReactNode; loading?: boolean; onClick: () => void }) => <button disabled={loading} onClick={onClick}>{children}</button>,
   Toggle: ({ checked, label, onCheckedChange }: { checked: boolean; label: string; onCheckedChange?: (checked: boolean) => void }) => <button role="switch" aria-checked={checked} aria-label={label} onClick={() => onCheckedChange?.(!checked)} />,
-  ConsumitPlayer: ({ qualityOptions, onQualityChange, source, onServerChange, serverOptions, serverAuto, onServerAuto, onServerRequest, serverError, serverLoading, serverBusy, selectedServer, extraSubtitles, resumeAt, resumePlaying, castAvailable, castConnected, onCastClick, onSourceError, onEnded, onPlay, onPause, onTimeUpdate, onSeeking, onSubtitleRequest, onSubtitlePage, onSubtitleCandidateSelect, subtitleDelayMs, onSubtitleDelayMsChange }: { qualityOptions?: { value: string; label: string }[]; onQualityChange?: (value: string) => void; source?: DirectMediaSource; onServerChange?: (value: string) => void; serverOptions?: { value: string; label: string }[]; serverAuto?: boolean; onServerAuto?: () => void; onServerRequest?: () => void; serverError?: string | null; serverLoading?: boolean; serverBusy?: boolean; selectedServer?: string; extraSubtitles?: { id: string }[]; resumeAt?: number; resumePlaying?: boolean; castAvailable?: boolean; castConnected?: boolean; onCastClick?: () => void; onSourceError?: (reason: 'network' | 'media' | 'gone') => void; onEnded?: () => void; onPlay?: () => void; onPause?: () => void; onTimeUpdate?: (event: { currentTarget: { currentTime: number; duration: number } }) => void; onSeeking?: (event: { currentTarget: { currentTime: number; duration: number } }) => void; onSubtitleRequest?: () => void; onSubtitlePage?: (lang: string, cursor: number) => Promise<unknown>; onSubtitleCandidateSelect?: (candidate: { id: string; label: string; language: string; provider: string }) => Promise<unknown>; subtitleDelayMs?: number; onSubtitleDelayMsChange?: (value: number) => void }) => (
-    <div data-testid="player" data-server-auto={String(serverAuto)} data-server={selectedServer} data-source={mocks.playerSources(source)?.src} data-extra={(extraSubtitles ?? []).map((track) => track.id).join(',')} data-delay={subtitleDelayMs ?? 'uncontrolled'} data-resume-at={resumeAt ?? 'uncontrolled'} data-resume-playing={String(resumePlaying)} data-cast-connected={String(castConnected)}>{(qualityOptions ?? []).map(option => <button key={option.value} onClick={() => onQualityChange?.(option.value)}>{option.label}</button>)}{onServerRequest ? <button onClick={onServerRequest}>open-servers</button> : null}{onServerAuto ? <button disabled={serverBusy} onClick={onServerAuto}>Auto server</button> : null}{serverLoading ? <p>Finding servers…</p> : null}{serverError ? <p>{serverError}</p> : null}{(serverOptions ?? []).map((option) => <button disabled={serverBusy} key={option.value} onClick={() => onServerChange?.(option.value)}>{option.label}</button>)}{castAvailable ? <button onClick={() => onCastClick?.()}>simulate-cast</button> : null}<button onClick={() => onSubtitleRequest?.()}>simulate-captions</button><button onClick={() => void onSubtitlePage?.('en', 0)}>simulate-track-page</button><button onClick={() => void onSubtitleCandidateSelect?.({ id: 'candidate', label: 'English', language: 'en', provider: 'yify' }).then(mocks.selected)}>simulate-track-select</button><button onClick={() => onSourceError?.('network')}>simulate-error</button><button onClick={() => onSourceError?.('gone')}>simulate-gone</button><button onClick={() => onEnded?.()}>simulate-ended</button><button onClick={() => onPlay?.()}>simulate-play</button><button onClick={() => onPause?.()}>simulate-pause</button><button onClick={() => onTimeUpdate?.({ currentTarget: { currentTime: 42, duration: 100 } })}>simulate-time</button><button onClick={() => onSeeking?.({ currentTarget: { currentTime: 600, duration: 1200 } })}>simulate-seek</button><button onClick={() => onSubtitleDelayMsChange?.(1500)}>simulate-delay</button></div>
+  ConsumitPlayer: ({ title: playerTitle, topMeta, qualityOptions, onQualityChange, source, onServerChange, serverOptions, serverAuto, onServerAuto, onServerRequest, serverError, serverLoading, serverBusy, selectedServer, extraSubtitles, resumeAt, resumePlaying, castAvailable, castConnected, onCastClick, onSourceError, onEnded, onPlay, onPause, onTimeUpdate, onSeeking, onSubtitleRequest, onSubtitlePage, onSubtitleCandidateSelect, subtitleDelayMs, onSubtitleDelayMsChange }: { title?: string; topMeta?: ReactNode; qualityOptions?: { value: string; label: string }[]; onQualityChange?: (value: string) => void; source?: DirectMediaSource; onServerChange?: (value: string) => void; serverOptions?: { value: string; label: string }[]; serverAuto?: boolean; onServerAuto?: () => void; onServerRequest?: () => void; serverError?: string | null; serverLoading?: boolean; serverBusy?: boolean; selectedServer?: string; extraSubtitles?: { id: string }[]; resumeAt?: number; resumePlaying?: boolean; castAvailable?: boolean; castConnected?: boolean; onCastClick?: () => void; onSourceError?: (reason: 'network' | 'media' | 'gone') => void; onEnded?: () => void; onPlay?: () => void; onPause?: () => void; onTimeUpdate?: (event: { currentTarget: { currentTime: number; duration: number } }) => void; onSeeking?: (event: { currentTarget: { currentTime: number; duration: number } }) => void; onSubtitleRequest?: () => void; onSubtitlePage?: (lang: string, cursor: number) => Promise<unknown>; onSubtitleCandidateSelect?: (candidate: { id: string; label: string; language: string; provider: string }) => Promise<unknown>; subtitleDelayMs?: number; onSubtitleDelayMsChange?: (value: number) => void }) => (
+    <div data-testid="player" data-title={playerTitle} data-top-meta={typeof topMeta === 'string' ? topMeta : undefined} data-server-auto={String(serverAuto)} data-server={selectedServer} data-source={mocks.playerSources(source)?.src} data-extra={(extraSubtitles ?? []).map((track) => track.id).join(',')} data-delay={subtitleDelayMs ?? 'uncontrolled'} data-resume-at={resumeAt ?? 'uncontrolled'} data-resume-playing={String(resumePlaying)} data-cast-connected={String(castConnected)}>{(qualityOptions ?? []).map(option => <button key={option.value} onClick={() => onQualityChange?.(option.value)}>{option.label}</button>)}{onServerRequest ? <button onClick={onServerRequest}>open-servers</button> : null}{onServerAuto ? <button disabled={serverBusy} onClick={onServerAuto}>Auto server</button> : null}{serverLoading ? <p>Finding servers…</p> : null}{serverError ? <p>{serverError}</p> : null}{(serverOptions ?? []).map((option) => <button disabled={serverBusy} key={option.value} onClick={() => onServerChange?.(option.value)}>{option.label}</button>)}{castAvailable ? <button onClick={() => onCastClick?.()}>simulate-cast</button> : null}<button onClick={() => onSubtitleRequest?.()}>simulate-captions</button><button onClick={() => void onSubtitlePage?.('en', 0)}>simulate-track-page</button><button onClick={() => void onSubtitleCandidateSelect?.({ id: 'candidate', label: 'English', language: 'en', provider: 'yify' }).then(mocks.selected)}>simulate-track-select</button><button onClick={() => onSourceError?.('network')}>simulate-error</button><button onClick={() => onSourceError?.('gone')}>simulate-gone</button><button onClick={() => onEnded?.()}>simulate-ended</button><button onClick={() => onPlay?.()}>simulate-play</button><button onClick={() => onPause?.()}>simulate-pause</button><button onClick={() => onTimeUpdate?.({ currentTarget: { currentTime: 42, duration: 100 } })}>simulate-time</button><button onClick={() => onSeeking?.({ currentTarget: { currentTime: 600, duration: 1200 } })}>simulate-seek</button><button onClick={() => onSubtitleDelayMsChange?.(1500)}>simulate-delay</button></div>
   ),
   buttonVariants: () => '',
 }))
@@ -48,6 +50,17 @@ async function waitForSourceResolved() {
 }
 
 describe('watch request lifecycle', () => {
+  it('keeps the anime name on the first line and episode title on the second', async () => {
+    const title = { kind: 'anime' as const, id: 21, title: "Takopi's Original Sin", year: 2025, episodeRuntimeMinutes: 24 }
+    const episode = { episodeNumber: 1, title: 'To You in 2016' }
+    mocks.request.mockReset().mockResolvedValue({ ...session, ref: { kind: 'anime', id: 21, episode: 1 } })
+    mocks.list.mockReset().mockResolvedValue([])
+    render(<WatchPlayback title={title} episode={episode} />)
+    await waitForSourceResolved()
+    expect(screen.getByTestId('player')).toHaveAttribute('data-title', "Takopi's Original Sin")
+    expect(screen.getByTestId('player')).toHaveAttribute('data-top-meta', 'E1 — To You in 2016')
+  })
+
   it('lets a viewer choose a server after automatic startup fails, before any session exists', async () => {
     const selected = { ...session, source: { ...session.source, type: 'native', delivery: 'direct', providerId: 'backup', src: 'https://media.example/backup.mp4' } }
     mocks.request.mockReset().mockRejectedValueOnce(new Error('Automatic startup unavailable')).mockResolvedValueOnce(selected)
@@ -82,6 +95,18 @@ describe('watch request lifecycle', () => {
     view.unmount()
     expect(mocks.write).not.toHaveBeenCalled()
   })
+  it('frames a sandbox-refusing provider as a plain iframe', async () => {
+    const initial = { ...session, source: { ...session.source, type: 'iframe', delivery: 'embed', providerId: 'megaplayframe', frameSandbox: 'none', src: 'https://megaplay.buzz/videojs/stream/s-2/2142/sub' } }
+    mocks.request.mockReset().mockResolvedValue(initial)
+    mocks.list.mockReset().mockResolvedValue([{ id: 'megaplayframe', label: 'MegaPlay' }, { id: 'backup', label: 'Backup' }])
+    render(<WatchPlayback title={movieDetail} />)
+    await waitForSourceResolved()
+    const frame = screen.getByTitle(movieDetail.title + ' external player')
+    expect(frame).not.toHaveAttribute('sandbox')
+    expect(screen.getByRole('link', { name: 'Open player in new tab' })).toHaveAttribute('href', initial.source.src)
+    fireEvent.load(frame)
+    expect(screen.getByText(/Progress sync is unavailable/)).toBeInTheDocument()
+  })
   it('switches from a frame back to direct playback through the outside Server control', async () => {
     const initial = { ...session, source: { ...session.source, type: 'iframe', delivery: 'embed', providerId: 'apiplayerframe', src: 'https://apiplayer.ru/embed/movie/' + movieDetail.id } }
     mocks.request.mockReset().mockResolvedValue(initial)
@@ -109,7 +134,7 @@ describe('watch request lifecycle', () => {
     act(() => screen.getByText('open-servers').click())
     await screen.findByText('Backup')
     act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-play').click(); screen.getByText('Backup').click() })
-    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null } }, expect.any(AbortSignal)))
+    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null, audioLanguage: 'en' } }, expect.any(AbortSignal)))
     // Retain a seek/pause made while the old source is still playing.
     act(() => { screen.getByText('simulate-seek').click(); if (!playing) screen.getByText('simulate-pause').click(); release(next) })
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', next.source.src))
@@ -235,6 +260,12 @@ describe('watch request lifecycle', () => {
     await waitForSourceResolved()
     expect(mocks.request).toHaveBeenCalledTimes(2)
   })
+  it('offers an exact SUB destination when an English anime DUB cannot play', async () => {
+    mocks.request.mockReset().mockRejectedValue(new Error('English dub unavailable.'))
+    render(<WatchPlayback title={{ ...movieDetail, kind: 'anime', id: 21 }} episode={{ episodeNumber: 3, title: 'Episode three' }} audioLanguage="en" />)
+    await screen.findByRole('alert')
+    expect(screen.getByRole('link', { name: 'Watch SUB instead' })).toHaveAttribute('href', '/watch/anime/21?episode=3&audio=sub')
+  })
   it('keeps provider rosters out of ordinary playback', async () => {
     mocks.request.mockReset().mockResolvedValue(session)
     mocks.list.mockReset().mockResolvedValue([{ id: 'secret-provider', label: 'secret-provider' }])
@@ -245,7 +276,18 @@ describe('watch request lifecycle', () => {
     expect(mocks.swap).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'secret-provider' })).not.toBeInTheDocument()
   })
+  it('discovers saved Arabic and English captions before playing or opening controls', async () => {
+    localStorage.setItem('consumit.player.subtitles', 'ar')
+    localStorage.setItem('consumit.player.subtitle-languages', '["ar","en"]')
+    mocks.request.mockReset().mockResolvedValue(session)
+    render(<WatchPlayback title={movieDetail} />)
+    await waitForSourceResolved()
+    await waitFor(() => expect(mocks.subs).toHaveBeenCalledTimes(1))
+    localStorage.removeItem('consumit.player.subtitle-languages')
+    localStorage.removeItem('consumit.player.subtitles')
+  })
   it('prepares a discovered subtitle only after selection', async () => {
+    localStorage.setItem('consumit.player.subtitles', 'off')
     mocks.request.mockReset().mockResolvedValue(session)
     mocks.list.mockReset().mockResolvedValue([])
     render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
@@ -256,6 +298,7 @@ describe('watch request lifecycle', () => {
     expect(screen.getByTestId('player')).toHaveAttribute('data-extra', '')
     screen.getByRole('button', { name: 'simulate-track-select' }).click()
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-extra', 'sub-yify-en'))
+    localStorage.removeItem('consumit.player.subtitles')
   })
   it('reuses the attached subtitle ID when another candidate prepares the same file', async () => {
     mocks.selected.mockReset()
@@ -432,7 +475,7 @@ describe('watch request lifecycle', () => {
     render(<Activity mode="visible"><WatchPlayback title={movieDetail} pinnedProvider="backup" /></Activity>)
     await waitForSourceResolved()
     await waitFor(() => expect(mocks.swap).toHaveBeenCalledTimes(1))
-    expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null } }, expect.any(AbortSignal))
+    expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null, audioLanguage: 'en' } }, expect.any(AbortSignal))
   })
   it('shows a visible switching status while recovering', async () => {
     let release!: (value: unknown) => void

@@ -3,6 +3,8 @@ import { parseRelayProviders, parseRelayDiscovery, type PlaybackRelayConfig } fr
 
 const envSchema = z.object({
   APP_ORIGIN: z.url().default('http://localhost:3000'),
+  RELEASE_TRACKING_ENABLED: z.enum(['true', 'false']).default('false'),
+  RELEASE_WORKER_SECRET: z.string().min(32).max(256).optional(),
   AUTH_CODE_PEPPER: z.string().min(32).optional(),
   AUTH_EMAIL_FROM: z.string().trim().min(3).optional(),
   DATABASE_SSL_CA: z.string().optional(),
@@ -42,6 +44,7 @@ const envSchema = z.object({
 })
 
 export type ApiEnv = {
+  releases?: { enabled: boolean; workerSecret: string | undefined }
   playback?: {
     relay?: PlaybackRelayConfig
     enabled: boolean; stateUrl: string | undefined; mediaConfig: string | undefined;
@@ -86,6 +89,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  if (value.RELEASE_TRACKING_ENABLED === 'true' && (!value.DATABASE_URL || !value.RELEASE_WORKER_SECRET || value.PLAYBACK_ENABLED !== 'true')) {
+    throw new Error('Release tracking requires a database, playback, and RELEASE_WORKER_SECRET.')
+  }
   const appUrl = new URL(value.APP_ORIGIN)
   if (!['http:', 'https:'].includes(appUrl.protocol) || appUrl.username || appUrl.password
       || appUrl.pathname !== '/' || appUrl.search || appUrl.hash) {
@@ -160,6 +166,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     ...(value.SES_REGION && value.SES_CONFIGURATION_SET && value.SES_CREDENTIALS_FILE
       ? { ses: { region: value.SES_REGION, configurationSet: value.SES_CONFIGURATION_SET, credentialsFile: value.SES_CREDENTIALS_FILE } } : {}),
     databaseSslMode: value.DATABASE_SSL_MODE,
+    releases: { enabled: value.RELEASE_TRACKING_ENABLED === 'true', workerSecret: value.RELEASE_WORKER_SECRET },
     databaseUrl: value.DATABASE_URL,
     nodeEnv: value.NODE_ENV,
     port: value.PORT,

@@ -122,6 +122,10 @@ services:
       target: web
       args:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_CAST_RECEIVER_ID: ${NEXT_PUBLIC_CAST_RECEIVER_ID:-}
+        NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED: ${NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED:-false}
+        NEXT_PUBLIC_CONSUMIT_DISCORD_URL: ${NEXT_PUBLIC_CONSUMIT_DISCORD_URL:-https://discord.gg/p7XVyk6vs}
+        NEXT_PUBLIC_CONSUMIT_REDDIT_URL: ${NEXT_PUBLIC_CONSUMIT_REDDIT_URL:-https://www.reddit.com/r/Consumit/}
     env_file:
       - path: ./.env
         required: false

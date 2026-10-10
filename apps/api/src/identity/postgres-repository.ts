@@ -1,5 +1,6 @@
 import { PrismaClient, type Prisma } from '../../generated/prisma/client.js'
-import { avatarStyleSchema, MAX_MEMBER_FAVORITES } from '@consumit/contracts'
+import { episodeView } from '../releases/repository.ts'
+import { avatarStyleSchema, MAX_MEMBER_FAVORITES, experiencePreferencesSchema } from '@consumit/contracts'
 
 import type { IdentityRepository, IdentityRecord } from './repository.ts'
 
@@ -33,7 +34,7 @@ function toRecord(row: IdentityRow): IdentityRecord {
       location: row.profile.location,
       username: row.profile.username,
       usernameChangedAt: row.profile.usernameChangedAt,
-      visibility: 'private',
+      visibility: row.profile.visibility === 'public' ? 'public' : 'private',
     },
     role: row.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
     status: row.status,
@@ -88,6 +89,11 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       }
     },
     async exportMember(memberId, exportedAt) {
+      const [preference, notifications, experience] = await Promise.all([
+        prisma.notificationPreference.findUnique({ where: { memberId } }),
+        prisma.releaseNotification.findMany({ where: { memberId }, include: { episode: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+        prisma.$queryRaw<{ preferences: unknown }[]>`SELECT "preferences" FROM "ExperiencePreference" WHERE "memberId"=${memberId}`,
+      ])
       const [row, watched, diary, saved, favorites, lists, ratings, reviews, watchHistory] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
         prisma.watchedTitle.findMany({ where: { memberId } }),
@@ -103,10 +109,13 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       const member = toRecord(row)
       return {
         exportedAt: exportedAt.toISOString(),
+        experiencePreferences: experience[0] ? experiencePreferencesSchema.parse(experience[0].preferences) : null,
+        notificationPreferences: { newEpisodes: Boolean(preference?.enabledAt) },
+        notifications: notifications.map(row => ({ id: row.id, episode: episodeView(row.episode, row.checkedAt), createdAt: row.createdAt.toISOString(), readAt: row.readAt?.toISOString() ?? null })),
         library: {
           diary: diary.map((item) => ({ ...(item.episode > 0 ? { ...(item.catalogKind === 'SERIES' || item.season > 0 ? { season: item.season } : {}), episode: item.episode } : {}), entryId: item.id, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: calendarDay(item.watchedOn) })),
           favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
-          lists: lists.map((item) => ({ description: item.description, id: item.id, itemCount: item._count.items, name: item.name, origin: dataOrigin(item.origin), slug: item.slug, visibility: 'private' as const })),
+          lists: lists.map((item) => ({ description: item.description, id: item.id, itemCount: item._count.items, name: item.name, origin: dataOrigin(item.origin), slug: item.slug, visibility: item.visibility === 'public' ? 'public' as const : 'private' as const })),
           saved: saved.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
           watched: watched.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
         },
@@ -191,6 +200,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
     },
     async tombstone(memberId) {
       await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`
         const member = await tx.member.findFirst({ where: { id: memberId, status: 'ACTIVE' } })
         if (!member) return
         const profile = await tx.profile.findUnique({ where: { memberId } })
@@ -205,6 +215,10 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         // aliases. Updating Member does not trigger its on-delete cascades, so
         // every member-owned record must be removed explicitly here.
         await tx.importBatch.deleteMany({ where: { memberId } })
+        await tx.releaseNotification.deleteMany({ where: { memberId } })
+        await tx.notificationPreference.deleteMany({ where: { memberId } })
+        await tx.$executeRaw`DELETE FROM "ExperiencePreference" WHERE "memberId"=${memberId}`
+        await tx.releaseTracking.deleteMany({ where: { memberId } })
         await tx.memberList.deleteMany({ where: { memberId } })
         await tx.favorite.deleteMany({ where: { memberId } })
         await tx.review.deleteMany({ where: { memberId } })

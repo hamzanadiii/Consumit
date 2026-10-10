@@ -4,11 +4,11 @@ import type { ComponentProps, ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
 
-export type SectionHeadingProps = Omit<ComponentProps<'div'>, 'children'> & {
+export type SectionHeadingProps = Omit<ComponentProps<'div'>, 'children' | 'title'> & {
   action?: ReactNode | undefined
   description?: ReactNode | undefined
   icon?: ReactNode | undefined
-  title: string
+  title: ReactNode
   variant?: 'editorial' | 'compact' | undefined
 }
 

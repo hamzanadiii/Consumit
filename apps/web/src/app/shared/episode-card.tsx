@@ -1,8 +1,12 @@
 import { ArtworkFrame } from '@consumit/ui'
 import { Play } from 'lucide-react'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 
 export type EpisodeCardProps = {
+  actionLabel?: string
+  linkLabel?: string
+  status?: ReactNode
   episode: number
   href: string
   airDate?: string | null | undefined
@@ -15,7 +19,7 @@ export type EpisodeCardProps = {
 }
 
 /** Shared episode presentation; title-specific callers own identity and availability. */
-export function EpisodeCard({ airDate, duration, episode, fallbackArt, href, stillUrl, summary, title, upcoming = false }: EpisodeCardProps) {
+export function EpisodeCard({ actionLabel = 'Play episode', linkLabel, status, airDate, duration, episode, fallbackArt, href, stillUrl, summary, title, upcoming = false }: EpisodeCardProps) {
   const artwork = <ArtworkFrame
     alt={stillUrl ? title ? `${title} still` : `Episode ${episode} still` : `Episode ${episode} title artwork`}
     className="rounded-none border-0"
@@ -26,7 +30,7 @@ export function EpisodeCard({ airDate, duration, episode, fallbackArt, href, sti
   const metadata = [duration, date].filter(Boolean).join(' · ')
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-card border border-[var(--fs-field-border)] bg-[var(--fs-field)] transition-colors hover:border-[var(--fs-accent)]/60 motion-reduce:transition-none" data-filscreen-episode-card>
-      {upcoming ? artwork : <Link aria-label={`Watch Episode ${episode}${title ? `: ${title}` : ''}`} className="block outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--fs-focus)]" href={href}>{artwork}</Link>}
+      {upcoming ? artwork : <Link aria-label={linkLabel ?? `Watch Episode ${episode}${title ? `: ${title}` : ''}`} className="block outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--fs-focus)]" href={href}>{artwork}</Link>}
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-4">
         <p className="flex flex-wrap items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-[var(--fs-accent)]">
           Episode {episode}
@@ -35,6 +39,7 @@ export function EpisodeCard({ airDate, duration, episode, fallbackArt, href, sti
         {title ? <h3 className="truncate text-sm font-bold text-[var(--fs-ink)]" title={title}>{title}</h3> : null}
         {!stillUrl && fallbackArt ? <p className="text-[10px] text-[var(--fs-muted)]">Title artwork</p> : null}
         {metadata ? <p className="text-xs tabular-nums text-[var(--fs-muted)]">{metadata}</p> : null}
+        {status ? <p className="text-xs leading-5 text-[var(--fs-muted)]">{status}</p> : null}
         {summary ? <p className="line-clamp-2 text-xs leading-5 text-[var(--fs-muted)]">{summary}</p> : null}
         <div className="mt-auto pt-3">
           {upcoming ? (
@@ -43,7 +48,7 @@ export function EpisodeCard({ airDate, duration, episode, fallbackArt, href, sti
             </span>
           ) : (
             <Link className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-orange px-4 text-xs font-bold text-canvas outline-none transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href={href}>
-              <Play aria-hidden="true" className="size-3 fill-current" /> Play episode
+              <Play aria-hidden="true" className="size-3 fill-current" /> {actionLabel}
             </Link>
           )}
         </div>

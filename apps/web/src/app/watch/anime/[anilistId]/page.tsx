@@ -38,7 +38,7 @@ export default async function AnimeWatchPage({ params, searchParams }: AnimeWatc
   const episodeValue = Array.isArray(query.episode) ? query.episode[0] : query.episode
   const audioValue = Array.isArray(query.audio) ? query.audio[0] : query.audio
   const episodeNumber = Number(episodeValue ?? 1)
-  const audio: 'sub' | 'dub' = audioValue === 'dub' ? 'dub' : 'sub'
+  const audio: 'sub' | 'dub' | undefined = audioValue === 'dub' ? 'dub' : audioValue === 'sub' ? 'sub' : undefined
   if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(episodeNumber) || episodeNumber <= 0 || episodeNumber > MAX_ANIME_EPISODE) notFound()
 
   let detail

@@ -10,7 +10,7 @@ import {
   memberLibraryPageQuerySchema,
   memberLibrarySnapshotSchema,
   memberListDetailSchema,
-  memberProfileDataSchema,
+  publicListDetailSchema,
   memberProfileArchiveCursorSchema,
   memberProfileArchiveKindSchema,
   memberProfileArchivePageSchema,
@@ -37,6 +37,12 @@ import {
   updateMemberListContentRequestSchema,
   updateMemberReviewRequestSchema,
   usernameSchema,
+  profileReadResponseSchema,
+  memberSearchQuerySchema,
+  publicMemberPageSchema,
+  publicProfileCollectionSchema,
+  publicProfileCollectionPageSchema,
+  publicMembersPageQuerySchema,
 } from '@consumit/contracts'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
@@ -48,9 +54,12 @@ import { requestMember } from '../http/request-member.ts'
 import type { Identity } from '../identity/identity.ts'
 import { sessionCookieName } from '../identity/session.ts'
 import type { MemberData } from './member-data.ts'
+import type { PublicMembers } from './public-members.ts'
+import { createSocialTelemetry } from './social-telemetry.ts'
 
-export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiEnv; identity: Identity; memberData: MemberData }) {
+export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiEnv; identity: Identity; memberData: MemberData; publicMembers?: PublicMembers | undefined }) {
   const cookieName = sessionCookieName(deps.env)
+  const observeSocial = createSocialTelemetry()
 
   function viewer(request: FastifyRequest, required: true): Promise<string>
   function viewer(request: FastifyRequest, required: false): Promise<string | undefined>
@@ -79,10 +88,44 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     void reply.header('cache-control', 'private, no-store')
     const parsed = usernameSchema.safeParse((request.params as { username?: unknown }).username)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
-    const profile = await deps.memberData.profile(parsed.data, await viewer(request, true))
+    const memberId = await viewer(request, false)
+    const owned = memberId ? await deps.memberData.profile(parsed.data, memberId) : null
+    const profile = owned ? { ...owned, viewerIsOwner: true } : await deps.publicMembers?.profile(parsed.data, memberId)
     if (!profile) throw new ApiError('NOT_FOUND', 'Profile not found.')
-    return memberProfileDataSchema.parse(profile)
+    return profileReadResponseSchema.parse(profile)
   })
+
+  app.get('/v1/members/search', async (request, reply) => {
+    void reply.header('cache-control', 'private, no-store')
+    const query = memberSearchQuerySchema.safeParse(request.query)
+    if (!query.success) throw new ApiError('BAD_REQUEST', 'Type between 3 and 100 characters to search people.')
+    if (!deps.publicMembers) throw new ApiError('AUTH_STATE_UNAVAILABLE', 'People search is temporarily unavailable.', { retryable: true })
+    const memberId = await viewer(request, false)
+    return publicMemberPageSchema.parse(await observeSocial('search', () => deps.publicMembers!.search(query.data.q, query.data.cursor, query.data.limit, memberId)))
+  })
+
+  app.get('/v1/profiles/:username/collections/:collection', async (request, reply) => {
+    void reply.header('cache-control', 'private, no-store')
+    const params = request.params as { username?: unknown; collection?: unknown }
+    const username = usernameSchema.safeParse(params.username)
+    const collection = publicProfileCollectionSchema.safeParse(params.collection)
+    const query = publicMembersPageQuerySchema.safeParse(request.query)
+    if (!username.success || !collection.success || !query.success) throw new ApiError('BAD_REQUEST', 'Use a valid profile collection request.')
+    const page = await deps.publicMembers?.collection(username.data, collection.data, query.data.cursor, query.data.limit, await viewer(request, false))
+    if (!page) throw new ApiError('NOT_FOUND', 'Profile not found.')
+    return publicProfileCollectionPageSchema.parse(page)
+  })
+
+  for (const method of ['PUT', 'DELETE'] as const) app.route({ method, url: '/v1/me/follows/:memberId', handler: async (request, reply) => {
+    void reply.header('cache-control', 'private, no-store')
+    guardMutation(request)
+    const actor = await viewer(request, true)
+    const target = z.string().min(1).max(100).safeParse((request.params as { memberId?: unknown }).memberId)
+    if (!target.success) throw new ApiError('BAD_REQUEST', 'Use a valid member identifier.')
+    if (!deps.publicMembers) throw new ApiError('AUTH_STATE_UNAVAILABLE', 'Following is temporarily unavailable.', { retryable: true })
+    await observeSocial(method === 'PUT' ? 'follow' : 'unfollow', () => deps.publicMembers!.follow(actor, target.data, method === 'PUT'))
+    return reply.code(204).send()
+  } })
 
   app.get('/v1/profiles/:username/archives/:collection', async (request, reply) => {
     const params = request.params as { collection?: unknown; username?: unknown }
@@ -302,9 +345,9 @@ for (const method of ['PUT', 'DELETE'] as const) {
     void reply.header('cache-control', 'private, no-store')
     const slug = (request.params as { slug?: unknown }).slug
     if (typeof slug !== 'string' || !slug || slug.length > 200) throw new ApiError('BAD_REQUEST', 'Use a valid list slug.')
-    const list = await deps.memberData.list(slug, await viewer(request, true))
+    const list = await deps.memberData.list(slug, await viewer(request, false))
     if (!list) throw new ApiError('NOT_FOUND', 'List not found.')
-    return memberListDetailSchema.parse(list)
+    return list.viewerIsOwner ? memberListDetailSchema.parse(list) : publicListDetailSchema.parse(list)
   })
 
   app.put('/v1/ratings', async (request, reply) => {

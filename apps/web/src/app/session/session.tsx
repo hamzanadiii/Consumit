@@ -1,5 +1,7 @@
 'use client'
 
+import { ExperienceProvider } from '../experience/experience-provider'
+
 import type { SafeMember } from '@consumit/contracts'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -27,7 +29,7 @@ export function SessionProvider({ children, initialMember = null, initialStatus 
     if (initialStatus !== 'loading') return
     // Watch pages seed a nested provider from the server session before the
     // player auto-starts, so this root lookup would be an unused extra request.
-    if (window.location.pathname === '/watch' || window.location.pathname.startsWith('/watch/')) return
+    if (window.location.pathname === '/watch' || window.location.pathname.startsWith('/watch/') || window.location.pathname.startsWith('/_internal/')) return
     const controller = new AbortController()
     const startedAtRevision = revision.current
     let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -74,7 +76,7 @@ export function SessionProvider({ children, initialMember = null, initialStatus 
     },
     status,
   }), [member, status])
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+  return <SessionContext.Provider value={value}><ExperienceProvider memberId={member?.id ?? null} status={status}>{children}</ExperienceProvider></SessionContext.Provider>
 }
 
 export function useSession() {

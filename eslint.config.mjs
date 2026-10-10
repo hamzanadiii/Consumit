@@ -19,11 +19,11 @@ export default defineConfig([
     '**/tmp-*',
   ]),
   {
-    files: ['apps/web/**/*.{js,jsx,ts,tsx}', 'apps/next-web/**/*.{js,jsx,ts,tsx}'],
+    files: ['apps/web/**/*.{js,jsx,ts,tsx}'],
     extends: [nextVitals, nextTypeScript],
   },
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}'],
+    files: ['apps/api/**/*.ts', 'apps/release-worker/**/*.ts', 'packages/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {

@@ -4,6 +4,8 @@ import Link from 'next/link'
 
 import { Avatar, buttonVariants } from '@consumit/ui'
 
+import { dicebearAvatarUrl } from '@/lib/avatar'
+
 import { FilScreenShell } from '../shared'
 
 /** What a signed-out visitor sees instead of a bare sign-in redirect when
@@ -15,7 +17,7 @@ export function GuestProfileScreen({ nextPath }: { nextPath: string }) {
     <FilScreenShell pageHeading={undefined}>
       <main className="mx-auto w-full max-w-2xl px-1 py-14 text-center sm:px-3 sm:py-20 lg:px-4" data-consumit-guest-profile>
         <div className="flex justify-center">
-          <Avatar name="G" size="xl" treatment="noir" />
+          <Avatar imageAlt="Guest portrait" name="Guest" size="xl" src={dicebearAvatarUrl('consumit-guest')} treatment="noir" />
         </div>
         <p className="mt-6 text-xs font-bold tracking-[0.18em] text-[var(--fs-muted)] uppercase">Guest profile</p>
         <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3.25rem)] leading-[1.02] font-normal tracking-[-0.025em] text-[var(--fs-ink)]">Browsing as a guest.</h1>

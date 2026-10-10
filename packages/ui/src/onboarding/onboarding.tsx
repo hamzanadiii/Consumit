@@ -10,6 +10,7 @@ export type OnboardingHeaderProps = Omit<ComponentProps<'header'>, 'children'> &
   current: number
   homeHref?: string | undefined
   skipHref?: string | undefined
+  onSkip?: (() => void) | undefined
   total: number
 }
 
@@ -19,6 +20,7 @@ export function OnboardingHeader({
   current,
   homeHref = '/',
   skipHref,
+  onSkip,
   total,
   ...props
 }: OnboardingHeaderProps) {
@@ -43,7 +45,7 @@ export function OnboardingHeader({
         <ProgressRail className="mt-2" label={`Onboarding step ${safeCurrent} of ${safeTotal}`} value={(safeCurrent / safeTotal) * 100} />
       </div>
       {skipHref ? (
-        <a className="inline-flex min-h-11 shrink-0 items-center rounded-control px-1 text-xs text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:px-2" href={skipHref}>
+        <a className="inline-flex min-h-11 shrink-0 items-center rounded-control px-1 text-xs text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:px-2" href={skipHref} onClick={onSkip ? event => { event.preventDefault(); onSkip() } : undefined}>
           <span className="sm:hidden">Skip</span>
           <span className="hidden sm:inline">Skip for now</span>
         </a>

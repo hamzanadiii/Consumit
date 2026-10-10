@@ -21,13 +21,11 @@ import {
   Loader2,
   Maximize,
   Minimize,
-  Minus,
   Moon,
   Music,
   Search,
   Upload,
   PictureInPicture2,
-  Plus,
   RotateCcw,
   RotateCw,
   Server,
@@ -37,10 +35,14 @@ import {
   TriangleAlert,
   Volume2,
   VolumeX,
-  Wand2,
+  TimerReset,
 } from 'lucide-react'
 
 import { cn } from '../lib/cn'
+import { CastPanel } from './cast-panel'
+import { SubtitleAppearance, SubtitleSync } from './subtitle-panels'
+import { standardQualityHeight } from './quality-tier'
+import type { SkipSegment } from './media-source'
 import { Toggle } from '../selection/selection'
 import { PlayerAdjustment, PlayerPanel, PlayerSettingRow } from './player-panel'
 import { createVolumeBoost } from './volume-boost'
@@ -53,7 +55,7 @@ import {
   type DirectMediaSource,
 } from './media-source'
 import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
-import type { MediaPreferences } from './media-preferences'
+import type { MediaPreferences, ViewingPreferences } from './media-preferences'
 import { createPlaybackControllerNext } from './playback-controller-next'
 import type { EngineDeliveryFailure } from './media-engine'
 import {
@@ -63,6 +65,7 @@ import {
   fetchVttCues,
   formatSubtitleDelayMs,
   nativeLanguageName,
+  canonicalSubtitleLanguage,
   subtitleLabelDetail,
   parseVttCues,
   readStoredSubtitleDelayMs,
@@ -71,7 +74,7 @@ import {
   type SubtitleCue,
 } from './subtitle-sync'
 
-export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance'
+export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance' | 'cast'
 
 export type CaptionSize = 'small' | 'medium' | 'large' | 'xlarge'
 export type CaptionBackground = 'cinematic' | 'boxed' | 'subtle'
@@ -198,6 +201,8 @@ export type ConsumitPlayerProps = Omit<
    *  default: stored on the device and applied after mount. */
   autoSkip?: boolean | undefined
   onAutoSkipChange?: ((value: boolean) => void) | undefined
+  /** Optional title/episode timing lookup after this recording's duration is known. */
+  onSkipSegmentsRequest?: ((durationSeconds: number, signal: AbortSignal) => Promise<readonly SkipSegment[]>) | undefined
   /** Inactivity delay before the control chrome fades. */
   autoHideMs?: number | undefined
   /** Alternative playback providers for manual source switching. */
@@ -212,17 +217,18 @@ export type ConsumitPlayerProps = Omit<
   serverBusy?: boolean | undefined
   onServerRequest?: (() => void) | undefined
   onRetry?: (() => void) | undefined
-  /** Chromecast output. The button renders only when a Cast runtime and a
-   *  configured receiver exist; the caller owns session, progress, and
-   *  telemetry while casting. */
+  /** Cast remains discoverable; the caller owns TV sessions and progress. */
   castAvailable?: boolean | undefined
   castConnected?: boolean | undefined
   onCastClick?: (() => void) | undefined
+  onCastCheck?: (() => Promise<'ready' | 'unconfigured' | 'unavailable'>) | undefined
   resumeAt?: number | undefined
   resumePlaying?: boolean | undefined
   onSourceError?: ((reason: 'network' | 'media' | 'gone' | 'expired', deliveryFailure?: EngineDeliveryFailure) => void) | undefined
   onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
   onMediaPreferencesChange?: ((preferences: MediaPreferences) => void) | undefined
+  initialViewingPreferences?: ViewingPreferences | undefined
+  onViewingPreferencesChange?: ((preferences: Partial<ViewingPreferences>) => void) | undefined
 }
 
 const DEFAULT_SUBTITLES: readonly PlayerOption[] = [
@@ -421,16 +427,6 @@ const serverHydrationSnapshot = () => false
  * FilScreen-flavored option chip for quality and speed: a real bordered chip
  * that reads selected through the signal-orange glow and ink contrast.
  */
-function settingsChipClass(selected: boolean, wide = false) {
-  return cn(
-    'min-h-10 rounded-control text-sm tabular-nums outline-none transition-all motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:opacity-40',
-    wide ? 'px-3.5' : 'min-w-11 px-2.5',
-    selected
-      ? 'border border-orange bg-orange/20 font-bold text-orange'
-      : 'border border-white/15 bg-white/5 text-copy hover:border-white/30 hover:bg-white/10 hover:text-ink',
-  )
-}
-
 function QualityIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -503,12 +499,14 @@ export function ConsumitPlayer({
   autoHideMs = 3000,
   autoSkip: controlledAutoSkip,
   onAutoSkipChange,
+  onSkipSegmentsRequest,
   backHref,
   brightness: controlledBrightness,
   caption,
   castAvailable = false,
   castConnected = false,
   onCastClick,
+  onCastCheck,
   chapters,
   children,
   className,
@@ -544,6 +542,8 @@ export function ConsumitPlayer({
   onSourceError,
   onPlaybackEvent,
   onMediaPreferencesChange,
+  initialViewingPreferences,
+  onViewingPreferencesChange,
   resumeAt = 0,
   resumePlaying = false,
   serverOptions,
@@ -684,6 +684,8 @@ export function ConsumitPlayer({
   const hasSource = mounted && Boolean(mediaSrc || children)
   const showTopBar = backHref != null || onBack != null || topMeta != null
 
+  const [decodedWidth, setDecodedWidth] = useState(0)
+  const [decodedHeight, setDecodedHeight] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [bufferedEnd, setBufferedEnd] = useState(0)
@@ -734,6 +736,9 @@ export function ConsumitPlayer({
   const searchGenerationRef = useRef(0)
   useEffect(() => () => clearTimeout(searchTimerRef.current), [])
   const [openSubtitleLanguage, setOpenSubtitleLanguage] = useState<string | null>(null)
+  const [loadingSubtitleLanguages, setLoadingSubtitleLanguages] = useState<string[]>([])
+  const subtitleLanguageRequests = useRef(new Set<string>())
+  const [subtitleLanguageErrors, setSubtitleLanguageErrors] = useState<string[]>([])
   const [discoveredTracks, setDiscoveredTracks] = useState<Record<string, PlayerSubtitleCandidate[]>>({})
   const [nextSubtitleCursor, setNextSubtitleCursor] = useState<Record<string, number | null>>({})
   const [subtitleMenuError, setSubtitleMenuError] = useState<string | null>(null)
@@ -831,23 +836,28 @@ export function ConsumitPlayer({
   const subtitleLanguages = controlledSubtitleLanguages ?? internalSubtitleLanguages
   const subtitleLanguageRows = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const language of subtitleDiscovery?.languages ?? []) counts.set(language.code, language.count)
+    for (const language of subtitleDiscovery?.languages ?? []) {
+      const code = canonicalSubtitleLanguage(language.code)
+      counts.set(code, (counts.get(code) ?? 0) + language.count)
+    }
     for (const option of subtitleOptions) {
       if (option.value === 'off') continue
-      const code = option.language ?? 'und'
+      const code = canonicalSubtitleLanguage(option.language)
       counts.set(code, (counts.get(code) ?? 0) + 1)
     }
     for (const track of extraSubtitles ?? []) {
-      if (preparedCandidateUrls.includes(track.url)) counts.set(track.language, Math.max(0, (counts.get(track.language) ?? 0) - 1))
+      const code = canonicalSubtitleLanguage(track.language)
+      if (preparedCandidateUrls.includes(track.url)) counts.set(code, Math.max(0, (counts.get(code) ?? 0) - 1))
     }
-    return [...counts].map(([code, count]) => ({ code, count }))
+    return [...counts].map(([code, count]) => ({ code, count, discoveryCodes: [...new Set((subtitleDiscovery?.languages ?? []).filter((language) => canonicalSubtitleLanguage(language.code) === code).map((language) => language.code))] }))
       .sort((a, b) => {
-        const aRank = subtitleLanguages.indexOf(a.code)
-        const bRank = subtitleLanguages.indexOf(b.code)
+        const aRank = subtitleLanguages.map(canonicalSubtitleLanguage).indexOf(a.code)
+        const bRank = subtitleLanguages.map(canonicalSubtitleLanguage).indexOf(b.code)
         return (aRank === -1 ? 100 : aRank) - (bRank === -1 ? 100 : bRank) || nativeLanguageName(a.code, a.code).localeCompare(nativeLanguageName(b.code, b.code))
       })
   }, [subtitleDiscovery?.languages, subtitleOptions, subtitleLanguages, extraSubtitles, preparedCandidateUrls])
   const captionsOn = selectedSubtitle !== 'off'
+  const matchingLocalSubtitles = subtitleOptions.filter((option) => option.value !== 'off' && `${option.label} ${nativeLanguageName(option.language, '')} ${option.language ?? ''}`.toLocaleLowerCase().includes(subtitleSearch.trim().toLocaleLowerCase()))
   /* Overlay cue text and its script: Arabic cues render untracked so letter
    *  joining survives Chromium's letter-spacing handling. */
   // External files use the styled overlay; HLS/DASH/native tracks keep the
@@ -870,7 +880,22 @@ export function ConsumitPlayer({
   /* Skip-intro ranges ride the resolved source. The button offers a manual
    * jump; auto-skip jumps on entry while playing and re-arms on exit, so a
    * deliberate rewind back into the range is respected, not fought. */
-  const skipSegments = source?.skipSegments ?? []
+  const [catalogSkipTimes, setCatalogSkipTimes] = useState<{ src: string; duration: number; request: typeof onSkipSegmentsRequest; segments: readonly SkipSegment[] } | null>(null)
+  const [metadataSource, setMetadataSource] = useState<string | undefined>(undefined)
+  const hasProviderIntro = Boolean(source?.skipSegments?.some((segment) => segment.kind === 'intro' && segment.start >= 0 && segment.end > segment.start && segment.end <= duration))
+  useEffect(() => {
+    if (!onSkipSegmentsRequest || !mediaSrc || metadataSource !== mediaSrc || duration < 30 || hasProviderIntro || hasError) return
+    const controller = new AbortController()
+    void onSkipSegmentsRequest(duration, controller.signal).then((segments) => {
+      if (!controller.signal.aborted) setCatalogSkipTimes({ src: mediaSrc, duration, request: onSkipSegmentsRequest, segments })
+    }, () => { /* Missing timing metadata never interrupts playback. */ })
+    return () => controller.abort()
+  }, [onSkipSegmentsRequest, mediaSrc, metadataSource, duration, hasProviderIntro, hasError])
+  const skipSegments = useMemo(() => {
+    const provider = source?.skipSegments ?? []
+    const fetched = catalogSkipTimes && catalogSkipTimes.request === onSkipSegmentsRequest && metadataSource === mediaSrc && catalogSkipTimes.src === mediaSrc && catalogSkipTimes.duration === duration ? catalogSkipTimes.segments : []
+    return [...provider, ...fetched.filter((segment) => !provider.some((known) => known.kind === segment.kind))].filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.start >= 0 && segment.end > segment.start && (duration <= 0 || segment.end <= duration))
+  }, [source?.skipSegments, catalogSkipTimes, mediaSrc, metadataSource, duration, onSkipSegmentsRequest])
   const activeSkip = skipSegments.find((segment) => currentTime >= segment.start && currentTime < segment.end - 0.25 && segment.end > segment.start)
   const skipArmed = useRef<string | null>(null)
   const jumpSkip = useCallback(() => {
@@ -961,9 +986,10 @@ export function ConsumitPlayer({
     )
   }, [])
 
+  const keyboardFocus = useRef(false)
   const hasKeyboardFocus = useCallback(() => {
     const focused = document.activeElement
-    return focused instanceof HTMLElement && shellRef.current?.contains(focused) && focused.matches(':focus-visible')
+    return focused instanceof HTMLElement && shellRef.current?.contains(focused) && keyboardFocus.current
   }, [])
 
   const scheduleHide = useCallback(() => {
@@ -1003,6 +1029,8 @@ export function ConsumitPlayer({
     const video = videoRef.current
     if (!video) return
     const controller = (useNextPlaybackCore ? createPlaybackControllerNext : createPlaybackController)(video, {
+      initialPreferences: initialViewingPreferences,
+      preferenceChange: change => onViewingPreferencesChange?.(change),
       change(snapshot) {
         controllerPhaseRef.current = snapshot.phase
         setEngineState(snapshot)
@@ -1045,6 +1073,40 @@ export function ConsumitPlayer({
     }))
     return [...fromSource, ...(extraSubtitles ?? []), ...(uploadedSubtitle ? [uploadedSubtitle] : [])]
   }, [source, extraSubtitles, uploadedSubtitle])
+
+  const automaticSubtitleAttempt = useRef<string | null>(null)
+  const manualSubtitleIntent = useRef(false)
+  useEffect(() => {
+    if (!source || !initialViewingPreferences?.subtitlesEnabled || !onSubtitlePage || !onSubtitleCandidateSelect || !subtitleDiscovery?.languages.length || subtitleDiscovery.loading || subtitleDiscovery.error || manualSubtitleIntent.current) return
+    const requested = initialViewingPreferences.subtitleLanguages
+    const localRank = requested.findIndex(code => (engineState?.subtitles ?? []).some(track => canonicalSubtitleLanguage(track.language ?? '') === canonicalSubtitleLanguage(code)))
+    if (localRank === 0 || automaticSubtitleAttempt.current === source.src) return
+    automaticSubtitleAttempt.current = source.src
+    let active = true
+    void (async () => {
+      for (const language of requested.slice(0, localRank < 0 ? requested.length : localRank)) {
+        const available = subtitleDiscovery.languages.filter(row => canonicalSubtitleLanguage(row.code) === canonicalSubtitleLanguage(language)).map(row => row.code)
+        for (const code of available.slice(0, 2)) {
+          if (!active || manualSubtitleIntent.current) return
+          try {
+            const page = await onSubtitlePage(code, 0)
+            for (const candidate of page.tracks.slice(0, 2)) {
+              if (!active || manualSubtitleIntent.current) return
+              try {
+                const track = await onSubtitleCandidateSelect(candidate)
+                if (!active || manualSubtitleIntent.current) return
+                // Arrival goes through normal automatic matching, preserving the preferred language order.
+                controllerRef.current?.externalSubtitles([...allExternalSubtitles, track])
+                return
+              } catch { /* Try another candidate, then the next preferred language. */ }
+            }
+          } catch { /* Caption failures never stop playback. */ }
+        }
+      }
+    })()
+    return () => { active = false }
+    // Opening preferences are immutable for a Watch instance; discovery must finish before one bounded pass.
+  }, [source?.src, subtitleDiscovery?.loading])
 
   /* A discovered row can duplicate a track the menu already offers: candidates
    * prepared this session (matched by id) and candidates whose prepared file is
@@ -1214,6 +1276,8 @@ export function ConsumitPlayer({
     if (!video) return
 
     const syncClock = () => {
+      setDecodedWidth(video.videoWidth || 0)
+      setDecodedHeight(video.videoHeight || 0)
       setCurrentTime(video.currentTime || 0)
       setDuration(Number.isFinite(video.duration) ? video.duration : 0)
     }
@@ -1228,9 +1292,13 @@ export function ConsumitPlayer({
 
     syncClock()
     syncBuffered()
+    const metadataLoaded = () => { setMetadataSource(mediaSrc); syncClock() }
+    const metadataEmptied = () => { setMetadataSource(undefined); syncClock() }
     const onEnterPip = () => setIsPip(true)
     const onLeavePip = () => setIsPip(false)
-    video.addEventListener('loadedmetadata', syncClock)
+    video.addEventListener('resize', syncClock)
+    video.addEventListener('emptied', metadataEmptied)
+    video.addEventListener('loadedmetadata', metadataLoaded)
     video.addEventListener('durationchange', syncClock)
     video.addEventListener('timeupdate', syncClock)
     video.addEventListener('progress', syncBuffered)
@@ -1238,7 +1306,9 @@ export function ConsumitPlayer({
     video.addEventListener('enterpictureinpicture', onEnterPip)
     video.addEventListener('leavepictureinpicture', onLeavePip)
     return () => {
-      video.removeEventListener('loadedmetadata', syncClock)
+      video.removeEventListener('resize', syncClock)
+      video.removeEventListener('emptied', metadataEmptied)
+      video.removeEventListener('loadedmetadata', metadataLoaded)
       video.removeEventListener('durationchange', syncClock)
       video.removeEventListener('timeupdate', syncClock)
       video.removeEventListener('progress', syncBuffered)
@@ -1440,6 +1510,7 @@ export function ConsumitPlayer({
   }
 
   function chooseSubtitle(value: string) {
+    manualSubtitleIntent.current = true
     controllerRef.current?.subtitle(value)
     if (!controlledSubtitle) setInternalSubtitle(value)
     storeValue('consumit.player.subtitles', value)
@@ -1447,18 +1518,28 @@ export function ConsumitPlayer({
     closeMenu()
   }
 
-  async function loadSubtitleLanguage(language: string, cursor = 0) {
-    if (!onSubtitlePage) return
-    setSubtitleMenuError(null)
+  async function loadSubtitleLanguage(language: string, more = false) {
+    if (!onSubtitlePage || subtitleLanguageRequests.current.has(language)) return
+    subtitleLanguageRequests.current.add(language)
+    setLoadingSubtitleLanguages((current) => [...current, language])
+    setSubtitleLanguageErrors((current) => current.filter((code) => code !== language))
     try {
-      const page = await onSubtitlePage(language, cursor)
+      const codes = subtitleLanguageRows.find((row) => row.code === language)?.discoveryCodes ?? []
+      const rawCodes = codes.length ? codes : [language]
+      const results = await Promise.allSettled(rawCodes.filter((code) => !more || nextSubtitleCursor[code] != null).map(async (code) => ({ code, page: await onSubtitlePage(code, more ? nextSubtitleCursor[code] ?? 0 : 0) })))
+      const pages = results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+      if (results.some((result) => result.status === 'rejected')) setSubtitleLanguageErrors((current) => [...current, language])
       setDiscoveredTracks((current) => {
-        const merged = cursor === 0 ? page.tracks : [...(current[language] ?? []), ...page.tracks]
+        const merged = [...(more || pages.length !== results.length ? current[language] ?? [] : []), ...pages.flatMap(({ page }) => page.tracks)]
         const seen = new Set<string>()
         return { ...current, [language]: merged.filter((track) => { if (seen.has(track.id)) return false; seen.add(track.id); return true }) }
       })
-      setNextSubtitleCursor((current) => ({ ...current, [language]: page.nextCursor }))
-    } catch { setSubtitleMenuError('Tracks could not be loaded. Try this language again.') }
+      setNextSubtitleCursor((current) => ({ ...current, ...Object.fromEntries(pages.map(({ code, page }) => [code, page.nextCursor])) }))
+    } catch { setSubtitleLanguageErrors((current) => [...current, language]) }
+    finally {
+      subtitleLanguageRequests.current.delete(language)
+      setLoadingSubtitleLanguages((current) => current.filter((code) => code !== language))
+    }
   }
 
   async function runSubtitleSearch(query: string, cursor = 0) {
@@ -1480,8 +1561,8 @@ export function ConsumitPlayer({
     clearTimeout(searchTimerRef.current)
     ++searchGenerationRef.current
     if (!query.trim()) { setSubtitleSearchResults([]); setNextSearchCursor(null); setSearchingSubtitles(false); return }
-    setSearchingSubtitles(true)
-    searchTimerRef.current = setTimeout(() => { void runSubtitleSearch(query) }, 200)
+    setSearchingSubtitles(Boolean(onSubtitleSearch))
+    if (onSubtitleSearch) searchTimerRef.current = setTimeout(() => { void runSubtitleSearch(query) }, 200)
   }
 
   async function selectDiscoveredSubtitle(candidate: PlayerSubtitleCandidate) {
@@ -1522,6 +1603,7 @@ export function ConsumitPlayer({
   }
 
   function toggleSubtitlesSwitch() {
+    manualSubtitleIntent.current = true
     const next = captionsOn ? 'off' : (subtitleOptions.find((o) => o.value !== 'off')?.value ?? 'english')
     controllerRef.current?.subtitle(next)
     if (!controlledSubtitle) setInternalSubtitle(next)
@@ -1845,11 +1927,11 @@ export function ConsumitPlayer({
         )}
         onKeyDown={onShellKeyDown}
         onMouseMove={pokeControls}
-        onPointerDown={pokeControls}
+        onPointerDown={() => { keyboardFocus.current = false; pokeControls() }}
         onTouchStart={pokeControls}
-        onFocusCapture={pokeControls}
+        onFocusCapture={(event) => { keyboardFocus.current = event.target.matches(':focus-visible'); pokeControls() }}
         onBlurCapture={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) scheduleHide()
+          if (!event.currentTarget.contains(event.relatedTarget)) { keyboardFocus.current = false; scheduleHide() }
         }}
         onMouseLeave={() => {
           if (isPlaying && activeMenu == null && !hasKeyboardFocus()) {
@@ -1964,14 +2046,8 @@ export function ConsumitPlayer({
               ) : null}
             </div>
             <div className="min-w-0 flex-1 text-center" data-player-title>
-              {!isPlaying && hasSource && !hasError && pauseLogoUrl ? (
-                <>
-                  <img alt="" aria-hidden="true" className="mx-auto max-h-6 w-auto max-w-full object-contain [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:hidden" src={pauseLogoUrl} />
-                  <span className="sr-only sm:hidden">{title}</span>
-                </>
-              ) : null}
-              <p className={cn('truncate font-display text-xl leading-7 font-normal tracking-[-0.02em] text-ink drop-shadow-md', !isPlaying && hasSource && !hasError && pauseLogoUrl && 'hidden sm:block')}>{title}</p>
-              {topMeta ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta}</p> : null}
+              <p data-player-heading className="truncate font-display font-normal tracking-[-0.02em] text-ink drop-shadow-md" title={title}>{title}</p>
+              {topMeta ?? (startupPending ? preparationMeta : undefined) ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta ?? preparationMeta}</p> : null}
             </div>
             <div className="pointer-events-auto hidden shrink-0 items-center gap-2 lg:flex" data-player-episode-navigation>
               {isFullscreen && onPreviousEpisode ? <PlayerIconButton label="Previous episode" onClick={onPreviousEpisode}><SkipBack aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
@@ -2001,8 +2077,8 @@ export function ConsumitPlayer({
                   />
                   <span className="sr-only">{title}</span>
                 </>
-              ) : <p className="consumit-player-preparation-title font-display text-ink">{title}</p>}
-              {preparationMeta ?? topMeta ? <p className="mt-3 text-sm text-copy">{preparationMeta ?? topMeta}</p> : null}
+              ) : !showTopBar ? <p className="consumit-player-preparation-title font-display text-ink">{title}</p> : null}
+              {!showTopBar && (preparationMeta ?? topMeta) ? <p className="mt-3 text-sm text-copy">{preparationMeta ?? topMeta}</p> : null}
               <div aria-hidden="true" className="consumit-player-preparation-steps" data-stage={hasSource ? 'connecting' : 'resolving'}>
                 <span /><span /><span />
               </div>
@@ -2139,8 +2215,8 @@ export function ConsumitPlayer({
           </div>
         ) : null}
 
-        {activeSkip && !autoSkip && hasSource && !hasError ? (
-          <div className="absolute right-4 bottom-28 z-20">
+        {activeSkip && (!autoSkip || !isPlaying) && hasSource && !hasError ? (
+          <div className="absolute right-4 bottom-36 z-20">
             <button
               className="inline-flex min-h-11 items-center gap-2 rounded-control border border-control-outline bg-black/80 px-4 text-sm font-bold text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
               onClick={jumpSkip}
@@ -2335,7 +2411,7 @@ export function ConsumitPlayer({
                   onClick={() => toggleMenu('sync')}
                   title={`Sync: ${formatSubtitleDelayMs(subtitleDelayMs)}`}
                 >
-                  <Wand2 aria-hidden="true" className="size-5" strokeWidth={1.75} />
+                  <TimerReset aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
               ) : null}
               <PlayerIconButton
@@ -2348,17 +2424,17 @@ export function ConsumitPlayer({
               >
                 <Settings aria-hidden="true" className="size-5" strokeWidth={1.75} />
               </PlayerIconButton>
-              {castAvailable ? (
-                <PlayerIconButton
+              <PlayerIconButton
                   active={castConnected}
                   disabled={!hasSource}
                   label={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
-                  onClick={() => onCastClick?.()}
+                  expanded={activeMenu === 'cast'}
+                  menuId={castConnected ? undefined : 'cast'}
+                  onClick={() => castConnected ? onCastClick?.() : toggleMenu('cast')}
                   title={castConnected ? 'Casting — select to disconnect' : 'Cast to TV'}
                 >
                   <Cast aria-hidden="true" className="size-5" strokeWidth={1.75} />
                 </PlayerIconButton>
-              ) : null}
               <span className="contents">
                 <PlayerIconButton
                   active={isPip}
@@ -2380,12 +2456,19 @@ export function ConsumitPlayer({
             </div>
           </div>
         </div>
+        {activeMenu === 'cast' ? (
+          <div className="contents" ref={menuRef}>
+            <PlayerPanel aria-label="Cast to TV" id="consumit-player-menu-cast" onClose={closeMenu} title="Cast to TV">
+              <CastPanel available={castAvailable} onCheck={onCastCheck} onConnect={onCastClick ? () => { closeMenu(); onCastClick() } : undefined} />
+            </PlayerPanel>
+          </div>
+        ) : null}
         {activeMenu === 'settings' ? (
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Settings options" id="consumit-player-menu-settings" onClose={closeMenu} title="Settings">
               <div className="p-3">
                 <div className="space-y-1">
-                  <PlayerSettingRow icon={<QualityIcon className="size-5" />} label="Quality" value={qualityOptions.find((option) => option.value === selectedQuality)?.label ?? 'Auto'} onClick={() => setActiveMenu('quality')} />
+                  <PlayerSettingRow icon={<QualityIcon className="size-5" />} label="Quality" value={decodedHeight > 0 ? `${selectedQuality === 'auto' ? 'Auto · ' : ''}${standardQualityHeight(decodedHeight, decodedWidth)}p` : qualityOptions.find((option) => option.value === selectedQuality)?.label ?? 'Auto'} onClick={() => setActiveMenu('quality')} />
                   <PlayerSettingRow icon={<Server className="size-5" />} label="Server" value={serverAuto ? 'Auto' : currentServerLabel ?? orderedServerOptions?.[0]?.label ?? 'Unavailable'} disabled={!onServerRequest && !dedupedServerOptions?.length} onClick={() => toggleMenu('server')} />
                   <PlayerSettingRow icon={<Captions className="size-5" />} label="Subtitles" value={captionsOn ? (subtitleOptions.find((option) => option.value === selectedSubtitle)?.label || 'On') : 'Off'} onClick={() => toggleMenu('subtitles')} />
                   <PlayerSettingRow icon={<Music className="size-5" />} label="Audio" value={selectedAudioLabel} onClick={() => setActiveMenu('audio')} />
@@ -2447,6 +2530,7 @@ export function ConsumitPlayer({
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Quality" id="consumit-player-menu-quality" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Quality">
               <div className="p-3">
+                {decodedHeight > 0 ? <p className="px-2 pb-2 text-xs text-copy" role="status">Playing at {decodedWidth} × {decodedHeight}</p> : null}
                 <div className="space-y-1" role="group" aria-label="Quality options">
                   {qualityOptions.map((option) => {
                     const selected = selectedQuality === option.value
@@ -2547,228 +2631,73 @@ export function ConsumitPlayer({
         {activeMenu === 'sync' ? (
           <div className="contents" ref={menuRef}>
             <PlayerPanel aria-label="Subtitle sync" backLabel="Back to subtitles" id="consumit-player-menu-sync" onClose={closeMenu} onBack={() => toggleMenu('subtitles')} title="Subtitle sync">
-              <div className="space-y-3 p-3">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-sm text-copy">Current offset</p>
-                  <p aria-live="polite" className="text-sm font-bold tabular-nums text-orange">
-                    {formatSubtitleDelayMs(subtitleDelayMs)}
-                  </p>
-                </div>
-                <p className="px-1 text-sm leading-6 text-copy">
-                  Click a line when you hear it spoken
-                </p>
-                <div
-                  className="flex h-40 flex-col gap-1 overflow-y-auto overscroll-contain rounded-control border border-white/10 bg-white/[0.03] p-1.5"
-                  onMouseEnter={() => setSyncHovering(true)}
-                  onMouseLeave={() => setSyncHovering(false)}
-                  onTouchStart={() => setSyncHovering(true)}
-                  ref={syncListRef}
-                  role="group"
-                  aria-label="Subtitle lines"
-                >
-                  {syncCueWindow.visible.length === 0 ? (
-                    <p className="grid h-full place-items-center text-center text-sm text-muted">
-                      {captionsOn ? 'No subtitles loaded' : 'Subtitles are off'}
-                    </p>
-                  ) : (
-                    syncCueWindow.visible.map((cue, index) => {
-                      const isActive = index === syncCueWindow.activeIndex
-                      return (
-                        <button
-                          className={cn(
-                            'group flex w-full items-center justify-between gap-2 rounded-control px-2.5 py-2 text-left text-xs outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-orange',
-                            isActive
-                              ? 'bg-orange/15 text-ink shadow-[inset_0_0_0_1px_var(--color-orange)]'
-                              : 'text-copy hover:bg-white/10 hover:text-ink',
-                          )}
-                          key={`${cue.startTime}-${index}`}
-                          onClick={() => syncToCue(cue)}
-                          type="button"
-                        >
-                          <span className="line-clamp-2 min-w-0 flex-1">{cue.text}</span>
-                          <span
-                            className={cn(
-                              'shrink-0 rounded px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] transition-opacity',
-                              isActive ? 'bg-orange text-canvas opacity-100' : 'bg-white/10 opacity-0 group-hover:opacity-100',
-                            )}
-                          >
-                            Sync
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-                <div className="flex items-center justify-center gap-1.5" role="group" aria-label="Fine tune offset">
-                  <button
-                    aria-label="Shift subtitles backwards 50 milliseconds"
-                    className={settingsChipClass(false)}
-                    onClick={() => { adjustSubtitleDelayMs(-50); flashSyncStatus('Adjusted −50ms') }}
-                    type="button"
-                  >
-                    <Minus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">50 ms</span>
-                  </button>
-                  <button
-                    aria-label="Reset subtitle sync offset"
-                    className={settingsChipClass(subtitleDelayMs === 0, true)}
-                    onClick={() => { chooseSubtitleDelayMs(0); flashSyncStatus('Offset reset') }}
-                    type="button"
-                  >
-                    <RotateCcw aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">Reset</span>
-                  </button>
-                  <button
-                    aria-label="Shift subtitles forwards 50 milliseconds"
-                    className={settingsChipClass(false)}
-                    onClick={() => { adjustSubtitleDelayMs(50); flashSyncStatus('Adjusted +50ms') }}
-                    type="button"
-                  >
-                    <Plus aria-hidden="true" className="size-3.5" />
-                    <span className="ml-1 text-xs">50 ms</span>
-                  </button>
-                </div>
-                {syncStatus ? (
-                  <p aria-live="polite" className="rounded-control bg-orange/15 px-3 py-2 text-center text-xs font-bold text-orange" role="status">
-                    {syncStatus}
-                  </p>
-                ) : null}
-              </div>
+              <SubtitleSync delay={subtitleDelayMs} cues={syncCueWindow.visible} activeIndex={syncCueWindow.activeIndex} captionsOn={captionsOn} status={syncStatus} listRef={syncListRef} onHover={setSyncHovering} onCue={syncToCue} onAdjust={(delta) => { adjustSubtitleDelayMs(delta); flashSyncStatus(delta < 0 ? 'Adjusted −50ms' : 'Adjusted +50ms') }} onReset={() => { chooseSubtitleDelayMs(0); flashSyncStatus('Offset reset') }} />
             </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'subtitles' ? (
           <div className="contents" ref={menuRef}>
-            <PlayerPanel aria-label="Subtitles" id="consumit-player-menu-subtitles" onClose={closeMenu} onBack={() => setActiveMenu("settings")} meta={subtitleTrackCount > 0 ? subtitleTrackCount + (subtitleTrackCount === 1 ? " track" : " tracks") : undefined} title="Subtitles">
-              <div className="space-y-1 p-3">
+            <PlayerPanel aria-label="Subtitles" className="consumit-subtitle-panel" id="consumit-player-menu-subtitles" onClose={closeMenu} onBack={() => setActiveMenu("settings")} meta={subtitleTrackCount > 0 ? subtitleTrackCount + (subtitleTrackCount === 1 ? " track" : " tracks") : undefined} title="Subtitles">
+              {engineState?.subtitleNotice ? <p className="mb-3 text-xs leading-5 text-copy" role="status">{engineState.subtitleNotice}</p> : null}
+              <div className="consumit-subtitle-body">
+                <div className="consumit-subtitle-browser">
                 <button aria-checked={!captionsOn} className={settingsRowClass(!captionsOn)} onClick={() => chooseSubtitle('off')} role="menuitemradio" type="button">
                   <span className="min-w-0 flex-1 text-left font-medium">Off</span>
                   {!captionsOn ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
                 </button>
-                <button className={settingsRowClass(false)} onClick={() => setActiveMenu('appearance')} type="button">
-                  <span className="min-w-0 flex-1 text-left font-medium">Subtitle appearance</span><ChevronRight aria-hidden="true" className="size-4 text-muted" />
-                </button>
-                <input accept=".srt,.vtt,text/vtt,application/x-subrip" className="sr-only" onChange={(event) => { void uploadSubtitle(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
-                <button className={settingsRowClass(false)} onClick={() => uploadInputRef.current?.click()} type="button">
-                  <span className="min-w-0 flex-1 text-left font-medium">Upload subtitle file</span><Upload aria-hidden="true" className="size-4" />
-                </button>
-                <button className={settingsRowClass(false)} onClick={() => setActiveMenu('sync')} type="button">
-                  <span className="min-w-0 flex-1 text-left font-medium">Sync subtitle to audio</span><ChevronRight aria-hidden="true" className="size-4" />
-                </button>
-                <label className="flex items-center gap-2 rounded-control bg-white/[0.06] px-3 py-2 text-muted">
+                <label className="consumit-subtitle-search">
                   <Search aria-hidden="true" className="size-4 shrink-0" />
-                  <input aria-label="Search subtitle languages and tracks" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" onChange={(event) => changeSubtitleSearch(event.target.value)} placeholder="Search" type="search" value={subtitleSearch} />
+                  <input aria-label="Search subtitle languages and tracks" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" onChange={(event) => changeSubtitleSearch(event.target.value)} placeholder="Find a language or track" type="search" value={subtitleSearch} />
                 </label>
                 {subtitleDiscovery?.loading ? <p className="px-2 py-1 text-xs text-muted" role="status">Searching subtitle providers…</p> : null}
-                {subtitleDiscovery?.error ? <p className="px-2 py-1 text-xs text-orange" role="alert">{subtitleDiscovery.error}</p> : null}
-                {subtitleMenuError ? <p className="px-2 py-1 text-xs text-orange" role="alert">{subtitleMenuError}</p> : null}
-                {subtitleDiscovery?.providers.some((provider) => provider.state === 'failed' || provider.state === 'timeout') ? (
-                  <p className="px-2 py-1 text-xs text-muted">Some subtitle providers are unavailable. Available tracks are shown below.</p>
-                ) : null}
-                {subtitleDiscovery?.providers.some((provider) => provider.reason === 'credentials_required') ? (
-                  <p className="px-2 py-1 text-xs text-muted">Some subtitle providers need server credentials. Other results are available below.</p>
+                {subtitleDiscovery?.error ? <div className="consumit-subtitle-notice" role="alert"><p>{subtitleDiscovery.error}</p>{onSubtitleRequest ? <button disabled={subtitleDiscovery.loading} onClick={onSubtitleRequest} type="button">Try again</button> : null}</div> : null}
+                {subtitleMenuError ? <div className="consumit-subtitle-notice" role="alert"><p>{subtitleMenuError}</p>{subtitleSearch.trim() ? <button disabled={searchingSubtitles} onClick={() => void runSubtitleSearch(subtitleSearch)} type="button">Try search again</button> : null}</div> : null}
+                {!subtitleDiscovery?.error && subtitleDiscovery?.providers.some((provider) => provider.state === 'failed' || provider.state === 'timeout' || provider.reason === 'credentials_required') ? (
+                  <p className="consumit-subtitle-availability">Some tracks are unavailable. You can still choose from the available tracks.</p>
                 ) : null}
                 {subtitleSearch.trim() ? <div className="space-y-1">
                   {searchingSubtitles ? <p className="px-2 text-xs text-muted" role="status">Searching tracks…</p> : null}
-                  {!searchingSubtitles && subtitleSearchResults.length === 0 ? <p className="px-2 text-xs text-muted">No tracks match this search.</p> : null}
-                  {subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} /></button>)}
+                  {!searchingSubtitles && matchingLocalSubtitles.length === 0 && subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).length === 0 ? <p className="px-2 text-xs text-muted">No tracks match this search.</p> : null}
+                  {matchingLocalSubtitles.map((option) => <button aria-checked={selectedSubtitle === option.value} className={settingsRowClass(selectedSubtitle === option.value)} key={option.value} onClick={() => chooseSubtitle(option.value)} role="menuitemradio" type="button"><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{selectedSubtitle === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
+                  {subtitleSearchResults.filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle !== null} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
                   {nextSearchCursor != null ? <button className={settingsRowClass(false)} onClick={() => void runSubtitleSearch(subtitleSearch, nextSearchCursor)} type="button">Load more matches</button> : null}
                 </div> : null}
                 {!subtitleSearch.trim() && !subtitleDiscovery?.loading && subtitleLanguageRows.length === 0 ? <p className="px-2 py-2 text-sm text-muted">No subtitles found for this title yet.</p> : null}
-                {!subtitleSearch.trim() && subtitleLanguageRows.map(({ code, count }) => {
+                {!subtitleSearch.trim() && subtitleLanguageRows.map(({ code, count, discoveryCodes }) => {
                   const opened = openSubtitleLanguage === code
-                  const localOptions = subtitleOptions.filter((option) => option.value !== 'off' && (option.language ?? 'und') === code)
-                  return <div key={code}>
+                  const localOptions = subtitleOptions.filter((option) => option.value !== 'off' && canonicalSubtitleLanguage(option.language) === code)
+                  return <div className="consumit-subtitle-language" key={code}>
                     <button aria-expanded={opened} className={settingsRowClass(false)} onClick={() => {
                       setOpenSubtitleLanguage(opened ? null : code)
-                      if (!opened && onSubtitlePage) void loadSubtitleLanguage(code)
+                      if (!opened && onSubtitlePage && !discoveredTracks[code]) void loadSubtitleLanguage(code)
                     }} type="button">
                       <bdi className="min-w-0 flex-1 truncate text-left font-medium tracking-normal" dir="auto" lang={code}>{nativeLanguageName(code, code === 'und' ? 'Uploaded' : code.toUpperCase())}</bdi>
                       <span className="tabular-nums text-muted">{count}</span><ChevronRight aria-hidden="true" className={cn('size-4 text-muted transition-transform', opened && 'rotate-90')} />
                     </button>
                     {opened ? <div aria-label={`${nativeLanguageName(code, code)} subtitle tracks`} className="space-y-1 pl-3">
+                      {loadingSubtitleLanguages.includes(code) ? <p className="consumit-subtitle-availability" role="status">Loading tracks…</p> : null}
+                      {subtitleLanguageErrors.includes(code) ? <div className="consumit-subtitle-notice" role="alert"><p>These tracks could not load.</p><button onClick={() => void loadSubtitleLanguage(code)} type="button">Try this language again</button></div> : null}
                       {localOptions.map((option) => <button aria-checked={selectedSubtitle === option.value} className={settingsRowClass(selectedSubtitle === option.value)} key={option.value} onClick={() => chooseSubtitle(option.value)} role="menuitemradio" type="button"><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{selectedSubtitle === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
-                      {(discoveredTracks[code] ?? []).filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle === track.id} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
-                      {nextSubtitleCursor[code] != null ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code, nextSubtitleCursor[code]!)} type="button">Load more tracks</button> : null}
-                      {nextSubtitleCursor[code] == null && (discoveredTracks[code]?.length ?? 0) < (subtitleDiscovery?.languages.find((language) => language.code === code)?.count ?? 0) ? <button className={settingsRowClass(false)} onClick={() => void loadSubtitleLanguage(code)} type="button">Show latest tracks</button> : null}
+                      {(discoveredTracks[code] ?? []).filter((track) => !isRepresentedCandidate(track)).map((track) => <button className={settingsRowClass(false)} disabled={preparingSubtitle !== null} key={track.id} onClick={() => void selectDiscoveredSubtitle(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{preparingSubtitle === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
+                      {!subtitleLanguageErrors.includes(code) && (discoveryCodes.length ? discoveryCodes : [code]).some((raw) => nextSubtitleCursor[raw] != null) ? <button className={settingsRowClass(false)} disabled={loadingSubtitleLanguages.includes(code)} onClick={() => void loadSubtitleLanguage(code, true)} type="button">Load more tracks</button> : null}
                     </div> : null}
                   </div>
                 })}
+                </div>
+                <div aria-label="Subtitle tools" className="consumit-subtitle-tools" role="group">
+                  <button aria-label="Subtitle appearance" onClick={() => setActiveMenu('appearance')} type="button"><Captions aria-hidden="true" className="size-4" />Appearance</button>
+                  <button aria-label="Sync subtitle to audio" onClick={() => setActiveMenu('sync')} type="button"><TimerReset aria-hidden="true" className="size-4" />Sync</button>
+                  <input accept=".srt,.vtt,text/vtt,application/x-subrip" className="sr-only" onChange={(event) => { void uploadSubtitle(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
+                  <button aria-label="Upload subtitle file" onClick={() => uploadInputRef.current?.click()} type="button"><Upload aria-hidden="true" className="size-4" />Upload</button>
+                </div>
               </div>
             </PlayerPanel>
           </div>
         ) : null}
         {activeMenu === 'appearance' ? (
           <div className="contents" ref={menuRef}>
-            <PlayerPanel aria-label="Subtitle appearance" backLabel="Back to subtitles" id="consumit-player-menu-appearance" onBack={() => setActiveMenu('subtitles')} onClose={closeMenu} title="Subtitle appearance">
-              <div className="space-y-3 p-3">
-                  <div aria-label="Caption size" className="space-y-1.5 px-1" role="group">
-                    <p className="text-xs font-medium text-copy">Size</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['small', 'medium', 'large', 'xlarge'] as const).map((size) => (
-                        <button
-                          aria-pressed={captionSize === size}
-                          className={settingsChipClass(captionSize === size, true)}
-                          key={size}
-                          onClick={() => chooseCaptionSize(size)}
-                          type="button"
-                        >
-                          {size === 'small' ? 'Small' : size === 'medium' ? 'Medium' : size === 'large' ? 'Large' : 'XL'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div aria-label="Caption style" className="space-y-1.5 px-1" role="group">
-                    <p className="text-xs font-medium text-copy">Style</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['cinematic', 'boxed', 'subtle'] as const).map((style) => (
-                        <button
-                          aria-pressed={captionBackground === style}
-                          className={settingsChipClass(captionBackground === style, true)}
-                          key={style}
-                          onClick={() => chooseCaptionBackground(style)}
-                          type="button"
-                        >
-                          {style === 'cinematic' ? 'Cinematic' : style === 'boxed' ? 'Boxed' : 'Subtle'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 px-1">
-                    <div aria-label="Caption position" className="space-y-1.5" role="group">
-                      <p className="text-xs font-medium text-copy">Position</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(['bottom', 'top'] as const).map((position) => (
-                          <button
-                            aria-pressed={captionPosition === position}
-                            className={settingsChipClass(captionPosition === position, true)}
-                            key={position}
-                            onClick={() => chooseCaptionPosition(position)}
-                            type="button"
-                          >
-                            {position === 'bottom' ? 'Bottom' : 'Top'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div aria-label="Caption font" className="space-y-1.5" role="group">
-                      <p className="text-xs font-medium text-copy">Font</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(['filscreen', 'sans'] as const).map((font) => (
-                          <button
-                            aria-pressed={captionFont === font}
-                            className={settingsChipClass(captionFont === font, true)}
-                            key={font}
-                            onClick={() => chooseCaptionFont(font)}
-                            type="button"
-                          >
-                            {font === 'filscreen' ? 'FilScreen' : 'Sans'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-              </div>
+            <PlayerPanel aria-label="Subtitle appearance" backLabel="Back to subtitles" id="consumit-player-menu-appearance" onBack={() => setActiveMenu('subtitles')} onClose={closeMenu} title="Subtitle appearance" heading="Appearance">
+              <SubtitleAppearance size={captionSize} background={captionBackground} position={captionPosition} font={captionFont} onSize={chooseCaptionSize} onBackground={chooseCaptionBackground} onPosition={chooseCaptionPosition} onFont={chooseCaptionFont} />
             </PlayerPanel>
           </div>
         ) : null}

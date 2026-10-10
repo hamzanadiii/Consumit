@@ -1,6 +1,6 @@
 import { attachMediaEngine, type EngineFailure, type EngineDeliveryFailure, type EngineTracks, type MediaEngine, type MediaOption } from './media-engine'
 import { isSafeMediaUrl, type DirectMediaSource } from './media-source'
-import { createQualityPreference, mediaPreferences, preferredAudioOption, type MediaPreferences } from './media-preferences'
+import { createQualityPreference, mediaPreferences, preferredAudioOption, preferredSubtitleOption, semanticSubtitleLanguage, type MediaPreferences, type ViewingPreferences } from './media-preferences'
 
 export type PlaybackPhase = 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'switching' | 'ended' | 'failed'
 export type ControllerSnapshot = EngineTracks & {
@@ -8,6 +8,7 @@ export type ControllerSnapshot = EngineTracks & {
   preferences?: MediaPreferences | undefined
   qualityNotice?: string | undefined
   audioNotice?: string | undefined
+  subtitleNotice?: string | undefined
 }
 export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' | 'error' | 'ended'; position: number; elapsedMs?: number }
 
@@ -16,6 +17,8 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   change: (snapshot: ControllerSnapshot) => void
   fatal: (reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure) => void
   event?: (event: ControllerEvent) => void
+  initialPreferences?: ViewingPreferences | undefined
+  preferenceChange?: ((change: Partial<ViewingPreferences>) => void) | undefined
 }, attach = attachMediaEngine) {
   let engine: MediaEngine | undefined
   let generation = 0
@@ -95,10 +98,17 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   }
   let subtitlePreference = 'en'
   let audioPreference = 'original'
-  const qualityPreference = createQualityPreference()
+  const qualityPreference = createQualityPreference(callbacks.initialPreferences?.qualityHeight)
   let fixedQualityHint: string | undefined
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Storage is optional. */ }
   try { audioPreference = localStorage.getItem('consumit.player.audio-language') ?? 'original' } catch { /* Storage is optional. */ }
+  let subtitleLanguages = callbacks.initialPreferences?.subtitleLanguages ?? [subtitlePreference]
+  if (callbacks.initialPreferences) {
+    audioPreference = callbacks.initialPreferences.audioLanguage ?? audioPreference
+    subtitlePreference = callbacks.initialPreferences.subtitlesEnabled ? subtitleLanguages[0] ?? 'en' : 'off'
+  } else {
+    try { if (localStorage.getItem('consumit.player.subtitles') === 'off') subtitlePreference = 'off' } catch { /* Optional storage. */ }
+  }
   let preferredPlaybackRate = video.playbackRate
   const restorePlaybackRate = () => {
     try { if (Number.isFinite(preferredPlaybackRate) && preferredPlaybackRate > 0) video.playbackRate = preferredPlaybackRate } catch { /* Playback speed is a preference, never a crash. */ }
@@ -177,12 +187,10 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     }
     update({ subtitleTrack: value })
   }
-  function preferredSubtitle() {
-    const match = snapshot.subtitles.find((option) =>
-      option.language?.split('-')[0] === subtitlePreference.split('-')[0] ||
-      option.label.toLowerCase() === subtitlePreference.toLowerCase()
-    )
+  function preferredSubtitle(currentValue?: string) {
+    const match = preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
     selectSubtitle(subtitlePreference === 'off' ? 'off' : match?.value ?? 'off')
+    update({ subtitleNotice: subtitlePreference !== 'off' && !match ? 'Your preferred subtitles are unavailable on this source. Choose another track or keep watching.' : undefined })
   }
   function subtitle(value: string) {
     let target = snapshot.subtitles.find((option) => option.value === value)
@@ -198,8 +206,12 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     if (value !== 'off' && !target) return
     const resolvedValue = target ? target.value : 'off'
     subtitlePreference = resolvedValue === 'off' ? 'off' : target?.language ?? 'en'
+    const language = semanticSubtitleLanguage(target?.language)
+    if (resolvedValue !== 'off' && language) subtitleLanguages = [language, ...subtitleLanguages.filter(value => value !== language)].slice(0, 3)
+    callbacks.preferenceChange?.({ subtitlesEnabled: resolvedValue !== 'off', ...(resolvedValue !== 'off' && language ? { subtitleLanguages } : {}) })
     try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Storage is optional. */ }
     selectSubtitle(resolvedValue)
+    update({ subtitleNotice: undefined })
   }
   function preferredAudio() {
     const match = preferredAudioOption(snapshot.audio, audioPreference)
@@ -217,6 +229,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     audioPreference = option.language || option.label.toLowerCase()
     try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Storage is optional. */ }
     engine?.audio(value); update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+    callbacks.preferenceChange?.(mediaPreferences(qualityPreference.height, audioPreference))
   }
   const listeners: [string, EventListener][] = [
     ['playing', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
@@ -360,6 +373,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       qualityPreference.choose(option)
       engine?.quality(value)
       update({ quality: value, qualityNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+      callbacks.preferenceChange?.({ qualityHeight: qualityPreference.height })
     },
     audio,
     subtitle,
@@ -371,8 +385,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       const previous = snapshot.subtitleTrack
       appendExternal(entries)
       publishTracks()
-      if (snapshot.subtitles.some((option) => option.value === previous)) selectSubtitle(previous)
-      else preferredSubtitle()
+      preferredSubtitle(previous)
     },
     destroy() {
       destroyed = true; generation++; clearTimeout(startupTimer); clearTimeout(recoveryTimer)

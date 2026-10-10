@@ -12,7 +12,7 @@ export const detailsQuery = `query ($id: Int) {
     duration
     genres
     tags { name rank }
-    coverImage { large color }
+    coverImage { extraLarge large color }
     bannerImage
     averageScore
     popularity
@@ -45,7 +45,7 @@ export const detailsQuery = `query ($id: Int) {
           episodes
           duration
           genres
-          coverImage { large color }
+          coverImage { extraLarge large color }
           bannerImage
           averageScore
           popularity
@@ -68,7 +68,7 @@ export const detailsQuery = `query ($id: Int) {
             season
             seasonYear
             episodes
-            coverImage { large color }
+            coverImage { extraLarge large color }
             averageScore
             popularity
             description(asHtml: false)

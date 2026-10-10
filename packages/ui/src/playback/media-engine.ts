@@ -1,5 +1,6 @@
 import { audioTrackLabel, canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUrl, type DirectMediaSource } from './media-source'
 import { RelayLeaseRouter, relayLeaseLoader } from './relay-lease'
+import { standardQualityHeight } from './quality-tier'
 
 export type MediaOption = { value: string; label: string; language?: string | undefined; height?: number | undefined }
 
@@ -10,25 +11,14 @@ export function orderQualityOptions(options: MediaOption[]): MediaOption[] {
   return [...options].sort((a, b) => (b.height ?? -1) - (a.height ?? -1))
 }
 
-/** Fixed quality ladder. Upstreams report odd heights (960p, 640p, …) for
- *  what are standard rungs, which litters the menu and trips "unavailable"
- *  notices for rungs that effectively exist. */
-const STANDARD_HEIGHTS = [2160, 1440, 1080, 720, 480, 360, 240]
-
-/** Snap a rendition height to its nearest standard rung (ties round up:
- *  900p reads as 1080p). Unknown heights stay unknown. */
-export function snapQualityHeight(height: number | undefined): number | undefined {
-  if (height === undefined) return undefined
-  let best = STANDARD_HEIGHTS[0]!
-  for (const rung of STANDARD_HEIGHTS) {
-    if (Math.abs(height - rung) < Math.abs(height - best)) best = rung
-  }
-  return best
+/** Preserve measured pixels, including cropped and nonstandard renditions. */
+export function validQualityHeight(height: number | undefined): number | undefined {
+  return height !== undefined && Number.isFinite(height) && height > 0 ? Math.round(height) : undefined
 }
 
-/** Collapse same-rung duplicates from snapping (first manifest entry wins,
+/** Collapse equal-height duplicates (first manifest entry wins,
  *  matching player dedupe). Height-less entries always survive. */
-export function dedupeSnappedQualities(options: MediaOption[]): MediaOption[] {
+export function dedupeQualityHeights(options: MediaOption[]): MediaOption[] {
   const seen = new Set<number>()
   return options.filter((option) => {
     if (option.height === undefined) return true
@@ -101,13 +91,12 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     })
     let lastError: EngineFailure = 'network'
     let lastDeliveryFailure: EngineDeliveryFailure | undefined
-    // Decoded truth for mislabeled single-rung masters: some upstreams
-    // declare one bogus height (e.g. 240p) while serving HD segments. The
-    // decoded frame size is ground truth, but only stable when no ABR ladder
-    // can move beneath it — so it corrects single-rendition menus exclusively.
+    const measuredHeights = new Map<number, number>()
+    let frameRequest: number | undefined
+    let destroyed = false
     const decodedHeight = () => {
       const height = video.videoHeight
-      return Number.isFinite(height) && height > 0 ? height : undefined
+      return standardQualityHeight(height, video.videoWidth)
     }
     const publish = () => {
       try {
@@ -123,10 +112,10 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         /* Auto cap is a preference, never a crash */
       }
       events.tracks({
-      qualities: [...auto, ...orderQualityOptions(dedupeSnappedQualities(hls.levels.map((level, index) => {
+      qualities: [...auto, ...orderQualityOptions(dedupeQualityHeights(hls.levels.map((level, index) => {
         const declared = typeof level.height === 'number' ? level.height : undefined
-        const truth = hls.levels.length === 1 ? decodedHeight() : undefined
-        const height = snapQualityHeight(truth ?? declared)
+        const truth = measuredHeights.get(index) ?? (hls.levels.length === 1 ? decodedHeight() : undefined)
+        const height = truth ?? standardQualityHeight(declared, level.width)
         return { value: String(index), label: height ? `${height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps`, height: height ?? undefined }
       })))],
       audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: audioTrackLabel({ name: track.name, lang: track.lang, isDefault: track.default }, index), language: track.lang })),
@@ -136,6 +125,19 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     hls.on(Hls.Events.MANIFEST_PARSED, publish)
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, publish)
     hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, publish)
+    // Observe the playing fragment, never a downloaded or selected future
+    // level. Waiting for a decoded frame avoids relabeling a new rendition
+    // with the dimensions of the previous frame during an ABR switch.
+    hls.on(Hls.Events.FRAG_CHANGED, (_event, { frag }) => {
+      if (frameRequest !== undefined) video.cancelVideoFrameCallback?.(frameRequest)
+      frameRequest = video.requestVideoFrameCallback?.((_now, frame) => {
+        frameRequest = undefined
+        if (destroyed || frame.mediaTime < frag.start || frame.mediaTime >= frag.end) return
+        const height = standardQualityHeight(frame.height, frame.width)
+        if (height !== undefined && hls.levels[frag.level]) measuredHeights.set(frag.level, height)
+        publish()
+      })
+    })
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal) return
       // HTTP 410 Gone is definitive: the bytes are not coming back, so a
@@ -157,9 +159,12 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         : undefined
       events.fatal(lastError, lastDeliveryFailure)
     })
-    // Intrinsic size changes as segments decode; re-ground the single-rung
-    // label once real pixels exist. Multi-rung ladders keep manifest labels.
-    const onVideoResize = () => publish()
+    const onVideoResize = () => {
+      const height = decodedHeight()
+      const level = hls.currentLevel
+      if (height !== undefined && hls.levels[level]) measuredHeights.set(level, height)
+      publish()
+    }
     video.addEventListener('resize', onVideoResize)
     hls.loadSource(source.src); hls.attachMedia(video)
     return {
@@ -182,15 +187,15 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         // when a seek is waiting for bytes. Retry the element's destination.
         if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(video.currentTime); return true
       },
-      destroy() { video.removeEventListener('resize', onVideoResize); lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
+      destroy() { destroyed = true; if (frameRequest !== undefined) video.cancelVideoFrameCallback?.(frameRequest); video.removeEventListener('resize', onVideoResize); lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
     }
   }
   const dash = await import('dashjs')
   signal?.throwIfAborted()
   const player = dash.MediaPlayer().create()
   const publish = () => events.tracks({
-    qualities: [...auto, ...orderQualityOptions(dedupeSnappedQualities(player.getRepresentationsByType('video').map((track) => {
-      const height = snapQualityHeight(typeof track.height === 'number' ? track.height : undefined)
+    qualities: [...auto, ...orderQualityOptions(dedupeQualityHeights(player.getRepresentationsByType('video').map((track) => {
+      const height = standardQualityHeight(typeof track.height === 'number' ? track.height : undefined, typeof track.width === 'number' ? track.width : undefined)
       return { value: track.id, label: height ? `${height}p` : 'Video', height: height ?? undefined }
     })))],
     audio: player.getTracksFor('audio').map((track, index) => ({ value: String(index), label: track.lang || `Audio ${index + 1}`, language: track.lang ?? undefined })),

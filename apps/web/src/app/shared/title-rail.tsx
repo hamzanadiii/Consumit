@@ -11,13 +11,14 @@ import { TitleCard } from './title-card'
 export type TitleRailProps = {
   id: string
   title: string
+  heading?: ReactNode | undefined
   items: readonly CatalogTitleSummary[]
   description?: string | undefined
   viewAllHref?: string | undefined
   icon?: ReactNode | undefined
 }
 
-export function TitleRail({ id, title, items, description, viewAllHref, icon }: TitleRailProps) {
+export function TitleRail({ id, title, heading, items, description, viewAllHref, icon }: TitleRailProps) {
   const scrollRef = useRef<HTMLUListElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -52,7 +53,7 @@ export function TitleRail({ id, title, items, description, viewAllHref, icon }: 
 
   return (
     <section aria-labelledby={`${id}-heading`} className="group/rail relative mt-8">
-      <SectionHeading id={`${id}-heading`} title={title} description={description} icon={icon} action={viewAllHref ? (
+      <SectionHeading id={`${id}-heading`} title={heading ?? title} description={description} icon={icon} action={viewAllHref ? (
           <Link
             className="flex min-h-10 items-center gap-1 text-xs text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={viewAllHref}

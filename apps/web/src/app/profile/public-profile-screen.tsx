@@ -9,6 +9,7 @@ import { BannerEditor } from './banner-editor'
 import { FavoritesShelf } from './favorites-shelf'
 import { EditBannerButton, ProfileEditProvider } from './profile-edit'
 import { ProfileSectionNavigation, type ProfileSectionId } from './profile-section-navigation'
+import { ShareProfile } from './share-profile'
 import { FilScreenShell } from '../shared'
 import { AdSlot } from '../shared/ad-slot'
 import { TitleCard } from '../shared/title-card'
@@ -309,6 +310,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:pb-1">
+                  {data.profile.visibility === 'public' ? <ShareProfile username={data.profile.username} variant="inline" /> : null}
                   {owner ? (
                     <>
                       <Link

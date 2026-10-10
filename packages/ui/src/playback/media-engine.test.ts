@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { attachMediaEngine, dedupeSnappedQualities, orderQualityOptions, snapQualityHeight } from './media-engine'
+import { attachMediaEngine, dedupeQualityHeights, orderQualityOptions, validQualityHeight } from './media-engine'
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
-const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }> }>)
+const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }>; currentLevel: number }>)
 const startLoad = vi.hoisted(() => vi.fn())
 vi.mock('hls.js', () => ({
   default: class {
     static isSupported = () => true
-    static Events = { MANIFEST_PARSED: 'manifest', AUDIO_TRACKS_UPDATED: 'audio', SUBTITLE_TRACKS_UPDATED: 'subs', ERROR: 'error' }
+    static Events = { MANIFEST_PARSED: 'manifest', AUDIO_TRACKS_UPDATED: 'audio', SUBTITLE_TRACKS_UPDATED: 'subs', ERROR: 'error', FRAG_CHANGED: 'fragment' }
     static ErrorTypes = { MEDIA_ERROR: 'media' }
     levels: Array<{ height?: number; bitrate: number }> = []
     audioTracks: unknown[] = []
@@ -15,6 +15,7 @@ vi.mock('hls.js', () => ({
     subtitleTrack = -1
     subtitleDisplay = false
     autoLevelCapping = 0
+    currentLevel = -1
     constructor() { instances.push(this) }
     on = (event: string, callback: (...args: unknown[]) => void) => { handlers.set(event, callback) }
     loadSource() {}
@@ -63,11 +64,13 @@ describe('media engine quality order', () => {
     engine.quality('1')
     engine.destroy()
   })
-  it('snaps odd rendition heights to their nearest standard rung, ties up', async () => {
-    expect([960, 640, 900, 1080, 720, 480, 360, 2160, 1440, 800, 500, 240].map(snapQualityHeight)).toEqual(
-      [1080, 720, 1080, 1080, 720, 480, 360, 2160, 1440, 720, 480, 240],
+  it('keeps raw measurement validation while exposing standard rendition tiers', async () => {
+    expect([960, 640, 900, 1080, 720, 480, 360, 2160, 1440, 800, 500, 240].map(validQualityHeight)).toEqual(
+      [960, 640, 900, 1080, 720, 480, 360, 2160, 1440, 800, 500, 240],
     )
-    expect(snapQualityHeight(undefined)).toBeUndefined()
+    expect(validQualityHeight(undefined)).toBeUndefined()
+    expect([NaN, Infinity, 0, -480].map(validQualityHeight)).toEqual([undefined, undefined, undefined, undefined])
+    expect(validQualityHeight(534)).toBe(534)
     instances.length = 0
     const video = document.createElement('video')
     const tracks = vi.fn()
@@ -104,7 +107,7 @@ describe('media engine quality order', () => {
     video.dispatchEvent(new Event('resize'))
     expect(tracks.mock.calls.length).toBe(calls)
   })
-  it('keeps manifest labels on multi-rung ladders regardless of decoded size', async () => {
+  it('does not attribute an unassociated old frame to an adaptive rendition', async () => {
     instances.length = 0
     const video = document.createElement('video')
     Object.defineProperty(video, 'videoHeight', { configurable: true, value: 1080 })
@@ -122,7 +125,7 @@ describe('media engine quality order', () => {
     engine.destroy()
   })
   it('collapses same-rung duplicates from snapping, keeping the first entry', () => {
-    expect(dedupeSnappedQualities([
+    expect(dedupeQualityHeights([
       { value: '0', label: '1080p', height: 1080 },
       { value: '1', label: '1080p', height: 1080 },
       { value: '2', label: '720p', height: 720 },
@@ -170,4 +173,46 @@ describe('media engine hls errors', () => {
     expect(engine.recover()).toBe(false)
     engine.destroy()
   })
+})
+
+it('corrects a mislabeled adaptive rendition from decoded pixels without changing other levels', async () => {
+  instances.length = 0
+  const video = document.createElement('video')
+  const tracks = vi.fn()
+  const engine = await attachMediaEngine(video, source, { tracks, fatal: vi.fn() })
+  instances[0]!.levels = [{ height: 720, bitrate: 3_000_000 }, { height: 1080, bitrate: 8_000_000 }]
+  handlers.get('manifest')?.()
+  instances[0]!.currentLevel = 0
+  handlers.get('fragment')?.(null, { frag: { level: 0, start: 0, end: 10 } })
+  Object.defineProperty(video, 'videoHeight', { configurable: true, value: 480 })
+  video.dispatchEvent(new Event('resize'))
+  expect(tracks).toHaveBeenLastCalledWith(expect.objectContaining({ qualities: [
+    { value: 'auto', label: 'Auto' }, expect.objectContaining({ value: '1', label: '1080p' }), expect.objectContaining({ value: '0', label: '480p' }),
+  ] }))
+  engine.destroy()
+})
+
+it('waits for a frame in the playing fragment and cancels outstanding observations on teardown', async () => {
+  instances.length = 0
+  const video = document.createElement('video')
+  const frames: VideoFrameRequestCallback[] = []
+  video.requestVideoFrameCallback = vi.fn(callback => { frames.push(callback); return frames.length })
+  video.cancelVideoFrameCallback = vi.fn()
+  const tracks = vi.fn()
+  const engine = await attachMediaEngine(video, source, { tracks, fatal: vi.fn() })
+  instances[0]!.levels = [{ height: 720, bitrate: 3_000_000 }, { height: 1080, bitrate: 8_000_000 }]
+  handlers.get('manifest')?.()
+  handlers.get('fragment')?.(null, { frag: { level: 1, start: 10, end: 20 } })
+  const frame = { width: 854, height: 480, mediaTime: 9, expectedDisplayTime: 0, presentationTime: 0, presentedFrames: 1, processingDuration: 0 }
+  frames[0]!(0, frame)
+  expect(tracks.mock.lastCall![0].qualities[1].label).toBe('1080p')
+  handlers.get('fragment')?.(null, { frag: { level: 1, start: 10, end: 20 } })
+  frames[1]!(0, { ...frame, mediaTime: 11 })
+  expect(tracks.mock.lastCall![0].qualities).toContainEqual(expect.objectContaining({ value: '1', label: '480p' }))
+  handlers.get('fragment')?.(null, { frag: { level: 0, start: 20, end: 30 } })
+  const calls = tracks.mock.calls.length
+  engine.destroy()
+  expect(video.cancelVideoFrameCallback).toHaveBeenCalledWith(3)
+  frames[2]!(0, { ...frame, mediaTime: 21 })
+  expect(tracks.mock.calls.length).toBe(calls)
 })

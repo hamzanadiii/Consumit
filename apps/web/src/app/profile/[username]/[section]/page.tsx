@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 
-import type { CatalogRef, CatalogTitleSummary, MemberProfileArchiveKind, MemberProfileArchivePage, MemberProfileData, MemberRating } from '@consumit/contracts'
+import { publicProfileCollectionSchema, type ProfileReadResponse, type CatalogRef, CatalogTitleSummary, MemberProfileArchiveKind, MemberProfileArchivePage, MemberRating } from '@consumit/contracts'
 
+import { VisitorProfileScreen } from '../../visitor-profile-screen'
+import { PublicCollection } from '../../public-collection'
+import { ProfileNetworkScreen } from '../../profile-network-screen'
 import { ProfileArchiveScreen } from '../../profile-archive-screen'
 import { ProfileHistoryScreen } from '../../profile-history-screen'
 import { ProfileWatchlistScreen } from '../../profile-watchlist-screen'
@@ -13,14 +16,14 @@ import { parseRatingRange, type RatingRangeValue } from '../../../shared/rating-
 
 import { getCatalogBatchForRefs, MAX_PAGE_CATALOG_ENRICHMENT } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'
-import { getMemberLibraryPage, getMemberList, getMemberRatingPage, getMemberRatingsForTitles, getMemberWatchHistory, getPublicProfile, getPublicProfileArchivePage, MemberApiError } from '@/lib/member-server'
+import { getMemberLibraryPage, getMemberList, getMemberRatingPage, getMemberRatingsForTitles, getMemberWatchHistory, getProfileRead, getPublicCollection, getPublicProfileArchivePage, MemberApiError } from '@/lib/member-server'
 
 type ProfileArchivePageProps = {
   params: Promise<{ section: string; username: string }>
-  searchParams: Promise<{ rating?: string | string[]; tab?: string | string[]; tag?: string | string[] }>
+  searchParams: Promise<{ rating?: string | string[]; tab?: string | string[]; tag?: string | string[]; view?: string | string[] }>
 }
 
-const sections = new Set<ProfileSectionId>(['activity', 'diary', 'films', 'history', 'likes', 'lists', 'reviews', 'tags', 'watchlist'])
+const sections = new Set<ProfileSectionId>(['activity', 'diary', 'films', 'history', 'likes', 'lists', 'network', 'reviews', 'tags', 'watchlist', 'ratings', 'followers', 'following'])
 
 export const metadata: Metadata = {
   title: 'Member archive · Consumit',
@@ -47,15 +50,42 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
       : typeof search.rating === 'string' && /^(?:[1-9]|10)$/.test(search.rating) ? Number(search.rating)
       : typeof search.rating === 'string' && parseRatingRange(search.rating) ? search.rating as RatingRangeValue
       : notFound()
+  const networkView = section === 'network'
+    ? search.view === undefined ? 'followers'
+      : search.view === 'followers' ? 'followers'
+      : search.view === 'following' ? 'following'
+      : notFound()
+    : undefined
   const session = await getServerSession()
-  let profile: MemberProfileData
-  try { profile = await getPublicProfile(normalizedUsername) }
+  let profile: ProfileReadResponse
+  try { profile = await getProfileRead(normalizedUsername) }
   catch (error) {
     if (error instanceof MemberApiError && error.status === 404) notFound()
     throw error
   }
-  if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}/${section}${selectedRating !== undefined ? `?rating=${selectedRating}` : ''}`)
+  const canonicalQuery = [selectedRating !== undefined ? `rating=${selectedRating}` : '', networkView !== undefined ? `view=${networkView}` : ''].filter(Boolean).join('&')
+  if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}/${section}${canonicalQuery ? `?${canonicalQuery}` : ''}`)
+  if (section === 'followers' || section === 'following') redirect(`/profile/${profile.canonicalUsername}/network?view=${section}`)
   const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  if (!profile.viewerIsOwner || ['ratings', 'network'].includes(section)) {
+    if (section === 'network') {
+      const view = networkView ?? 'followers'
+      let page = null
+      try { page = await getPublicCollection(profile.canonicalUsername, view) }
+      catch (error) { if (error instanceof MemberApiError && error.status === 404) notFound() }
+      return <VisitorProfileScreen data={profile} owner={owner} section="network"><ProfileNetworkScreen initialPage={page} owner={owner} username={profile.canonicalUsername} view={view} /></VisitorProfileScreen>
+    }
+    const collection = publicProfileCollectionSchema.safeParse(section)
+    if (!collection.success) notFound()
+    let page = null
+    try { page = await getPublicCollection(profile.canonicalUsername, collection.data) }
+    catch (error) { if (error instanceof MemberApiError && error.status === 404) notFound() }
+    let titles: CatalogTitleSummary[] = []
+    if (page?.collection === 'ratings' || page?.collection === 'reviews') {
+      try { titles = (await getCatalogBatchForRefs(page.items))?.items ?? [] } catch { /* Stored taste remains readable. */ }
+    }
+    return <VisitorProfileScreen data={profile} owner={owner} section={activeSection}><PublicCollection collection={collection.data} initialPage={page} initialTitles={titles} owner={owner} username={profile.canonicalUsername} /></VisitorProfileScreen>
+  }
   if (!owner) notFound()
   if (selectedRating !== undefined && (!owner || activeSection !== 'films')) notFound()
   if (section === 'lists' && owner) {
@@ -116,7 +146,7 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
     catch { listTitles = [] }
     const titleMap = new Map(listTitles.map((title) => [`${title.kind}:${title.id}`, title]))
     for (const [slug, coverRefs] of listCovers) listPosters[slug] = coverRefs.map((ref) => titleMap.get(`${ref.kind}:${ref.id}`)?.posterUrl ?? undefined)
-    return <ProfileArchiveScreen data={profile} initialPage={initialPage} listPosters={listPosters} owner={owner} section={activeSection as Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history'>} {...(selectedTag ? { selectedTag } : {})} titles={listTitles} />
+    return <ProfileArchiveScreen data={profile} initialPage={initialPage} listPosters={listPosters} owner={owner} section={activeSection as Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history' | 'ratings' | 'followers' | 'following' | 'network'>} {...(selectedTag ? { selectedTag } : {})} titles={listTitles} />
   }
 
   let titles: CatalogTitleSummary[] = []
@@ -130,5 +160,5 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
     try { initialRatings = await getMemberRatingsForTitles(refs.slice(0, 50)) }
     catch { ratingsUnavailable = true }
   }
-  return <ProfileArchiveScreen data={profile} key={`${activeSection}:${profile.canonicalUsername}`} initialPage={initialPage} initialRatings={initialRatings} owner={owner} ratingsUnavailable={ratingsUnavailable} {...(ratingTotalCount !== undefined ? { ratingTotalCount } : {})} {...(selectedRating !== undefined ? { selectedRating } : {})} section={activeSection as Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history'>} {...(selectedTag ? { selectedTag } : {})} titles={titles} />
+  return <ProfileArchiveScreen data={profile} key={`${activeSection}:${profile.canonicalUsername}`} initialPage={initialPage} initialRatings={initialRatings} owner={owner} ratingsUnavailable={ratingsUnavailable} {...(ratingTotalCount !== undefined ? { ratingTotalCount } : {})} {...(selectedRating !== undefined ? { selectedRating } : {})} section={activeSection as Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history' | 'ratings' | 'followers' | 'following' | 'network'>} {...(selectedTag ? { selectedTag } : {})} titles={titles} />
 }

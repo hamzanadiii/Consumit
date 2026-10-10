@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { playbackRefSchema, playbackTrackSchema, type PlaybackRef, type ProviderRole, type ProviderDeliveryMode } from '@consumit/contracts'
+import { frameSandboxSchema, playbackRefSchema, playbackTrackSchema, type PlaybackRef, type ProviderRole, type ProviderDeliveryMode } from '@consumit/contracts'
 import { z } from 'zod'
 
 export { createVixsrcProvider } from './adapters/vixsrc.ts'
@@ -51,6 +51,14 @@ export { createRecloudProvider } from './adapters/recloud.ts'
 export { createAnimeRelayProvider } from './adapters/anime-relay.ts'
 export { createStormBoronProvider } from './adapters/stormboron.ts'
 export { createBingeBangYMoviesProvider } from './adapters/bingebangymovies.ts'
+export { createPurstreamProvider, type PurstreamMetadata, type PurstreamMetadataResolver } from './adapters/purstream.ts'
+export { createVidriftProvider } from './adapters/vidrift.ts'
+export { createStreamvaultProvider } from './adapters/streamvault.ts'
+export { createNetodaProvider } from './adapters/netoda.ts'
+export { createVidukiProvider } from './adapters/viduki.ts'
+export { createCookieBakersProvider } from './adapters/cookiebakers.ts'
+export { createKazoraProvider } from './adapters/kazora.ts'
+export { createKisskhProvider, type KisskhMetadata, type KisskhMetadataResolver } from './adapters/kisskh.ts'
 export type { ProviderHttp } from './adapters/http.ts'
 export { assertHlsManifest, isPlausibleManifestDuration, parseHlsAttributeList, parseHlsReferenceEntries, parseHlsReferences, sumMediaPlaylistDuration } from './manifest.ts'
 
@@ -65,6 +73,9 @@ export const providerSourceSchema = z.object({
   // This key describes the rendition, never its temporary URL signature.
   key: z.string().min(1).max(100),
   url: z.url().max(4096), type: z.enum(['hls', 'dash', 'native', 'iframe']),
+  /** Frame-only sandbox policy declared by the adapter. Absent keeps
+   *  Consumit's standard frame sandbox (ADR 0006). */
+  frameSandbox: frameSandboxSchema.optional(),
   expiresAt: z.iso.datetime(), language: z.string().max(32).default('original'),
   /** Adapter-owned metadata; unmarked deadlines remain authoritative. */
   expiryEstimated: z.boolean().optional(),
@@ -89,7 +100,9 @@ export type ProviderInput = { ref: PlaybackRef; region: string; audioLanguage: s
 export type ProviderIdentityResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<{ imdbId?: string | undefined }>
 export interface ProviderAdapter {
   readonly id: string
-  /** Reviewed alternate HLS audio discovery; not a recording compatibility claim. */
+  /** Optional friendly label for discovered audio tracks. Role assignment
+   *  (Audio source/Both) opts a row into discovery; this is not a
+   *  recording compatibility claim. */
   readonly separateAudio?: { label: string }
   /** Known anime audio capabilities. An absent declaration is unknown;
    * returned source language must still match the requested anime audio. */
@@ -194,6 +207,8 @@ export function validatedSources(result: unknown, registration: ProviderRegistra
     if (seen.has(source.key) || Date.parse(source.expiresAt) <= now + 30_000) continue
     if ((source.type === 'iframe') !== (registration.deliveryMode === 'embed')) continue
     if (source.type === 'iframe' && (Object.keys(source.headers).length || source.relayRecipe || source.segmentTransform || source.subtitles.length || source.skipSegments?.length)) continue
+    // Sandbox policy describes a frame document, never media delivery.
+    if (source.type !== 'iframe' && source.frameSandbox) continue
     if (isWrappedRelayUrl(source.url)) continue
     // Proxy-named upstream hosts are legitimate relay destinations when
     // explicitly allowlisted (e.g. proxy.stigstream.ru via ADR 0005). Direct

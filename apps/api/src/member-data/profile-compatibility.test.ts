@@ -29,6 +29,7 @@ describe('personal profiles with legacy stored visibility', () => {
       profile: { findUnique: vi.fn(async () => ({ memberId: record.id })) },
       member: { findFirst: vi.fn(async () => member) },
       rating: { groupBy: vi.fn(async () => []) },
+      follow: { count: vi.fn(async () => 0) },
     } as unknown as PrismaClient
     // Exercise the real persistence mapper and HTTP response validation;
     // only database query results are fixtures.
@@ -41,7 +42,7 @@ describe('personal profiles with legacy stored visibility', () => {
     const response = await app.inject({ cookies, method: 'GET', url: '/v1/profiles/profile_owner' })
     expect(response.statusCode).toBe(200)
     expect(response.headers['cache-control']).toBe('private, no-store')
-    expect(response.json()).toMatchObject({ canonicalUsername: 'profile_owner', profile: { visibility: 'private' }, social: { followers: 2, following: 3 } })
+    expect(response.json()).toMatchObject({ canonicalUsername: 'profile_owner', viewerIsOwner: true, profile: { visibility }, social: { followers: 0, following: 0 } })
     const settings = await app.inject({ cookies, method: 'GET', url: '/v1/me/profile' })
     expect(settings.statusCode).toBe(200)
     expect(settings.json()).toMatchObject({ visibility: 'private' })
@@ -49,7 +50,7 @@ describe('personal profiles with legacy stored visibility', () => {
     expect(await memberData.profile('profile_owner', 'another-member')).toBeNull()
     vi.spyOn(identity, 'getSession').mockResolvedValueOnce({ ...session.member, id: 'another-member' })
     expect((await app.inject({ cookies, method: 'GET', url: '/v1/profiles/profile_owner' })).statusCode).toBe(404)
-    expect((await app.inject({ method: 'GET', url: '/v1/profiles/profile_owner' })).statusCode).toBe(401)
+    expect((await app.inject({ method: 'GET', url: '/v1/profiles/profile_owner' })).statusCode).toBe(404)
     expect(member.profile.visibility).toBe(visibility)
   })
 })

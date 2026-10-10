@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 import { SupportShell } from '../support/support-shell'
+import { communityLinks } from '@/lib/community'
 
 export const metadata: Metadata = {
   title: 'Help Center · Consumit',
@@ -67,6 +68,7 @@ export default function HelpPage() {
           <h1 className="mt-4 font-display text-4xl leading-[1.02] tracking-[-0.035em] sm:text-6xl">A little help, when you need it.</h1>
           <p className="mt-5 max-w-[62ch] text-sm leading-6 text-[var(--fs-secondary)] sm:text-base sm:leading-7">Find answers about watching, keeping your library, and getting back into your account.</p>
           <Link className="mt-6 inline-flex min-h-11 items-center rounded-control border border-[var(--fs-field-border)] px-4 text-xs font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/report-issue">Report an issue</Link>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2"><Link className="inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4" href="/onboarding?next=%2Fhelp">Reopen the welcome guide</Link>{communityLinks.map(link => link.href ? <a className="inline-flex min-h-11 items-center text-sm underline underline-offset-4" href={link.href} key={link.name} target="_blank" rel="noopener noreferrer">Join {link.name}<span className="sr-only"> (opens in a new tab)</span></a> : null)}</div>
         </div>
 
         <div className="mt-12 grid gap-10 border-t border-[var(--fs-line)] pt-8 md:mt-16 md:grid-cols-[minmax(10rem,0.7fr)_minmax(0,1.8fr)] md:gap-16">

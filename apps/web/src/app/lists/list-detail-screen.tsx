@@ -1,4 +1,4 @@
-import { kindLabel, titleHref, type CatalogRef, type CatalogTitleSummary, type MemberListDetail } from '@consumit/contracts'
+import { kindLabel, titleHref, type CatalogRef, type CatalogTitleSummary, type MemberListDetail, type PublicListDetail } from '@consumit/contracts'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -12,7 +12,7 @@ function key(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
 export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavailable = false, data, titles }: {
   catalogDetailsLimited?: boolean
   catalogUnavailable?: boolean
-  data: MemberListDetail
+  data: MemberListDetail | PublicListDetail
   signedIn: boolean
   titles: readonly CatalogTitleSummary[]
 }) {
@@ -43,10 +43,10 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
           {catalogDetailsLimited && !catalogUnavailable ? <p className="mt-4 text-xs text-muted" role="status">Title details are loaded for the first 120 unique titles. Every entry remains in the list and can still be opened.</p> : null}
 
           <section className="py-14 sm:py-16 lg:py-20" id="titles" aria-labelledby="list-titles-heading">
-            {data.viewerIsOwner ? (
+            {data.viewerIsOwner && 'origin' in data.list ? (
               <>
                 <SectionHeading description="Edit details, add titles, and set their order." id="list-titles-heading" title="Your list" />
-                <div className="mt-8"><ListEditor data={data} titles={titles} /></div>
+                <div className="mt-8"><ListEditor data={data as MemberListDetail} titles={titles} /></div>
               </>
             ) : (
               <>
@@ -61,7 +61,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
 
           <section className="border-t border-border py-14" id="about" aria-labelledby="list-about-heading">
             <SectionHeading id="list-about-heading" title="About this list" />
-            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. This list is private and only available to its owner.</p>
+            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. {data.list.visibility === 'public' ? 'This list is shared while its owner’s profile is public.' : 'This list is private and only available to its owner.'}</p>
           </section>
         </div>
       </main>

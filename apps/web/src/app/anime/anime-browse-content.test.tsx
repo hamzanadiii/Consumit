@@ -39,6 +39,10 @@ async function chooseOption(user: ReturnType<typeof userEvent.setup>, triggerNam
 afterEach(() => { vi.resetAllMocks() })
 
 describe('anime browsing', () => {
+  it('places the shared catalog banner after the featured rail', () => {
+    const { container } = show()
+    expect(container.querySelector('[data-ad-slot="catalog"][data-ad-position="early"]')).toBeInTheDocument()
+  })
   it('renders the default popular grid without fetching', () => {
     show()
     expect(within(screen.getByRole('region', { name: 'Popular now' })).getByRole('link', { name: 'Example' })).toHaveAttribute('href', '/anime/21')

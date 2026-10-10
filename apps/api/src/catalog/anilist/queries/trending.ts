@@ -12,7 +12,7 @@ export const trendingQuery = `query ($page: Int, $perPage: Int) {
       episodes
       duration
       genres
-      coverImage { large color }
+      coverImage { extraLarge large color }
       bannerImage
       averageScore
       popularity

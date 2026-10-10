@@ -39,6 +39,7 @@ const SERVERS = [
   { name: 'Filxer', path: 'rogflix' },
   { name: 'Gama', path: 'vidzee' },
   { name: 'Zeta', path: 'nextgencloudfabric' },
+  { name: 'Fabric', path: 'nextgencloudfabric' },
   { name: 'Ophim', path: 'klikxxi' },
   { name: 'Beta', path: 'vidxyz' },
   { name: 'Sigma', path: 'hollymoviehd' },
@@ -128,7 +129,7 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope:
         // Upstream sometimes returns Origin with a trailing slash
         // (`https://host/`), which is not a valid Origin header value and can
         // cause the media host to 403. Normalize to scheme://host.
-        const forwarded = ['zeta', 'vidnest'].includes(id)
+        const forwarded = ['zeta', 'fabric', 'vidnest'].includes(id)
           ? Object.fromEntries(Object.entries(data.headers ?? {})
             .filter(([name, value]) => /^(referer|origin|user-agent|accept)$/i.test(name) && !/[\r\n]/.test(value))
             .map(([name, value]) => {
@@ -149,7 +150,7 @@ export function createVidnestProvider(http: ProviderHttp, now = Date.now, scope:
           type,
           qualityHint,
           ...sourceAccess(c.url, now()),
-          language: id === 'zeta' ? 'original' : (c.language || 'original').slice(0, 32),
+          language: id === 'zeta' || id === 'fabric' ? 'original' : (c.language || 'original').slice(0, 32),
           headers: forwarded,
           subtitles,
         })

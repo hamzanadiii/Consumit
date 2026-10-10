@@ -10,6 +10,7 @@ import { FilScreenSearchOverlay } from './filscreen-search-overlay'
 import { ShellStateProvider } from './shell-state'
 
 const mocks = vi.hoisted(() => ({
+  searchMembers: vi.fn(),
   browserSearchAnime: vi.fn(),
   browserSearchCatalog: vi.fn(),
   push: vi.fn(),
@@ -23,6 +24,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/catalog-browser', () => ({
   browserSearchCatalog: mocks.browserSearchCatalog,
 }))
+
+vi.mock('@/lib/identity-browser', () => ({ searchMembers: mocks.searchMembers, setMemberFollow: vi.fn() }))
 
 vi.mock('@/lib/anime-browser', () => ({
   browserSearchAnime: mocks.browserSearchAnime,
@@ -79,7 +82,7 @@ describe('filscreen command search', () => {
     await user.click(screen.getByRole('option', { name: 'Movies' }))
     await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'dune')
 
-    await waitFor(() => expect(mocks.browserSearchCatalog).toHaveBeenCalledWith('dune', 'movie'))
+    await waitFor(() => expect(mocks.browserSearchCatalog).toHaveBeenCalledWith('dune', 'movie', expect.any(AbortSignal)))
     expect(mocks.browserSearchAnime).not.toHaveBeenCalled()
     expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
   })
@@ -93,7 +96,7 @@ describe('filscreen command search', () => {
     await user.click(screen.getByRole('option', { name: 'Anime' }))
     await user.type(screen.getByRole('combobox', { name: 'Search movies, series, and anime' }), 'one piece')
 
-    await waitFor(() => expect(mocks.browserSearchAnime).toHaveBeenCalledWith('one piece'))
+    await waitFor(() => expect(mocks.browserSearchAnime).toHaveBeenCalledWith('one piece', 1, expect.any(AbortSignal)))
     expect(mocks.browserSearchCatalog).not.toHaveBeenCalled()
     expect(await screen.findByRole('option', { name: /One Piece/ })).toBeInTheDocument()
   })
@@ -135,7 +138,7 @@ describe('filscreen command search', () => {
 
     expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /Severance/ })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /See all results/ })).toHaveAttribute('href', '/search?q=dune')
+    expect(screen.getByRole('link', { name: /See all results/ })).toHaveAttribute('href', '/search?q=dune&type=all')
 
     await user.keyboard('{Enter}')
     expect(mocks.push).toHaveBeenCalledWith('/title/693134')
@@ -226,4 +229,47 @@ describe('filscreen command search', () => {
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('option', { name: /Dune: Part Two/ })).toBeInTheDocument()
   })
+})
+
+ it('searches people after three characters without calling either catalog and opens the profile', async () => {
+   vi.clearAllMocks()
+   const user = userEvent.setup()
+   mocks.searchMembers.mockResolvedValue({ items: [{ id: 'target', username: 'cinephile', displayName: 'Samira', avatarStyle: 'dusk', avatarUrl: null, isFollowing: false }], nextCursor: null })
+   render(<FilScreenSearchOverlay onClose={() => {}} open />)
+   await user.click(screen.getByRole('button', { name: 'Search scope All' }))
+   await user.click(screen.getByRole('option', { name: 'People' }))
+   const input = screen.getByRole('combobox', { name: 'Search people' })
+   await user.type(input, 'ci')
+   expect(mocks.searchMembers).not.toHaveBeenCalled()
+   await user.type(input, 'ne')
+   expect(await screen.findByRole('option', { name: /Samira/ })).toBeVisible()
+   expect(mocks.browserSearchCatalog).not.toHaveBeenCalled()
+   expect(mocks.browserSearchAnime).not.toHaveBeenCalled()
+   expect(screen.getByRole('link', { name: /See all results/ })).toHaveAttribute('href', '/search?q=cine&type=people')
+   await user.keyboard('{Enter}')
+   expect(mocks.push).toHaveBeenCalledWith('/profile/cinephile')
+ })
+
+it('cancels stale people searches when the query changes or closes', async () => {
+  const user = userEvent.setup()
+  let resolveOld!: (value: unknown) => void
+  const old = new Promise(resolve => { resolveOld = resolve })
+  mocks.searchMembers.mockImplementationOnce(() => old).mockResolvedValue({ items: [{ id: 'current', username: 'current', displayName: 'Current result', avatarStyle: 'dusk', avatarUrl: null, isFollowing: false }], nextCursor: null })
+  const { rerender } = render(<FilScreenSearchOverlay onClose={() => {}} open />)
+  await user.click(screen.getByRole('button', { name: 'Search scope All' }))
+  await user.click(screen.getByRole('option', { name: 'People' }))
+  const input = screen.getByRole('combobox', { name: 'Search people' })
+  await user.type(input, 'old')
+  await waitFor(() => expect(mocks.searchMembers).toHaveBeenCalledTimes(1))
+  const firstSignal = mocks.searchMembers.mock.calls[0]![2] as AbortSignal
+  await user.clear(input)
+  await user.type(input, 'new')
+  expect(await screen.findByRole('option', { name: /Current result/ })).toBeVisible()
+  expect(firstSignal.aborted).toBe(true)
+  resolveOld({ items: [{ id: 'stale', username: 'stale', displayName: 'Stale result', avatarStyle: 'dusk', avatarUrl: null, isFollowing: false }], nextCursor: null })
+  await waitFor(() => expect(screen.getByRole('option', { name: /Current result/ })).toBeVisible())
+  expect(screen.queryByRole('option', { name: /Stale result/ })).not.toBeInTheDocument()
+  const lastSignal = mocks.searchMembers.mock.calls.at(-1)![2] as AbortSignal
+  rerender(<FilScreenSearchOverlay onClose={() => {}} open={false} />)
+  expect(lastSignal.aborted).toBe(true)
 })

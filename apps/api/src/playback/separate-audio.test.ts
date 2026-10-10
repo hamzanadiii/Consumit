@@ -37,6 +37,34 @@ describe('separate audio without replacing video', () => {
     expect(await createSeparateAudio([p], 'US', http).list(input, new AbortController().signal)).toEqual([])
     expect(http).toHaveBeenCalledTimes(3)
   })
+  it('discovers audio for any enabled Audio source or Both row, with or without an adapter label', async () => {
+    const movie = { kind: 'movie' as const, id: 550 }
+    const sourceFor = (host: string) => ({ ...source, url: `https://${host}/master.m3u8` })
+    const providers: ProviderRegistration[] = [
+      { adapter: createStaticProvider('vixsrc', [{ ref: movie, sources: [sourceFor('media.example')] }]), role: 'both', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'vixsrc', concurrency: 1, requestsPerMinute: 30, mediaKinds: ['movie'] },
+      { adapter: Object.assign(createStaticProvider('riveapogee', [{ ref: movie, sources: [sourceFor('apogee.example')] }]), { separateAudio: { label: 'Apogee' } }), role: 'audio', enabled: true, approvedRegions: ['US'], mediaHosts: ['apogee.example'], upstreamGroup: 'riveapogee', concurrency: 1, requestsPerMinute: 30, mediaKinds: ['movie'] },
+      { adapter: createStaticProvider('videoonly', [{ ref: movie, sources: [sourceFor('video.example')] }]), role: 'video', enabled: true, approvedRegions: ['US'], mediaHosts: ['video.example'], upstreamGroup: 'videoonly', concurrency: 1, requestsPerMinute: 30, mediaKinds: ['movie'] },
+    ]
+    const http = vi.fn(async (url: string) => ({ status: 200, url, text: master, headers: new Headers() }))
+    const input = { ...body, ref: movie }
+    const tracks = await createSeparateAudio(providers, 'US', http).list(input, new AbortController().signal)
+    expect(tracks).toHaveLength(2)
+    expect(tracks.map(t => t.provider).sort()).toEqual(['Apogee', 'vixsrc'])
+    expect(http.mock.calls.map(c => c[0])).toEqual(['https://apogee.example/master.m3u8', 'https://media.example/master.m3u8'])
+  })
+  it('keeps other opted-in rows when one is budget-exhausted, and only reports busy when none can run', async () => {
+    const movie = { kind: 'movie' as const, id: 550 }
+    const sourceFor = (host: string) => ({ ...source, url: `https://${host}/master.m3u8` })
+    const row = (id: string, rpm: number): ProviderRegistration => ({
+      adapter: createStaticProvider(id, [{ ref: movie, sources: [sourceFor(`${id}.example`)] }]), role: 'both', enabled: true, approvedRegions: ['US'], mediaHosts: [`${id}.example`], upstreamGroup: id, concurrency: 1, requestsPerMinute: rpm, mediaKinds: ['movie'],
+    })
+    const input = { ...body, ref: movie }
+    const http = vi.fn(async (url: string) => ({ status: 200, url, text: master, headers: new Headers() }))
+    const tracks = await createSeparateAudio([row('tired', 0), row('fresh', 30)], 'US', http).list(input, new AbortController().signal)
+    expect(tracks.map(t => t.provider)).toEqual(['fresh'])
+    expect(http).toHaveBeenCalledTimes(1)
+    await expect(createSeparateAudio([row('tired', 0)], 'US', http).list(input, new AbortController().signal)).rejects.toThrow('Audio discovery is busy. Try again shortly.')
+  })
   it('discovers and prepares a title-specific audio track in the owned session', async () => {
     const providers: ProviderRegistration[] = ['primary', 'riveapogee'].map(id => ({
       adapter: Object.assign(createStaticProvider(id, [{ ref, sources: [source] }]), id === 'primary' ? {} : { separateAudio: { label: 'Apogee' } }), role: id === 'primary' ? 'video' : 'audio', enabled: true,

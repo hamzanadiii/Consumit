@@ -1,4 +1,21 @@
 groups:
+  - name: consumit-releases
+    rules:
+      - alert: ConsumitReleaseQueueDelayed
+        expr: sum(rate(consumit_releases_queue_age_seconds_sum[15m])) / clamp_min(sum(rate(consumit_releases_queue_age_seconds_count[15m])), 0.001) > 3600
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Episode release work is over an hour behind; inspect safe queue counts and worker readiness."}
+      - alert: ConsumitReleaseCatalogFailures
+        expr: sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) >= 10 and sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) / clamp_min(sum(increase(consumit_releases_catalog_refreshes_total[30m])), 1) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Recent episode catalog refreshes are failing; last known metadata is retained."}
+      - alert: ConsumitReleaseVerificationFailures
+        expr: sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) >= 10 and sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) / clamp_min(sum(increase(consumit_releases_verification_results_total[1h])), 1) > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Automatic episode checks are mostly failing; inspect sandbox and provider configuration separately from live resolver health."}
   - name: consumit-playback
     rules:
       - alert: ProviderPlaybackFailure

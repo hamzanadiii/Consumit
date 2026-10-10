@@ -108,7 +108,7 @@ describe('FilScreenShell', () => {
     }
     const guest = screen.getByRole('link', { name: 'Guest profile' })
     expect(guest).toHaveAttribute('href', '/library?section=profile')
-    expect(guest).toHaveTextContent('G')
+    expect(within(guest).getByRole('img', { hidden: true, name: 'Guest portrait' })).toHaveAttribute('src', expect.stringContaining('seed=consumit-guest'))
     expect(window.sessionStorage.getItem('consumit.guest-character')).toBeNull()
     expect(screen.getByRole('button', { name: 'Search titles' }).nextElementSibling).toBe(guest)
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()

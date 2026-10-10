@@ -12,6 +12,8 @@ export default function robots(): MetadataRoute.Robots {
         '/watchlist',
         '/profile/',
         '/settings',
+        '/notifications',
+        '/_internal/',
         '/sign-in',
         '/sign-up',
         '/onboarding/',

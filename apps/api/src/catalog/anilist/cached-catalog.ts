@@ -58,36 +58,36 @@ export function createCachedAnimeCatalog(catalog: AnimeCatalog, cache: StaleCach
   return {
     ...catalog,
     async search(query, page = 1, perPage = 20): Promise<AnimeSearchResult> {
-      return cached<AnimeSearchResult>(`anilist:v1:search:${query}:${page}:${perPage}`, policies.search, animeSearchResultSchema,
+      return cached<AnimeSearchResult>(`anilist:v2:search:${query}:${page}:${perPage}`, policies.search, animeSearchResultSchema,
         () => catalog.search(query, page, perPage))
     },
     async title(anilistId): Promise<AnimeTitleDetail> {
-      return cached<AnimeTitleDetail>(`anilist:v1:details:${anilistId}`, policies.detail, animeTitleDetailSchema,
+      return cached<AnimeTitleDetail>(`anilist:v2:details:${anilistId}`, policies.detail, animeTitleDetailSchema,
         () => catalog.title(anilistId))
     },
     async trending(page = 1, perPage = 20): Promise<AnimePage> {
-      return cached<AnimePage>(`anilist:v1:trending:${page}:${perPage}`, policies.page, animePageSchema,
+      return cached<AnimePage>(`anilist:v2:trending:${page}:${perPage}`, policies.page, animePageSchema,
         () => catalog.trending(page, perPage))
     },
     async seasonal(season: AnimeSeason, year: number, page = 1, perPage = 20): Promise<AnimePage> {
-      return cached<AnimePage>(`anilist:v1:seasonal:${season}:${year}:${page}:${perPage}`, policies.page, animePageSchema,
+      return cached<AnimePage>(`anilist:v2:seasonal:${season}:${year}:${page}:${perPage}`, policies.page, animePageSchema,
         () => catalog.seasonal(season, year, page, perPage))
     },
     async browse(query: AnimeBrowseQuery, perPage = 20): Promise<AnimePage> {
-      return cached<AnimePage>(`anilist:v1:browse:${query.sort}:${query.genre ?? ''}:${query.year ?? ''}:${query.format ?? ''}:${query.page}:${perPage}`, policies.page, animePageSchema,
+      return cached<AnimePage>(`anilist:v2:browse:${query.sort}:${query.genre ?? ''}:${query.year ?? ''}:${query.format ?? ''}:${query.page}:${perPage}`, policies.page, animePageSchema,
         () => catalog.browse(query, perPage))
     },
     async relations(anilistId): Promise<AnimeFranchise> {
-      return cached<AnimeFranchise>(`anilist:v1:relations:${anilistId}`, policies.relations, animeFranchiseSchema,
+      return cached<AnimeFranchise>(`anilist:v2:relations:${anilistId}`, policies.relations, animeFranchiseSchema,
         () => catalog.relations(anilistId))
     },
     async airingSchedule(anilistId, page = 1, perPage = 20): Promise<AnimeAiringSchedule> {
-      return cached<AnimeAiringSchedule>(`anilist:v1:airing:${anilistId}:${page}:${perPage}`, policies.airing, animeAiringScheduleSchema,
+      return cached<AnimeAiringSchedule>(`anilist:v2:airing:${anilistId}:${page}:${perPage}`, policies.airing, animeAiringScheduleSchema,
         () => catalog.airingSchedule(anilistId, page, perPage))
     },
     async batch(anilistIds): Promise<AnimeBatch> {
       const keyIds = anilistIds.join(',')
-      return cached<AnimeBatch>(`anilist:v1:batch:${keyIds}`, policies.batch, animeBatchSchema,
+      return cached<AnimeBatch>(`anilist:v2:batch:${keyIds}`, policies.batch, animeBatchSchema,
         () => catalog.batch(anilistIds))
     },
   }

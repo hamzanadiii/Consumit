@@ -51,32 +51,13 @@
         "prisma": "^7.10.0",
       },
     },
-    "apps/next-web": {
-      "name": "@consumit/next-web",
+    "apps/release-worker": {
+      "name": "@consumit/release-worker",
       "version": "0.0.0",
       "dependencies": {
         "@consumit/contracts": "workspace:*",
-        "@consumit/next-ui": "workspace:*",
-        "lucide-react": "^1.39.0",
-        "next": "16.3.8",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-        "zod": "^4.3.6",
-      },
-      "devDependencies": {
-        "@tailwindcss/postcss": "^4.3.3",
-        "@testing-library/jest-dom": "^7.0.1",
-        "@testing-library/react": "^16.3.3",
-        "@testing-library/user-event": "^14.6.7",
-        "@types/node": "^24.13.3",
-        "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.5",
-        "@vitejs/plugin-react": "^6.1.1",
-        "jsdom": "^30.0.1",
-        "tailwindcss": "^4.3.3",
-        "typescript": "^6.0.3",
-        "vite": "^8.2.2",
-        "vitest": "^4.1.11",
+        "playwright": "1.63.0",
+        "zod": "^4.5.4",
       },
     },
     "apps/web": {
@@ -120,38 +101,6 @@
     "packages/media-relay": {
       "name": "@consumit/media-relay",
       "version": "0.0.0",
-    },
-    "packages/next-ui": {
-      "name": "@consumit/next-ui",
-      "version": "0.0.0",
-      "dependencies": {
-        "@fontsource-variable/manrope": "^5.3.0",
-        "@fontsource/dejavu-sans": "^5.3.0",
-        "charter-webfont": "^4.1.0",
-        "class-variance-authority": "^0.7.1",
-        "clsx": "^2.1.1",
-        "dashjs": "^5.2.1",
-        "hls.js": "^1.7.2",
-        "lucide-react": "^1.39.0",
-        "tailwind-merge": "^3.6.0",
-      },
-      "devDependencies": {
-        "@testing-library/dom": "^10.4.1",
-        "@testing-library/jest-dom": "^7.0.1",
-        "@testing-library/react": "^16.3.3",
-        "@testing-library/user-event": "^14.6.7",
-        "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.5",
-        "@vitejs/plugin-react": "^6.1.1",
-        "jsdom": "^30.0.1",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-        "vite": "^8.2.2",
-      },
-      "peerDependencies": {
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-      },
     },
     "packages/provider-sdk": {
       "name": "@consumit/provider-sdk",
@@ -298,11 +247,9 @@
 
     "@consumit/media-relay": ["@consumit/media-relay@workspace:packages/media-relay"],
 
-    "@consumit/next-ui": ["@consumit/next-ui@workspace:packages/next-ui"],
-
-    "@consumit/next-web": ["@consumit/next-web@workspace:apps/next-web"],
-
     "@consumit/provider-sdk": ["@consumit/provider-sdk@workspace:packages/provider-sdk"],
+
+    "@consumit/release-worker": ["@consumit/release-worker@workspace:apps/release-worker"],
 
     "@consumit/ui": ["@consumit/ui@workspace:packages/ui"],
 
@@ -369,8 +316,6 @@
     "@fastify/proxy-addr": ["@fastify/proxy-addr@5.1.0", "", { "dependencies": { "@fastify/forwarded": "^3.0.0", "ipaddr.js": "^2.1.0" } }, "sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw=="],
 
     "@fastify/rate-limit": ["@fastify/rate-limit@11.2.0", "", { "dependencies": { "@lukeed/ms": "^2.0.2", "fastify-plugin": "^6.0.0", "ip-address": "^10.2.0", "toad-cache": "^3.7.0" } }, "sha512-X7osJd4XSvMoejYrnJkSZYYjY1eNYoBqhjlzf1RakC2204qExFqZFTKj5+T7VuzA/iUI9Z3UoSqQRkB2HpG0oQ=="],
-
-    "@fontsource-variable/manrope": ["@fontsource-variable/manrope@5.3.0", "", {}, "sha512-6D5dgokHsWDDMtmXHznKa0hK229NN+1a4BLPmUCLqcO1Pw5EEhWY5RFt0AcXnVRAljFFPfRtLkJePQj6LSsV6g=="],
 
     "@fontsource/dejavu-sans": ["@fontsource/dejavu-sans@5.3.0", "", {}, "sha512-F/tV+7S31Mo8jtGUhj857XfUzcDCl9JJC8bzMtZ0wcTuOm89dG4FPjAOHOesMfmoChYVQ3eg5fHafdhxFrQIxQ=="],
 

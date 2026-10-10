@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
   // Development only: accept HMR and dev-asset requests when browsing
   // through the Docker gateway origin instead of the dev server directly.
   ...(process.env.NODE_ENV !== 'production'
-    ? { allowedDevOrigins: ['localhost:8080', '127.0.0.1:8080'] }
+    ? { allowedDevOrigins: ['localhost:8080', '127.0.0.1:8080', '127.0.0.1'] }
     : {}),
 }
 

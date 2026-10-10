@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPlaybackController } from './playback-controller'
 import { createPlaybackControllerNext } from './playback-controller-next'
-import { createQualityPreference, readQualityPreference, preferredAudioOption, mediaPreferences } from './media-preferences'
+import { createQualityPreference, readQualityPreference, preferredAudioOption, mediaPreferences, semanticSubtitleLanguage } from './media-preferences'
 import type { MediaEngine } from './media-engine'
 
 afterEach(() => localStorage.clear())
+it('canonicalizes subtitle language intent without storing unknown uploaded-track identity', () => {
+  expect(semanticSubtitleLanguage('en_US')).toBe('en')
+  expect(semanticSubtitleLanguage('eng')).toBe('en')
+  expect(semanticSubtitleLanguage('und')).toBeUndefined()
+  expect(semanticSubtitleLanguage(undefined)).toBeUndefined()
+})
 describe.each([['legacy', createPlaybackController], ['next', createPlaybackControllerNext]] as const)('%s source preferences', (_, create) => {
   it('maps quality and language to new identifiers and restores them after a downgrade', async () => {
     const video = document.createElement('video')

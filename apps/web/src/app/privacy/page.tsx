@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         </ul>
       </LegalSection>
       <LegalSection id="privacy-use" number={2} title="How we use it">
-        <p>We use this information to authenticate you, keep your sessions secure, remember where you stopped watching, render your library and archives, diagnose playback failures, and understand aggregate performance. We do not use your viewing data to build advertising profiles. Display advertising is served by our advertising partner Adsterra, which may use its own cookies as described in section 5.</p>
+        <p>We use this information to authenticate you, keep your sessions secure, remember where you stopped watching, render your library and archives, diagnose playback failures, and understand aggregate performance. We do not use your viewing data to build advertising profiles. Display advertising is served by our advertising partner Adsterra, and occasional pop-under advertising is served by our advertising partner profitableratecpmnetwork. Both may use their own cookies as described in section 5.</p>
       </LegalSection>
       <LegalSection id="privacy-playback" number={3} title="Playback and third-party sources">
         <LegalNotice>Consumit does not host any media. When you press Watch, your browser requests the video from a configured third-party source, sometimes through Consumit&rsquo;s relay.</LegalNotice>
@@ -34,7 +34,7 @@ export default function PrivacyPage() {
         <p>Passwords are hashed with Argon2id, sessions use opaque tokens, and mutations require a verified origin. No method of transmission over the internet is 100% secure.</p>
       </LegalSection>
       <LegalSection id="privacy-storage" number={5} title="Local storage and cookies">
-        <p>Consumit uses a session cookie to keep you signed in and local storage for device preferences such as theme. Display advertising from our partner Adsterra loads third-party scripts that may set their own cookies to serve and measure ads. Those cookies are governed by Adsterra&rsquo;s privacy policy, not this one. Blocking third-party scripts or cookies hides the ad slots without breaking the rest of the site.</p>
+        <p>Consumit uses a session cookie to keep you signed in and local storage for device preferences such as theme. Display advertising from our partner Adsterra and pop-under advertising from our partner profitableratecpmnetwork load third-party scripts that may set their own cookies to serve and measure ads. Those cookies are governed by the partners&rsquo; own privacy policies, not this one. Consumit limits pop-unders to at most two per hour using its own local storage. Blocking third-party scripts or cookies hides the ad slots and pop-unders without breaking the rest of the site.</p>
       </LegalSection>
       <LegalSection id="privacy-choices" number={6} title="Your choices">
         <p>From Settings you can export the data held for your account, change your password, adjust profile visibility, or close your account and delete its records. For any other data question, <LegalLink href="/report-issue">contact us through the report form</LegalLink> or start with the <LegalLink href="/help">Help Center</LegalLink>.</p>

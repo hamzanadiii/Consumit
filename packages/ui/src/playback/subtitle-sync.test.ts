@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   cleanSubtitleLanguages,
+  canonicalSubtitleLanguage,
   clampSubtitleDelayMs,
   computeSyncDelayMs,
   cueTextAt,
@@ -101,6 +102,15 @@ describe('nativeLanguageName', () => {
     expect(nativeLanguageName(undefined, 'English (yify)')).toBe('English (yify)')
     expect(nativeLanguageName('', 'Off')).toBe('Off')
     expect(nativeLanguageName('und', 'Uploaded')).toBe('Uploaded')
+  })
+
+  it('retains ISO alias grouping and label fallback without language display support', () => {
+    const display = vi.spyOn(Intl, 'DisplayNames').mockImplementation(() => { throw new Error('Unavailable ICU') })
+    try {
+      expect(canonicalSubtitleLanguage('eng')).toBe('en')
+      expect(canonicalSubtitleLanguage('en_US')).toBe('en-us')
+      expect(nativeLanguageName('eng', 'English')).toBe('English')
+    } finally { display.mockRestore() }
   })
 })
 

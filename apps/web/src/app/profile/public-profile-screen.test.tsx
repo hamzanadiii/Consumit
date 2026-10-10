@@ -81,12 +81,14 @@ describe('profile as a personal cinema', () => {
     expect(screen.queryByRole('button', { name: /follow/i })).not.toBeInTheDocument()
     expect(screen.queryByText('followers')).not.toBeInTheDocument()
     expect(screen.queryByText('following')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Network' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Network' })).toHaveAttribute('href', '/profile/alex_sample/network')
+    expect(screen.queryByRole('link', { name: 'Followers' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Following' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /share/i })).not.toBeInTheDocument()
   })
   it('renders profile stats, collection links, and recent activity', () => {
     render(
-      <ProfileScreen
+      <ProfileScreen owner
         data={{
           ...profile,
           diary: [{ entryId: 'e1', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, rewatch: false, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-02` }, { entryId: 'e2', episode: 3, id: seriesSummary.id, kind: 'series', origin: 'native', rewatch: false, season: 1, sourceKey: null, tags: [], watchedOn: `${new Date().getUTCFullYear()}-01-01` }],

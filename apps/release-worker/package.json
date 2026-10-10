@@ -1,0 +1,14 @@
+{
+  "name": "@consumit/release-worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --target=node --outdir=dist --external=playwright",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": { "@consumit/contracts": "workspace:*", "playwright": "1.63.0", "zod": "^4.5.4" }
+}

@@ -1,12 +1,15 @@
 'use client'
 
-import { kindLabel, titleHref, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
-import { Select } from '@consumit/ui'
+import { kindLabel, titleHref, type PublicMemberSummary, type AnimeTitleSummary, type CatalogTitleSummary } from '@consumit/contracts'
+import { Avatar, Select } from '@consumit/ui'
 import { ArrowRight, CornerDownLeft, Search, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
+import { searchMembers } from '@/lib/identity-browser'
+import { memberAvatarSrc } from '@/lib/avatar'
+import { FollowButton } from '../profile/follow-button'
 import { browserSearchAnime } from '@/lib/anime-browser'
 import { browserSearchCatalog } from '@/lib/catalog-browser'
 
@@ -27,16 +30,19 @@ const OVERLAY_ANIMATION = [
 
 type SearchStatus = 'idle' | 'loading' | 'error'
 
-type SearchScope = 'all' | 'movie' | 'series' | 'anime'
+type SearchScope = 'all' | 'movie' | 'series' | 'anime' | 'people'
 
 const SCOPES: ReadonlyArray<{ value: SearchScope; label: string; placeholder: string }> = [
   { value: 'all', label: 'All', placeholder: 'Search movies and TV shows…' },
   { value: 'movie', label: 'Movies', placeholder: 'Search movies…' },
   { value: 'series', label: 'Series', placeholder: 'Search series…' },
   { value: 'anime', label: 'Anime', placeholder: 'Search anime…' },
+  { value: 'people', label: 'People', placeholder: 'Search names or usernames…' },
 ]
 
 type OverlayEntry = {
+  member?: PublicMemberSummary
+
   href: string
   key: string
   meta: string
@@ -116,11 +122,12 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
   const [retryNonce, setRetryNonce] = useState(0)
 
   const normalized = query.trim().slice(0, 100)
-  const showResults = normalized.length >= 2
+  const minimumLength = scope === 'people' ? 3 : 2
+  const showResults = normalized.length >= minimumLength
 
   function handleQuery(value: string) {
     setQuery(value)
-    if (value.trim().length < 2) {
+    if (value.trim().length < minimumLength) {
       requestIdRef.current += 1
       setResults([])
       setStatus('idle')
@@ -141,17 +148,26 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
   }, [open])
 
   useEffect(() => {
-    if (!open || normalized.length < 2) return
+    if (!open || normalized.length < minimumLength) return
+    const controller = new AbortController()
     const requestId = ++requestIdRef.current
     const timer = window.setTimeout(() => {
       setStatus('loading')
+      if (scope === 'people') {
+        void searchMembers(normalized, undefined, controller.signal).then(page => {
+          if (requestIdRef.current !== requestId) return
+          const items = page.items.slice(0, MAX_OVERLAY_RESULTS).map(member => ({ member, href: `/profile/${member.username}`, key: member.id, title: member.displayName ?? member.username, meta: `@${member.username}` }))
+          setResults(items); setStatus('idle'); setActiveIndex(items.length ? 0 : -1)
+        }).catch(() => { if (!controller.signal.aborted && requestIdRef.current === requestId) setStatus('error') })
+        return
+      }
       // Movies/series (TMDB) and anime (AniList) are separate domains.
       // Either outage must not take down the other: each resolves to null
       // on failure and only a total miss surfaces the error state. A chosen
       // scope searches its domain only.
       void Promise.all([
-        scope === 'anime' ? Promise.resolve(null) : browserSearchCatalog(normalized, scope).catch(() => null),
-        scope === 'movie' || scope === 'series' ? Promise.resolve(null) : browserSearchAnime(normalized).catch(() => null),
+        scope === 'anime' ? Promise.resolve(null) : browserSearchCatalog(normalized, scope, controller.signal).catch(() => null),
+        scope === 'movie' || scope === 'series' ? Promise.resolve(null) : browserSearchAnime(normalized, 1, controller.signal).catch(() => null),
       ]).then(([catalog, anime]) => {
         if (requestIdRef.current !== requestId) return
         if (!catalog && !anime) {
@@ -164,8 +180,8 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
         setActiveIndex(items.length > 0 ? 0 : -1)
       })
     }, SEARCH_DEBOUNCE_MS)
-    return () => window.clearTimeout(timer)
-  }, [normalized, open, retryNonce, scope])
+    return () => { window.clearTimeout(timer); controller.abort(); if (requestIdRef.current === requestId) requestIdRef.current += 1 }
+  }, [minimumLength, normalized, open, retryNonce, scope])
 
   useEffect(() => {
     if (!open || activeIndex < 0) return
@@ -190,8 +206,8 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
       goTo(activeResult.href)
       return
     }
-    if (normalized.length >= 2) {
-      goTo(`/search?q=${encodeURIComponent(normalized)}`)
+    if (normalized.length >= minimumLength) {
+      goTo(`/search?q=${encodeURIComponent(normalized)}&type=${scope}`)
     }
   }
 
@@ -231,7 +247,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               value={scope}
             />
             <label className="sr-only" htmlFor="filscreen-command-search">
-              Search movies, series, and anime
+              {scope === 'people' ? 'Search people' : 'Search movies, series, and anime'}
             </label>
             <input
               aria-activedescendant={activeResult ? `fs-search-option-${activeIndex}` : undefined}
@@ -287,15 +303,14 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               <span aria-hidden="true" className="grid size-14 place-items-center rounded-full border border-[var(--fs-line)] bg-[var(--fs-rail)]">
                 <Search className="size-6 text-[var(--fs-muted)]" />
               </span>
-              <p className="mt-5 text-lg font-bold text-[var(--fs-ink)]">Find something to watch</p>
+              <p className="mt-5 text-lg font-bold text-[var(--fs-ink)]">{scope === 'people' ? 'Find people with your taste' : 'Find something to watch'}</p>
               <p className="mt-2 max-w-xs text-sm leading-6 text-[var(--fs-muted)]">
-                Start typing a title, then narrow by <strong className="text-[var(--fs-ink)]">Movies</strong>,{' '}
-                <strong className="text-[var(--fs-ink)]">Series</strong> or <strong className="text-[var(--fs-ink)]">Anime</strong>.
+                {scope === 'people' ? 'Enter at least three characters to find public profiles. Search by name or username.' : <>Start typing a title, then narrow by <strong className="text-[var(--fs-ink)]">Movies</strong>, <strong className="text-[var(--fs-ink)]">Series</strong> or <strong className="text-[var(--fs-ink)]">Anime</strong>.</>}
               </p>
             </div>
           ) : status === 'loading' && results.length === 0 ? (
             <p className="px-5 py-8 text-sm text-[var(--fs-muted)]" role="status">
-              Searching the catalog…
+              {scope === 'people' ? 'Searching people…' : 'Searching the catalog…'}
             </p>
           ) : status === 'error' ? (
             <div className="px-5 py-8">
@@ -312,7 +327,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
             </div>
           ) : results.length === 0 ? (
             <div className="px-5 py-8">
-              <p className="text-sm font-bold text-[var(--fs-ink)]">No titles found for “{normalized}”.</p>
+              <p className="text-sm font-bold text-[var(--fs-ink)]">No {scope === 'people' ? 'people' : 'titles'} found for “{normalized}”.</p>
               <p className="mt-1 text-sm text-[var(--fs-muted)]">Try a different spelling, or see everything matching on the full search page.</p>
             </div>
           ) : (
@@ -330,14 +345,14 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                     onMouseEnter={() => setActiveIndex(index)}
                     role="option"
                   >
-                    <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
+                    {item.member ? <Avatar name={item.title} size="md" src={memberAvatarSrc(item.member.avatarUrl, item.member.id)} treatment={item.member.avatarStyle} /> : <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
                       {item.posterUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- tiny command-palette thumb avoids Next image overhead
                         <img alt="" className="h-full w-full object-cover" loading="lazy" src={item.posterUrl} />
                       ) : (
                         item.title.charAt(0)
                       )}
-                    </span>
+                    </span>}
                     <Link
                       className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                       href={item.href}
@@ -358,6 +373,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                       </span>
                       <CornerDownLeft aria-hidden="true" className={`size-5 shrink-0 ${selected ? 'text-[var(--fs-accent)]' : 'text-[var(--fs-muted)]'}`} />
                     </Link>
+                    {item.member ? <FollowButton isFollowing={item.member.isFollowing} memberId={item.member.id} username={item.member.username} /> : null}
                   </li>
                 )
               })}
@@ -381,7 +397,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
           {showResults ? (
             <Link
               className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-              href={`/search?q=${encodeURIComponent(normalized)}`}
+              href={`/search?q=${encodeURIComponent(normalized)}&type=${scope}`}
               onClick={onClose}
             >
               See all results

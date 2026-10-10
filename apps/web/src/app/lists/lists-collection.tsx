@@ -20,7 +20,7 @@ export type ListCollectionItem = {
   curator: string
   username: string
   slug: string
-  visibility: 'private'
+  visibility: 'private' | 'public'
   savedByViewer: boolean
   isOwner: boolean
 }

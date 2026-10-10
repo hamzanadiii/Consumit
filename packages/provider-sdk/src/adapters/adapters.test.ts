@@ -1185,7 +1185,11 @@ describe('imported provider contracts', () => {
     expect(requested.some((url) => url.includes('/scrape/NoTorrent/'))).toBe(false)
   })
   it('resolves VidZen movies with relative URLs and pooled failover servers', async () => {
+    const token = 'eyJpZCI6IjEiLCJ0eXBlIjoibW92aWUifQ.c2lnbmF0dXJl'
     const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url === 'https://vidzen.fun/movie/1') {
+        return { status: 200, text: `{"type":"movie","id":"1","apiToken":"${token}"}`, url }
+      }
       if (url.includes('/api/sources?type=movie')) {
         return { status: 200, text: JSON.stringify({
           sources: [
@@ -1204,7 +1208,8 @@ describe('imported provider contracts', () => {
       return { status: 404, text: '', url }
     })
     const result = await createVidzenProvider(client, () => now).resolve(input, new AbortController().signal)
-    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/api/sources?type=movie&id=1')
+    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/movie/1')
+    expect(client.mock.calls[1]?.[0]).toBe(`https://vidzen.fun/api/sources?type=movie&id=1&token=${encodeURIComponent(token)}`)
     expect(result).toMatchObject({ ok: true, sources: [
       { key: 'vidzen:1080p:0', type: 'hls', url: 'https://free.finepulfe.xyz/vid/playlist.m3u8', qualityHint: '1080p', height: 1080, language: 'original' },
       { key: 'vidzen:auto:1', type: 'hls', url: 'https://vidzen.fun/api/stream/abc/master.m3u8', qualityHint: 'Auto' },
@@ -1212,22 +1217,41 @@ describe('imported provider contracts', () => {
       { key: 'vidzen:480p:4', type: 'hls', qualityHint: '480p' },
     ] })
     expect(result.ok && result.sources).toHaveLength(4)
+    expect(result.ok && result.sources.every(source => source.headers.referer === 'https://vidzen.fun/')).toBe(true)
     expect(result.ok && result.sources[0]?.subtitles).toMatchObject([
       { id: 'vidzen-sub-0', format: 'vtt' },
       { id: 'vidzen-sub-1', format: 'srt' },
     ])
   })
   it('resolves VidZen episodes with season/episode params and answers empty on misses', async () => {
+    const token = 'eyJpZCI6IjIiLCJ0eXBlIjoidHYiLCJzIjozLCJlcCI6NH0.c2ln'
     const client = vi.fn<ProviderHttp>(async (url) => {
+      if (url === 'https://vidzen.fun/tv/2/3/4') {
+        return { status: 200, text: `{"type":"tv","id":"2","apiToken":"${token}"}`, url }
+      }
       if (url.includes('/api/sources?type=tv')) {
         return { status: 200, text: JSON.stringify({ sources: [{ url: 'https://free.finepulfe.xyz/ep.m3u8', label: 'Auto' }] }), url }
       }
       return { status: 404, text: '', url }
     })
     const result = await createVidzenProvider(client, () => now).resolve(episode, new AbortController().signal)
-    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/api/sources?type=tv&id=2&season=3&episode=4')
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'vidzen:auto:0' }] })
+    expect(client.mock.calls[0]?.[0]).toBe('https://vidzen.fun/tv/2/3/4')
+    expect(client.mock.calls[1]?.[0]).toBe(`https://vidzen.fun/api/sources?type=tv&id=2&season=3&episode=4&token=${encodeURIComponent(token)}`)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'vidzen:auto:0', headers: { referer: 'https://vidzen.fun/' } }] })
     expect(await createVidzenProvider(http({ status: 404, text: '' }), () => now).resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+  })
+  it('keeps VidZen unavailable when the player page withholds its token', async () => {
+    const client = vi.fn<ProviderHttp>(async (url) => ({ status: 200, text: '<html><body>Highlights, not playback.</body></html>', url }))
+    expect(await createVidzenProvider(client, () => now).resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'unavailable' })
+    expect(client.mock.calls.map(([url]) => String(url))).toEqual(['https://vidzen.fun/movie/1'])
+  })
+  it('keeps VidZen unavailable when the source API refuses the carried token', async () => {
+    const token = 'eyJpZCI6IjEiLCJ0eXBlIjoibW92aWUifQ.c2lnbmF0dXJl'
+    const client = vi.fn<ProviderHttp>(async (url) => url === 'https://vidzen.fun/movie/1'
+      ? { status: 200, text: `{"apiToken":"${token}"}`, url }
+      : { status: 401, text: JSON.stringify({ error: 'Unauthorized: Token ID mismatch', code: 'TOKEN_MISMATCH' }), url })
+    expect(await createVidzenProvider(client, () => now).resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'unavailable' })
+    expect(String(client.mock.calls[1]?.[0])).toContain('&token=')
   })
   it('resolves Stig Nebula through the secure channel with one server scope', async () => {
     const client = vi.fn<ProviderHttp>(async (url) => {

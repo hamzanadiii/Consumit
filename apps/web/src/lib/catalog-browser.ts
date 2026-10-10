@@ -3,6 +3,7 @@ import {
   catalogBatchSchema,
   catalogPageSchema,
   catalogSeasonResponseSchema,
+  catalogTitleResponseSchema,
   type CatalogKind,
   type CatalogFeed,
   type CatalogRef,
@@ -79,6 +80,14 @@ export async function browserCatalogBatch(refs: readonly CatalogRef[], signal?: 
   const parsed = catalogBatchSchema.safeParse(await request(`/v1/titles/batch?${params}`, signal))
   if (!parsed.success) throw new BrowserCatalogError('The catalog returned an invalid batch response.')
   return parsed.data
+}
+
+export async function browserCatalogTitle(ref: CatalogRef, signal?: AbortSignal) {
+  const parsed = catalogTitleResponseSchema.safeParse(await request(`/v1/titles/${ref.kind}/${ref.id}`, signal))
+  if (!parsed.success || parsed.data.item.id !== ref.id || parsed.data.item.kind !== ref.kind) {
+    throw new BrowserCatalogError('The catalog returned an invalid title response.')
+  }
+  return parsed.data.item
 }
 
 /** Resolve at most 120 unique titles, respecting the 24-title route limit and

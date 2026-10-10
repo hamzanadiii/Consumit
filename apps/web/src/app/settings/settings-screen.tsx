@@ -1,22 +1,22 @@
 'use client'
 
 import type { MemberProfile } from '@consumit/contracts'
-import { ArrowUp, Download, ExternalLink, LogOut, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { Download, ExternalLink, LogOut, RefreshCw, Save, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import {
   Avatar,
   Button,
   Input,
   Label,
-  nativeLanguageName,
+
   PreferenceRow,
-  PREFERRED_LANGUAGE_CODES,
-  readStoredSubtitleLanguages,
-  savePreferredSubtitleLanguages,
-  Select,
+
+
+
+
   SettingsFact,
   SettingsRail,
   SettingsSection,
@@ -26,64 +26,8 @@ import { FilScreenShell } from '../shared'
 import { useSession } from '../session/session'
 import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, IdentityApiError, logoutMember, updateMemberProfile } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
-
-/** Preferred subtitle languages (max 3, priority order). Device-local like
- *  every player preference; the watch screen refetches live on change. */
-function SubtitleLanguagePicker() {
-  const [langs, setLangs] = useState<string[]>([])
-  const pickerRef = useRef<HTMLDivElement>(null)
-  const pendingFocus = useRef<{ code: string } | 'add' | null>(null)
-  useEffect(() => { queueMicrotask(() => setLangs(readStoredSubtitleLanguages())) }, [])
-  useLayoutEffect(() => {
-    const target = pendingFocus.current
-    pendingFocus.current = null
-    if (!target) return
-    const button = target === 'add'
-      ? pickerRef.current?.querySelector<HTMLButtonElement>('[data-consumit-select] > button')
-      : [...(pickerRef.current?.querySelectorAll<HTMLButtonElement>('[data-remove-language]') ?? [])].find((element) => element.dataset.removeLanguage === target.code)
-    button?.focus()
-  }, [langs])
-  function remove(code: string) {
-    const index = langs.indexOf(code)
-    const next = langs.filter((entry) => entry !== code)
-    const remaining = next[index] ?? next[index - 1]
-    pendingFocus.current = remaining ? { code: remaining } : 'add'
-    setLangs(savePreferredSubtitleLanguages(next))
-  }
-  function moveUp(index: number) {
-    const next = [...langs]
-    if (index < 1 || index >= next.length) return
-    ;[next[index - 1], next[index]] = [next[index]!, next[index - 1]!]
-    if (index === 1) pendingFocus.current = { code: next[0]! }
-    setLangs(savePreferredSubtitleLanguages(next))
-  }
-  return (
-    <div aria-label="Preferred subtitle languages" className="w-full max-w-md" data-consumit-subtitle-preferences ref={pickerRef} role="group">
-      {langs.length ? (
-        <ol aria-label="Subtitle language priority" className="divide-y divide-[var(--fs-line)] rounded-control border border-[var(--fs-line)] bg-[var(--fs-field)]">
-          {langs.map((code, index) => {
-            const name = nativeLanguageName(code, code.toUpperCase())
-            return (
-              <li className="flex min-h-16 items-center gap-3 py-2 pr-2 pl-4" key={code}>
-                <span aria-hidden="true" className={`w-4 shrink-0 text-sm font-bold tabular-nums ${index === 0 ? 'text-[var(--fs-accent)]' : 'text-[var(--fs-muted)]'}`}>{index + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-[var(--fs-ink)]"><bdi>{name}</bdi></p>
-                  <p className="mt-0.5 text-xs text-[var(--fs-muted)]">{index === 0 ? 'First choice' : `Fallback ${index}`}</p>
-                </div>
-                <Button aria-label={`Move ${name} up`} className="min-h-[44px] min-w-[44px]" disabled={index === 0} onClick={() => moveUp(index)} size="icon" type="button" variant="ghost"><ArrowUp aria-hidden="true" /></Button>
-                <Button aria-label={`Remove ${name}`} className="min-h-[44px] min-w-[44px]" data-remove-language={code} onClick={() => remove(code)} size="icon" type="button" variant="ghost"><X aria-hidden="true" /></Button>
-              </li>
-            )
-          })}
-        </ol>
-      ) : <p className="pb-4 text-sm text-[var(--fs-muted)]">Choose your first language, then add optional fallbacks.</p>}
-      {langs.length < 3 ? (
-        <Select className={`${langs.length ? 'mt-4 ' : ''}[&_button]:min-h-[44px]`} label="Add subtitle language" onValueChange={(code) => { if (langs.length === 2) pendingFocus.current = { code }; setLangs(savePreferredSubtitleLanguages([...langs, code])) }} options={PREFERRED_LANGUAGE_CODES.filter((code) => !langs.includes(code)).map((code) => ({ label: nativeLanguageName(code, code.toUpperCase()), value: code }))} placeholder="Choose a language…" value="" />
-      ) : null}
-      <p aria-live="polite" className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">{langs.length === 3 ? 'Three languages selected. Remove one to add another.' : 'Choose up to three languages.'} Saved on this device.</p>
-    </div>
-  )
-}
+import { NotificationPreference } from './notification-preference'
+import { PreferenceEditor } from '../experience/preference-fields'
 
 const SETTINGS_ITEMS = [
   { href: '#account', label: 'Account', index: '01' },
@@ -99,6 +43,8 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
   const session = useSession()
   const [profile, setProfile] = useState(initialProfile)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
+  const profileSaveLock = useRef(false)
+  const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [accountAction, setAccountAction] = useState<'delete' | 'password' | null>(null)
   const [accountError, setAccountError] = useState<string | null>(null)
@@ -160,6 +106,9 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (profileSaveLock.current) return
+    profileSaveLock.current = true
+    setProfileSaving(true)
     const data = new FormData(event.currentTarget)
     setAccountError(null)
     setProfileSaved(false)
@@ -170,7 +119,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
         displayName: String(data.get('displayName')).trim() || null,
         location: String(data.get('location')).trim() || null,
         username: String(data.get('username')),
-        visibility: 'private',
+        visibility: data.get('visibility') === 'public' ? 'public' : 'private',
       })
       setProfile(updated)
       if (session.member) session.setMember({ ...session.member, avatarUrl: updated.avatarUrl, displayName: updated.displayName, username: updated.username })
@@ -180,7 +129,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
       router.refresh()
     } catch (error) {
       setAccountError(error instanceof IdentityApiError ? error.message : 'The profile could not be saved.')
-    }
+    } finally { profileSaveLock.current = false; setProfileSaving(false) }
   }
 
   async function signOut() {
@@ -262,7 +211,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
             <SettingsSection
               action={(
                 <div className="flex flex-col items-start gap-2 sm:items-end">
-                  <Button form="profile-settings-form" type="submit" variant="accent"><Save aria-hidden="true" /> Save changes</Button>
+                  <Button disabled={profileSaving} form="profile-settings-form" type="submit" variant="accent"><Save aria-hidden="true" /> {profileSaving ? 'Saving…' : 'Save changes'}</Button>
                   <p aria-live="polite" className="text-xs text-lime">{profileSaved ? 'Profile saved.' : ''}</p>
                 </div>
               )}
@@ -298,8 +247,14 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                   {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
                 </div>
                 <div><Label htmlFor="settings-location">Location</Label><Input className="mt-2 w-full" defaultValue={profile.location ?? ''} id="settings-location" maxLength={100} name="location" /></div>
-                <p className="text-xs text-muted">Your profile and collections are private.</p>
+                <p className="text-xs text-muted">Your location stays private.</p>
                 <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
+                <fieldset className="sm:col-span-2 border-t border-[var(--fs-line)] pt-5">
+                  <legend className="text-sm font-bold text-[var(--fs-ink)]">Profile visibility</legend>
+                  <div className="mt-3 flex flex-wrap gap-5">{(['private', 'public'] as const).map((value) => <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--fs-ink)]" key={value}><input className="size-4 accent-[var(--fs-accent)]" defaultChecked={profile.visibility === value} name="visibility" type="radio" value={value} />{value === 'private' ? 'Private' : 'Public'}</label>)}</div>
+                  <p className="mt-2 max-w-[70ch] text-sm leading-6 text-[var(--fs-secondary)]">Publishing shares your display name, username, avatar, banner, bio, favorites, all ratings, and all reviews. Public lists become accessible while your profile is public.</p>
+                  <p className="mt-2 max-w-[70ch] text-xs leading-5 text-[var(--fs-muted)]">Location, diary, watched titles, watchlist, likes, tags, history, progress, account details, and import metadata stay private. Making your profile private hides it from visitors and search and keeps your follows.</p>
+                </fieldset>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>
                   <Input className="mt-2 w-full" defaultValue={session.member?.email ?? ''} id="settings-email" readOnly type="email" />
@@ -326,19 +281,20 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               index="02"
               title="Privacy & social"
             >
-              <SettingsFact lead="Private by default.">There is no visibility switch because nothing is shared, and visitors are always rejected from member data.</SettingsFact>
-              <SettingsFact lead="Nothing is social yet.">Follows, activity sharing, and direct messaging are not implemented, so no activity ever leaves your account.</SettingsFact>
+              <SettingsFact lead="Private until you publish.">Choose Public in the profile editor above, then save changes. Each list has its own visibility control.</SettingsFact>
+              <SettingsFact lead="Follow public profiles.">People can discover your published taste and follow you. Your personal watch history stays private.</SettingsFact>
             </SettingsSection>
 
             <SettingsSection
               className="scroll-mt-8"
-              description="Resolution, audio, and subtitles are chosen per title inside the player and remembered on this device."
+              description="Choose how titles start in Watch. Member preferences sync across devices; available tracks vary by title and source."
               id="playback"
               index="03"
               title="Streaming & playback"
             >
               <SettingsFact lead="Automatic source recovery.">If a source fails, Consumit switches to the next working source without losing your position. Pick a different server anytime from the player&apos;s Server menu.</SettingsFact>
-              <SettingsFact lead="Quality and tracks stay with the player.">Open Quality, Audio, or Subtitles in the player toolbar; your last choice becomes the starting point for the next title.</SettingsFact>
+              <div className="py-6"><PreferenceEditor /></div>
+              <Link className="inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4" href="/onboarding?next=%2Fsettings">Reopen the welcome guide</Link>
             </SettingsSection>
 
             <SettingsSection
@@ -350,11 +306,11 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
             >
               <PreferenceRow
                 className="flex-col items-stretch gap-5 lg:flex-row lg:items-start [&>div:last-child]:w-full [&>div:last-child]:min-w-0 lg:[&>div:last-child]:max-w-md"
-                control={<SubtitleLanguagePicker />}
-                description="Applies on this device to every movie, series, and anime. The first language also drives automatic track selection."
+                control={<a className="inline-flex min-h-11 items-center font-bold underline underline-offset-4" href="#playback">Edit viewing preferences</a>}
+                description="Set your language order and subtitle default in Streaming & playback above."
                 label="Preferred subtitle languages"
               />
-              <SettingsFact lead="Everything else is per title.">Audio and subtitle tracks, timing, and text appearance are chosen in the player&apos;s Audio and Subtitles menus.</SettingsFact>
+              <SettingsFact lead="Adjust a title in Watch.">Track selection, subtitle timing, and text appearance stay available in the player&apos;s Audio and Subtitles menus.</SettingsFact>
             </SettingsSection>
 
             <SettingsSection
@@ -364,7 +320,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               index="05"
               title="Notifications"
             >
-              <SettingsFact lead="Nothing is announced yet.">Release tracking is not implemented, so no alerts are sent. Saved series keep their existing library behavior.</SettingsFact>
+              <NotificationPreference />
             </SettingsSection>
 
             <SettingsSection

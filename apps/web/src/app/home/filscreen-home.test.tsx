@@ -24,8 +24,8 @@ function shellTheme() {
 }
 
 function showSidebarButtons() {
-  // The rail toggle (desktop) and the center-column button (mobile) share one
-  // name; CSS shows exactly one per viewport, both render in jsdom.
+  // Only the center-column button (mobile) carries this name now that the
+  // desktop rail uses a home-linked brand mark; CSS shows it per viewport.
   return screen.getAllByRole('button', { name: 'Show sidebar' })
 }
 
@@ -59,7 +59,8 @@ describe('filscreen live home', () => {
     expect(screen.getByRole('heading', { name: 'Dune: Part Two' })).toBeInTheDocument()
     expect(screen.getByText('Long live the fighters.')).toBeInTheDocument()
     expect(screen.queryByText(/taste match|% match|% finished/i)).not.toBeInTheDocument()
-    expect(await screen.findByText(/nothing in progress yet/i)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Continue watching' })).not.toBeInTheDocument()
+    expect(document.querySelector('section[aria-labelledby="filscreen-continue-title"]')).toBeNull()
   })
 
   it('renders trending movies before trending series with real poster art and drops popular', () => {
@@ -159,7 +160,8 @@ describe('filscreen live home', () => {
     expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hide sidebar' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
-    expect(showSidebarButtons()).toHaveLength(2)
+    expect(screen.getAllByRole('link', { name: 'Consumit home' }).every((link) => link.getAttribute('href') === '/')).toBe(true)
+    expect(showSidebarButtons()).toHaveLength(1)
     expect(window.localStorage.getItem('consumit.home-sidebar')).toBe('collapsed')
 
     await user.click(showSidebarButtons()[0]!)
@@ -172,6 +174,6 @@ describe('filscreen live home', () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
     expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
-    expect(showSidebarButtons()).toHaveLength(2)
+    expect(showSidebarButtons()).toHaveLength(1)
   })
 })

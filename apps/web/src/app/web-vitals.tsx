@@ -10,9 +10,10 @@ export function WebVitals() {
   const pathname = usePathname() ?? '/'
   const page = webVitalPageForPath(pathname)
   const report = useCallback((metric: { name: string; value: number }) => {
+    if (pathname.startsWith('/_internal/')) return
     if (!['CLS', 'FCP', 'INP', 'LCP', 'TTFB'].includes(metric.name)) return
     sendWebVital({ metric: metric.name as WebVitalEvent['metric'], page, value: metric.value })
-  }, [page])
+  }, [page, pathname])
 
   useReportWebVitals(report)
   return null

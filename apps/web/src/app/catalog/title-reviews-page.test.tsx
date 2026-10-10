@@ -55,6 +55,7 @@ vi.mock('@/lib/member-server', () => ({
 }))
 
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND')
   },
@@ -160,4 +161,3 @@ describe('title reviews page', () => {
     await expect(TitleReviewsPage({ id: 404, kind: 'anime', page: 1, sort: 'recent' })).rejects.toThrow('NEXT_NOT_FOUND')
   })
 })
-

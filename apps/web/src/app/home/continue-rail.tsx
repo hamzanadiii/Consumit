@@ -1,7 +1,7 @@
 'use client'
 
 import { titleHref, watchHref, progressWriteRequestSchema, type CatalogTitleSummary } from '@consumit/contracts'
-import { Check, Info, Pencil, RotateCcw, X } from 'lucide-react'
+import { Check, Info, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -160,10 +160,12 @@ export function ContinueRail() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => load(), [load])
 
+  if (status !== 'ready' || rows.length === 0) return null
+
   const showEditToggle = status === 'ready' && rows.length > 0
 
   return (
-    <>
+    <section aria-labelledby="filscreen-continue-title" className="mt-8">
       <div className="flex items-center justify-between gap-4">
         <h2 className="font-display text-2xl tracking-[-0.02em]" id="filscreen-continue-title">Continue watching</h2>
         {showEditToggle ? (
@@ -183,32 +185,6 @@ export function ContinueRail() {
         ) : null}
       </div>
 
-      {status === 'loading' ? (
-        <div className="mt-4 flex snap-x gap-4 overflow-x-auto overscroll-x-contain py-1 pr-1 pb-3 fs-noscroll" role="status" aria-label="Loading your in-progress titles">
-          {[0, 1, 2].map((index) => (
-            <div aria-hidden="true" className="aspect-video w-[85%] max-w-[26rem] shrink-0 animate-pulse rounded-xl bg-[var(--fs-accent-soft)] sm:w-[22rem] lg:w-[25rem]" key={index} />
-          ))}
-        </div>
-      ) : status === 'error' ? (
-        <div className="mt-3 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-          <p className="text-sm leading-6 text-[var(--fs-secondary)]">Your in-progress titles could not load, but nothing was lost.</p>
-          <button
-            className="mt-3 inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-            onClick={() => load()}
-            type="button"
-          >
-            <RotateCcw aria-hidden="true" className="size-4" />
-            Try again
-          </button>
-        </div>
-      ) : status === 'empty' ? (
-        <div className="mt-3 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-          <p className="text-sm leading-6 text-[var(--fs-secondary)]">Nothing in progress yet. Watch a title and pick up right here.</p>
-          <Link className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/movies">
-            Explore movies
-          </Link>
-        </div>
-      ) : (
         <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" role="region" tabIndex={0}>
           {rows.map(({ entry, title }) => {
         const href = watchHref(title, entry.season !== undefined || entry.episode !== undefined
@@ -313,7 +289,6 @@ export function ContinueRail() {
         )
       })}
         </ul>
-      )}
-    </>
+    </section>
   )
 }

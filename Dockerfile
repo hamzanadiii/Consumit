@@ -6,12 +6,11 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-COPY apps/next-web/package.json apps/next-web/package.json
+COPY apps/release-worker/package.json apps/release-worker/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/media-relay/package.json packages/media-relay/package.json
 COPY packages/provider-sdk/package.json packages/provider-sdk/package.json
 COPY packages/ui/package.json packages/ui/package.json
-COPY packages/next-ui/package.json packages/next-ui/package.json
 
 FROM manifests AS dependencies
 RUN bun install --frozen-lockfile --network-concurrency 16
@@ -58,7 +57,15 @@ RUN bun install --frozen-lockfile --filter @consumit/web --network-concurrency 1
 FROM web-dependencies AS web-build
 COPY . .
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:8080
+ARG NEXT_PUBLIC_CAST_RECEIVER_ID
+ARG NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED=false
+ARG NEXT_PUBLIC_CONSUMIT_DISCORD_URL=https://discord.gg/p7XVyk6vs
+ARG NEXT_PUBLIC_CONSUMIT_REDDIT_URL=https://www.reddit.com/r/Consumit/
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} \
+    NEXT_PUBLIC_CAST_RECEIVER_ID=${NEXT_PUBLIC_CAST_RECEIVER_ID} \
+    NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED=${NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED} \
+    NEXT_PUBLIC_CONSUMIT_DISCORD_URL=${NEXT_PUBLIC_CONSUMIT_DISCORD_URL} \
+    NEXT_PUBLIC_CONSUMIT_REDDIT_URL=${NEXT_PUBLIC_CONSUMIT_REDDIT_URL} \
     NEXT_TELEMETRY_DISABLED=1
 RUN bun --filter @consumit/web build
 
@@ -75,27 +82,23 @@ USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
-FROM manifests AS next-web-dependencies
-RUN bun install --frozen-lockfile --filter @consumit/next-web --network-concurrency 16
-
-FROM next-web-dependencies AS next-web-build
-COPY . .
-ARG NEXT_PUBLIC_SITE_URL=http://localhost:3080
-ARG CONSUMIT_API_URL=http://api:3001
-ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL} CONSUMIT_API_URL=${CONSUMIT_API_URL} NEXT_TELEMETRY_DISABLED=1
-RUN bun --filter @consumit/next-web build
-
-FROM node:24-alpine AS next-web
-WORKDIR /app
-ENV HOSTNAME=0.0.0.0 NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
-COPY --from=next-web-build --chown=node:node /app/apps/next-web/.next/standalone ./
-COPY --from=next-web-build --chown=node:node /app/apps/next-web/.next/static ./apps/next-web/.next/static
-COPY --from=next-web-build --chown=node:node /app/apps/next-web/public ./apps/next-web/public
-USER node
-EXPOSE 3000
-CMD ["node", "apps/next-web/server.js"]
-
 FROM nginx:1.29-alpine AS gateway
 COPY infra/nginx/consumit.conf /etc/nginx/conf.d/default.conf
 COPY infra/nginx/request-limits.conf /etc/nginx/consumit-request-limits.conf
 EXPOSE 80
+
+FROM source AS release-worker-build
+RUN bun --filter @consumit/release-worker build
+
+# Match the production dependency exactly; install Chromium on glibc, not Alpine.
+FROM node:24-bookworm-slim AS release-worker
+WORKDIR /app
+ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/opt/consumit-browsers
+RUN npm install --omit=dev --ignore-scripts playwright@1.63.0 \
+  && npm pkg set type=module \
+  && npx playwright install --with-deps chromium \
+  && chmod -R a+rX /opt/consumit-browsers \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=release-worker-build --chown=node:node /app/apps/release-worker/dist/index.js ./index.js
+USER node
+CMD ["node", "index.js"]

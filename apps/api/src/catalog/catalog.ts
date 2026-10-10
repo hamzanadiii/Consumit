@@ -25,6 +25,7 @@ export type SearchCatalogQuery = CatalogQuery & {
 }
 
 export interface Catalog {
+  recentEpisodes?(seriesId: number, since: Date): Promise<import('@consumit/contracts').ReleaseEpisode[]>
   batch(refs: readonly CatalogRef[]): Promise<CatalogBatch>
   discover(query: DiscoverCatalogQuery): Promise<CatalogPage>
   movieByExternalId(imdbId: string): Promise<CatalogTitleSummary | null>

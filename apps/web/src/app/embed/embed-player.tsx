@@ -6,6 +6,7 @@ import type { PlaybackEvents, PlaybackRef, PlaybackSession, DeliveryFailure } fr
 import { ConsumitPlayer, readQualityPreference, type DirectMediaSource } from '@consumit/ui'
 import { createPlaybackCoordinator, watchSourceExpiry } from '@/lib/playback-coordinator'
 import { playbackCapabilities } from '@/lib/playback-browser'
+import { browserSkipTimes } from '@/lib/skip-times-browser'
 import { listEmbedProviders, recoverEmbedSession, resolveEmbedSession, switchEmbedSession } from '@/lib/embed-playback-browser'
 import { fetchAggregatedSubtitles, type AggregatedSubtitle } from '@/lib/subtitles-browser'
 import { createPlaybackEvents } from '@/lib/playback-events'
@@ -94,6 +95,7 @@ function createEmbedCoordinator() {
 }
 
 export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pauseFacts, posterSrc, playbackRef, sources, startAt = 0, subtitles, title, videoId }: EmbedPlayerProps) {
+  const requestSkipTimes = useCallback((duration: number, signal: AbortSignal) => playbackRef ? browserSkipTimes(playbackRef, duration, signal) : Promise.resolve([]), [playbackRef])
   const durationRef = useRef(0)
   const requestRef = useRef<AbortController | null>(null)
   const clock = useRef({ position: startAt, playing: autoPlay })
@@ -193,6 +195,7 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
       autoPlay={autoPlay}
       className="h-full w-full rounded-none border-0"
       source={source}
+      onSkipSegmentsRequest={requestSkipTimes}
       extraSubtitles={extraSubtitles}
       onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)}
       onSubtitleRequest={loadSubtitles}

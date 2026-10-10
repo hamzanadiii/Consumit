@@ -5,11 +5,11 @@ import { ApiError } from '../http/errors.ts'
 import { createProviderHttp } from './provider-http.ts'
 
 type Candidate = SeparateAudioTrack & { src: string; expiresAt: string; registration: ProviderRegistration; headers: Record<string, string> }
-/** Explicit, bounded Apogee experiment. Discovery never changes the video session. */
+/** Explicit, bounded role-opted discovery (ADR 0004). Discovery never changes the video session. */
 export function createSeparateAudio(providers: readonly ProviderRegistration[], region: string, injectedHttp?: ProviderHttp, appOrigin?: string) {
   const cache = new Map<string, { until: number; tracks: Candidate[] }>()
   const budget = new Map<string, { active: number; count: number; since: number }>()
-  const eligible = () => providers.filter(p => p.enabled && (p.role === 'audio' || p.role === 'both') && p.adapter.separateAudio && p.approvedRegions.includes(region))
+  const eligible = () => providers.filter(p => p.enabled && (p.role === 'audio' || p.role === 'both') && p.approvedRegions.includes(region))
   const safe = (url: string, p: ProviderRegistration) => allowedMediaUrl(url, p.mediaHosts, p.mediaHostPatterns) && !isRelayMediaUrl(url)
   const httpFor = (p: ProviderRegistration) => injectedHttp ?? createProviderHttp(p.mediaHosts)
   async function audioMaster(src: string, headers: Record<string, string>, p: ProviderRegistration, signal: AbortSignal) {
@@ -33,13 +33,17 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
     const key = keyFor(input), cached = cache.get(key)
     if (cached && cached.until > Date.now()) return cached.tracks
     const tracks: Candidate[] = []
-    // One configured Apogee row per title; prefer the dedicated audio role.
-    for (const p of eligible().filter(p => p.mediaKinds.includes(input.ref.kind)).sort((a, b) => Number(b.role === 'audio') - Number(a.role === 'audio')).slice(0, 1)) {
+    // Every enabled Audio source or Both row the operator opted in; dedicated audio roles sort first.
+    const rows = eligible().filter(p => p.mediaKinds.includes(input.ref.kind)).sort((a, b) => Number(b.role === 'audio') - Number(a.role === 'audio'))
+    let attempted = 0
+    for (const p of rows) {
       const b = budget.get(p.adapter.id) ?? { active: 0, count: 0, since: Date.now() }
       if (b.since + 60000 <= Date.now()) { b.count = 0; b.since = Date.now() }
       budget.set(p.adapter.id, b)
-      if (b.active >= p.concurrency || b.count >= p.requestsPerMinute) throw new ApiError('CONFLICT', 'Audio discovery is busy. Try again shortly.', { retryable: true })
+      // One busy row must not hide the other opted-in rows' tracks.
+      if (b.active >= p.concurrency || b.count >= p.requestsPerMinute) continue
       b.active++; b.count++
+      attempted++
       try {
         const bounded = AbortSignal.any([signal, AbortSignal.timeout(12000)])
         const result = await p.adapter.resolve({ ref: input.ref, region, audioLanguage: input.audioLanguage }, bounded)
@@ -58,11 +62,13 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
           let language: string
           try { language = Intl.getCanonicalLocales(a.LANGUAGE)[0]! } catch { continue }
           if (!/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(language)) continue
-          tracks.push({ id: createHash('sha256').update(JSON.stringify([input.ref, p.adapter.id, a['GROUP-ID'], a.NAME, language])).digest('hex').slice(0, 32), label: a.NAME.slice(0, 128), language, provider: p.adapter.separateAudio!.label, src, expiresAt: source.expiresAt, registration: p, headers })
+          tracks.push({ id: createHash('sha256').update(JSON.stringify([input.ref, p.adapter.id, a['GROUP-ID'], a.NAME, language])).digest('hex').slice(0, 32), label: a.NAME.slice(0, 128), language, provider: p.adapter.separateAudio?.label ?? p.adapter.id, src, expiresAt: source.expiresAt, registration: p, headers })
           if (tracks.length >= 40) break
         }
       } finally { b.active-- }
     }
+    // Nothing was even attempted: every opted-in row is at its own budget.
+    if (rows.length && !attempted) throw new ApiError('CONFLICT', 'Audio discovery is busy. Try again shortly.', { retryable: true })
     if (cache.size >= 128) cache.delete(cache.keys().next().value!)
     const expiry = Math.min(Date.now() + (tracks.length ? 120000 : 15000), ...tracks.map(t => Date.parse(t.expiresAt) - 30000))
     cache.set(key, { until: expiry, tracks })

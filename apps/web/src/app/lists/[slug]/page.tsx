@@ -6,11 +6,12 @@ import { notFound } from 'next/navigation'
 
 import { getCatalogBatchForRefs, MAX_PAGE_CATALOG_ENRICHMENT } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'
-import { getMemberList, MemberApiError } from '@/lib/member-server'
+import { getListRead, MemberApiError } from '@/lib/member-server'
 
 export const metadata: Metadata = {
   title: 'List · Consumit',
   description: 'A member-curated list, preserved in deliberate order.',
+  robots: { follow: false, index: false },
 }
 
 type ListPageProps = {
@@ -22,7 +23,7 @@ export default async function ListPage({ params }: ListPageProps) {
   const session = await getServerSession()
   let list
   try {
-    list = await getMemberList(slug)
+    list = await getListRead(slug)
   } catch (error) {
     if (error instanceof MemberApiError && error.status === 404) notFound()
     throw error

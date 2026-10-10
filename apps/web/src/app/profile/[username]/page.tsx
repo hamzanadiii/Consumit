@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
-import type { CatalogRef, CatalogTitleSummary, MemberProfileData } from '@consumit/contracts'
+import type { CatalogRef, CatalogTitleSummary, ProfileReadResponse } from '@consumit/contracts'
 
+import { VisitorProfileScreen } from '../visitor-profile-screen'
 import { ProfileScreen } from '../public-profile-screen'
 import { notFound, redirect } from 'next/navigation'
 
 import { getCatalogBatchForRefs } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'
-import { getMemberLibrarySnapshot, getMemberList, getPublicProfile, MemberApiError } from '@/lib/member-server'
+import { getMemberLibrarySnapshot, getMemberList, getProfileRead, MemberApiError } from '@/lib/member-server'
 
 type PublicProfilePageProps = {
   params: Promise<{ username: string }>
@@ -22,15 +23,20 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   const { username } = await params
   const normalizedUsername = username.trim().replace(/^@+/, '').toLowerCase()
   const session = await getServerSession()
-  let profile: MemberProfileData
+  let profile: ProfileReadResponse
   try {
-    profile = await getPublicProfile(normalizedUsername)
+    profile = await getProfileRead(normalizedUsername)
   } catch (error) {
     if (error instanceof MemberApiError && error.status === 404) notFound()
     throw error
   }
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}`)
   const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  if (!profile.viewerIsOwner) {
+    let titles: CatalogTitleSummary[] = []
+    try { titles = (await getCatalogBatchForRefs(profile.favorites))?.items ?? [] } catch { /* Favorites remain available without catalog details. */ }
+    return <VisitorProfileScreen data={profile} titles={titles} />
+  }
   if (!owner) notFound()
   let savedPreview: { hasMore: boolean; items: CatalogRef[] } | { unavailable: true } | undefined
   if (owner) {

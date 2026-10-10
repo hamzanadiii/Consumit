@@ -24,6 +24,9 @@ import {
   updateMemberReviewRequestSchema,
   updateProfileRequestSchema,
   usernameAvailabilityResponseSchema,
+  publicMemberPageSchema,
+  publicProfileCollectionPageSchema,
+  type PublicProfileCollection,
   type AcceptedResponse,
   type CreateDiaryEntryRequest,
   type CreateMemberListRequest,
@@ -98,6 +101,10 @@ async function request<T>(path: string, options: RequestInit, schema?: ZodType<T
 }
 
 const body = (value: unknown) => JSON.stringify(value)
+
+export const setMemberFollow = (memberId: string, following: boolean): Promise<void> => request(`/v1/me/follows/${encodeURIComponent(memberId)}`, { method: following ? 'PUT' : 'DELETE' })
+export const searchMembers = (q: string, cursor?: string, signal?: AbortSignal) => request(`/v1/members/search?${new URLSearchParams({ q, limit: '20', ...(cursor ? { cursor } : {}) })}`, { method: 'GET', ...(signal ? { signal } : {}) }, publicMemberPageSchema)
+export const getProfileCollection = (username: string, collection: PublicProfileCollection, cursor?: string, signal?: AbortSignal) => request(`/v1/profiles/${encodeURIComponent(username)}/collections/${collection}?${new URLSearchParams({ limit: '20', ...(cursor ? { cursor } : {}) })}`, { method: 'GET', ...(signal ? { signal } : {}) }, publicProfileCollectionPageSchema)
 
 export async function getCurrentMember(signal?: AbortSignal): Promise<SafeMember | null> {
   try {

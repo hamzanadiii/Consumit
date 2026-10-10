@@ -18,7 +18,7 @@ describe('provider contract', () => {
     expect(await registration.adapter.resolve({ ref, region: 'US', audioLanguage: 'en' }, AbortSignal.abort())).toMatchObject({ code: 'cancelled' })
   })
   it('rejects malformed, expired, off-allowlist, and header-locked direct sources', () => {
-    for (const bad of [{ ...source, url: 'https://evil.example/media' }, { ...source, expiresAt: new Date(0).toISOString() }, { ...source, headers: { Cookie: 'secret' } }, { ...source, type: 'iframe' }]) {
+    for (const bad of [{ ...source, url: 'https://evil.example/media' }, { ...source, expiresAt: new Date(0).toISOString() }, { ...source, headers: { Cookie: 'secret' } }, { ...source, type: 'iframe' }, { ...source, frameSandbox: 'none' }]) {
       expect(validatedSources({ ok: true, sources: [bad] }, registration)).toEqual([])
     }
     expect(validatedSources({ ok: true, sources: [source, source] }, registration)).toHaveLength(1)

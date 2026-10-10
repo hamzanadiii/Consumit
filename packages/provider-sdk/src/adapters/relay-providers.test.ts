@@ -73,6 +73,11 @@ describe('PROVE relay provider routes', () => {
     expect(await createVidnestProvider(http, () => now, { id: 'zeta', servers: ['zeta'] }).resolve(series, signal())).toMatchObject({ ok: true, sources: [{ language: 'original', headers: { referer: 'https://nextgencloudfabric.com/' } }] })
     expect(http.mock.calls[0]?.[0]).toBe('https://new.vidnest.fun/nextgencloudfabric/tv/1396/3/4')
   })
+  it('scopes Fabric to the same nextgencloudfabric lane with original audio', async () => {
+    const http = client({ all_urls: ['https://remoteconsultinggroup.site/a.m3u8'], label: 'Fight Club 1999', headers: { Referer: 'https://nextgencloudfabric.com/', Cookie: 'secret' } }, [])
+    expect(await createVidnestProvider(http, () => now, { id: 'fabric', servers: ['fabric'] }).resolve(series, signal())).toMatchObject({ ok: true, sources: [{ language: 'original', headers: { referer: 'https://nextgencloudfabric.com/' } }] })
+    expect(http.mock.calls[0]?.[0]).toBe('https://new.vidnest.fun/nextgencloudfabric/tv/1396/3/4')
+  })
   it.each(['nebula','zephyr'])('scopes Rive %s and retains required Origin without credentials', async sub => {
     const inner = 'https://nebula.bright67.online/a.m3u8'
     const wrapper = new URL('https://proxy.valhallastream.com/m3u8-proxy')

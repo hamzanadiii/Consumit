@@ -156,8 +156,8 @@ describe('catalog contracts', () => {
     expect(titleReviewsQuerySchema.parse({ audience: 'circle' })).toEqual({ page: 1, sort: 'recent' })
     expect(titleReviewsQuerySchema.safeParse({ page: 0 }).success).toBe(false)
     expect(titleReviewsQuerySchema.safeParse({ sort: 'top' }).success).toBe(false)
-    expect(updateProfileRequestSchema.safeParse({ visibility: 'public' }).success).toBe(false)
-    expect(updateMemberListRequestSchema.safeParse({ visibility: 'public' }).success).toBe(false)
+    expect(updateProfileRequestSchema.safeParse({ visibility: 'public' }).success).toBe(true)
+    expect(updateMemberListRequestSchema.safeParse({ visibility: 'public' }).success).toBe(true)
   })
 
   it('bounds playback progress writes to sane ranges', () => {    expect(progressWriteRequestSchema.parse({ id: 693134, kind: 'movie', positionSeconds: 0 })).toMatchObject({ id: 693134, kind: 'movie' })

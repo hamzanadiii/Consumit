@@ -1,6 +1,8 @@
 import type { MediaOption } from './media-engine'
+import { canonicalSubtitleLanguage } from './subtitle-sync'
 
 export type MediaPreferences = { qualityHeight: number | null; audioLanguage?: string | undefined }
+export type ViewingPreferences = MediaPreferences & { subtitlesEnabled: boolean; subtitleLanguages: readonly string[] }
 const QUALITY_KEY = 'consumit.player.quality-height'
 
 export function readQualityPreference(): number | null {
@@ -15,8 +17,8 @@ export function qualityHeight(option: MediaOption): number | undefined {
 }
 
 /** Resolve a resolution intent against each source's own rendition identifiers. */
-export function createQualityPreference() {
-  let height = readQualityPreference()
+export function createQualityPreference(initialHeight = readQualityPreference()) {
+  let height = initialHeight
   return {
     get height() { return height },
     choose(option: MediaOption) {
@@ -43,6 +45,21 @@ export function preferredAudioOption(options: readonly MediaOption[], preference
   const normalized = normalizeAudioLanguage(preference)
   return options.find((option) => normalizeAudioLanguage(option.language ?? '') === normalized || option.label.toLowerCase() === normalized)
     ?? options.find((option) => normalized !== 'original' && normalizeAudioLanguage(option.language ?? '').split('-')[0] === normalized.split('-')[0])
+}
+
+export function preferredSubtitleOption(options: readonly MediaOption[], languages: readonly string[], currentValue?: string) {
+  const current = options.find(option => option.value === currentValue)
+  for (const language of languages) {
+    const match = preferredAudioOption(options, language)
+    // Preserve a selected release within the preferred language, while
+    // allowing a higher-priority language to replace a fallback.
+    if (match) return current && preferredAudioOption([current], language) ? current : match
+  }
+  return undefined
+}
+export function semanticSubtitleLanguage(language: string | undefined) {
+  const code = canonicalSubtitleLanguage(language).split('-')[0] ?? ''
+  return /^[a-z]{2,3}$/.test(code) && code !== 'und' ? code : undefined
 }
 
 export function normalizeAudioLanguage(language: string): string {

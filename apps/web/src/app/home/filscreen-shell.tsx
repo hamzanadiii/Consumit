@@ -1,9 +1,11 @@
 'use client'
 
-import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, Search, Settings, Shield, Sun } from 'lucide-react'
+import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, Search, Settings, Shield, Sun, X } from 'lucide-react'
 import Image from 'next/image'
 import * as NextNav from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { NotificationBell } from '../notifications/notification-bell'
+import { WelcomeDialog } from '../experience/welcome-dialog'
 
 function getNextPathname(): string | null {
   try {
@@ -28,9 +30,16 @@ import { Avatar } from '@consumit/ui'
 import { FilScreenSearchOverlay } from './filscreen-search-overlay'
 import { FilScreenFooter } from './filscreen-footer'
 import { logoutMember } from '@/lib/identity-browser'
-import { memberAvatarSrc } from '@/lib/avatar'
+import { dicebearAvatarUrl, memberAvatarSrc } from '@/lib/avatar'
 import { useSession } from '../session/session'
 import { OnDemandLink as Link } from '../shared/on-demand-link'
+import { PopunderAd } from '../shared/popunder-ad'
+
+/** Surfaces where a popunder must never fire: private work, account
+ *  management, and admin. Browse surfaces (home, catalog, detail, search,
+ *  profile, lists) keep the two-per-hour popunder. Watch and onboarding use
+ *  reduced shells and never mount this component. */
+const POPUNDER_EXCLUDED_PATHS = ['/settings', '/admin']
 
 export { SIDEBAR_STORAGE_KEY, THEME_INIT_SCRIPT, THEME_STORAGE_KEY, THEME_STYLE, stampDocumentTheme, type FilScreenTheme } from './filscreen-theme'
 import { THEME_STYLE } from './filscreen-theme'
@@ -49,9 +58,9 @@ const SIDEBAR_ROW_CLASS =
 const SIDEBAR_ICON_CLASS =
   'grid place-items-center text-[var(--fs-muted)] transition-all duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none motion-reduce:transform-none'
 
-/** The single default guest character every visitor shares. One stable
- *  letter for all guests: no storage, no hydration mismatch, no surprises. */
-const GUEST_CHARACTER = 'G'
+/** The single default guest portrait every visitor shares. One fixed generated
+ *  character for all guests: no storage, no hydration mismatch, no surprises. */
+const GUEST_AVATAR_SRC = dicebearAvatarUrl('consumit-guest')
 
 const MEMBER_ARCHIVES = [
   { section: 'watchlist', label: 'Watchlist', icon: Bookmark },
@@ -150,6 +159,20 @@ export function FilScreenShell({
     }
   }
 
+  // The desktop rail never expands: the brand mark links home instead of
+  // toggling, so any open state (a stored choice, the mobile strip) falls
+  // back to the rail at desktop widths.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const forceRail = () => {
+      if (desktop.matches && sidebarOpen) persistSidebarToggle()
+    }
+    forceRail()
+    desktop.addEventListener('change', forceRail)
+    return () => desktop.removeEventListener('change', forceRail)
+  }, [sidebarOpen, persistSidebarToggle])
+
   async function signOut() {
     setSignOutError(null)
     try {
@@ -196,6 +219,7 @@ export function FilScreenShell({
 
   return (
     <div className="min-h-screen bg-[var(--fs-shell)] text-[var(--fs-ink)]" data-filscreen-home data-theme={theme} style={{ colorScheme: theme }}>
+      <WelcomeDialog pathname={pathname ?? '/'} />
       {pendingHref ? (
         <div aria-label="Loading page" className="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden" role="status">
           <div aria-hidden="true" className="fs-route-progress h-full w-1/4 bg-[var(--fs-accent)]" />
@@ -204,36 +228,39 @@ export function FilScreenShell({
       <div aria-hidden="true" dangerouslySetInnerHTML={{ __html: CONTRACT_HTML }} />
       <style>{THEME_STYLE}</style>
       {pageHeading ? <h1 className="sr-only">{pageHeading}</h1> : null}
-      <div className={sidebarOpen ? 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[216px_minmax(0,1fr)]' : 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]'}>
-        <aside aria-label="Primary" id="filscreen-sidebar" className={sidebarOpen ? 'fs-sidebar-rail flex flex-col gap-6 border-b border-[var(--fs-line)] p-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-6' : 'fs-sidebar-rail hidden flex-col items-center gap-6 border-[var(--fs-line)] py-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3'}>
-          <div className={sidebarOpen ? 'flex min-h-11 items-center justify-between gap-2' : 'flex min-h-11 flex-col items-center justify-center gap-2'}>
+      <div className={sidebarOpen ? 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]' : 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]'}>
+        <aside aria-label="Primary" id="filscreen-sidebar" className={sidebarOpen ? 'fs-sidebar-rail flex flex-col gap-6 border-b border-[var(--fs-line)] p-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3 lg:items-center' : 'fs-sidebar-rail hidden flex-col gap-6 border-[var(--fs-line)] py-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3 lg:items-center'}>
+          <div className="flex min-h-11 items-center justify-between gap-2 lg:flex-col lg:justify-center">
             {sidebarOpen ? (
-              <Link aria-label="Consumit home" className="fs-fade fs-sidebar-wordmark inline-flex min-h-11 items-center gap-2.5 rounded text-sm font-bold tracking-[0.2em] outline-none transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none" href="/">
+              <Link aria-label="Consumit home" className="fs-fade fs-sidebar-wordmark inline-flex min-h-11 items-center gap-2.5 rounded text-sm font-bold tracking-[0.2em] outline-none transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none lg:hidden" href="/">
                 <Image alt="" className="size-7" height={28} src="/assets/consumit-mark.svg" width={28} />
                 CONSUMIT
               </Link>
             ) : null}
-            <button
-              aria-controls="filscreen-sidebar"
-              aria-expanded={sidebarOpen}
-              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-              className="group grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none"
-              onClick={toggleSidebar}
-              type="button"
-            >
-              <span className="grid place-items-center transition-transform duration-300 ease-out group-active:scale-90 motion-reduce:transition-none">
-                <Image alt="" className="size-[18px]" height={18} src="/assets/consumit-mark.svg" width={18} />
-              </span>
-            </button>
+            <Link aria-label="Consumit home" className="hidden size-11 shrink-0 place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] lg:grid" href="/">
+              <Image alt="" className="size-8" height={32} src="/assets/consumit-mark.svg" width={32} />
+            </Link>
+            {sidebarOpen ? (
+              <button
+                aria-controls="filscreen-sidebar"
+                aria-expanded={sidebarOpen}
+                aria-label="Hide sidebar"
+                className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
+                onClick={toggleSidebar}
+                type="button"
+              >
+                <X aria-hidden="true" className="size-[18px]" />
+              </button>
+            ) : null}
           </div>
-          <nav aria-label="Main navigation" className={sidebarOpen ? 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0' : 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3'} data-scrollrow key={sidebarOpen ? 'main-open' : 'main-collapsed'}>
+          <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3" data-scrollrow key={sidebarOpen ? 'main-open' : 'main-collapsed'}>
             <SidebarLink active={pathname === '/'} delay={0} href="/" icon={<House aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Home" />
             {MEMBER_ARCHIVES.map(({ section, label, icon: Icon }, index) => {
               const href = memberProfileRoot ? `${memberProfileRoot}/${section}` : `/library?section=${section}`
               return <SidebarLink active={pathname === href || pathname.startsWith(`${href}/`)} delay={(index + 1) * 50} href={href} icon={<Icon aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} key={section} label={label} />
             })}
           </nav>
-          <nav aria-label="Account" className={sidebarOpen ? 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0 lg:mt-auto' : 'flex gap-1 overflow-x-auto pb-1 lg:grid lg:mt-auto lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3 lg:[&>button]:justify-center lg:[&>button]:px-3'} data-scrollrow key={sidebarOpen ? 'account-open' : 'account-collapsed'}>
+          <nav aria-label="Account" className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:mt-auto lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3 lg:[&>button]:justify-center lg:[&>button]:px-3" data-scrollrow key={sidebarOpen ? 'account-open' : 'account-collapsed'}>
             <button
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               aria-pressed={theme === 'dark'}
@@ -343,13 +370,14 @@ export function FilScreenShell({
                 <span className="flex-1 truncate text-[var(--fs-muted)] group-hover:text-[var(--fs-secondary)]">Search</span>
                 <kbd aria-hidden="true" className="hidden shrink-0 rounded-md border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--fs-muted)] sm:inline-block">⌘K</kbd>
               </button>
+              <NotificationBell pathname={pathname} navigate={href => router.push(href)} />
               {member ? (
                 <Link aria-label={`Your library, signed in as ${member.username}`} className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/profile/${member.username}`}>
                   <Avatar className="size-11" name={member.displayName ?? member.username} size="md" src={avatarSrc ?? undefined} treatment={member.avatarStyle} />
                 </Link>
               ) : (
                 <Link aria-label="Guest profile" title="Guest profile" className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/library?section=profile">
-                  <Avatar className="size-11" name={GUEST_CHARACTER} size="md" treatment="noir" />
+                  <Avatar className="size-11" imageAlt="Guest portrait" name="Guest" size="md" src={GUEST_AVATAR_SRC} treatment="noir" />
                 </Link>
               )}
             </div>
@@ -361,6 +389,7 @@ export function FilScreenShell({
         </div>
       </div>
       {searchOpen ? <FilScreenSearchOverlay onClose={closeSearch} open /> : null}
+      {POPUNDER_EXCLUDED_PATHS.every(prefix => !pathname.startsWith(prefix)) ? <PopunderAd /> : null}
     </div>
   )
 }

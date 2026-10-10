@@ -4,9 +4,12 @@ import { Keyboard, Moon, SkipBack, SkipForward, Tv } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { titleHref, type PlaybackProvider, type PlaybackRef, type PlaybackSession, type DeliveryFailure, type SeparateAudioTrack } from '@consumit/contracts'
+import { titleHref, experiencePreferencesSchema, type PlaybackProvider, type PlaybackRef, type PlaybackSession, type DeliveryFailure, type SeparateAudioTrack, type ExperiencePreferences, type ExperiencePatch } from '@consumit/contracts'
 import { Button, ConsumitPlayer, Toggle, buttonVariants, SUBTITLE_LANGUAGES_EVENT, readStoredSubtitleLanguages, readQualityPreference, createQualityPreference } from '@consumit/ui'
 import { useSession } from '../session/session'
+import { useExperience } from '../experience/experience-provider'
+import { applyPlayerDefaults } from '@/lib/experience-storage'
+import { browserSkipTimes } from '@/lib/skip-times-browser'
 import { listPlaybackProviders, playbackCapabilities, playbackRequest, switchPlaybackProvider, listSeparateAudio, prepareSeparateAudio } from '@/lib/playback-browser'
 import { discoverSubtitles, pageSubtitles, searchSubtitles, prepareSubtitle, fetchSubtitlePreference, saveSubtitlePreference, type SubtitleDiscoveryEvent, type SubtitleCandidate, type SubtitleProviderStatus } from '@/lib/subtitles-browser'
 import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, readPlaybackProgress, writePlaybackProgress, type ProgressCheckpoint } from '@/lib/playback-progress'
@@ -25,11 +28,28 @@ function formatClock(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode, nextHref, prevHref, layout = 'fullscreen', pinnedProvider }: { audioLanguage?: string | undefined; title: WatchTitle; episode?: WatchEpisode | undefined; nextHref?: string | undefined; prevHref?: string | undefined; layout?: 'fullscreen' | 'embedded' | undefined; pinnedProvider?: string | undefined }) {
+type WatchPlaybackProps = { audioLanguage?: string | undefined; title: WatchTitle; episode?: WatchEpisode | undefined; nextHref?: string | undefined; prevHref?: string | undefined; layout?: 'fullscreen' | 'embedded' | undefined; pinnedProvider?: string | undefined }
+export function WatchPlayback(props: WatchPlaybackProps) {
+  const experience = useExperience()
+  if (!experience.ready) return <ConsumitPlayer title={props.title.title} preparing posterSrc={watchPoster(props.title.backdropUrl ?? props.title.posterUrl)} />
+  return <WatchPlaybackReady {...props} key={`${experience.owner ?? 'guest'}:${props.title.kind}:${props.title.id}:${props.episode?.seasonNumber}:${props.episode?.episodeNumber}`} initialPreferences={experience.preferences} />
+}
+function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, nextHref, prevHref, layout = 'fullscreen', pinnedProvider, initialPreferences }: WatchPlaybackProps & { initialPreferences: ExperiencePreferences }) {
   const { member } = useSession()
+  const experience = useExperience()
+  const [openingPreferences] = useState(initialPreferences)
+  const saveExperience = experience.patch
+  const intent = useRef(openingPreferences)
+  const [preferenceSyncError, setPreferenceSyncError] = useState(false)
+  const remember = useCallback((change: ExperiencePatch) => {
+    if (!Object.keys(change).length) return
+    intent.current = experiencePreferencesSchema.parse({ ...intent.current, ...change })
+    void saveExperience(change).then(() => setPreferenceSyncError(false), () => setPreferenceSyncError(true))
+  }, [saveExperience])
   const router = useRouter()
   const memberId = member?.id
   const ref = useMemo<PlaybackRef>(() => ({ kind: title.kind, id: title.id, ...(episode ? { season: episode.seasonNumber, episode: episode.episodeNumber } : {}) }), [title.id, title.kind, episode])
+  const requestSkipTimes = useCallback((duration: number, signal: AbortSignal) => browserSkipTimes(ref, duration, signal), [ref])
   const [session, setSession] = useState<PlaybackSession | null>(null)
   // The session holds the newest lease; buffered HLS requests can adopt it
   // without replacing the engine or clearing the movie's buffered media.
@@ -64,10 +84,13 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       if (!request.signal.aborted) { audioLoadedSession.current = null; setSeparateAudioError('More languages are unavailable right now. Close and reopen Audio to retry.') }
     }).finally(() => { if (!request.signal.aborted) setSeparateAudioLoading(false) })
   }, [session, title.kind])
-  const selectSeparateAudio = useCallback((id: string) => {
-    if (!session) return Promise.reject(new Error('Playback has not started'))
-    return prepareSeparateAudio(session, id, new AbortController().signal)
-  }, [session])
+  const selectSeparateAudio = useCallback(async (id: string) => {
+    if (!session) throw new Error('Playback has not started')
+    const result = await prepareSeparateAudio(session, id, AbortSignal.timeout(12_000))
+    const language = separateAudioTracks.find(track => track.id === id)?.language
+    if (language && language !== 'und' && /^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(language)) remember({ audioLanguage: language })
+    return result
+  }, [session, separateAudioTracks, remember])
   const sourceFailed = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -97,22 +120,19 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   // in the mount effect so SSR and first paint never disagree.
   const [storedAudio, setStoredAudio] = useState<string | null>(null)
   useEffect(() => {
-    if (audioLanguageProp !== undefined) return
     let active = true
     queueMicrotask(() => {
       if (!active) return
-      try {
-        const stored = window.localStorage.getItem('consumit.player.audio-language')
-        setStoredAudio(stored && /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(stored) ? Intl.getCanonicalLocales(stored)[0] ?? stored : 'en')
-      } catch { setStoredAudio('en') }
+      applyPlayerDefaults(openingPreferences)
+      setStoredAudio(openingPreferences.audioLanguage)
     })
     return () => { active = false }
-  }, [audioLanguageProp])
+  }, [openingPreferences])
   const audioLanguage = audioLanguageProp ?? storedAudio ?? 'en'
   // Episode-room preferences: device-local, read after mount so SSR and
   // first paint never disagree. Autoplay advances on end, Auto Next shows
   // the Up-next card, Auto Skip drives the player skip control in sync.
-  const [autoplay, setAutoplay] = useState(false)
+  const [autoplay, setAutoplay] = useState(openingPreferences.autoplayNextEpisode)
   const [autoNext, setAutoNext] = useState(true)
   const [autoSkip, setAutoSkip] = useState(true)
   const [lightsOff, setLightsOff] = useState(false)
@@ -122,7 +142,6 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     queueMicrotask(() => {
       if (!active) return
       try {
-        if (window.localStorage.getItem('consumit.player.autoplay') === '1') setAutoplay(true)
         if (window.localStorage.getItem('consumit.player.auto-next') === '0') setAutoNext(false)
         if (window.localStorage.getItem('consumit.player.auto-skip') === '0') setAutoSkip(false)
       } catch { /* Storage is optional. */ }
@@ -156,7 +175,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     eventsRef.current = events
     return () => { events.close(); eventsRef.current = null }
   }, [sessionId, isFrame])
-  const name = episode ? `${title.title} · ${episode.title}` : title.title
+  const name = title.title
 
   const save = useCallback(async (keepalive = false, force = false) => {
     if (frameActive.current) return
@@ -204,7 +223,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     if (!autoStarted.current) {
       // Without an explicit prop the first resolve waits for the stored
       // preference so the opening request already carries it.
-      if (audioLanguageProp === undefined && storedAudio === null) return
+      if (storedAudio === null) return
       autoStarted.current = true; void start()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,16 +279,20 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const castSender = useMemo(() => createCastSender({}), [])
   const [castAvailable, setCastAvailable] = useState(false)
   const [castStatus, setCastStatus] = useState<CastStatus | null>(null)
+  const castStarting = useRef(false)
+  const updateCastStatus = useRef<() => void>(() => undefined)
   const wasCasting = useRef(false)
   const tvPlaying = useRef(false)
-  const loadCastMedia = useCallback(async (target: PlaybackSession) => {
+  const loadCastMedia = useCallback(async (target: PlaybackSession, playback = { position: clock.current.position, playing: clock.current.playing }, signal?: AbortSignal) => {
     if (target.source.type === 'iframe') { castSender.endSession(true); return }
+    signal?.throwIfAborted()
     await castSender.loadMedia({
       contentId: target.source.src,
       contentType: castContentType(target.source.type),
       title: name,
       artwork: episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl ?? undefined,
-      position: clock.current.position,
+      position: playback.position,
+      playing: playback.playing,
       customData: {
         sessionId: target.id,
         providerId: target.source.providerId,
@@ -281,8 +304,8 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   useEffect(() => {
     let cancelled = false
     void castSender.ensure().then((ready) => { if (!cancelled && ready) setCastAvailable(castSender.available) })
-    const unsubscribe = castSender.subscribe(() => {
-      if (cancelled) return
+    const update = () => {
+      if (cancelled || castStarting.current) return
       setCastAvailable(castSender.available)
       const status = castSender.status
       setCastStatus(status)
@@ -306,12 +329,20 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
         clock.current.playing = true
         setResume({ position: clock.current.position, playing: true })
       }
-    })
+    }
+    updateCastStatus.current = update
+    const unsubscribe = castSender.subscribe(update)
     return () => {
       cancelled = true
       unsubscribe()
     }
   }, [castSender, completePlayback])
+  const checkCast = useCallback(async () => {
+    if (!process.env.NEXT_PUBLIC_CAST_RECEIVER_ID) return 'unconfigured' as const
+    const ready = await castSender.ensure()
+    setCastAvailable(castSender.available)
+    return ready ? 'ready' as const : 'unavailable' as const
+  }, [castSender])
   const handleCastClick = useCallback(() => {
     if (!session || requestRef.current) return
     if (castSender.status) {
@@ -319,17 +350,20 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       castSender.endSession(true)
       return
     }
+    const playback = { position: clock.current.position, playing: clock.current.playing }
+    castStarting.current = true
     const controller = new AbortController(); requestRef.current = controller
     setBusy(true); setError(null)
     void (async () => {
       try {
         await castSender.requestSession()
-        if (controller.signal.aborted) return
-        await loadCastMedia(session)
+        controller.signal.throwIfAborted()
+        await loadCastMedia(session, playback, controller.signal)
       } catch {
+        castSender.endSession(true)
         if (!controller.signal.aborted) showNotice('Couldn’t reach the TV. Try again.')
       }
-      finally { finishRequest(controller, async () => { handleCastClick() }) }
+      finally { castStarting.current = false; updateCastStatus.current(); finishRequest(controller, async () => { handleCastClick() }) }
     })()
   }, [session, castSender, loadCastMedia, showNotice, finishRequest])
 
@@ -340,7 +374,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     setBusy(true); setError(null); setEnded(false); setManualServer(providerId)
     try {
       const [next, position] = await Promise.all([
-        coordinator.resolve({ ref, capabilities: playbackCapabilities(), audioLanguage, ...(providerId ? { providerId } : {}), preferences: { qualityHeight: readQualityPreference() } }, controller.signal),
+        coordinator.resolve({ ref, capabilities: playbackCapabilities(), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, ...(providerId ? { providerId } : {}), preferences: { qualityHeight: intent.current.qualityHeight, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage } }, controller.signal),
         readPlaybackProgress(ref, controller.signal, member?.id),
       ])
       if (controller.signal.aborted) return
@@ -469,6 +503,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       if (controller.signal.aborted) return
       if (next.source.providerId !== session.source.providerId || next.ref.kind !== session.ref.kind || next.ref.id !== session.ref.id || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Unexpected quality source.')
       createQualityPreference().choose({ value, label: `${height}p`, height })
+      remember({ qualityHeight: height })
       coordinator.setPreferences({ qualityHeight: height, audioLanguage })
       setResume(retained); setSession(next); setLocalSource(next.source); sourceFailed.current = false
       if (castSender.status) {
@@ -478,7 +513,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
     } catch {
       if (!controller.signal.aborted) showNotice('Couldn’t change quality. Keeping the current stream.')
     } finally { finishRequest(controller, () => switchQuality(value)) }
-  }, [session, audioLanguage, coordinator, castSender, loadCastMedia, showNotice, finishRequest])
+  }, [session, audioLanguage, coordinator, castSender, loadCastMedia, showNotice, finishRequest, remember])
 
   // Lab pin (?provider=): after the opening resolve lands on another
   // provider, switch once to the pinned one. Consumed immediately so
@@ -493,7 +528,8 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
 
   // Aggregated engine captions (YIFY, TVSubtitles, CastleSubs, NxshaSubs,
   // SubSource, VDRK) join the menu independently of the streaming provider.
-  // They arrive after first frame and merge live without reloading media; a
+  // Enabled viewing preferences start discovery with Watch, before Play.
+  // Tracks merge live without reloading media; a
   // failure only means the menu shows the streaming providers' own tracks.
   // The member's preferred subtitle languages ride along so the engine
   // tries those first; changing them refetches live.
@@ -502,23 +538,24 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const [subtitleSearchId, setSubtitleSearchId] = useState<string | null>(null)
   const [subtitleLanguages, setSubtitleLanguages] = useState<SubtitleDiscoveryEvent['languages']>([])
   const [subtitleProviders, setSubtitleProviders] = useState<SubtitleProviderStatus[]>([])
-  const [subtitleLoading, setSubtitleLoading] = useState(false)
+  const [subtitleLoading, setSubtitleLoading] = useState(openingPreferences.subtitlesEnabled)
   const [subtitleError, setSubtitleError] = useState<string | null>(null)
-  const [subtitleRequested, setSubtitleRequested] = useState(false)
+  const [subtitleRequested, setSubtitleRequested] = useState(openingPreferences.subtitlesEnabled)
   const [subtitleAttempt, setSubtitleAttempt] = useState(0)
-  const subtitleSessionId = session?.id
-  const [subtitleLangs, setSubtitleLangs] = useState<string[]>(() => readStoredSubtitleLanguages())
+  const subtitleSessionReady = Boolean(session && session.source.type !== 'iframe')
+  const [subtitleLangs, setSubtitleLangs] = useState<string[]>(openingPreferences.subtitleLanguages)
   useEffect(() => {
     const sync = () => setSubtitleLangs(readStoredSubtitleLanguages())
     window.addEventListener(SUBTITLE_LANGUAGES_EVENT, sync)
     return () => window.removeEventListener(SUBTITLE_LANGUAGES_EVENT, sync)
   }, [])
   useEffect(() => {
-    if (!subtitleSessionId || !subtitleRequested) return
+    if (!subtitleSessionReady || !subtitleRequested) return
     let active = true
+    const controller = new AbortController()
     void discoverSubtitles(
       { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
-      AbortSignal.timeout(15_000),
+      AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
       (event) => {
         if (!active) return
         setSubtitleSearchId(event.searchId)
@@ -530,8 +567,8 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
       () => { if (active) setSubtitleLoading(false) },
       () => { if (active) { setSubtitleLoading(false); setSubtitleError('Subtitle search is unavailable. Try again.') } },
     )
-    return () => { active = false }
-  }, [subtitleSessionId, ref, subtitleRequested, subtitleAttempt])
+    return () => { active = false; controller.abort() }
+  }, [subtitleSessionReady, ref, subtitleRequested, subtitleAttempt])
   const loadSubtitlePage = useCallback(async (language: string, cursor: number): Promise<{ tracks: SubtitleCandidate[]; total: number; nextCursor: number | null }> => {
     if (!subtitleSearchId) return { tracks: [], total: 0, nextCursor: null }
     return pageSubtitles(subtitleSearchId, language, cursor, subtitleLangs, AbortSignal.timeout(10_000))
@@ -659,6 +696,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
   const embedded = layout === 'embedded'
   return (
     <main className={embedded ? 'flex w-full flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-black' : 'flex h-dvh flex-col bg-black'} data-consumit-player-screen data-layout={layout} data-session={session ? 'ready' : 'searching'}>
+      {preferenceSyncError || experience.error ? <div className="flex flex-wrap items-center gap-3 bg-black px-4 py-2 text-xs text-copy" role="alert">{experience.error ?? 'Your choices could not sync. Playback continues.'}<Button size="sm" variant="ghost" onClick={() => { void experience.retry().then(() => setPreferenceSyncError(false), () => setPreferenceSyncError(true)) }}>Retry preference sync</Button></div> : null}
       <section aria-label={`${name} playback`} className={embedded ? 'relative flex aspect-video w-full flex-col' : 'relative flex min-h-0 w-full flex-1 flex-col justify-center'}>
         <p className="sr-only" role="status">{stateText}</p>
         {busy && session ? (
@@ -689,10 +727,15 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
             {serverLoading ? <span role="status" className="text-xs">Loading servers…</span> : null}
             {serverError ? <Button size="sm" variant="ghost" onClick={requestServers}>Retry server list</Button> : null}
           </div>
-          <ProviderFrame key={localSource.id} src={localSource.src} title={name} audioLanguage={title.kind === 'anime' ? audioLanguage : undefined} onFallback={() => void recover('network', 'manual')} />
+          <ProviderFrame key={localSource.id} src={localSource.src} title={name} audioLanguage={title.kind === 'anime' ? audioLanguage : undefined} frameSandbox={localSource.frameSandbox} onFallback={() => void recover('network', 'manual')} />
+          <p className="px-3 py-2 text-xs leading-5 text-white/80">This external player may require choosing audio and subtitles inside its own controls.</p>
         </div> : <ConsumitPlayer
+          initialViewingPreferences={{ ...openingPreferences, audioLanguage }}
+          subtitleLanguages={openingPreferences.subtitleLanguages}
+          onViewingPreferencesChange={change => { const { audioLanguage: selectedAudio, subtitleLanguages, ...rest } = change; remember({ ...rest, ...(subtitleLanguages ? { subtitleLanguages: [...subtitleLanguages] } : {}), ...(title.kind !== 'anime' && selectedAudio ? { audioLanguage: selectedAudio } : {}) }) }}
           className="flex w-full flex-1 flex-col rounded-none border-0" title={name} posterSrc={watchPoster(episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl)}
           source={playerSource} extraSubtitles={extraSubtitles} resumeAt={resume.position} resumePlaying={resume.playing}
+          onSkipSegmentsRequest={requestSkipTimes}
           {...(session ? {
             serverOptions, selectedServer: session.source.providerId,
             serverAuto: manualServer !== session.source.providerId,
@@ -706,10 +749,10 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
             onQualityChange: (value: string) => { void switchQuality(value) },
           } : {})}
           {...(title.kind !== 'anime' ? { separateAudioTracks, separateAudioLoading, separateAudioError, onAudioRequest: requestAudio, onSeparateAudioSelect: selectSeparateAudio } : {})}
-          castAvailable={castAvailable} castConnected={false} onCastClick={() => handleCastClick()}
+          castAvailable={castAvailable} castConnected={false} onCastCheck={checkCast} onCastClick={() => handleCastClick()}
           subtitleDiscovery={{ languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
           onSubtitlePage={loadSubtitlePage} onSubtitleSearch={searchSubtitleCandidates} onSubtitleCandidateSelect={selectSubtitleCandidate}
-          topMeta={[episodeMeta, qualityMeta].filter(Boolean).join(' · ') || undefined}
+          topMeta={(title.kind === 'anime' ? episodeMeta : [episodeMeta, qualityMeta].filter(Boolean).join(' · ')) || undefined}
           preparing={!session && !error}
           preparationMeta={episodeMeta ?? [title.year, formatRuntime(title.kind === 'movie' ? title.runtimeMinutes : title.episodeRuntimeMinutes)].filter(Boolean).join(' · ')}
           onPreviousEpisode={prevHref ? () => router.push(prevHref) : undefined}
@@ -739,6 +782,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
                 <Button loading={busy} onClick={() => void start()}>Try again</Button>
                 {!serverRequested ? <Button variant="secondary" onClick={requestServers}>Choose another server</Button> : null}
                 <Link className={buttonVariants({ variant: 'secondary' })} href={titleHref(title)}>Return to title</Link>
+                {title.kind === 'anime' && audioLanguage === 'en' ? <Link className={buttonVariants({ variant: 'secondary' })} href={`/watch/anime/${title.id}?episode=${episode?.episodeNumber ?? 1}&audio=sub`}>Watch SUB instead</Link> : null}
               </div>
               {serverRequested ? <div className="mt-4 space-y-2">
                 <label className="flex items-center gap-3 text-sm text-ink">Server<select aria-label="Server" className="h-11 min-w-0 flex-1 rounded-control border border-control-outline bg-black px-3 text-white outline-none focus-visible:ring-2 focus-visible:ring-orange" value={manualServer ?? ''} disabled={busy || serverLoading} onChange={event => void start(event.target.value || null)}>
@@ -770,7 +814,7 @@ export function WatchPlayback({ audioLanguage: audioLanguageProp, title, episode
         <>
           <nav aria-label="Episode" className={`flex flex-wrap items-center gap-1 border-t border-white/10 bg-black px-3 py-2 sm:gap-2 sm:px-4 ${lightsOff ? 'opacity-30 transition-opacity hover:opacity-100 focus-within:opacity-100' : ''}`}>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Toggle checked={autoplay} label="Autoplay next episode" onCheckedChange={(value) => persistPref('consumit.player.autoplay', value, setAutoplay)} />
+              <Toggle checked={autoplay} label="Autoplay next episode" onCheckedChange={(value) => { persistPref('consumit.player.autoplay', value, setAutoplay); remember({ autoplayNextEpisode: value }) }} />
               <span className="text-xs font-bold text-copy">Autoplay</span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">

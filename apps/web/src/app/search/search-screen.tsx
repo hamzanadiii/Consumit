@@ -22,6 +22,7 @@ import { TitleCard } from '../shared/title-card'
 type SearchScreenProps = {
   /** AniList anime matches. TMDB never serves anime, so these arrive separately. */
   animeResults?: readonly AnimeTitleSummary[] | undefined
+  initialKind?: 'all' | 'movie' | 'series' | 'anime'
   initialQuery: string
   page: CatalogPage
   queryTooShort: boolean
@@ -40,8 +41,8 @@ function AnimeSearchCard({ anime }: { anime: AnimeTitleSummary }) {
   )
 }
 
-export function SearchScreen({ animeResults, initialQuery, page, queryTooShort }: SearchScreenProps) {
-  const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series' | 'anime'>('all')
+export function SearchScreen({ animeResults, initialKind = 'all', initialQuery, page, queryTooShort }: SearchScreenProps) {
+  const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series' | 'anime'>(initialKind)
   // TMDB serves movies and series only — anime matches come from AniList.
   const animeItems = animeResults ?? []
   const results = useMemo(() => {
@@ -95,6 +96,7 @@ export function SearchScreen({ animeResults, initialQuery, page, queryTooShort }
               <SectionHeading description={activeKind === 'anime' ? `${animeItems.length} AniList ${animeItems.length === 1 ? 'match' : 'matches'}` : `${results.length} real catalog ${results.length === 1 ? 'match' : 'matches'}`} id="results-heading" title={initialQuery.length >= 2 ? 'Search results' : 'Explore the catalog'} />
               <div className="flex flex-wrap gap-2" role="group" aria-label="Filter results">
                 {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => <FilterChip key={value} onClick={() => setActiveKind(value)} selected={activeKind === value}>{label}</FilterChip>)}
+                <Link className="inline-flex min-h-11 items-center rounded-control border border-[var(--fs-line)] px-4 text-sm text-[var(--fs-secondary)] hover:text-[var(--fs-ink)]" href={`/search?q=${encodeURIComponent(initialQuery)}&type=people`}>People</Link>
               </div>
             </div>
             {activeKind === 'anime' ? null : (

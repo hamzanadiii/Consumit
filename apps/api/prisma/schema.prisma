@@ -10,6 +10,92 @@ datasource db {
   provider = "postgresql"
 }
 
+model ReleaseTracking {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId Int
+  trackedSince DateTime @default(now())
+  @@id([memberId, catalogKind, tmdbId])
+  @@index([catalogKind, tmdbId])
+}
+
+model NotificationPreference {
+  memberId String @id
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  enabledAt DateTime?
+}
+
+model ReleaseTitle {
+  catalogKind CatalogKind
+  tmdbId Int
+  refreshAfter DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  failed Boolean @default(false)
+  @@id([catalogKind, tmdbId])
+  @@index([refreshAfter])
+}
+
+model ReleaseEpisode {
+  id String @id @default(uuid())
+  catalogKind CatalogKind
+  tmdbId Int
+  season Int
+  episode Int
+  title String
+  episodeTitle String?
+  imageUrl String?
+  releasedAt DateTime
+  datePrecision String
+  catalogCurrent Boolean @default(true)
+  verifyAfter DateTime @default(now())
+  providerCursor Int @default(0)
+  checkedAt DateTime?
+  providerId String?
+  revision String?
+  region String?
+  audioLanguage String?
+  notifications ReleaseNotification[]
+  checks ReleaseCheck[]
+  @@unique([catalogKind, tmdbId, season, episode])
+  @@index([verifyAfter])
+  @@index([catalogKind, tmdbId, releasedAt])
+}
+
+model ReleaseCheck {
+  id String @id @default(uuid())
+  episodeId String
+  episode ReleaseEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  leaseToken String
+  startedAt DateTime @default(now())
+  leaseUntil DateTime
+  finishedAt DateTime?
+  attempts Int @default(0)
+  providerId String?
+  revision String?
+  region String?
+  audioLanguage String?
+  passed Boolean @default(false)
+  failure String?
+  evidence Json?
+  @@index([startedAt])
+  @@index([leaseUntil, finishedAt])
+}
+
+model ReleaseNotification {
+  id String @id @default(uuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  episodeId String
+  episode ReleaseEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  checkedAt DateTime
+  readAt DateTime?
+  @@unique([memberId, episodeId])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)])
+}
+
 // Identity slice (Phase 3). Emails are stored normalized (lowercase, trimmed)
 // by the module; the unique constraint enforces one account per address.
 model Member {
@@ -41,11 +127,22 @@ model Member {
   savedLists      SavedMemberList[]
   importBatches   ImportBatch[]
   subtitlePreferences UserSubtitlePreference[]
+  releaseTracking ReleaseTracking[]
+  notificationPreference NotificationPreference?
+  experiencePreference ExperiencePreference?
+  notifications ReleaseNotification[]
 }
 
 enum MemberStatus {
   ACTIVE
   DELETED
+}
+
+model ExperiencePreference {
+  memberId String @id
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  preferences Json
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 enum MemberRole {

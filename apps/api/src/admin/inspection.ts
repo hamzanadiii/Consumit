@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { playbackRefSchema } from '@consumit/contracts'
-import { suppliesVideo, validatedSources, type ProviderRegistration } from '@consumit/provider-sdk'
+import { suppliesVideo, type ProviderRegistration } from '@consumit/provider-sdk'
+import { inspectProviderSources } from '../playback/inspection.ts'
 import type { PlaybackStore } from '../playback/state.ts'
 import { ApiError } from '../http/errors.ts'
 import { isProviderRemoved } from './provider-config.ts'
@@ -71,11 +72,7 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
     const started = performance.now()
     const elapsed = () => Math.round(performance.now() - started)
     try {
-      const result = await Promise.race([
-        provider.adapter.resolve({ ref: input.ref, region: deps.region, audioLanguage: input.audioLanguage }, controller.signal),
-        new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error('Inspection cancelled')), { once: true })),
-      ])
-      const valid = result.ok ? validatedSources(result, provider, Date.now()) : []
+      const { result, sources: valid } = await inspectProviderSources(provider, { ref: input.ref, region: deps.region, audioLanguage: input.audioLanguage }, controller.signal, deps.store)
       const proxy = provider.deliveryMode === 'relay'
       // A disabled provider can be tested in isolation without enabling its
       // live registration. The independent Worker approval still applies.
@@ -92,7 +89,7 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
         sources: valid.map((source) => ({ key: source.key, type: source.type, language: source.language,
           host: new URL(source.url).hostname, qualityHint: source.qualityHint, subtitleCount: source.subtitles.length })),
         // Private, ephemeral browser preview. Never put this field in reports, telemetry or logs.
-        ...(preview && previewSrc ? { preview: { src: previewSrc, type: preview.type, qualityHint: preview.qualityHint, expiresAt: new Date(expiry).toISOString(), delivery: proxy ? 'relay' : 'direct' } } : {}),
+        ...(preview && previewSrc ? { preview: { src: previewSrc, type: preview.type, qualityHint: preview.qualityHint, ...(preview.frameSandbox ? { frameSandbox: preview.frameSandbox } : {}), expiresAt: new Date(expiry).toISOString(), delivery: proxy ? 'relay' : 'direct' } } : {}),
       }
     } catch {
       reply.header('cache-control', 'private, no-store')

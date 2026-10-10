@@ -1,12 +1,14 @@
 import { attachMediaEngine, type EngineFailure, type EngineDeliveryFailure, type EngineTracks, type MediaEngine, type MediaOption } from './media-engine'
 import { isSafeMediaUrl, type DirectMediaSource } from './media-source'
 import type { ControllerEvent, ControllerSnapshot } from './playback-controller'
-import { createQualityPreference, mediaPreferences, preferredAudioOption } from './media-preferences'
+import { createQualityPreference, mediaPreferences, preferredAudioOption, preferredSubtitleOption, semanticSubtitleLanguage, type ViewingPreferences } from './media-preferences'
 
 type Callbacks = {
   change(snapshot: ControllerSnapshot): void
   fatal(reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure): void
   event?(event: ControllerEvent): void
+  initialPreferences?: ViewingPreferences | undefined
+  preferenceChange?: ((change: Partial<ViewingPreferences>) => void) | undefined
 }
 
 type ExternalTrack = { id: string; label: string; language: string; url: string }
@@ -52,11 +54,18 @@ export function createPlaybackControllerNext(
   let lastAdvanceAt = performance.now()
   let lastPosition = 0
   let audioPreference = 'original'
-  const qualityPreference = createQualityPreference()
+  const qualityPreference = createQualityPreference(callbacks.initialPreferences?.qualityHeight)
   let fixedQualityHint: string | undefined
   let subtitlePreference = 'en'
   try { audioPreference = localStorage.getItem('consumit.player.audio-language') ?? 'original' } catch { /* Optional storage. */ }
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Optional storage. */ }
+  let subtitleLanguages = callbacks.initialPreferences?.subtitleLanguages ?? [subtitlePreference]
+  if (callbacks.initialPreferences) {
+    audioPreference = callbacks.initialPreferences.audioLanguage ?? audioPreference
+    subtitlePreference = callbacks.initialPreferences.subtitlesEnabled ? subtitleLanguages[0] ?? 'en' : 'off'
+  } else {
+    try { if (localStorage.getItem('consumit.player.subtitles') === 'off') subtitlePreference = 'off' } catch { /* Optional storage. */ }
+  }
   let preferredPlaybackRate = video.playbackRate
   const restorePlaybackRate = () => {
     try { if (Number.isFinite(preferredPlaybackRate) && preferredPlaybackRate > 0) video.playbackRate = preferredPlaybackRate } catch { /* Playback speed is a preference, never a crash. */ }
@@ -133,11 +142,10 @@ export function createPlaybackControllerNext(
     })
     update({ subtitleTrack: value })
   }
-  const preferredSubtitle = () => {
-    const selected = snapshot.subtitles.find((option) =>
-      option.language?.split('-')[0] === subtitlePreference.split('-')[0] ||
-      option.label.toLowerCase() === subtitlePreference.toLowerCase())
+  const preferredSubtitle = (currentValue?: string) => {
+    const selected = preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
     selectSubtitle(subtitlePreference === 'off' ? 'off' : selected?.value ?? 'off')
+    update({ subtitleNotice: subtitlePreference !== 'off' && !selected ? 'Your preferred subtitles are unavailable on this source. Choose another track or keep watching.' : undefined })
   }
   const preferredAudio = () => {
     const selected = preferredAudioOption(snapshot.audio, audioPreference)
@@ -343,6 +351,7 @@ export function createPlaybackControllerNext(
       qualityPreference.choose(option)
       engine?.quality(value)
       update({ quality: value, qualityNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+      callbacks.preferenceChange?.({ qualityHeight: qualityPreference.height })
     },
     audio(value: string) {
       const selected = snapshot.audio.find((option) => option.value === value)
@@ -350,22 +359,26 @@ export function createPlaybackControllerNext(
       audioPreference = selected.language || selected.label.toLowerCase()
       try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Optional storage. */ }
       engine?.audio(value); update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+      callbacks.preferenceChange?.({ audioLanguage: mediaPreferences(qualityPreference.height, audioPreference).audioLanguage })
     },
     subtitle(value: string) {
       const selected = snapshot.subtitles.find((option) => option.value === value || option.language === value || option.label.toLowerCase() === value.toLowerCase())
       if (value !== 'off' && !selected) return
       const resolved = selected?.value ?? 'off'
       subtitlePreference = resolved === 'off' ? 'off' : selected?.language ?? 'en'
+      const language = semanticSubtitleLanguage(selected?.language)
+      if (resolved !== 'off' && language) subtitleLanguages = [language, ...subtitleLanguages.filter(value => value !== language)].slice(0, 3)
+      callbacks.preferenceChange?.({ subtitlesEnabled: resolved !== 'off', ...(resolved !== 'off' && language ? { subtitleLanguages } : {}) })
       try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Optional storage. */ }
       selectSubtitle(resolved)
+      update({ subtitleNotice: undefined })
     },
     externalSubtitles(entries: readonly ExternalTrack[]) {
       if (disposed) return
       const previous = snapshot.subtitleTrack
       replaceExternal(entries)
       mergeTracks()
-      if (snapshot.subtitles.some((option) => option.value === previous)) selectSubtitle(previous)
-      else preferredSubtitle()
+      preferredSubtitle(previous)
     },
     destroy() {
       if (disposed) return

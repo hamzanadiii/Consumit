@@ -1,89 +1,97 @@
 'use client'
 
-import { kindLabel, MAX_MEMBER_FAVORITES, type CatalogTitleSummary } from '@consumit/contracts'
-import { Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
+import { GUIDE_VERSION, kindLabel, MAX_MEMBER_FAVORITES, type CatalogRef, type CatalogTitleSummary } from '@consumit/contracts'
+import { Button, FilterChip, Input, OnboardingHeader, SelectableTitle } from '@consumit/ui'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-
-import { Button, FilterChip, Input, OnboardingHeader, ProgressRail, SelectableTitle } from '@consumit/ui'
-
+import Link from 'next/link'
 import { browserSearchCatalog } from '@/lib/catalog-browser'
 import { saveMemberFavorites } from '@/lib/identity-browser'
+import { useExperience } from '../experience/experience-provider'
+import { PreferenceEditor } from '../experience/preference-fields'
+import { CommunityCards } from '../experience/community-cards'
+import { useSession } from '../session/session'
+import { readFavoritesDraft, storeFavoritesDraft, clearFavoritesDraft } from './favorites-draft'
 
-function OnboardingScreen({ children, current }: { children: ReactNode; current: number }) {
-  return <div className="min-h-screen bg-canvas text-ink"><OnboardingHeader className="lg:min-h-[68px] lg:px-[50px]" current={current} skipHref="/" total={2} />{children}</div>
-}
-
-function SearchBox({ label, onChange, placeholder, value }: { label: string; onChange: (value: string) => void; placeholder: string; value: string }) {
-  return <form className="relative min-w-0" onSubmit={(event) => event.preventDefault()} role="search"><label className="sr-only" htmlFor={label}>{placeholder}</label><Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted" /><Input className="h-12 pl-12" id={label} maxLength={100} onChange={(event) => onChange(event.currentTarget.value)} placeholder={placeholder} type="search" value={value} /></form>
-}
-
-function PosterFan({ titles }: { titles: readonly CatalogTitleSummary[] }) {
-  return <div aria-hidden="true" className="relative mt-14 hidden h-[18rem] w-[28rem] lg:block">{titles.slice(0, 3).map((title, index) => title.posterUrl ? <Image alt="" className="absolute top-1 aspect-[2/3] h-[16.5rem] w-auto rounded-card border border-ink/15 object-cover shadow-2xl shadow-canvas/40" height={600} key={`${title.kind}:${title.id}`} src={title.posterUrl} style={{ left: `${0.75 + index * 8.1}rem`, transform: `rotate(${-8 + index * 7}deg)`, zIndex: index }} width={400} /> : null)}</div>
-}
-
-export function HistoryOnboardingScreen({ titles }: { titles: readonly CatalogTitleSummary[] }) {
-  return (
-    <OnboardingScreen current={1}><main className="px-5 py-7 sm:px-8 sm:py-10 lg:px-[50px] lg:py-11" data-consumit-onboarding-history><section className="relative overflow-hidden rounded-card border border-border bg-[linear-gradient(135deg,#17131a_0%,#37222e_55%,#15151b_100%)] px-5 py-8 sm:p-10 lg:min-h-[48rem] lg:p-[50px]"><div className="relative grid gap-10 lg:grid-cols-[minmax(0,29.5rem)_minmax(0,1fr)] lg:gap-10"><div className="flex flex-col"><h1 className="max-w-[14ch] text-balance font-display text-4xl leading-[0.98] tracking-[-0.025em] text-ink sm:text-5xl lg:text-[3.25rem]">Your history starts here.</h1><p className="mt-7 max-w-[44ch] text-sm leading-6 text-muted">Nothing to import. Every episode and film you finish lands in your diary automatically, with progress, ratings, and lists building from it.</p><PosterFan titles={titles} /></div><div className="flex flex-col justify-center"><div className="rounded-card border border-white/10 bg-black/25 p-6 sm:p-8"><p className="text-sm font-bold text-ink">Next: pick a few favorites</p><p className="mt-2 max-w-[42ch] text-sm leading-6 text-muted">Tell Consumit what you already love so home opens with something worth watching instead of an empty shelf.</p><Link className="mt-6 inline-flex min-h-11 items-center rounded-control bg-orange px-6 text-sm font-bold text-canvas transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href="/onboarding/favorites">Choose favorites</Link><Link className="mt-5 inline-flex min-h-11 items-center text-xs font-bold text-muted hover:text-ink" href="/">Skip for now</Link></div></div></div></section></main></OnboardingScreen>
-  )
-}
-
-function favoriteKey(title: CatalogTitleSummary) { return `${title.kind}:${title.id}` }
-
-export function FavoritesOnboardingScreen({ initialTitles }: { initialTitles: readonly CatalogTitleSummary[] }) {
+const stepHref = (step: string, next: string) => `/onboarding${step ? `/${step}` : ''}?${new URLSearchParams({ next })}`
+const keyFor = (ref: CatalogRef) => `${ref.kind}:${ref.id}`
+function GuideFrame({ children, current, next, back }: { children: ReactNode; current: number; next: string; back: string }) {
   const router = useRouter()
-  const requestIdRef = useRef(0)
+  const experience = useExperience()
+  async function skip() {
+    try { await experience.patch({ guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' }) } catch { /* Device dismissal is retained; skipping stays optional. */ }
+    router.push(next)
+  }
+  return <div className="min-h-screen bg-[var(--fs-page)] text-[var(--fs-ink)]"><OnboardingHeader current={current} total={3} skipHref={next} onSkip={() => void skip()} homeHref={next} className="bg-[var(--fs-nav)] text-[var(--fs-ink)]" /><main className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 sm:py-10"><Link className="mb-7 inline-flex min-h-11 items-center text-sm text-[var(--fs-secondary)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={back} onClick={event => { if (current === 1) { event.preventDefault(); void skip() } }}>Back</Link>{children}</main></div>
+}
+export function ViewingOnboardingScreen({ next = '/' }: { next?: string }) {
+  const router = useRouter()
+  return <GuideFrame current={1} next={next} back={next}><header className="mb-9 max-w-[68ch]"><h1 className="text-balance font-display text-4xl leading-[1.05] tracking-[-0.025em] sm:text-5xl">Make yourself at home.</h1><p className="mt-5 text-sm leading-7 text-[var(--fs-secondary)] sm:text-base">Pick how you like to watch. We’ll use these choices when you open a title, whenever the source supports them. You can change everything later.</p></header><PreferenceEditor label="Save and continue" onSaved={() => router.push(stepHref('favorites', next))} /></GuideFrame>
+}
+export function FavoritesOnboardingScreen({ initialTitles, initialFavorites = [], favoritesUnavailable = false, next = '/' }: { initialTitles: readonly CatalogTitleSummary[]; initialFavorites?: readonly CatalogRef[]; favoritesUnavailable?: boolean; next?: string }) {
+  const { member, status } = useSession()
+  const router = useRouter()
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<'all' | 'movie' | 'series' | 'anime'>('all')
   const [results, setResults] = useState<readonly CatalogTitleSummary[]>(initialTitles)
-  const [selectedIds, setSelectedIds] = useState<string[]>(initialTitles.slice(0, MAX_MEMBER_FAVORITES).map(favoriteKey))
+  const [selected, setSelected] = useState<readonly CatalogRef[]>(initialFavorites)
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-
+  const requestId = useRef(0)
+  const [known, setKnown] = useState(() => new Map(initialTitles.map(title => [keyFor(title), title])))
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
-    const normalized = query.trim().slice(0, 100)
-    if (normalized.length < 2) return
-    // Stale responses are ignored by request id instead of aborting in
-    // flight: aborts surface as unhandled AbortError overlays in the browser.
-    const requestId = ++requestIdRef.current
-    const timer = window.setTimeout(() => {
+    if (member) queueMicrotask(() => setSelected(readFavoritesDraft(member.id, initialFavorites)))
+  }, [member, initialFavorites])
+  useEffect(() => {
+    const id = ++requestId.current
+    if (query.trim().length < 2) return
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
       setSearchState('loading')
-      void browserSearchCatalog(normalized, scope)
-        .then((response) => {
-          if (requestIdRef.current !== requestId) return
-          setResults(response.items)
-          setSearchState('idle')
-        })
-        .catch(() => {
-          if (requestIdRef.current !== requestId) return
-          setSearchState('error')
-        })
+      void browserSearchCatalog(query.trim(), scope, controller.signal).then(response => {
+        if (id !== requestId.current || controller.signal.aborted) return
+        setKnown(current => new Map([...current, ...response.items.map(title => [keyFor(title), title] as const)]))
+        setResults(response.items); setSearchState('idle')
+      }, () => { if (id === requestId.current && !controller.signal.aborted) setSearchState('error') })
     }, 350)
-    return () => window.clearTimeout(timer)
-  }, [initialTitles, query, scope])
-
-  const searchActive = query.trim().length >= 2
-  const source = searchActive ? results : initialTitles
-  const visible = useMemo(() => (searchActive ? source : source.filter((title) => scope === 'all' || title.kind === scope)), [scope, searchActive, source])
-  const visibleSearchState = searchActive ? searchState : 'idle'
-  const known = new Map([...initialTitles, ...results].map((title) => [favoriteKey(title), title]))
-  const selected = selectedIds.map((id) => known.get(id)).filter((title): title is CatalogTitleSummary => Boolean(title))
-  function toggle(id: string) { setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : current.length < MAX_MEMBER_FAVORITES ? [...current, id] : current) }
-  async function saveFavorites() {
-    setSaving(true); setSaveError(null)
-    try {
-      await saveMemberFavorites(selected.map(({ id, kind }) => ({ id, kind })))
-      router.push('/')
-      router.refresh()
-    } catch { setSaveError('Your Favorites could not be saved. Please retry.'); setSaving(false) }
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [query, scope, attempt])
+  function toggle(ref: CatalogRef) {
+    const nextSelection = selected.some(value => keyFor(value) === keyFor(ref)) ? selected.filter(value => keyFor(value) !== keyFor(ref)) : selected.length < MAX_MEMBER_FAVORITES ? [...selected, ref] : selected
+    setSelected(nextSelection)
+    if (member) storeFavoritesDraft(member.id, nextSelection)
   }
-
-  return (
-    <OnboardingScreen current={2}><main className="px-5 py-9 sm:px-8 lg:px-[50px] lg:pt-[58px] lg:pb-9" data-consumit-onboarding-favorites><header><h1 className="max-w-[24ch] text-balance font-display text-4xl leading-none tracking-[-0.025em] text-ink sm:text-5xl">Pick four that feel like you.</h1><p className="mt-4 max-w-[68ch] text-sm leading-6 text-muted">Not the “best” titles. The real movies and series you would defend at an unreasonable hour.</p></header><div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_21.9375rem] lg:gap-20"><section><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><SearchBox label="favorite-title-search" onChange={setQuery} placeholder="Search a movie or series" value={query} /><div className="flex gap-2">{([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => <FilterChip className="h-12 flex-1 px-4 sm:flex-none" key={value} onClick={() => setScope(value)} selected={scope === value}>{label}</FilterChip>)}</div></div>{query.trim().length === 1 ? <p className="mt-3 text-xs text-orange">Type at least two characters to search.</p> : null}{visibleSearchState === 'loading' ? <p className="mt-5 text-xs text-muted" role="status">Searching the catalog…</p> : null}{visibleSearchState === 'error' ? <p className="mt-5 text-xs text-orange" role="alert">Search could not load. Your current favorites are preserved.</p> : null}<div className="mt-8 grid grid-cols-2 gap-x-3 gap-y-8 sm:grid-cols-3 xl:grid-cols-5">{visible.map((title) => <SelectableTitle artworkSrc={title.posterUrl ?? undefined} checked={selectedIds.includes(favoriteKey(title))} key={favoriteKey(title)} meta={[title.year, kindLabel(title.kind)].filter(Boolean).join(' · ')} name="favoriteTitles" onChange={() => toggle(favoriteKey(title))} title={title.title} value={favoriteKey(title)} />)}</div>{visible.length === 0 && visibleSearchState !== 'loading' ? <p className="mt-10 text-sm text-muted">No real catalog title matched that search.</p> : null}</section><aside className="self-start rounded-card border border-border bg-surface p-6 lg:sticky lg:top-7"><div className="flex items-baseline justify-between gap-4"><h2 className="text-sm font-bold text-ink">Your four</h2><p className="text-xs font-bold text-orange">{selectedIds.length} selected</p></div><ProgressRail className="mt-6" label={`${selectedIds.length} of ${MAX_MEMBER_FAVORITES} favorite titles selected`} max={MAX_MEMBER_FAVORITES} value={selectedIds.length} /><ol className="mt-7 space-y-3 text-xs text-copy">{selected.map((title) => <li key={favoriteKey(title)}>{title.title}</li>)}</ol>{selectedIds.length === MAX_MEMBER_FAVORITES ? <Button className="mt-8 w-full" loading={saving} onClick={() => void saveFavorites()} variant="accent">Save and continue</Button> : <Button className="mt-8 w-full" disabled size="lg" variant="accent">Choose {MAX_MEMBER_FAVORITES - selectedIds.length} more</Button>}{saveError ? <p className="mt-3 text-xs text-danger" role="alert">{saveError}</p> : null}</aside></div></main></OnboardingScreen>
-  )
+  async function save() {
+    setSaving(true); setSaveError(null)
+    try { await saveMemberFavorites(selected); if (member) clearFavoritesDraft(member.id); router.push(stepHref('ready', next)) }
+    catch { setSaveError('Favorites could not be saved. Your selections are kept here. Retry or continue without saving.'); setSaving(false) }
+  }
+  const visible = query.trim().length >= 2 ? results : initialTitles.filter(title => scope === 'all' || title.kind === scope)
+  return <GuideFrame current={2} next={next} back={stepHref('', next)}><header><h1 className="text-balance font-display text-4xl leading-[1.05] tracking-[-0.025em] sm:text-5xl">A few of your favorites.</h1><p className="mt-5 max-w-[65ch] text-sm leading-7 text-[var(--fs-secondary)]">Choose up to four titles you love. This step is optional; your Favorites express your taste on your profile.</p></header>
+    {status === 'loading' ? <p role="status">Loading your account…</p> : !member ? <div className="mt-8 border-y border-[var(--fs-line)] py-7"><p className="text-sm leading-6">Create an account to save Favorites, keep your Watchlist, and remember your progress.</p><div className="mt-5 flex flex-wrap gap-5"><Link className="inline-flex min-h-11 items-center font-bold text-[var(--fs-accent)]" href={`/sign-up?${new URLSearchParams({ next })}`}>Create an account</Link><Link className="inline-flex min-h-11 items-center text-sm" href={stepHref('ready', next)}>Continue without an account</Link></div></div> : <>
+      {favoritesUnavailable ? <p role="alert" className="mt-6 text-sm">Existing Favorites could not load. <Button variant="ghost" onClick={() => router.refresh()}>Retry loading Favorites</Button></p> : null}
+      <div className="mt-8 grid gap-7 lg:grid-cols-[minmax(0,1fr)_16rem]"><section><label className="text-sm font-bold" htmlFor="favorite-title-search">Search movies, series, or anime</label><Input className="mt-2 min-h-11 w-full" id="favorite-title-search" maxLength={100} value={query} onChange={e => setQuery(e.target.value)} type="search" /><div className="mt-4 flex flex-wrap gap-2">{(['all', 'movie', 'series', 'anime'] as const).map(value => <FilterChip key={value} selected={scope === value} onClick={() => setScope(value)}>{value === 'all' ? 'All' : kindLabel(value)}</FilterChip>)}</div>
+        {query.trim().length >= 2 && searchState === 'loading' ? <p role="status" className="mt-5 text-sm">Searching the catalog…</p> : null}
+        {query.trim().length >= 2 && searchState === 'error' ? <div role="alert" className="mt-5 text-sm">Search could not load. Your choices are kept. <Button variant="ghost" onClick={() => setAttempt(value => value + 1)}>Retry search</Button></div> : null}
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">{visible.map(title => <SelectableTitle artworkSrc={title.posterUrl ?? undefined} checked={selected.some(ref => keyFor(ref) === keyFor(title))} key={keyFor(title)} name="favoriteTitles" meta={[title.year, kindLabel(title.kind)].filter(Boolean).join(' · ')} onChange={() => toggle({ kind: title.kind, id: title.id })} title={title.title} value={keyFor(title)} />)}</div>
+        {!visible.length && searchState !== 'loading' ? <p className="mt-6 text-sm text-[var(--fs-secondary)]">No titles to show yet. Search for a favorite, or continue without choosing.</p> : null}
+      </section><aside className="self-start border-t border-[var(--fs-line)] pt-5"><h2 className="text-base font-bold">Your Favorites · {selected.length}/4</h2><ul className="mt-4 space-y-2">{selected.map(ref => <li className="flex items-start justify-between gap-2 text-sm" key={keyFor(ref)}><span className="min-w-0 break-words">{known.get(keyFor(ref))?.title ?? `${kindLabel(ref.kind)} ${ref.id}`}</span><Button size="sm" variant="ghost" onClick={() => toggle(ref)} aria-label={`Remove ${known.get(keyFor(ref))?.title ?? keyFor(ref)}`}>Remove</Button></li>)}</ul><Button className="mt-6 w-full" disabled={favoritesUnavailable} loading={saving} onClick={() => void save()} variant="accent">{saveError ? 'Retry saving Favorites' : 'Save and continue'}</Button>{saveError ? <p role="alert" className="mt-3 text-sm">{saveError}</p> : null}<Link className="mt-4 inline-flex min-h-11 items-center text-sm text-[var(--fs-secondary)]" href={stepHref('ready', next)}>Continue without saving</Link></aside></div>
+    </>}
+  </GuideFrame>
 }
-
-
+export function ReadyOnboardingScreen({ next = '/' }: { next?: string }) {
+  const router = useRouter()
+  const experience = useExperience()
+  const [error, setError] = useState(false)
+  const [busy, setBusy] = useState(false)
+  async function finish() {
+    setBusy(true); setError(false)
+    try { await experience.patch({ guideVersion: GUIDE_VERSION, guideStatus: 'completed' }); if (experience.owner) clearFavoritesDraft(experience.owner); router.push(next) }
+    catch { setError(true) } finally { setBusy(false) }
+  }
+  return <GuideFrame current={3} next={next} back={stepHref('favorites', next)}><h1 className="text-balance font-display text-4xl leading-[1.05] tracking-[-0.025em] sm:text-5xl">You’re ready to watch.</h1><p className="mt-5 max-w-[65ch] text-sm leading-7 text-[var(--fs-secondary)]">Your choices travel into Watch. Change them anytime in Settings or the player.</p><dl className="mt-8 divide-y divide-[var(--fs-line)] border-y border-[var(--fs-line)]">
+    {[['Find your next title', 'Use Search to find a movie, series, or anime. Open a title and choose Watch.'], ['Save it for later', 'Members can add titles to Watchlist and pick up from Continue watching.'], ['Keep up with new episodes', 'Save series or anime to Watchlist or Favorites for New this week. Episode notifications are optional and start in Settings.']].map(([title, description]) => <div className="py-5 sm:grid sm:grid-cols-[13rem_1fr] sm:gap-7" key={title}><dt className="text-sm font-bold">{title}</dt><dd className="mt-2 max-w-[65ch] text-sm leading-6 text-[var(--fs-secondary)] sm:mt-0">{description}</dd></div>)}
+    </dl><CommunityCards />{!experience.ready ? <p className="mb-4 text-sm" role="status">Loading your account preferences… <Button variant="ghost" onClick={() => router.refresh()}>Retry loading account</Button></p> : null}{error ? <p role="alert" className="mb-4 text-sm">Completion could not sync. Retry, or use Skip to start browsing.</p> : null}<Button disabled={!experience.ready} loading={busy} variant="accent" onClick={() => void finish()}>{error ? 'Retry and start browsing' : 'Start browsing'}</Button></GuideFrame>
+}

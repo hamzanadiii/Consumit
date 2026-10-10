@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import type { z } from 'zod'
 import type { PlaybackStore } from './state.ts'
 import { matchesRequestedAudio, supportsRequestedAudio } from './audio-policy.ts'
+import { acquireProviderBudget } from './provider-budget.ts'
 
 export type ResolvedSource = { source: ProviderSource; qualitySources?: ProviderSource[]; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
 
@@ -115,6 +116,8 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     if (current.window + 60000 <= now()) { current.window = now(); current.requests = 0 }
     const ceiling = current.failures >= 3 ? 1 : registration.concurrency
     if (current.openUntil > now() || current.active >= ceiling || current.requests >= registration.requestsPerMinute) return null
+    const releaseBudget = await acquireProviderBudget(registration, options.region, options.store)
+    if (!releaseBudget) return null
     current.active++; current.requests++
     const started = now()
     return trace.getTracer('consumit.playback').startActiveSpan('provider.resolve', async (span) => {
@@ -167,6 +170,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         return null
       } finally {
         current.active--
+        await releaseBudget().catch(() => undefined)
         if (current.failures >= 3) current.openUntil = now() + 60000
         latency.record(now() - started, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region })
         persist(registration.adapter.id, input.ref.kind, current)

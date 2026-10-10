@@ -128,18 +128,26 @@ export function computeSyncDelayMs(cueStartTime: number, clickTime: number, isPl
   return Math.round((cueStartTime - trueAudioTime) * 1000)
 }
 
-/**
- * Native language display name for a subtitle menu row, PROVE-embed style
- * ("العربية", "English", "Español", …). Resolves the code in its own locale
- * so the name renders natively; falls back to the supplied label when the
- * code is missing or the runtime lacks full ICU.
- */
+/** Collapse ISO aliases and common English language names, retaining regions. */
+export function canonicalSubtitleLanguage(code: string | undefined): string {
+  const clean = (code ?? 'und').trim().replaceAll('_', '-').toLowerCase()
+  let named = clean
+  try {
+    const known = [...PREFERRED_LANGUAGE_CODES, 'ja', 'ko', 'zh', 'vi', 'th', 'sv', 'no', 'da', 'fi', 'cs', 'el', 'ro', 'hu']
+    const names = new Intl.DisplayNames(['en'], { type: 'language' })
+    named = known.find((entry) => names.of(entry)?.toLowerCase() === clean) ?? clean
+  } catch { /* ISO alias canonicalization still works without display names. */ }
+  try { return Intl.getCanonicalLocales(named)[0]?.toLowerCase() ?? 'und' }
+  catch { return clean || 'und' }
+}
+
+/** Native display name, with the supplied label as the fallback without ICU. */
 export function nativeLanguageName(code: string | undefined, fallback: string): string {
-  const clean = (code ?? '').trim()
+  const clean = canonicalSubtitleLanguage(code)
   if (!clean || clean.toLowerCase() === 'und' || clean.toLowerCase() === 'zxx') return fallback
   try {
     const base = clean.split('-')[0]!.toLowerCase()
-    const name = new Intl.DisplayNames([base], { type: 'language' }).of(base)
+    const name = new Intl.DisplayNames([base], { type: 'language' }).of(clean)
     if (name) return name.charAt(0).toUpperCase() + name.slice(1)
   } catch {
     /* runtime without full ICU: fall through to the label */

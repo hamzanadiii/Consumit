@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { experiencePreferencesSchema } from './experience.ts'
+import { notificationPreferencesSchema, releaseNotificationSchema } from './releases.ts'
 
 export const catalogKindSchema = z.enum(['movie', 'series', 'anime'])
 export type CatalogKind = z.infer<typeof catalogKindSchema>
@@ -431,7 +433,7 @@ export const safeMemberSchema = z.object({
 })
 export type SafeMember = z.infer<typeof safeMemberSchema>
 
-export const profileVisibilitySchema = z.literal('private')
+export const profileVisibilitySchema = z.enum(['private', 'public'])
 export type ProfileVisibility = z.infer<typeof profileVisibilitySchema>
 
 const optionalProfileText = (maximum: number) => z.string().trim().min(1).max(maximum).nullable().optional()
@@ -825,6 +827,8 @@ export const skipSegmentSchema = z.object({
   start: z.number().min(0).max(86400),
   end: z.number().min(0).max(86400),
 })
+
+export const playbackSkipTimesResponseSchema = z.object({ segments: z.array(skipSegmentSchema).max(8) })
 export const playbackDeliverySchema = z.enum(['direct', 'relay', 'embed'])
 export type PlaybackDelivery = z.infer<typeof playbackDeliverySchema>
 /** Provider pool assignment; Proxy uses the independently approved relay. */
@@ -833,17 +837,25 @@ export type ProviderDeliveryMode = z.infer<typeof providerDeliveryModeSchema>
 /** Browser delivery failures guide renewal and provider fallback. */
 export const deliveryFailureSchema = z.enum(['cors', 'manifest', 'segment', 'forbidden', 'timeout', 'headers', 'unstable', 'manual'])
 export type DeliveryFailure = z.infer<typeof deliveryFailureSchema>
+/** Sandbox policy of one provider frame. `restricted` keeps Consumit's
+ *  standard iframe sandbox (scripts, same-origin, forms, presentation);
+ *  `none` is declared only by a published player that refuses any sandboxed
+ *  frame, so it runs as a plain iframe. See ADR 0006. */
+export const frameSandboxSchema = z.enum(['restricted', 'none'])
+export type FrameSandbox = z.infer<typeof frameSandboxSchema>
 export const playbackSourceSchema = z.object({
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
   type: z.enum(['hls', 'dash', 'native', 'iframe']), src: z.string().min(1).max(4096),
   qualityHint: z.string().min(1).max(24).optional(),
   qualityHeights: z.array(z.int().min(144).max(4320)).max(32).optional(),
   delivery: playbackDeliverySchema.default('direct'),
+  frameSandbox: frameSandboxSchema.optional(),
   expiresAt: z.iso.datetime(), subtitles: z.array(playbackTrackSchema).max(32).default([]),
   skipSegments: z.array(skipSegmentSchema).max(8).default([]),
 }).superRefine((source, context) => {
   if ((source.type === 'iframe') !== (source.delivery === 'embed')) context.addIssue({ code: 'custom', message: 'Frame sources require embed delivery.' })
   if (source.type === 'iframe' && !/^https:\/\//.test(source.src)) context.addIssue({ code: 'custom', message: 'Frame sources require HTTPS.' })
+  if (source.type !== 'iframe' && source.frameSandbox) context.addIssue({ code: 'custom', message: 'Only frame sources carry a frame sandbox policy.' })
 })
 export const playbackSessionSchema = z.object({
   id: z.string().uuid(), ref: playbackRefSchema, source: playbackSourceSchema,
@@ -1012,6 +1024,41 @@ export const memberProfileDataSchema = z.object({
 })
 export type MemberProfileData = z.infer<typeof memberProfileDataSchema>
 
+/** Public reads deliberately have no diary, history, location or import fields. */
+export const publicMemberSummarySchema = z.object({
+  id: z.string().min(1), username: usernameSchema, displayName: z.string().nullable(),
+  avatarStyle: avatarStyleSchema, avatarUrl: avatarUrlSchema.nullable(), isFollowing: z.boolean(),
+})
+export type PublicMemberSummary = z.infer<typeof publicMemberSummarySchema>
+export const publicProfileSchema = z.object({
+  viewerIsOwner: z.literal(false), canonicalUsername: usernameSchema,
+  profile: publicMemberSummarySchema.extend({ bio: z.string().nullable(), bannerUrl: bannerUrlSchema.nullable() }),
+  favorites: z.array(catalogRefSchema.extend({ position: z.int().positive() })).max(MAX_MEMBER_FAVORITES),
+  ratingDistribution: z.array(z.object({ count: z.int().nonnegative(), value: z.int().min(1).max(10) })).length(10),
+  statistics: z.object({ ratings: z.int().nonnegative(), reviews: z.int().nonnegative(), lists: z.int().nonnegative() }),
+  social: z.object({ followers: z.int().nonnegative(), following: z.int().nonnegative() }),
+})
+export type PublicProfile = z.infer<typeof publicProfileSchema>
+export const profileReadResponseSchema = z.union([
+  memberProfileDataSchema.extend({ viewerIsOwner: z.literal(true).default(true) }), publicProfileSchema,
+])
+export type ProfileReadResponse = z.infer<typeof profileReadResponseSchema>
+export const publicMemberPageSchema = z.object({ items: z.array(publicMemberSummarySchema).max(50), nextCursor: z.string().max(1024).nullable() })
+export type PublicMemberPage = z.infer<typeof publicMemberPageSchema>
+export const publicProfileCollectionSchema = z.enum(['ratings', 'reviews', 'lists', 'followers', 'following'])
+export type PublicProfileCollection = z.infer<typeof publicProfileCollectionSchema>
+export const publicReviewSchema = catalogRefSchema.extend({ reviewId: z.string(), body: z.string(), reviewedOn: z.iso.date().nullable() })
+export const publicListSummarySchema = z.object({ id: z.string(), slug: z.string(), name: z.string(), description: z.string().nullable(), itemCount: z.int().nonnegative() })
+export const publicProfileCollectionPageSchema = z.discriminatedUnion('collection', [
+  z.object({ collection: z.literal('ratings'), items: z.array(catalogRefSchema.extend({ value: z.int().min(1).max(10) })).max(50), nextCursor: z.string().max(1024).nullable() }),
+  z.object({ collection: z.literal('reviews'), items: z.array(publicReviewSchema).max(50), nextCursor: z.string().max(1024).nullable() }),
+  z.object({ collection: z.literal('lists'), items: z.array(publicListSummarySchema).max(50), nextCursor: z.string().max(1024).nullable() }),
+  ...(['followers', 'following'] as const).map(collection => z.object({ collection: z.literal(collection), items: z.array(z.union([publicMemberSummarySchema.extend({ private: z.literal(false) }), z.object({ id: z.string(), private: z.literal(true) })])).max(50), nextCursor: z.string().max(1024).nullable() })),
+])
+export type PublicProfileCollectionPage = z.infer<typeof publicProfileCollectionPageSchema>
+export const publicMembersPageQuerySchema = z.object({ cursor: z.string().min(1).max(1024).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) })
+export const memberSearchQuerySchema = publicMembersPageQuerySchema.extend({ q: z.string().trim().min(3).max(100) })
+
 /** Owner-only archives keep the profile overview bounded. Watchlist remains in the personal Library. */
 export const memberProfileArchiveKindSchema = z.enum(['activity', 'diary', 'films', 'likes', 'lists', 'reviews', 'tags'])
 export type MemberProfileArchiveKind = z.infer<typeof memberProfileArchiveKindSchema>
@@ -1052,9 +1099,20 @@ export const memberListDetailSchema = z.object({
   viewerIsOwner: z.boolean(),
 })
 export type MemberListDetail = z.infer<typeof memberListDetailSchema>
+export const publicListDetailSchema = z.object({
+  viewerIsOwner: z.literal(false),
+  owner: memberListOwnerSchema,
+  list: memberListSummarySchema.omit({ origin: true }),
+  items: z.array(catalogRefSchema.extend({ note: z.string().nullable(), position: z.int().positive() })),
+})
+export type PublicListDetail = z.infer<typeof publicListDetailSchema>
+export const listReadResponseSchema = z.union([publicListDetailSchema, memberListDetailSchema])
 
 
 export const memberExportSchema = z.object({
+  experiencePreferences: experiencePreferencesSchema.nullable().optional(),
+  notificationPreferences: notificationPreferencesSchema.optional(),
+  notifications: z.array(releaseNotificationSchema).optional(),
   exportedAt: z.iso.datetime(),
   library: memberLibrarySchema,
   watchHistory: z.array(watchHistoryEntrySchema),
@@ -1064,6 +1122,8 @@ export const memberExportSchema = z.object({
   reviews: z.array(memberReviewSchema),
 })
 export type MemberExport = z.infer<typeof memberExportSchema>
+
+export * from './releases.ts'
 
 export function titleHref(title: CatalogRef) {
   if (title.kind === 'anime') return `/anime/${title.id}`
@@ -1087,3 +1147,4 @@ export function diaryEntryHref(entry: DiaryRef) {
   if (entry.episode === undefined) return titleHref(entry)
   return watchHref(entry, { episode: entry.episode, season: entry.season ?? 1 })
 }
+export * from './experience.ts'

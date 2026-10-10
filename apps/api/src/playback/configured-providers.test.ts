@@ -58,6 +58,43 @@ describe('configured real provider integration', () => {
     expect(providers.find(row => row.adapter.id === 'vixsrc')?.deliveryMode).toBe('direct')
     expect(providers.find(row => row.adapter.id === '9anime')?.mediaHosts).not.toContain('ru-ri-cdn3.echovideo.to')
     expect(providers.find(row => row.adapter.id === 'zoko')?.mediaHosts).toContain('hls1.drama1.cfd')
+    const [cookiebakers] = configuredProviders(
+      [{ id: 'cookiebakers', adapter: 'cookiebakers', enabled: false, regions: ['US'], mediaHosts: ['cookiebakers23blog.xyz'], upstreamGroup: 'cookiebakers', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
+    )
+    expect(cookiebakers?.deliveryMode).toBe('direct')
+    expect(cookiebakers?.mediaHosts).toEqual(['cookiebakers23blog.xyz'])
+    const [kazora] = configuredProviders(
+      [{ id: 'kazora', adapter: 'kazora', enabled: false, regions: ['US'], mediaHosts: ['cdnx.aniwatchtv.site'], upstreamGroup: 'kazora', mediaKinds: ['anime'], deliveryMode: 'direct' }],
+    )
+    expect(kazora?.deliveryMode).toBe('direct')
+    expect(kazora?.mediaKinds).toEqual(['anime'])
+    expect(() => configuredProviders(
+      [{ id: 'kazora', adapter: 'kazora', regions: ['US'], mediaHosts: ['cdnx.aniwatchtv.site'], upstreamGroup: 'kazora', mediaKinds: ['movie'] }],
+    )).toThrow('must include "anime"')
+    const [kisskh] = configuredProviders(
+      [{ id: 'kisskh', adapter: 'kisskh', enabled: false, regions: ['US'], mediaHosts: ['sub.cdnvideo11.shop'], mediaHostPatterns: ['^hls[0-9]*\\.cdnvideo11\\.shop$', '^hls[0-9]+\\.[a-z0-9-]+\\.site$'], upstreamGroup: 'kisskh', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
+      { tmdbToken: 'token' },
+    )
+    expect(kisskh?.deliveryMode).toBe('direct')
+    expect(kisskh?.mediaHostPatterns).toHaveLength(2)
+    expect(kisskh?.mediaHostPatterns?.[0]?.test('hls03.cdnvideo11.shop')).toBe(true)
+    expect(kisskh?.mediaHostPatterns?.[1]?.test('hls03.verois3.site')).toBe(true)
+    expect(kisskh?.mediaHostPatterns?.[1]?.test('evil.example')).toBe(false)
+    const frames = configuredProviders(
+      [
+        { id: 'vidcoreioframe', adapter: 'vidcoreioframe', enabled: true, regions: ['US'], mediaHosts: ['vidcore.io'], upstreamGroup: 'vidcoreioframe', mediaKinds: ['movie', 'series'], deliveryMode: 'embed' },
+        { id: 'cinesrcframe', adapter: 'cinesrcframe', enabled: true, regions: ['US'], mediaHosts: ['cinesrc.st'], upstreamGroup: 'cinesrcframe', mediaKinds: ['movie', 'series'], deliveryMode: 'embed' },
+        { id: 'vidriftframe', adapter: 'vidriftframe', enabled: true, regions: ['US'], mediaHosts: ['embed.vidrift.net'], upstreamGroup: 'vidriftframe', mediaKinds: ['movie', 'series'], deliveryMode: 'embed' },
+      ],
+    )
+    expect(frames.map(frame => ({ id: frame.adapter.id, deliveryMode: frame.deliveryMode, hosts: frame.mediaHosts }))).toEqual([
+      { id: 'vidcoreioframe', deliveryMode: 'embed', hosts: ['vidcore.io'] },
+      { id: 'cinesrcframe', deliveryMode: 'embed', hosts: ['cinesrc.st'] },
+      { id: 'vidriftframe', deliveryMode: 'embed', hosts: ['embed.vidrift.net'] },
+    ])
+    expect(() => configuredProviders(
+      [{ id: 'vidcoreioframe', adapter: 'vidcoreioframe', regions: ['US'], mediaHosts: ['vidcore.io'], upstreamGroup: 'vidcoreioframe', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
+    )).toThrow('embed delivery')
   })
   it('registers Evion for TV video and keeps Apogee audio out of video attempts', async () => {
     const evion = { id: 'evion', adapter: 'evion', regions: ['US'], mediaHosts: ['img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['series'], role: 'video' }

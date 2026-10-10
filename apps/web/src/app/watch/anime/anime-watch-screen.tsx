@@ -1,10 +1,11 @@
 'use client'
 
 import type { AnimeTitleDetail } from '@consumit/contracts'
-import { SegmentedControl } from '@consumit/ui'
+import { Button, SegmentedControl } from '@consumit/ui'
 import { Bell } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useExperience } from '../../experience/experience-provider'
 
 import { browserAnimeEpisodes } from '@/lib/anime-browser'
 import { useEpisodeArt, type EpisodeArt } from '../../anime/use-episode-art'
@@ -77,15 +78,24 @@ function indexStreamingEpisodes(detail: AnimeTitleDetail): Map<number, { title: 
   return indexed
 }
 
-export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, pinnedProvider }: {
-  audio: 'sub' | 'dub'
+type AnimeWatchProps = {
+  audio?: 'sub' | 'dub' | undefined
   detail: AnimeTitleDetail
   episode: number
   nextHref: string | undefined
   prevHref?: string | undefined
   pinnedProvider?: string | undefined
-}) {
+}
+export function AnimeWatchScreen(props: AnimeWatchProps) {
+  const experience = useExperience()
+  if (!experience.ready) return <p className="min-h-screen bg-[var(--fs-page)] p-6 text-[var(--fs-ink)]" role="status">Loading your viewing preferences…</p>
+  return <AnimeWatchReady {...props} key={`${experience.owner}:${props.detail.anilistId}:${props.episode}:${props.audio ?? 'preferred'}`} initialAudio={props.audio ?? experience.preferences.animeAudio} />
+}
+function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, initialAudio }: AnimeWatchProps & { initialAudio: 'sub' | 'dub' }) {
+  const [audio] = useState(initialAudio)
+  const experience = useExperience()
   const router = useRouter()
+  const audioNavigation = (href: string | undefined) => href ? `${href}${href.includes('?') ? '&' : '?'}audio=${audio}` : undefined
   const audioHref = (nextAudio: 'sub' | 'dub') => `/watch/anime/${detail.anilistId}?episode=${episode}&audio=${nextAudio}`
   const airedBefore = detail.nextAiringEpisode ? detail.nextAiringEpisode.episode - 1 : null
   const knownTotal = detail.episodes ?? (airedBefore !== null && airedBefore > 0 ? airedBefore : 0)
@@ -133,8 +143,8 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
               episode={toWatchEpisode(detail, episode, currentStream, currentArt)}
               key={`${detail.anilistId}:${episode}:${audio}`}
               layout="embedded"
-              nextHref={nextHref}
-              prevHref={prevHref}
+              nextHref={audioNavigation(nextHref)}
+              prevHref={audioNavigation(prevHref)}
               title={toWatchTitle(detail)}
               {...(pinnedProvider ? { pinnedProvider } : {})}
             />
@@ -153,12 +163,13 @@ export function AnimeWatchScreen({ audio, detail, episode, nextHref, prevHref, p
                   <SegmentedControl
                     legend="Audio language"
                     name="anime-audio"
-                    onValueChange={(value) => router.push(audioHref(value === 'dub' ? 'dub' : 'sub'))}
+                    onValueChange={(value) => { const nextAudio = value === 'dub' ? 'dub' : 'sub'; void experience.patch({ animeAudio: nextAudio }).catch(() => {}); router.push(audioHref(nextAudio)) }}
                     options={[{ label: 'SUB', value: 'sub' }, { label: 'DUB', value: 'dub' }]}
                     value={audio}
                   />
                 </div>
               </div>
+              {experience.error ? <p role="alert" className="mt-4 text-sm text-[var(--fs-secondary)]">{experience.error} <Button variant="ghost" onClick={() => void experience.retry().catch(() => {})}>Retry saving preferences</Button></p> : null}
               {currentArt?.synopsis || detail.description ? (
                 <p className="mt-4 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)] line-clamp-3">
                   {currentArt?.synopsis ?? detail.description}

@@ -154,17 +154,18 @@ export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] 
   }
   return <Card>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h3 className="text-sm font-bold text-ink">Playback attempt order</h3><p className="mt-1 text-xs text-muted">Saved settings are shown below. Direct providers run first, then Proxy providers in their saved order. Unavailable providers are skipped.</p></div>
+      <div><h3 className="text-sm font-bold text-ink">Playback attempt order</h3><p className="mt-1 text-xs text-muted">Saved settings are shown below. Direct providers run first, then Proxy providers in their saved order. Unavailable providers are skipped. Disabled providers are hidden until enabled; saving keeps their place in the order.</p></div>
       <Select label="Title kind" value={kind} options={[{ label: 'Movies', value: 'movie' }, { label: 'Series', value: 'series' }, { label: 'Anime', value: 'anime' }]} onValueChange={(value) => { setBusy(true); setKind(value as ProviderKind) }} />
     </div>
     {error && <p className="mt-3 text-xs text-danger" role="alert">{error}</p>}
     <ol className="mt-4 max-h-96 space-y-1 overflow-y-auto" aria-label={`${kind} provider order`}>
-      {ids.map((id, index) => {
+      {ids.filter((id) => providers.find((entry) => entry.id === id)?.enabled !== false).map((id, visibleIndex, visibleIds) => {
         const provider = providers.find((entry) => entry.id === id)
-        return <li key={id} draggable={!busy} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from)) move(from, index) }} className="flex items-center gap-2 rounded-control border border-border bg-field px-3 py-2 text-xs">
-          <span className="w-5 tabular-nums text-muted">{index + 1}</span><span className="min-w-0 flex-1 truncate font-mono text-ink">{id}</span><span className="text-muted">{provider?.enabled ? provider.deliveryMode === 'relay' ? 'Proxy' : provider.deliveryMode === 'embed' ? 'Embed' : 'Direct' : 'Disabled'}</span>
-          <button type="button" aria-label={`Move ${id} up`} disabled={busy || index === 0} onClick={() => move(index, index - 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↑</button>
-          <button type="button" aria-label={`Move ${id} down`} disabled={busy || index === ids.length - 1} onClick={() => move(index, index + 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↓</button>
+        const fullIndex = ids.indexOf(id)
+        return <li key={id} draggable={!busy} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(fullIndex))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from)) move(from, fullIndex) }} className="flex items-center gap-2 rounded-control border border-border bg-field px-3 py-2 text-xs">
+          <span className="w-5 tabular-nums text-muted">{visibleIndex + 1}</span><span className="min-w-0 flex-1 truncate font-mono text-ink">{id}</span><span className="text-muted">{provider?.enabled ? provider.deliveryMode === 'relay' ? 'Proxy' : provider.deliveryMode === 'embed' ? 'Embed' : 'Direct' : 'Disabled'}</span>
+          <button type="button" aria-label={`Move ${id} up`} disabled={busy || visibleIndex === 0} onClick={() => move(fullIndex, fullIndex - 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↑</button>
+          <button type="button" aria-label={`Move ${id} down`} disabled={busy || visibleIndex === visibleIds.length - 1} onClick={() => move(fullIndex, fullIndex + 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↓</button>
         </li>
       })}
     </ol>

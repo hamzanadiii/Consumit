@@ -18,6 +18,7 @@ import { seasonalQuery } from './queries/seasonal.ts'
 import { browseQuery } from './queries/browse.ts'
 import { relationsQuery } from './queries/relations.ts'
 import { airingScheduleQuery } from './queries/airing.ts'
+import { z } from 'zod'
 import {
   isAdultMedia,
   mapTitleSummary,
@@ -27,6 +28,7 @@ import {
 } from './mapper.ts'
 
 export type AnimeCatalog = {
+  recentEpisodes?(anilistId: number, since: Date, until: Date): Promise<import('@consumit/contracts').ReleaseEpisode[]>
   search(query: string, page?: number, perPage?: number): Promise<AnimeSearchResult>
   title(anilistId: number): Promise<AnimeTitleDetail>
   trending(page?: number, perPage?: number): Promise<AnimePage>
@@ -78,6 +80,29 @@ export function createAnilistCatalog(client?: AnilistClient): AnimeCatalog {
   }
 
   return {
+    async recentEpisodes(anilistId, since, until) {
+      const title = await this.title(anilistId)
+      const schema = z.object({ Page: z.object({ pageInfo: z.object({ hasNextPage: z.boolean() }), airingSchedules: z.array(z.object({
+        mediaId: z.int().positive(), episode: z.int().positive(), airingAt: z.int().positive(),
+      })).max(50) }) })
+      const episodes: import('@consumit/contracts').ReleaseEpisode[] = []
+      for (let page = 1; page <= 4; page++) {
+        const raw = await queryAnime<unknown>(`query ($id:Int,$since:Int,$until:Int,$page:Int) {
+          Page(page:$page,perPage:50) { pageInfo { hasNextPage }
+            airingSchedules(mediaId:$id,airingAt_greater:$since,airingAt_lesser:$until,sort:TIME_DESC) { mediaId episode airingAt }
+          }
+        }`, { id: anilistId, since: Math.floor(since.getTime() / 1000) - 1, until: Math.floor(until.getTime() / 1000) + 1, page },
+        `recent-airing:${anilistId}:${Math.floor(until.getTime() / 1_800_000)}:${page}`, 'airing')
+        const data = schema.parse(raw).Page
+        episodes.push(...data.airingSchedules.filter(node => node.mediaId === anilistId).map(node => ({
+          ref: { kind: 'anime' as const, id: anilistId, season: 0, episode: node.episode },
+          title: title.titles.english ?? title.titles.romaji ?? title.titles.native ?? `Anime ${anilistId}`, episodeTitle: null, imageUrl: title.bannerImage ?? title.coverImage.url,
+          releasedAt: new Date(node.airingAt * 1000).toISOString(), datePrecision: 'instant' as const, checkedAt: null,
+        })))
+        if (!data.pageInfo.hasNextPage) return episodes
+      }
+      throw new AnimeError('ANILIST_UNAVAILABLE', 'Episode release metadata exceeded its bounded page limit.', { retryable: true })
+    },
     async search(query, page = 1, perPage = 20) {
       const data = await queryAnime<AnilistPageResponse>(
         searchQuery,

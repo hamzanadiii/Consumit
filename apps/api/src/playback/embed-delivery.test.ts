@@ -8,7 +8,7 @@ const input = { ref, capabilities: { hls: true, dash: true, native: true, native
 const signal = new AbortController().signal
 const source: ProviderSource = { key: 'main', url: 'https://media.example/master.m3u8', type: 'hls', language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }
 function row(id: string, deliveryMode: 'direct' | 'relay' | 'embed', available = true): ProviderRegistration {
-  return { adapter: createStaticProvider(id, [{ ref, sources: available ? [{ ...source, ...(deliveryMode === 'embed' ? { type: 'iframe', url: 'https://media.example/embed/exact' } : {}) }] : [] }]), enabled: true, deliveryMode, approvedRegions: ['US'], mediaHosts: ['media.example'], mediaKinds: ['series'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30 }
+  return { adapter: createStaticProvider(id, [{ ref, sources: available ? [{ ...source, ...(deliveryMode === 'embed' ? { type: 'iframe', url: 'https://media.example/embed/exact', frameSandbox: 'none' as const } : {}) }] : [] }]), enabled: true, deliveryMode, approvedRegions: ['US'], mediaHosts: ['media.example'], mediaKinds: ['series'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30 }
 }
 describe('Direct then Relay then Embed delivery', () => {
   it('starts on the explicitly chosen provider without running the other tiers', async () => {
@@ -17,7 +17,7 @@ describe('Direct then Relay then Embed delivery', () => {
     const playback = createPlayback({ providers: [direct, frame], region: 'US', store: createMemoryPlaybackStore() })
     const request = { ...input, providerId: 'frame' }
     const result = await playback.resolve('guest', request, signal)
-    expect(result.source).toMatchObject({ providerId: 'frame', delivery: 'embed' })
+    expect(result.source).toMatchObject({ providerId: 'frame', delivery: 'embed', frameSandbox: 'none' })
     expect(result.ref).toEqual(ref)
     expect(direct.adapter.resolve).not.toHaveBeenCalled()
   })
@@ -48,7 +48,7 @@ describe('Direct then Relay then Embed delivery', () => {
     const result = await playback.resolve('guest', input, signal)
     expect(calls).toEqual(['direct', 'relay', 'frame'])
     expect(result.ref).toEqual(ref)
-    expect(result.source).toMatchObject({ delivery: 'embed', type: 'iframe', providerId: 'frame', subtitles: [], skipSegments: [] })
+    expect(result.source).toMatchObject({ delivery: 'embed', type: 'iframe', providerId: 'frame', frameSandbox: 'none', subtitles: [], skipSegments: [] })
     expect(result.capabilities).toMatchObject({ refresh: false, externalSubtitles: false })
     expect((await playback.listProviders(input, signal)).map(row => row.deliveryMode)).toContain('embed')
   })
@@ -62,6 +62,13 @@ describe('Direct then Relay then Embed delivery', () => {
     const direct = await playback.switchProvider('guest', start.id, 'direct', signal)
     expect(direct.source.delivery).toBe('direct')
     await expect(playback.switchProvider('other', start.id, 'frame', signal)).rejects.toThrow()
+  })
+  it('publishes the declared frame sandbox policy only on frame sources', async () => {
+    const playback = createPlayback({ providers: [row('direct', 'direct'), row('frame', 'embed')], region: 'US', store: createMemoryPlaybackStore() })
+    const start = await playback.resolve('guest', input, signal)
+    expect(start.source.frameSandbox).toBeUndefined()
+    const framed = await playback.switchProvider('guest', start.id, 'frame', signal)
+    expect(framed.source).toMatchObject({ type: 'iframe', delivery: 'embed', frameSandbox: 'none' })
   })
   it('recovers from exhausted direct media into embeds, without relay approval', async () => {
     const playback = createPlayback({ providers: [row('direct', 'direct'), row('frame', 'embed')], region: 'US', store: createMemoryPlaybackStore() })

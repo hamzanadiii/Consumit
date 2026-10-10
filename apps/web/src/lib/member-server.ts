@@ -7,6 +7,11 @@ import {
   watchHistoryPageSchema,
   memberListDetailSchema,
   memberProfileDataSchema,
+  profileReadResponseSchema,
+  listReadResponseSchema,
+  publicMemberPageSchema,
+  publicProfileCollectionPageSchema,
+  type PublicProfileCollection,
   memberProfileArchivePageSchema,
   memberRatingLookupResponseSchema,
   memberRatingPageSchema,
@@ -56,7 +61,15 @@ async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
   return parsed.data
 }
 
-export const getPublicProfile = cache((username: string): Promise<MemberProfileData> => request(`/v1/profiles/${encodeURIComponent(username)}`, memberProfileDataSchema))
+export const getProfileRead = cache((username: string) => request(`/v1/profiles/${encodeURIComponent(username)}`, profileReadResponseSchema))
+export const getPublicProfile = cache(async (username: string): Promise<MemberProfileData> => {
+  const profile = await getProfileRead(username)
+  if (!profile.viewerIsOwner) throw new MemberApiError('Profile not found.', 404)
+  return memberProfileDataSchema.parse(profile)
+})
+export const getListRead = cache((slug: string) => request(`/v1/lists/${encodeURIComponent(slug)}`, listReadResponseSchema))
+export const getPeopleSearch = cache((q: string, cursor?: string) => request(`/v1/members/search?${new URLSearchParams({ q, limit: '20', ...(cursor ? { cursor } : {}) })}`, publicMemberPageSchema))
+export const getPublicCollection = cache((username: string, collection: PublicProfileCollection, cursor?: string) => request(`/v1/profiles/${encodeURIComponent(username)}/collections/${collection}?${new URLSearchParams({ limit: '20', ...(cursor ? { cursor } : {}) })}`, publicProfileCollectionPageSchema))
 export const getPublicProfileArchivePage = cache((username: string, collection: MemberProfileArchiveKind, cursor?: string, limit = 30): Promise<MemberProfileArchivePage> => {
   const params = new URLSearchParams({ limit: String(limit) })
   if (cursor) params.set('cursor', cursor)

@@ -1,4 +1,5 @@
 import { act, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +8,8 @@ import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
 import { SignInScreen, SignUpScreen } from './auth-screens'
+// Authentication owns session issuance; preference persistence is covered by its own service and browser tests.
+vi.mock('../experience/experience-provider', () => ({ ExperienceProvider: ({ children }: { children: ReactNode }) => children }))
 
 const mocks = vi.hoisted(() => ({
   getUsernameAvailability: vi.fn(),

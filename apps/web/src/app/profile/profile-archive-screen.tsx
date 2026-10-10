@@ -89,7 +89,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
   ratingsUnavailable?: boolean
   selectedRating?: number | 'none' | RatingRangeValue
   selectedTag?: string
-  section: Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history'>
+  section: Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history' | 'ratings' | 'followers' | 'following' | 'network'>
   titles?: readonly CatalogTitleSummary[]
 }) {
   const router = useRouter()
@@ -284,7 +284,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
     }
   }
 
-  const archiveTitles: Record<Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history'>, { description: string; heading: string }> = {
+  const archiveTitles: Record<Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history' | 'ratings' | 'followers' | 'following' | 'network'>, { description: string; heading: string }> = {
     activity: { description: selectedTag ? `Activity tagged “${selectedTag}”.` : 'A running log of watches and reviews, in the order they happened.', heading: selectedTag ? `Activity · #${selectedTag}` : 'Activity' },
     films: selectedRating === undefined
       ? { description: 'The titles marked watched, gathered into one collection.', heading: 'Watched' }

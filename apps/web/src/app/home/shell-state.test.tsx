@@ -39,12 +39,12 @@ describe('shell state provider', () => {
 
     await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
     expect(window.localStorage.getItem('consumit.home-sidebar')).toBe('collapsed')
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
 
     // A navigation remounts the shell; the persisted choice must survive it.
     unmount()
     render(<FilScreenShell currentPathname="/movies"><p>Page two</p></FilScreenShell>)
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
     expect(screen.queryByRole('button', { name: 'Hide sidebar' })).not.toBeInTheDocument()
   })
 
@@ -52,7 +52,7 @@ describe('shell state provider', () => {
     window.localStorage.setItem('consumit.home-sidebar', 'collapsed')
     render(<FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell>)
 
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
   })
 
   it('leaves the clicked row untouched and announces page loading at the top', async () => {

@@ -1,6 +1,8 @@
 import type { AnimeTitleSummary } from '@consumit/contracts'
 import type { Metadata } from 'next'
 
+import { PeopleSearchScreen } from './people-search-screen'
+import { getPeopleSearch } from '@/lib/member-server'
 import { SearchScreen } from './search-screen'
 
 import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
@@ -15,12 +17,17 @@ export const metadata: Metadata = {
 }
 
 type SearchPageProps = {
-  searchParams: Promise<{ q?: string | string[] | undefined }>
+  searchParams: Promise<{ q?: string | string[] | undefined; type?: string | string[] | undefined }>
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const { q } = await searchParams
+  const { q, type } = await searchParams
   const initialQuery = (Array.isArray(q) ? (q[0] ?? '') : (q ?? '')).trim().slice(0, 100)
+  if (type === 'people') {
+    let page = null
+    if (initialQuery.length >= 3) { try { page = await getPeopleSearch(initialQuery) } catch { /* The screen offers retry independently of catalog services. */ } }
+    return <PeopleSearchScreen initialPage={page} initialQuery={initialQuery} key={initialQuery} />
+  }
   const queryTooShort = initialQuery.length === 1
   // Anime is an AniList domain: TMDB never serves it (the catalog adapter
   // rejects `anime`), so search AniList alongside TMDB. Best-effort — an
@@ -46,5 +53,5 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   // (the anime page owns playback). Movies and year-less records never match.
   const deduped = { ...page, items: dedupeTwinSeries(page.items, animeItems) }
 
-  return <SearchScreen animeResults={animeItems} initialQuery={initialQuery} page={deduped} queryTooShort={queryTooShort} />
+  return <SearchScreen initialKind={type === 'movie' || type === 'series' || type === 'anime' ? type : 'all'} animeResults={animeItems} initialQuery={initialQuery} page={deduped} queryTooShort={queryTooShort} />
 }

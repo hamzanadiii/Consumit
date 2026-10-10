@@ -47,8 +47,7 @@ function profileView(member: IdentityRecord, now: Date): MemberProfile {
     nextUsernameChangeAt: nextChange && nextChange > now ? nextChange.toISOString() : null,
     username: member.profile.username,
     usernameChangedAt: member.profile.usernameChangedAt?.toISOString() ?? null,
-    // Older stored profiles may still say public; the active surface is personal.
-    visibility: 'private',
+    visibility: member.profile.visibility,
   }
 }
 

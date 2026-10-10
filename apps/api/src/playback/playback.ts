@@ -131,7 +131,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
       id: previous?.session.id ?? randomUUID(), ref: input.ref,
-      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
+      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.frameSandbox ? { frameSandbox: source.frameSandbox } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
       fallbackCount: windowedFallbacks.length,
       capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.some((track) => track.format === 'vtt') },

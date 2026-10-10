@@ -1,11 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { FrameSandbox } from '@consumit/contracts'
 import { Button, buttonVariants } from '@consumit/ui'
 import { ExternalLink } from 'lucide-react'
 
-/** A validated provider page; loading the document never establishes playback. */
-export function ProviderFrame({ src, title, audioLanguage, onFallback }: { src: string; title: string; audioLanguage?: string | undefined; onFallback?: (() => void) | undefined }) {
+/** Standard frame sandbox: scripts, same-origin, forms and presentation.
+ *  Popup and top-navigation permissions stay withheld. */
+const RESTRICTED_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-presentation'
+
+/** A validated provider page; loading the document never establishes playback.
+ *  A source that declares `frameSandbox: 'none'` runs as a plain iframe
+ *  because its published player refuses any sandboxed frame (ADR 0006). */
+export function ProviderFrame({ src, title, audioLanguage, frameSandbox, onFallback }: { src: string; title: string; audioLanguage?: string | undefined; frameSandbox?: FrameSandbox | undefined; onFallback?: (() => void) | undefined }) {
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<'loading' | 'loaded' | 'failed' | 'slow'>('loading')
   useEffect(() => {
@@ -22,7 +29,7 @@ export function ProviderFrame({ src, title, audioLanguage, onFallback }: { src: 
       </div>
     </div>
     <iframe key={`${src}:${attempt}`} src={src} title={`${title} external player`} className="min-h-0 w-full flex-1 border-0 bg-black" style={{ minHeight: 'min(56vw, 240px)' }}
-      sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"
+      {...(frameSandbox === 'none' ? {} : { sandbox: RESTRICTED_SANDBOX })} allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin"
       onLoad={() => setState('loaded')} onError={() => setState('failed')} />
   </div>
 }

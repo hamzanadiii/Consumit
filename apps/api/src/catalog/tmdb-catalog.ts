@@ -853,6 +853,36 @@ export function createTmdbCatalog({
       })
     },
 
+    async recentEpisodes(seriesId: number, since: Date) {
+      const now = Date.now()
+      const cached = await cache.get(`tmdb:recent-episodes:${seriesId}:${language}`, { freshForMs: 15 * 60_000, staleForMs: 60 * 60_000 }, async () => {
+        const series = z.object({ id: z.int().positive(), name: z.string().min(1), backdrop_path: nullableString,
+          seasons: z.array(z.object({ season_number: z.int(), air_date: nullableString })).max(100),
+        }).parse(await requestJson(`/tv/${seriesId}`, { language }))
+        if (series.id !== seriesId) throw new Error('Mismatched series identity.')
+        const seasons = series.seasons.filter(season => season.season_number > 0 && (!season.air_date || Date.parse(season.air_date) <= now))
+          .sort((a, b) => b.season_number - a.season_number)
+        const recent = seasons.filter((season, index) => index < 2 || (season.air_date && Date.parse(season.air_date) >= since.getTime()))
+        if (recent.length > 6) throw new Error('Release season batch exceeded its limit.')
+        const images = await configuration()
+        const episodes: import('@consumit/contracts').ReleaseEpisode[] = []
+        for (const season of recent) {
+          const detail = tmdbSeasonSchema.parse(await requestJson(`/tv/${seriesId}/season/${season.season_number}`, { language }))
+          if (detail.season_number !== season.season_number) throw new Error('Mismatched season identity.')
+          for (const episode of detail.episodes) {
+            if (!episode.air_date || !/^\d{4}-\d{2}-\d{2}$/.test(episode.air_date) || episode.season_number !== season.season_number) continue
+            const at = Date.parse(`${episode.air_date}T00:00:00Z`)
+            if (!Number.isFinite(at) || at < since.getTime() || at > now) continue
+            episodes.push({ ref: { kind: 'series', id: seriesId, season: season.season_number, episode: episode.episode_number },
+              title: series.name, episodeTitle: episode.name || null, imageUrl: imageUrl(episode.still_path ?? series.backdrop_path, images.value, 'still'),
+              releasedAt: new Date(at).toISOString(), datePrecision: 'date', checkedAt: null })
+          }
+        }
+        return episodes
+      })
+      return cached.value
+    },
+
     async season(seriesId: number, seasonNumber: number) {
       const cached = await cache.get(
         `tmdb:season:${seriesId}:${seasonNumber}:${language}`,
