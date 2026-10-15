@@ -71,6 +71,7 @@ describe('continue rail from device progress', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { resolveFetch = resolve })))
     const { container } = render(<ContinueRail />)
     expect(container).toBeEmptyDOMElement()
+    await act(async () => {})
     await act(async () => { resolveFetch(Response.json(batch)) })
     expect(await screen.findByRole('heading', { name: 'Continue watching' })).toBeInTheDocument()
   })
@@ -93,6 +94,7 @@ describe('continue rail from device progress', () => {
       })),
     )
     const { unmount } = render(<ContinueRail />)
+    await act(async () => {})
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
     unmount()
     resolveFetch(Response.json(batch))
@@ -193,7 +195,7 @@ describe('continue rail from device progress', () => {
     expect(screen.getByRole('link', { name: 'Continue Dune: Part Two' })).toBeInTheDocument()
   })
 
-  it('removes a title from the rail and its stored progress', async () => {
+  it('hides a title while preserving its stored progress', async () => {
     const user = userEvent.setup()
     window.localStorage.setItem(
       'consumit.progress:guest:movie:1:0:0',
@@ -219,7 +221,8 @@ describe('continue rail from device progress', () => {
 
     expect(screen.queryByRole('link', { name: 'Continue First Title' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue Second Title' })).toBeInTheDocument()
-    expect(window.localStorage.getItem('consumit.progress:guest:movie:1:0:0')).toBeNull()
+    expect(window.localStorage.getItem('consumit.progress:guest:movie:1:0:0')).not.toBeNull()
+    expect(JSON.parse(window.localStorage.getItem('consumit.continue-hidden:guest') ?? '{}')['movie:1']).toEqual(expect.any(Number))
     expect(window.localStorage.getItem('consumit.progress:guest:movie:2:0:0')).not.toBeNull()
   })
 
@@ -234,6 +237,6 @@ describe('continue rail from device progress', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Dune: Part Two from Continue watching' }))
 
     expect(screen.queryByRole('heading', { name: 'Continue watching' })).not.toBeInTheDocument()
-    expect(window.localStorage.getItem('consumit.progress:guest:movie:693134:0:0')).toBeNull()
+    expect(window.localStorage.getItem('consumit.progress:guest:movie:693134:0:0')).not.toBeNull()
   })
 })

@@ -3,29 +3,46 @@ import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
 import { invalidateAphroditeSession, signAphroditeRequest } from './aphrodite-gate.ts'
 
-// Port of the PROVE Aphrodite recipe (Stellar's CDN backend, direct):
-//   GET cdn.hls.lol/content/{movie|tv}/... with signed X-A-* headers
-//   -> totallyacdn.org HLS (2160/1080 + audio), CORS-open.
+// Port of the PROVE Aphrodite recipe (Stellar's CDN backends):
+//   1. Helios (stream.hls.lol/helios, lane-prefixed AES-GCM payload ->
+//      HLS whose master answers ACAO * and whose rungs still carry full
+//      titles) — the current first lane. Its variants answer only an
+//      exact-match Referer on https://atlantic.st or http://localhost
+//      (2026-10-11 probe: no Referer, https://consumit.online and
+//      https://www.movy.sx all answer 403, and the localhost ACAO echo
+//      drops the port), so the lane plays behind an Atlantic relay, not
+//      browser-direct from Watch, which sends no Referer at all.
+//   2. GET cdn.hls.lol/content/{movie|tv}/... with signed X-A-* headers
+//      -> totallyacdn.org HLS (2160/1080 + audio), CORS-open, demoted to
+//      fallback: since 2026-10-09 every rung it serves is a static 64-second
+//      decoy sample, so it ships only when the playlist reaches ten minutes
+//      (PROVE's own `>= 600` gate). A route that answers with the atlantic.st
+//      SPA homepage instead of a playlist is a miss all the same.
 // The signing implementation is vendored from atlantic.st's own player
 // chunk (aphrodite-gate.ts, refreshed 2026-09-22) — re-pull it from the
 // player bundle if auth starts failing (the importer names the file; hash
 // rotates on deploy). A stale chunk is treacherous: signing still succeeds
 // but the backend answers every title with one generic m3u8-proxy fallback
 // entry whose media URL never becomes a playlist.
-// Fallback: Helios (stream.hls.lol/helios, ns_-AES-GCM -> workers.dev HLS,
-// ACAO *) — cdn.hls.lol's totallyacdn payload route started serving the
-// atlantic.st SPA homepage instead of a playlist (2026-09), so a cdn URL
-// that does not serve a playlist is treated as a miss and Helios is tried
-// next. The NS key below is the public client key vendored from
-// atlantic.st's own assets bundle (PROVE providers/stellar-gate/helios.ts);
-// refresh it from the bundle if Helios payloads stop decrypting.
+// The Helios lane keys below are the public client keys vendored from
+// atlantic.st's own assets bundle (PROVE providers/stellar-gate/helios.ts):
+// hl_ is Helios, ms_ is Moscow, ns_ is the legacy workers.dev lane. Refresh
+// them from the bundle if Helios payloads stop decrypting.
 // A 401/403 clears the cached session and retries once: a stale sid
 // otherwise poisons every later call in a long-lived process.
 const apiOrigin = 'https://cdn.hls.lol'
 const subsOrigin = 'https://natsuki.hls.lol'
 const heliosOrigin = 'https://stream.hls.lol'
-const nsKeyHex = 'e4b8a1d6f2c9037b5a8e4d1c6f9b2085a7c3e9f6d1b4a8c2e5f7a0d3b6c9e2f5'
+// 2026-10-06 bundle order: helios, moscow, then the legacy workers.dev lane.
+const heliosKeys = [
+  '117c358bcfcaf8fe2cfca57c9d2238a300e1c4de2efb83a5012ba84d8a31f1dd',
+  '55060a042823f51a94c296894a58a0db15f3baef807155140983083fa799ef47',
+  'e4b8a1d6f2c9037b5a8e4d1c6f9b2085a7c3e9f6d1b4a8c2e5f7a0d3b6c9e2f5',
+]
+/** Real titles run past this; the cdn decoy lane stops at 64 seconds. */
+const MIN_TITLE_SECONDS = 600
 const clientHeaders = { 'user-agent': userAgent, accept: 'application/json' }
+const playlistHeaders = { 'user-agent': userAgent, referer: 'https://atlantic.st/' }
 
 const contentSchema = z.object({
   found: z.boolean().optional(),
@@ -117,22 +134,61 @@ export function createAphroditeProvider(http: ProviderHttp, now = Date.now, opti
     return first
   }
 
-  async function measurePlaylist(url: string, signal: AbortSignal): Promise<string | null> {
-    const op = bounded(signal, 4000)
+  /** Validated HLS body, or null when the answer is not a playlist: the dead
+   *  totallyacdn payload route serves the atlantic.st SPA homepage instead. */
+  async function readPlaylist(url: string, signal: AbortSignal): Promise<string | null> {
+    const op = bounded(signal, 6000)
     try {
-      const res = await document(http, url, op.signal, { 'user-agent': userAgent, referer: 'https://atlantic.st/' })
-      const text = res.text.trimStart()
-      if (!text.startsWith('#EXTM3U') || !/#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE):/.test(res.text)) return null
-      let maxRes = 0
-      for (const match of res.text.matchAll(/RESOLUTION=\d+x(\d+)/gi)) {
-        maxRes = Math.max(maxRes, Number.parseInt(match[1] ?? '0', 10))
-      }
-      return qualityLabel(maxRes)
+      const res = await document(http, url, op.signal, playlistHeaders)
+      const text = res.text
+      if (!/^\s*#EXTM3U/.test(text) || !/#EXT-X-(?:STREAM-INF|TARGETDURATION|MEDIA-SEQUENCE):/.test(text)) return null
+      return text
     } catch {
       return null
     } finally {
       op.cleanup()
     }
+  }
+
+  function qualityOf(text: string): string {
+    let maxRes = 0
+    for (const match of text.matchAll(/RESOLUTION=\d+x(\d+)/gi)) {
+      maxRes = Math.max(maxRes, Number.parseInt(match[1] ?? '0', 10))
+    }
+    return qualityLabel(maxRes)
+  }
+
+  /** First variant reference of a master playlist, resolved against it. */
+  function firstVariant(text: string, base: string): string | null {
+    const lines = text.split(/\r?\n/).filter((line) => line.trim())
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!lines[index]!.startsWith('#EXT-X-STREAM-INF')) continue
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const line = lines[next]!
+        if (line.startsWith('#')) continue
+        try {
+          return new URL(line, base).toString()
+        } catch {
+          return null
+        }
+      }
+      return null
+    }
+    return null
+  }
+
+  /** Total VOD seconds behind an already-read playlist (0 on any failure).
+   *  This is what rejects the cdn.hls.lol decoy lane: its rungs validate as
+   *  playlists but hold a static 64-second sample, not the title. */
+  async function playlistDurationSeconds(url: string, text: string, signal: AbortSignal): Promise<number> {
+    const variant = firstVariant(text, url)
+    const body = variant ? await readPlaylist(variant, signal) : text
+    if (!body) return 0
+    let total = 0
+    for (const match of body.matchAll(/#EXTINF:([\d.]+)/g)) {
+      total += Number.parseFloat(match[1] ?? '0')
+    }
+    return total
   }
 
   function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
@@ -145,22 +201,28 @@ export function createAphroditeProvider(http: ProviderHttp, now = Date.now, opti
     return out
   }
 
-  async function decryptNs(payload: string): Promise<string | null> {
-    if (!payload.startsWith('ns_')) return /^https?:\/\//i.test(payload) ? payload : null
-    try {
-      const subtle = globalThis.crypto?.subtle
-      if (!subtle) return null
-      const hex = payload.slice(3)
-      if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return null
-      const raw = hexToBytes(hex)
-      if (raw.length < 28) return null
-      const key = await subtle.importKey('raw', hexToBytes(nsKeyHex), { name: 'AES-GCM' }, false, ['decrypt'])
-      const plain = await subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12) }, key, raw.slice(12))
-      const url = new TextDecoder().decode(plain)
-      return /^https?:\/\//i.test(url) ? url : null
-    } catch {
-      return null
+  async function decryptHelios(payload: string): Promise<string | null> {
+    // Plain URLs (already-decrypted lanes) pass straight through.
+    if (/^https?:\/\//i.test(payload)) return payload
+    // <2-char lane prefix + hex body (hl_, ms_, ns_, ...).
+    if (!/^[a-z]{2}_[0-9a-fA-F]+$/.test(payload)) return null
+    const hex = payload.slice(3)
+    if (hex.length % 2 !== 0) return null
+    const subtle = globalThis.crypto?.subtle
+    if (!subtle) return null
+    for (const keyHex of heliosKeys) {
+      try {
+        const raw = hexToBytes(hex)
+        if (raw.length < 28) return null
+        const key = await subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt'])
+        const plain = await subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(0, 12) }, key, raw.slice(12))
+        const url = new TextDecoder().decode(plain)
+        if (/^https?:\/\//i.test(url)) return url
+      } catch {
+        // Wrong lane key for this payload; the next one may still open it.
+      }
     }
+    return null
   }
 
   async function heliosResolve(kind: 'movie' | 'tv', tmdbId: string, season: number, episode: number, signal: AbortSignal): Promise<string | null> {
@@ -180,7 +242,7 @@ export function createAphroditeProvider(http: ProviderHttp, now = Date.now, opti
         const raw = String(entry?.url ?? '')
         if (!raw || seen.has(raw)) continue
         seen.add(raw)
-        const url = await decryptNs(raw)
+        const url = await decryptHelios(raw)
         if (url) return url
       }
       return null
@@ -195,36 +257,39 @@ export function createAphroditeProvider(http: ProviderHttp, now = Date.now, opti
     const { ref } = input
     const isTv = ref.kind === 'series'
     if ((ref.kind !== 'movie' && !isTv) || (isTv && (!ref.season || !ref.episode))) throw new ProviderFailure('empty')
-    // cdn.hls.lol first — but only if it still serves a playlist (its
-    // totallyacdn payload route started answering with the atlantic.st SPA
-    // homepage) — then the Helios backend.
     let streamUrl: string | null = null
     let qualityHint = 'Auto'
-    const path = isTv ? `/content/tv/${ref.id}/${ref.season}/${ref.episode}` : `/content/movie/${ref.id}`
-    const res = await signedGet(path, signal)
-    if (!res) throw new ProviderFailure('unavailable')
-    try {
-      const data = contentSchema.parse(JSON.parse(res.text))
-      const candidate = (data.hls || (data.type === 'hls' ? data.url : '') || '').trim()
-      if (data.found && /^https?:\/\//i.test(candidate)) {
-        const measured = await measurePlaylist(candidate, signal)
-        if (measured) {
-          streamUrl = candidate
-          qualityHint = measured
-        }
+    // Helios first: its master answers ACAO * and still carries the full
+    // title, but its variants accept only the Atlantic or localhost
+    // Referer (see the header), so the lane verifies server-side and plays
+    // behind a relay. The cdn.hls.lol lane is a fallback since 2026-10-09 —
+    // its totallyacdn payloads still validate as playlists, but every rung is a
+    // static 64-second decoy sample, so it only ships past ten minutes.
+    const heliosUrl = await heliosResolve(isTv ? 'tv' : 'movie', String(ref.id), ref.season ?? 1, ref.episode ?? 1, signal)
+    if (heliosUrl) {
+      const text = await readPlaylist(heliosUrl, signal)
+      if (text) {
+        streamUrl = heliosUrl
+        qualityHint = qualityOf(text)
       }
-    } catch (error) {
-      if (error instanceof ProviderFailure) throw error
-      throw new ProviderFailure('malformed')
     }
     if (!streamUrl) {
-      const heliosUrl = await heliosResolve(isTv ? 'tv' : 'movie', String(ref.id), ref.season ?? 1, ref.episode ?? 1, signal)
-      if (heliosUrl) {
-        const measured = await measurePlaylist(heliosUrl, signal)
-        if (measured) {
-          streamUrl = heliosUrl
-          qualityHint = measured
+      const path = isTv ? `/content/tv/${ref.id}/${ref.season}/${ref.episode}` : `/content/movie/${ref.id}`
+      const res = await signedGet(path, signal)
+      if (!res) throw new ProviderFailure('unavailable')
+      try {
+        const data = contentSchema.parse(JSON.parse(res.text))
+        const candidate = (data.hls || (data.type === 'hls' ? data.url : '') || '').trim()
+        if (data.found && /^https?:\/\//i.test(candidate)) {
+          const text = await readPlaylist(candidate, signal)
+          if (text && (await playlistDurationSeconds(candidate, text, signal)) >= MIN_TITLE_SECONDS) {
+            streamUrl = candidate
+            qualityHint = qualityOf(text)
+          }
         }
+      } catch (error) {
+        if (error instanceof ProviderFailure) throw error
+        throw new ProviderFailure('malformed')
       }
     }
     if (!streamUrl) throw new ProviderFailure('empty')
@@ -278,9 +343,12 @@ export function createAphroditeProvider(http: ProviderHttp, now = Date.now, opti
       qualityHint,
       expiresAt: accessDeadline(streamUrl, now()),
       language: 'original',
-      // The Atlantic player referer is required by its HLS payload hosts.
-      // Direct playback cannot set it in the browser; the signed Worker retry
-      // uses this hint when a direct manifest request is rejected.
+      // The Atlantic Referer is what the API's server-side verification
+      // sends, and it is the only Referer Helios variants accept: they
+      // echo it as ACAO and refuse every other origin, including the
+      // production one (2026-10-11 matrix). A browser cannot set a
+      // Referer, so this hint buys server-side verification and a
+      // Worker-relay route; Watch itself sends none.
       headers: { referer: 'https://atlantic.st/' },
       subtitles,
     }]

@@ -36,7 +36,7 @@ describe('legal pages', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeInTheDocument()
     expect(screen.getByText(/Consumit does not host any media/)).toBeInTheDocument()
-    expect(screen.getByText(/advertising partner Adsterra/)).toBeInTheDocument()
+    expect(screen.getByText(/advertising partner highrevenueformat/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'contact us through the report form' })).toHaveAttribute('href', '/report-issue')
   })
 

@@ -104,6 +104,14 @@ export function srtToVtt(srt: string): string {
   return out.join('\n')
 }
 
+/** Decompression bounds. The download layer already caps the archive at
+ *  5 MiB, but deflate expands: a tiny entry can inflate to gigabytes, and
+ *  a 65k-entry directory multiplies that. Subtitle packs are tiny — these
+ *  ceilings sit far above any real archive and fail closed above them. */
+const MAX_ZIP_ENTRIES = 512
+const MAX_ENTRY_BYTES = 8_388_608
+const MAX_TOTAL_BYTES = 16_777_216
+
 /** Minimal zip extraction (stored + deflated entries) ported from PROVE, so
  *  subtitle archives need no new dependency. Throws on malformed input. */
 export function unzipEntries(buffer: Buffer): { name: string; data: Buffer }[] {
@@ -117,9 +125,10 @@ export function unzipEntries(buffer: Buffer): { name: string; data: Buffer }[] {
     }
   }
   if (eocd < 0) throw new Error('Zip directory not found.')
-  const count = buffer.readUInt16LE(eocd + 10)
+  const count = Math.min(buffer.readUInt16LE(eocd + 10), MAX_ZIP_ENTRIES)
   let central = buffer.readUInt32LE(eocd + 16)
   const out: { name: string; data: Buffer }[] = []
+  let total = 0
   for (let n = 0; n < count; n++) {
     if (buffer.readUInt32LE(central) !== 0x02014b50) break
     const method = buffer.readUInt16LE(central + 10)
@@ -140,16 +149,20 @@ export function unzipEntries(buffer: Buffer): { name: string; data: Buffer }[] {
       data = Buffer.from(comp)
     } else if (method === 8) {
       try {
-        data = Buffer.from(inflateSync(comp))
+        data = Buffer.from(inflateSync(comp, { maxOutputLength: MAX_ENTRY_BYTES }))
       } catch {
         try {
-          data = Buffer.from(inflateRawSync(comp))
+          data = Buffer.from(inflateRawSync(comp, { maxOutputLength: MAX_ENTRY_BYTES }))
         } catch {
           data = null
         }
       }
     }
-    if (data) out.push({ name, data: Buffer.from(data) })
+    if (data) {
+      total += data.length
+      if (total > MAX_TOTAL_BYTES) throw new Error('Zip archive expands beyond its limit.')
+      out.push({ name, data: Buffer.from(data) })
+    }
   }
   return out
 }

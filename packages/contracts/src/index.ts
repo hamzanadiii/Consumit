@@ -364,6 +364,7 @@ export const apiErrorCodeSchema = z.enum([
   'RATE_LIMITED',
   'SUBTITLES_NOT_FOUND',
   'SUBTITLES_UNAVAILABLE',
+  'TOO_MANY_ATTEMPTS',
   'UNAUTHENTICATED',
   'USERNAME_CHANGE_COOLDOWN',
   'USERNAME_UNAVAILABLE',
@@ -491,7 +492,7 @@ export type AcceptedResponse = z.infer<typeof acceptedResponseSchema>
 export const emailRequestSchema = z.object({ email: emailSchema })
 export type EmailRequest = z.infer<typeof emailRequestSchema>
 
-export const verificationCodeSchema = z.string().regex(/^\d{6}$/)
+export const verificationCodeSchema = z.string().regex(/^\d{8}$/)
 export const verifyEmailRequestSchema = emailRequestSchema.extend({ code: verificationCodeSchema })
 export type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>
 
@@ -792,6 +793,8 @@ export const playbackCapabilitiesSchema = z.object({
 export const providerRoleSchema = z.enum(['video', 'audio', 'both'])
 export type ProviderRole = z.infer<typeof providerRoleSchema>
 export const playbackPreferencesSchema = z.object({
+  providerOrder: z.array(z.string().min(1).max(80)).max(128).refine(ids => new Set(ids).size === ids.length).optional(),
+  adsEnabled: z.boolean().optional(),
   qualityHeight: z.int().min(144).max(4320).nullable().optional(),
   audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).optional(),
 })
@@ -847,6 +850,7 @@ export const playbackSourceSchema = z.object({
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
   type: z.enum(['hls', 'dash', 'native', 'iframe']), src: z.string().min(1).max(4096),
   qualityHint: z.string().min(1).max(24).optional(),
+  hlsSubtitlePlaylistFormat: z.literal('vtt').optional(),
   qualityHeights: z.array(z.int().min(144).max(4320)).max(32).optional(),
   delivery: playbackDeliverySchema.default('direct'),
   frameSandbox: frameSandboxSchema.optional(),
@@ -856,6 +860,7 @@ export const playbackSourceSchema = z.object({
   if ((source.type === 'iframe') !== (source.delivery === 'embed')) context.addIssue({ code: 'custom', message: 'Frame sources require embed delivery.' })
   if (source.type === 'iframe' && !/^https:\/\//.test(source.src)) context.addIssue({ code: 'custom', message: 'Frame sources require HTTPS.' })
   if (source.type !== 'iframe' && source.frameSandbox) context.addIssue({ code: 'custom', message: 'Only frame sources carry a frame sandbox policy.' })
+  if (source.type !== 'hls' && source.hlsSubtitlePlaylistFormat) context.addIssue({ code: 'custom', message: 'Only HLS sources carry subtitle playlist format.' })
 })
 export const playbackSessionSchema = z.object({
   id: z.string().uuid(), ref: playbackRefSchema, source: playbackSourceSchema,
@@ -888,6 +893,8 @@ export const webVitalEventSchema = z.object({
 export const webVitalBatchSchema = z.object({ events: z.array(webVitalEventSchema).min(1).max(20) }).strict()
 export type WebVitalEvent = z.infer<typeof webVitalEventSchema>
 export type WebVitalBatch = z.infer<typeof webVitalBatchSchema>
+export const clientErrorNames = ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'NetworkError', 'AbortError', 'Unknown'] as const
+export const clientErrorBatchSchema = z.strictObject({ events: z.array(z.strictObject({ page: webVitalPageSchema, kind: z.enum(['error', 'promise']), name: z.enum(clientErrorNames) })).min(1).max(10) })
 export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80), preferences: playbackPreferencesSchema.optional() })
 export const playbackProviderSchema = z.object({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80),
@@ -948,13 +955,16 @@ export const subtitleProviderStatusSchema = z.object({
   failure: z.enum(['search', 'parse', 'download', 'conversion']).optional(),
 })
 export const subtitleDiscoveryEventSchema = z.object({
+  nextCursor: z.string().regex(/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/).optional(),
   type: z.enum(['snapshot', 'provider', 'complete']), searchId: z.uuid(),
-  languages: z.array(z.object({ code: z.string().regex(/^[a-z]{2,3}$/), count: z.int().min(0).max(100000) })).max(256),
+  languages: z.array(z.object({ code: z.string().max(32).regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/), count: z.int().min(0).max(100000) })).max(256),
   provider: subtitleProviderStatusSchema.optional(),
 }).refine((event) => event.type !== 'provider' || Boolean(event.provider), 'Provider events require a provider result.')
+export const subtitleDiscoveryResponseSchema = z.object({ events: z.array(subtitleDiscoveryEventSchema).min(1).max(512) })
 export const subtitleCandidateSchema = z.object({
-  id: z.string().min(1).max(128), label: z.string().max(160), language: z.string().regex(/^[a-z]{2,3}$/),
+  id: z.string().min(1).max(128), label: z.string().max(160), language: z.string().max(32).regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/),
   provider: z.string().min(1).max(64), release: z.string().max(160).optional(),
+  providerName: z.string().min(1).max(160).optional(),
   hi: z.boolean().optional(), forced: z.boolean().optional(), sdh: z.boolean().optional(), machineTranslated: z.boolean().optional(),
   preparedUrl: z.url().max(4096).refine((value) => /^https?:\/\/[^/?#@\\\s]+(?:[/?#]|$)/i.test(value)).optional(),
 })
@@ -1110,6 +1120,8 @@ export const listReadResponseSchema = z.union([publicListDetailSchema, memberLis
 
 
 export const memberExportSchema = z.object({
+  continueWatchingDismissals: z.array(catalogRefSchema.extend({ hiddenAt: z.iso.datetime() })).optional(),
+  recommendationDismissals: z.array(catalogRefSchema).optional(),
   experiencePreferences: experiencePreferencesSchema.nullable().optional(),
   notificationPreferences: notificationPreferencesSchema.optional(),
   notifications: z.array(releaseNotificationSchema).optional(),
@@ -1148,3 +1160,23 @@ export function diaryEntryHref(entry: DiaryRef) {
   return watchHref(entry, { episode: entry.episode, season: entry.season ?? 1 })
 }
 export * from './experience.ts'
+export const continueWatchingPageSchema = z.object({
+  items: z.array(playbackProgressSchema.extend({ hiddenAt: z.iso.datetime().nullable() })).max(50),
+  nextCursor: z.string().max(512).nullable(),
+})
+export type ContinueWatchingPage = z.infer<typeof continueWatchingPageSchema>
+export const recommendationDismissalsSchema = z.object({ items: z.array(catalogRefSchema).max(2000) })
+export const playbackAttemptRequestSchema = z.object({ input: resolvePlaybackRequestSchema, sessionId: z.uuid().optional(), failure: playbackFailureRequestSchema.optional() })
+export const playbackAttemptSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ready'), attemptId: z.uuid(), tried: z.int().min(0).max(128), total: z.int().min(0).max(128), session: playbackSessionSchema }),
+  z.object({ status: z.enum(['pending', 'exhausted']), attemptId: z.uuid(), tried: z.int().min(0).max(128), total: z.int().min(0).max(128) }),
+])
+export type PlaybackAttempt = z.infer<typeof playbackAttemptSchema>
+export const playbackDiagnosticsSchema = z.strictObject({
+  ref: playbackRefSchema,
+  provider: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/).optional(),
+  browser: z.enum(['Chrome', 'Edge', 'Firefox', 'Safari', 'Other']),
+  delivery: z.enum(['direct', 'relay', 'embed']).optional(),
+  category: z.enum(['network', 'media', 'expired', 'gone', 'subtitles', 'audio', 'unknown']),
+})
+export type PlaybackDiagnostics = z.infer<typeof playbackDiagnosticsSchema>

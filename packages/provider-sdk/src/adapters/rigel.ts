@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { assertHlsManifest, parseHlsReferences } from '../manifest.ts'
+import { inspectHlsManifest } from '../manifest.ts'
 import { adapter, document, sourceAccess, ProviderFailure, type ProviderHttp } from './http.ts'
 
 const streamsSchema = z.object({ streams: z.array(z.object({ url: z.url().max(4096), quality: z.string().nullable().optional(), label: z.string().nullable().optional() })).max(32) })
@@ -13,6 +13,11 @@ const PLAYLIST_TIMEOUT_MS = 3000
 const SEGMENT_TIMEOUT_MS = 2500
 const MAX_STREAMS = 4
 const MAX_DEPTH = 2
+// The host's bounded document reader caps uncapped bodies at 1 MB, and full
+// dlproxy variant playlists for a feature routinely exceed that cap, which
+// killed every candidate and resolved `empty`. The walk only needs the
+// manifest head and its first reference, so both legs read a bounded prefix.
+const PLAYLIST_PREFIX_BYTES = 8192
 
 function bounded(parent: AbortSignal, ms: number) {
   const controller = new AbortController()
@@ -47,14 +52,14 @@ export function createRigelProvider(http: ProviderHttp, now = Date.now) {
           const leg = bounded(signal, PLAYLIST_TIMEOUT_MS)
           let response: Awaited<ReturnType<typeof document>>
           try {
-            response = await document(http, url, leg.signal)
+            response = await document(http, url, leg.signal, {}, { readPrefixBytes: PLAYLIST_PREFIX_BYTES })
           } finally {
             leg.cleanup()
           }
-          assertHlsManifest(response.text)
-          const next = parseHlsReferences(response.text, response.url)[0]
+          const inspected = inspectHlsManifest(response.text, response.url)
+          const next = inspected.references[0]?.url
           if (!next) return null
-          if (/#EXT-X-STREAM-INF/.test(response.text)) { url = next; continue }
+          if (inspected.kind === 'master') { url = next; continue }
           const probe = bounded(signal, SEGMENT_TIMEOUT_MS)
           try {
             const segment = await document(http, next, probe.signal, { range: 'bytes=0-1023' }, { readPrefixBytes: 1024 })

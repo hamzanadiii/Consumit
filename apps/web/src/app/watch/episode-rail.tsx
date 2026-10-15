@@ -1,9 +1,10 @@
 'use client'
 
-import { ArtworkFrame } from '@consumit/ui'
+import { ArtworkFrame, Button } from '@consumit/ui'
 import { ChevronLeft, ChevronRight, Play, Search } from 'lucide-react'
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import styles from './watch-surface.module.css'
 
 export type RailEpisode = {
   number: number
@@ -37,22 +38,28 @@ export function EpisodeRail({ actions, countLabel, currentLabel, episodes, fallb
   loadPage?: ((episodes: number[]) => Promise<Record<number, EpisodeArt | null>>) | undefined
   pageSize?: number | undefined
 }) {
+  const filterId = useId()
+  const headingId = useId()
+  const currentEpisodeIndex = episodes.findIndex((item) => item.current)
+  const currentPage = currentEpisodeIndex < 0 ? 1 : Math.floor(currentEpisodeIndex / pageSize) + 1
   const [filter, setFilter] = useState('')
-  const [page, setPage] = useState(1)
+  const [pageOverride, setPageOverride] = useState<{ currentPage: number; value: number } | null>(null)
+  const page = pageOverride?.currentPage === currentPage ? pageOverride.value : currentPage
+  const changePage = (value: number) => setPageOverride({ currentPage, value })
+  const [artCache, setArtCache] = useState<{ loader: typeof loadPage; art: Record<number, EpisodeArt | null> }>({ loader: loadPage, art: {} })
+  const pageArt = useMemo(() => artCache.loader === loadPage ? artCache.art : {}, [artCache, loadPage])
   const query = filter.trim().toLowerCase()
   const matches = useMemo(() => {
     if (!query) return [...episodes]
     return episodes.filter((item) => {
       if (String(item.number) === query) return true
       if (`episode ${item.number}`.includes(query)) return true
-      return item.title?.toLowerCase().includes(query) ?? false
+      return (item.title ?? pageArt[item.number]?.title)?.toLowerCase().includes(query) ?? false
     }).slice(0, 100)
-  }, [episodes, query])
+  }, [episodes, pageArt, query])
   const totalPages = Math.max(1, Math.ceil(matches.length / pageSize))
   const safePage = Math.min(page, totalPages)
   const visible = query ? matches : matches.slice((safePage - 1) * pageSize, safePage * pageSize)
-  const [artCache, setArtCache] = useState<{ loader: typeof loadPage; art: Record<number, EpisodeArt | null> }>({ loader: loadPage, art: {} })
-  const pageArt = artCache.loader === loadPage ? artCache.art : {}
   const missingNumbers = visible.filter((episode) => !episode.upcoming && pageArt[episode.number] === undefined).map((episode) => episode.number)
   const missingKey = missingNumbers.join(',')
   useEffect(() => {
@@ -66,68 +73,66 @@ export function EpisodeRail({ actions, countLabel, currentLabel, episodes, fallb
   }, [loadPage, missingKey])
 
   return (
-    <section aria-labelledby="episode-rail-heading" className="flex min-w-0 flex-col rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-      <div className="flex items-baseline justify-between gap-2 px-1">
-        <h2 id="episode-rail-heading" className="text-[11px] font-bold tracking-[0.12em] text-[var(--fs-muted)] uppercase">
+    <section aria-labelledby={headingId} className={styles.episodeRail}>
+      <div className={styles.railHeading}>
+        <h2 id={headingId}>
           {heading}
         </h2>
-        <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">
+        <p className={styles.railCount} role="status">
           {query ? `${visible.length} match${visible.length === 1 ? '' : 'es'}` : countLabel}
         </p>
       </div>
-      {actions ? <div className="mt-3 px-1">{actions}</div> : null}
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] px-3 outline-none transition-colors focus-within:border-[var(--fs-focus)]">
+      {actions ? <div className={styles.railActions}>{actions}</div> : null}
+      <div className={styles.filter}>
           <Search aria-hidden="true" className="size-4 shrink-0 text-[var(--fs-muted)]" />
-          <label className="sr-only" htmlFor="episode-rail-filter">Filter episodes</label>
+          <label className="sr-only" htmlFor={filterId}>Filter episodes</label>
           <input
             autoComplete="off"
-            className="h-11 min-w-0 flex-1 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]"
-            id="episode-rail-filter"
-            onChange={(event) => { setFilter(event.currentTarget.value); setPage(1) }}
+            className={styles.filterInput}
+            id={filterId}
+            onChange={(event) => { const value = event.currentTarget.value; setFilter(value); changePage(value ? 1 : currentPage) }}
             placeholder="Filter episodes..."
             type="search"
             value={filter}
           />
-        </div>
       </div>
       {visible.length ? (
-        <ul aria-label="Episode picker" className="mt-3 flex max-h-[50vh] flex-col gap-3 overflow-y-auto pr-0.5 lg:max-h-[44rem]">
+        <ul aria-label="Episode picker" className={styles.episodeList}>
           {visible.map((item) => (
             <RailRow currentLabel={currentLabel} fallbackArt={fallbackArt} key={item.number} item={item} art={pageArt[item.number]} />
           ))}
         </ul>
       ) : (
-        <div className="mt-3 rounded-xl border border-dashed border-[var(--fs-field-border)] px-4 py-8 text-center">
+        <div className={styles.railEmpty}>
           <p className="text-sm text-[var(--fs-muted)]">No episodes match “{filter.trim()}”.</p>
-          <button
-            className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-[var(--fs-field-border)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none transition-colors hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
-            onClick={() => setFilter('')}
-            type="button"
+          <Button
+            className="mt-3 min-h-11"
+            onClick={() => { setFilter(''); changePage(currentPage) }}
+            variant="secondary"
           >
             Clear filter
-          </button>
+          </Button>
         </div>
       )}
       {!query && totalPages > 1 ? (
-        <nav aria-label="Episode pages" className="mt-3 flex items-center gap-2 border-t border-[var(--fs-line)] px-1 pt-3">
+        <nav aria-label="Episode pages" className={styles.railPages}>
           <p className="flex-1 text-xs tabular-nums text-[var(--fs-muted)]" role="status">
             Page {safePage} of {totalPages}
           </p>
           <button
             aria-label="Go to previous episode page"
-            className="grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40 disabled:hover:text-[var(--fs-muted)]"
+            className={styles.pageButton}
             disabled={safePage === 1}
-            onClick={() => setPage(safePage - 1)}
+            onClick={() => changePage(safePage - 1)}
             type="button"
           >
             <ChevronLeft aria-hidden="true" className="size-4" />
           </button>
           <button
             aria-label="Go to next episode page"
-            className="grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-rail)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40 disabled:hover:text-[var(--fs-muted)]"
+            className={styles.pageButton}
             disabled={safePage === totalPages}
-            onClick={() => setPage(safePage + 1)}
+            onClick={() => changePage(safePage + 1)}
             type="button"
           >
             <ChevronRight aria-hidden="true" className="size-4" />
@@ -146,61 +151,45 @@ function RailRow({ currentLabel, item, art, fallbackArt }: {
 }) {
   const still = item.stillUrl ?? art?.thumbnail ?? undefined
   const title = item.title ?? art?.title ?? `Episode ${item.number}`
-  const status = item.current ? currentLabel : item.upcoming ? 'Not aired yet' : null
+  const active = item.current && !item.upcoming
+  const status = item.upcoming ? 'Not aired yet' : active ? currentLabel : null
   const airDate = item.airDate ?? art?.airDate
   // Explicit locale: bare toLocaleDateString renders the server locale during
   // SSR and the browser locale on hydration, which splits the tree.
   const date = airDate ? new Date(`${airDate}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : null
-  const meta = [item.meta ?? (art?.duration ? `${art.duration}m` : null), date, status].filter(Boolean).join(' · ')
-  const rowClass = item.current
-    ? 'group block min-w-0 overflow-hidden rounded-xl bg-[var(--fs-accent-soft)] text-left shadow-[inset_0_0_0_1px_var(--fs-accent)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
-    : 'group block min-w-0 overflow-hidden rounded-xl border border-transparent text-left outline-none transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--fs-accent)]/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
+  const meta = [item.meta ?? (art?.duration ? `${art.duration}m` : null), date].filter(Boolean).join(' · ')
+  const rowClass = `${styles.episodeRow}${active ? ` ${styles.currentEpisode}` : ''}`
   const body = (
-    <ArtworkFrame
-      alt={still ? `${title} still` : `${title} title artwork`}
-      className="rounded-xl border-0"
-      ratio="wide"
-      src={still ?? fallbackArt ?? undefined}
-    >
-      <span aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/10" />
-      {!still && fallbackArt ? <span className="absolute top-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">Title artwork</span> : null}
-      <span className="absolute top-2 left-2 flex items-center gap-1.5">
-        <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">
-          EP {item.number}
-        </span>
-        {item.current ? (
-          <span className="grid size-6 place-items-center rounded-full bg-[var(--fs-accent)] text-[var(--fs-on-accent)]">
-            <Play aria-hidden="true" className="size-3 fill-current" />
-          </span>
-        ) : null}
+    <>
+      <ArtworkFrame
+        alt={still ? `${title} still` : `${title} title artwork`}
+        className={styles.episodeArt}
+        ratio="wide"
+        src={still ?? fallbackArt ?? undefined}
+      />
+      <span className={styles.episodeCopy}>
+        <span className={styles.episodeNumber}>Episode {item.number}</span>
+        <span className={styles.episodeName}>{title}</span>
+        {meta ? <span className={styles.episodeMeta}>{meta}</span> : null}
+        {!still && fallbackArt ? <span className={styles.episodeMeta}>Title artwork</span> : null}
+        {status ? <span className={active ? styles.playingLabel : styles.episodeMeta}>{status}</span> : null}
       </span>
-      <span className="absolute inset-x-0 bottom-0 flex min-w-0 flex-col gap-px p-2.5">
-        <span className="text-[0.625rem] font-bold tracking-[0.14em] text-white/75 uppercase">
-          Episode {item.number}
-        </span>
-        <span className="line-clamp-2 text-sm leading-5 font-bold text-white [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
-          {title}
-        </span>
-        {meta ? (
-          <span className="text-[11px] tabular-nums text-white/65">
-            {meta}
-          </span>
-        ) : null}
-      </span>
-    </ArtworkFrame>
+      {active ? <Play aria-hidden="true" className={styles.playingIcon} size={14} /> : null}
+    </>
   )
   return (
     <li className="min-w-0">
       {!item.href ? (
-        <span aria-disabled="true" title={item.upcoming ? 'Not aired yet' : undefined} className={`${rowClass} cursor-not-allowed opacity-70`}>
+        <span aria-disabled="true" title={item.upcoming ? 'Not aired yet' : undefined} className={rowClass}>
           {body}
         </span>
       ) : (
         <Link
           aria-current={item.current ? 'page' : undefined}
-          aria-label={`Watch episode ${item.number}${item.current ? ', now playing' : ''}`}
+          aria-label={`Watch episode ${item.number}${item.current ? ', now playing' : ''}: ${title}`}
           className={rowClass}
           href={item.href}
+          title={title}
         >
           {body}
         </Link>

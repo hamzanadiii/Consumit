@@ -1,3 +1,15 @@
+export function serializeProductionEnvironment(env) {
+  // Node parseEnv does not decode JSON backslash escapes. Single quotes also
+  // keep Docker Compose from interpolating literal dollars in private values.
+  return Object.entries(env).map(([key, value]) => {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error('Production configuration contains an invalid field name.')
+    if (typeof value !== 'string' || /[\r\n]/.test(value)) throw new Error(`${key} requires a single-line production value; contents withheld.`)
+    if (!value.includes("'")) return `${key}='${value}'`
+    if (!/["\\$]/.test(value)) return `${key}="${value}"`
+    throw new Error(`${key} cannot be safely quoted for both production readers; contents withheld.`)
+  }).join('\n') + '\n'
+}
+
 export function assertProductionDatabaseUrl(value, options = {}) {
   let url
   try { url = new URL(value) } catch { throw new Error('DATABASE_URL must be a valid PostgreSQL URL; credentials were withheld.') }
@@ -46,6 +58,23 @@ export function productionEnvironmentIssues(env) {
     for (const key of ['PLAYBACK_RELAY_ORIGIN', 'PLAYBACK_RELAY_SECRET', 'PLAYBACK_RELAY_PROVIDERS']) {
       if (!env[key] || /replace[-_]/i.test(env[key])) issues.push(`${key} is required for the approved Worker relay.`)
     }
+  }
+  if (env.PLAYBACK_RESOLVER_ENABLED === 'true') {
+    if (env.PLAYBACK_ENABLED !== 'true') issues.push('PLAYBACK_RESOLVER_ENABLED requires playback to be enabled.')
+    if ((env.PLAYBACK_RESOLVER_SECRET?.length ?? 0) < 32 || /replace[-_]|missing[-_]/i.test(env.PLAYBACK_RESOLVER_SECRET ?? '')) issues.push('PLAYBACK_RESOLVER_SECRET requires a new secret of at least 32 characters.')
+    try {
+      const origin = new URL(env.PLAYBACK_RESOLVER_ORIGIN)
+      if (origin.protocol !== 'https:' || origin.origin !== env.PLAYBACK_RESOLVER_ORIGIN || origin.username || origin.password) throw new Error()
+    } catch { issues.push('PLAYBACK_RESOLVER_ORIGIN must be an exact HTTPS origin.') }
+  }
+  if (env.PLAYBACK_NODE_ENABLED === 'true') {
+    if (env.PLAYBACK_NODE_ORIGIN !== 'https://media.consumit.online') issues.push('PLAYBACK_NODE_ORIGIN must select the separate DNS-only HTTPS media hostname.')
+    if ((env.PLAYBACK_NODE_SECRET?.length ?? 0) < 32 || env.PLAYBACK_NODE_SECRET === env.PLAYBACK_RELAY_SECRET) issues.push('Media node requires an independent signing secret.')
+    try {
+      const policy = JSON.parse(env.PLAYBACK_NODE_PROVIDERS)
+      if (!policy || Object.keys(policy).length !== 1 || !Array.isArray(policy['lookmovie-relay']) || !policy['lookmovie-relay'].length
+        || policy['lookmovie-relay'].some(host => typeof host !== 'string' || !/^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/.test(host))) throw new Error()
+    } catch { issues.push('Media node requires exact reviewed LookMovie hosts.') }
   }
   return issues
 }

@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,12 +21,6 @@ afterEach(() => {
 
 function shellTheme() {
   return screen.getByRole('heading', { name: 'Consumit home' }).closest('[data-filscreen-home]')?.getAttribute('data-theme')
-}
-
-function showSidebarButtons() {
-  // Only the center-column button (mobile) carries this name now that the
-  // desktop rail uses a home-linked brand mark; CSS shows it per viewport.
-  return screen.getAllByRole('button', { name: 'Show sidebar' })
 }
 
 const hero = { ...movieSummary, tagline: 'Long live the fighters.' }
@@ -52,6 +46,18 @@ const popular = [
 ]
 
 describe('filscreen live home', () => {
+  it('keeps the shelf feed in movie and series View all destinations', () => {
+    render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={trendingMovies} trendingSeries={trendingSeries} topRatedMovies={popular} topRatedSeries={trendingSeries} /></ShellStateProvider>)
+    for (const [title, href] of [
+      ['Trending Movies', '/movies?feed=trending'],
+      ['Trending Series', '/series?feed=trending'],
+      ['Top Rated Movies', '/movies?feed=top-rated'],
+      ['Top Rated Series', '/series?feed=top-rated'],
+    ] as const) {
+      expect(within(screen.getByRole('region', { name: title })).getByRole('link', { name: `View all ${title.toLowerCase()}` })).toHaveAttribute('href', href)
+    }
+  })
+
   it('links Watch directly to the player and keeps TMDB evidence separate from member claims', async () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
@@ -151,29 +157,17 @@ describe('filscreen live home', () => {
     expect(shellTheme()).toBe('light')
   })
 
-  it('collapses to an icon rail and restores with the choice persisted', async () => {
-    const user = userEvent.setup()
+  it('keeps the desktop icon rail and exposes a separate mobile navigation trigger', () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
-
     expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
-    expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Hide sidebar' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: 'Consumit home' }).every((link) => link.getAttribute('href') === '/')).toBe(true)
-    expect(showSidebarButtons()).toHaveLength(1)
-    expect(window.localStorage.getItem('consumit.home-sidebar')).toBe('collapsed')
-
-    await user.click(showSidebarButtons()[0]!)
-    expect(screen.getByRole('button', { name: 'Hide sidebar' })).toBeInTheDocument()
-    expect(window.localStorage.getItem('consumit.home-sidebar')).toBe('open')
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('title', 'Home')
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('dialog', { name: 'CONSUMIT' })).not.toBeInTheDocument()
   })
 
-  it('restores a collapsed sidebar on load', () => {
-    window.localStorage.setItem('consumit.home-sidebar', 'collapsed')
+  it('keeps navigation closed on load even with a legacy expanded sidebar preference', () => {
+    window.localStorage.setItem('consumit.home-sidebar', 'open')
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
-
-    expect(screen.getByRole('complementary', { name: 'Primary' })).toBeInTheDocument()
-    expect(showSidebarButtons()).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-expanded', 'false')
   })
 })

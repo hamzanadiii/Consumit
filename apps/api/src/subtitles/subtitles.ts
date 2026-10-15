@@ -13,6 +13,23 @@ import { z } from 'zod'
 
 const SEARCH_CACHE_TTL_SECONDS = 3600
 
+/** Optional identity enrichment must not prevent ID-keyed subtitle discovery. */
+async function optionalLookup<T>(lookup: (signal: AbortSignal) => Promise<T>, signal: AbortSignal): Promise<T | null> {
+  const controller = new AbortController()
+  const bounded = AbortSignal.any([signal, controller.signal])
+  let rejectAbort: (() => void) | undefined
+  const timeout = setTimeout(() => controller.abort(), 2500)
+  try {
+    bounded.throwIfAborted()
+    return await Promise.race([lookup(bounded), new Promise<never>((_, reject) => {
+      rejectAbort = () => reject(new Error('Subtitle identity lookup stopped.'))
+      bounded.addEventListener('abort', rejectAbort, { once: true })
+      if (bounded.aborted) rejectAbort()
+    })])
+  } catch { return null }
+  finally { clearTimeout(timeout); if (rejectAbort) bounded.removeEventListener('abort', rejectAbort) }
+}
+
 /** Cached track lists keep the serving provider name; the public response
  *  contract carries it inside the label instead. */
 const cachedTracksSchema = z.object({
@@ -87,10 +104,7 @@ export function createSubtitleService(deps: {
   async function animeMap(anilistId: number, episode: number, signal: AbortSignal): Promise<{ tmdbId?: number | undefined; season?: number | undefined }> {
     if (!deps.animeMapping) return {}
     try {
-      const mapped = await Promise.race([
-        deps.animeMapping(anilistId, episode, signal),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-      ])
+      const mapped = await optionalLookup(bounded => deps.animeMapping!(anilistId, episode, bounded), signal)
       if (!mapped) return {}
       return {
         ...(mapped.tmdbId !== undefined ? { tmdbId: mapped.tmdbId } : {}),
@@ -111,17 +125,19 @@ export function createSubtitleService(deps: {
     const season = ref.season ?? 1
     const episode = ref.episode ?? 1
     if (ref.kind === 'anime') {
-      const detail = await deps.animeTitle(ref.id)
+      const [detail, mapped] = await Promise.all([
+        optionalLookup(() => deps.animeTitle(ref.id), signal),
+        animeMap(ref.id, episode, signal),
+      ])
       // Episode stays canonical (absolute): AnimeTosho keys off it while the
       // mapped TVDB season unlocks the TMDB-keyed fleet for the same query.
-      const mapped = await animeMap(ref.id, episode, signal)
-      return { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped }
+      return { type: 'anime', ...(detail?.title ? { title: detail.title } : {}), episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped }
     }
     let title: string | undefined
     let year: number | undefined
     let imdbId: string | undefined
     try {
-      const meta = await deps.metadata?.({ kind: ref.kind, id: ref.id }, signal)
+      const meta = deps.metadata ? await optionalLookup(bounded => deps.metadata!({ kind: ref.kind, id: ref.id }, bounded), signal) : null
       title = meta?.title; year = meta?.year; imdbId = meta?.imdbId
     } catch { /* ID-keyed providers can still answer. */ }
     return {
@@ -181,7 +197,7 @@ export function createSubtitleService(deps: {
         const mapped = await animeMap(ref.id, episode, signal)
         tracks = await resolveSubtitles(
           { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped, ...(queryLangs ? { langs: queryLangs } : {}) },
-          deps.providers,
+          deps.providers.filter(provider => !provider.discoveryOnly),
           files,
           deps.origin,
           signal,
@@ -210,7 +226,7 @@ export function createSubtitleService(deps: {
             episode,
             ...(queryLangs ? { langs: queryLangs } : {}),
           },
-          deps.providers,
+          deps.providers.filter(provider => !provider.discoveryOnly),
           files,
           deps.origin,
           signal,

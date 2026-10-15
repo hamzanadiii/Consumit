@@ -13,8 +13,6 @@ import { CommunityCards } from '../experience/community-cards'
 import { FilScreenHeroRotator } from './hero-rotator'
 import { FilScreenShell } from './filscreen-shell'
 import { TitleRail } from '../shared/title-rail'
-import { AdSlot } from '../shared/ad-slot'
-import { AdSupportCard } from '../shared/ad-support-card'
 
 export type FilScreenHomeProps = {
   awardWinningShows?: readonly CatalogTitleSummary[] | undefined
@@ -52,8 +50,6 @@ export function FilScreenHome({
       <NewEpisodesRail />
       <BecauseYouWatchedRail />
       <CommunityCards dismissible />
-      <div className="my-8 sm:my-10"><AdSlot placement="home" position="early" /></div>
-      <AdSupportCard />
 
       {trendingMovies && trendingMovies.length > 0 ? (
         <TitleRail
@@ -61,7 +57,7 @@ export function FilScreenHome({
           id="filscreen-trending-movies"
           items={trendingMovies}
           title="Trending Movies"
-          viewAllHref="/movies"
+          viewAllHref="/movies?feed=trending"
         />
       ) : null}
 
@@ -71,12 +67,8 @@ export function FilScreenHome({
           id="filscreen-trending-series"
           items={trendingSeries}
           title="Trending Series"
-          viewAllHref="/series"
+          viewAllHref="/series?feed=trending"
         />
-      ) : null}
-
-      {trendingSeries && trendingSeries.length > 0 ? (
-        <div className="my-8 sm:my-10"><AdSlot placement="home" /></div>
       ) : null}
 
       {trendingAnime && trendingAnime.length > 0 ? (
@@ -94,7 +86,7 @@ export function FilScreenHome({
           id="filscreen-top-rated-movies"
           items={topRatedMovies}
           title="Top Rated Movies"
-          viewAllHref="/movies"
+          viewAllHref="/movies?feed=top-rated"
         />
       ) : null}
 
@@ -103,13 +95,10 @@ export function FilScreenHome({
           id="filscreen-top-rated-series"
           items={topRatedSeries}
           title="Top Rated Series"
-          viewAllHref="/series"
+          viewAllHref="/series?feed=top-rated"
         />
       ) : null}
 
-      {topRatedSeries && topRatedSeries.length > 0 ? (
-        <div className="my-8 sm:my-10"><AdSlot placement="home" position="late" /></div>
-      ) : null}
 
       {awardWinningShows && awardWinningShows.length > 0 ? (
         <TitleRail

@@ -86,6 +86,19 @@ describe('provider network boundary', () => {
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)).rejects.toThrow('Blocked media destination')
     expect(mocks.request).toHaveBeenCalledOnce()
   })
+  it('admits a configured flux-pattern host only when its pattern is supplied', async () => {
+    mocks.request.mockImplementation(response())
+    const patterns = [/^hls[0-9]*\.cdnvideo11\.shop$/i]
+    await expect(fetchMedia('https://hls03.cdnvideo11.shop/master.m3u8', ['sub.cdnvideo11.shop'], {}, new AbortController().signal)).rejects.toThrow('Blocked media destination')
+    expect(mocks.lookup).not.toHaveBeenCalled()
+    const admitted = await fetchMedia('https://hls03.cdnvideo11.shop/master.m3u8', ['sub.cdnvideo11.shop'], {}, new AbortController().signal, undefined, patterns)
+    expect(mocks.request).toHaveBeenCalledOnce()
+    admitted.body.destroy()
+    await expect(fetchMedia('https://evil.example/master.m3u8', ['sub.cdnvideo11.shop'], {}, new AbortController().signal, undefined, patterns)).rejects.toThrow('Blocked media destination')
+    expect(mocks.request).toHaveBeenCalledOnce()
+    await expect(fetchMedia('https://hls03.cdnvideo11.shop.evil.example/master.m3u8', ['sub.cdnvideo11.shop'], {}, new AbortController().signal, undefined, patterns)).rejects.toThrow('Blocked media destination')
+    expect(mocks.request).toHaveBeenCalledOnce()
+  })
   it('does not resolve DNS for cancelled requests or URLs with user information', async () => {
     const controller = new AbortController(); controller.abort()
     await expect(fetchMedia('https://media.example/a', ['media.example'], {}, controller.signal)).rejects.toThrow()

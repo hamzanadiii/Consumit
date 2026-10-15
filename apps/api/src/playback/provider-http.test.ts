@@ -34,6 +34,18 @@ describe('bounded provider HTTP', () => {
     expect(body.destroyed).toBe(true)
     expect(transport.mock.calls[0]?.[1]).toEqual(['provider.example'])
   })
+  it('forwards the configured media host patterns to the transport gate and defaults to none', async () => {
+    const patterns = [/^hls[0-9]*\.cdnvideo11\.shop$/i]
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from(['media']) }))
+    const signal = new AbortController().signal
+    await createProviderHttp(['sub.cdnvideo11.shop'], transport, false, patterns)('https://hls03.cdnvideo11.shop/master.m3u8', {}, signal)
+    expect(transport.mock.calls[0]?.[5]).toEqual(patterns)
+    await createProviderHttp(['sub.cdnvideo11.shop'], transport)('https://sub.cdnvideo11.shop/sub.srt', {}, signal)
+    expect(transport.mock.calls[1]?.[5]).toEqual([])
+    const scoped = createProviderHttp(['provider.example'], transport, true, patterns)
+    await scoped.mediaScope!(['rotating.example'])('https://rotating.example/part.ts', {}, signal)
+    expect(transport.mock.calls[2]?.[5]).toEqual([])
+  })
   it('cancels stalled document bodies and releases the upstream stream', async () => {
     const body = new Readable({ read() {} })
     const http = createProviderHttp(['provider.example'], async (url) => ({ status: 200, url, headers: new Headers(), body }))

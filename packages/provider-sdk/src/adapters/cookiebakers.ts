@@ -17,6 +17,9 @@ const headers = {
  *  attempts cover a burst; only the upstream's own flap statuses retry. */
 const MAX_ATTEMPTS = 3
 const RETRY_DELAY_MS = 800
+// Leave the first cold lookup longer, while reserving time for recovery
+// within the outer 15-second provider attempt (7 + 3 + 2 + 1.6 seconds).
+const REQUEST_TIMEOUT_MS = [7000, 3000, 2000] as const
 const RETRYABLE = new Set([429, 502, 504])
 
 const streamSchema = z.object({ url: z.string().max(4096).nullish() }).passthrough()
@@ -24,10 +27,12 @@ const streamSchema = z.object({ url: z.string().max(4096).nullish() }).passthrou
 /** Port of the supplied CookieBakers recipe: a TMDB-keyed HLS vault behind
  *  stream.lfmx.app returns one master on cookiebakers23blog.xyz with a
  *  correct ladder, a demuxed audio rendition and AES-128 segments. The
- *  origin answers CORS-open but serves cold segments at ~150-250 KB/s with
- *  an unreliable own-CDN cache, so first paint is not deterministic
- *  browser-direct. These sources always cross the approved Worker relay
- *  tier under ADR 0005. */
+ *  origin answers CORS-open (ACAO `*`), so the row registers browser-direct
+ *  per PROVE's registry (see the 2026-10-09 additions audit); no Worker
+ *  relay lane is approved for it. The vault's own CDN cache is unreliable
+ *  and its resolution route flaps on multi-minute upstream windows, so a
+ *  window resolves unavailable for that title only and the waterfall moves
+ *  on. */
 export function createCookieBakersProvider(http: ProviderHttp, now = Date.now) {
   return adapter('cookiebakers', async (input, signal) => {
     const { ref } = input
@@ -39,12 +44,19 @@ export function createCookieBakersProvider(http: ProviderHttp, now = Date.now) {
       if (attempt) await delay(RETRY_DELAY_MS, signal)
       signal.throwIfAborted()
       let response
+      const controller = new AbortController()
+      const cancel = () => controller.abort(signal.reason)
+      signal.addEventListener('abort', cancel, { once: true })
+      const timer = setTimeout(() => controller.abort(new DOMException('CookieBakers lookup timed out.', 'TimeoutError')), REQUEST_TIMEOUT_MS[attempt])
       try {
-        response = await http(`${API}/stream/cookiebakers/${path}`, headers, signal)
+        response = await http(`${API}/stream/cookiebakers/${path}`, headers, controller.signal)
       } catch {
-        // A transport failure is not the upstream's flap loop.
+        signal.throwIfAborted()
         if (attempt === MAX_ATTEMPTS - 1) throw new ProviderFailure('unavailable')
         continue
+      } finally {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', cancel)
       }
       if (response.status === 404) throw new ProviderFailure('empty')
       if (response.status < 200 || response.status >= 300) {

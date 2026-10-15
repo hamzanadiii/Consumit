@@ -51,6 +51,63 @@ describe('media grants', () => {
   })
 })
 describe('Worker delivery boundary', () => {
+  it('fetches only authenticated signed Rigel control playlists, without rewriting or accepting media grants', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ rigel: ['media.example'] }) }
+    const codec = await createGrantCodec(secret)
+    const token = await codec.seal({ ...base, provider: 'rigel' }, now)
+    const control = (grant = token, authorization = `Bearer ${secret}`) => new Request(`${edge}/v1/relay-manifest`, { method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify({ grant }) })
+    const text = '#EXTM3U\n# comment ' + 'x'.repeat(1_100_000) + '\n#EXTINF:6,\nseg.ts\n'
+    const first = setup(new Response(text, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const response = await first.worker.fetch(control(), settings)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe(text)
+    expect(response.headers.get('x-consumit-manifest-base')).toBe(base.url)
+    expect(first.fetcher.mock.calls[0]?.[1]?.method).toBe('GET')
+    expect((await setup(new Response(text)).worker.fetch(control(token, 'Bearer wrong'), settings)).status).toBe(403)
+    const native = await codec.seal({ ...base, provider: 'rigel', kind: 'native' }, now)
+    expect((await setup(new Response(text)).worker.fetch(control(native), settings)).status).toBe(403)
+    expect((await setup(new Response('x'.repeat(2_097_153))).worker.fetch(control(), settings)).status).toBe(502)
+    expect((await setup(new Response(text)).worker.fetch(control(await codec.seal(base, now)), env)).status).toBe(403)
+  })
+  it('resolves LookMovie and discovers its HLS host graph from authenticated Worker egress', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }
+    const segment = new Uint8Array(564); segment[0] = 71; segment[188] = 71; segment[376] = 71
+    const fetcher = vi.fn<typeof fetch>(async input => {
+      const url = new URL(String(input))
+      if (url.hostname === 'lmscript.xyz' && url.pathname === '/v1/movies') return Response.json({ items: [{ id_movie: '42', title: 'Alien', year: 1979 }] })
+      if (url.hostname === 'lmscript.xyz' && url.pathname === '/v1/movies/view') return Response.json({ streams: { '1080p': 'https://srv313.seclar.cyou/master.m3u8' }, subtitles: [] })
+      if (url.hostname === 'srv313.seclar.cyou' && url.pathname === '/master.m3u8') return new Response('#EXTM3U\n#EXTINF:6,\nhttps://srv314.seclar.cyou/part.ts\n#EXT-X-ENDLIST\n', { headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
+      if (url.hostname === 'srv314.seclar.cyou') return new Response(segment, { headers: { 'content-type': 'video/mp2t' } })
+      return new Response('', { status: 404 })
+    })
+    const worker = createRelayWorker({ fetch: fetcher, now: () => now, verifyPublicHost: async () => undefined })
+    const response = await worker.fetch(new Request('https://edge.example/v1/lookmovie/resolve', {
+      method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Alien', year: 1979, ref: { kind: 'movie', id: 550 } }),
+    }), settings)
+    expect(response.status).toBe(200)
+    const result = await response.json() as { ok: boolean; sources: Array<{ url: string; relayRecipe?: string; relayHosts?: string[] }> }
+    expect(result.ok).toBe(true)
+    expect(result.sources[0]).toMatchObject({ url: 'https://srv313.seclar.cyou/master.m3u8', relayRecipe: 'lookmovie-v1', relayHosts: ['srv313.seclar.cyou', 'srv314.seclar.cyou'] })
+    expect(fetcher).toHaveBeenCalledTimes(4)
+  })
+
+  it('rejects unauthenticated or malformed Worker-side LookMovie resolution requests', async () => {
+    const worker = createRelayWorker({ fetch: vi.fn<typeof fetch>(), now: () => now })
+    const url = 'https://edge.example/v1/lookmovie/resolve'
+    expect((await worker.fetch(new Request(url, { method: 'POST', body: '{}' }), env)).status).toBe(403)
+    expect((await worker.fetch(new Request(url, { method: 'POST', headers: { authorization: `Bearer ${secret}` }, body: '{"title":"Alien","year":1979}' }), env)).status).toBe(400)
+  })
+
+  it('allows LookMovie rotating hosts only through its exact Worker recipe and signed host scope', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }
+    const grant = { provider: 'lookmovie-relay', url: 'https://srv313.seclar.cyou/part.ts', kind: 'auto' as const, recipe: 'lookmovie-v1' as const, hosts: ['srv313.seclar.cyou'] }
+    const fetcher = vi.fn<typeof fetch>(async () => new Response('media'))
+    const dependencies = { fetch: fetcher, now: () => now, verifyPublicHost: async () => undefined }
+    expect((await createRelayWorker(dependencies).fetch(await request(grant), settings)).status).toBe(200)
+    expect((await createRelayWorker(dependencies).fetch(await request({ ...grant, url: 'https://unrelated.example/part.ts', hosts: ['unrelated.example'] }), settings)).status).toBe(403)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
   it('requires independent recipe opt-in, an exact signed scope and public DNS before fetching a rotating host', async () => {
     const settings={...env,RELAY_PROVIDERS:JSON.stringify({'wecollege-miami':['moon.zenoak.top']}),RELAY_DISCOVERY_PROVIDERS:JSON.stringify({'wecollege-miami':'wecollege-city-v1'})}
     const grant={provider:'wecollege-miami',url:'https://new-title.example/part.ts',kind:'auto' as const,headerHost:'moon.zenoak.top',recipe:'wecollege-city-v1' as const,hosts:['new-title.example']}
@@ -173,6 +230,32 @@ describe('Worker delivery boundary', () => {
       }
     }
   })
+  it('preserves Aphrodite Referer through its exact master, transcode and segment host graph', async () => {
+    const hosts = ['stream.hls.lol', 'iad-01.transcode.cfd', 'totallyacdn.org']
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ aphrodite: hosts }) }
+    const grant = { provider: 'aphrodite', url: 'https://stream.hls.lol/helios/master.m3u8', headerHost: 'stream.hls.lol',
+      headers: { referer: 'https://atlantic.st/' }, kind: 'hls' as const }
+    const fetcher = vi.fn<typeof fetch>(async input => {
+      const url = new URL(String(input))
+      if (url.hostname === 'stream.hls.lol') return new Response('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nhttps://iad-01.transcode.cfd/variant.m3u8\n', { headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
+      if (url.hostname === 'iad-01.transcode.cfd') return new Response('#EXTM3U\n#EXTINF:6,\nhttps://totallyacdn.org/segment.ts\n#EXT-X-ENDLIST\n', { headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
+      return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'video/mp2t' } })
+    })
+    const worker = createRelayWorker({ fetch: fetcher, now: () => now })
+    const master = await worker.fetch(await request(grant), settings)
+    expect(master.status).toBe(200)
+    const variantUrl = new URL((await master.text()).split('\n').find(line => line.startsWith('https://'))!)
+    const variant = await worker.fetch(new Request(variantUrl, { headers: { origin } }), settings)
+    expect(variant.status).toBe(200)
+    const segmentUrl = new URL((await variant.text()).split('\n').find(line => line.startsWith('https://'))!)
+    const segment = await worker.fetch(new Request(segmentUrl, { headers: { origin } }), settings)
+    expect(segment.status).toBe(200)
+    expect(await segment.arrayBuffer()).toEqual(new Uint8Array([1, 2, 3]).buffer)
+    for (const call of fetcher.mock.calls) expect(new Headers(call[1]?.headers).get('referer')).toBe('https://atlantic.st/')
+    expect(fetcher.mock.calls.map(([url]) => new URL(String(url)).hostname)).toEqual(hosts)
+    const denied = await worker.fetch(await request({ ...grant, url: 'https://unapproved.transcode.cfd/variant.m3u8' }), settings)
+    expect(denied.status).toBe(403)
+  })
   it('accepts only verified TS bytes from reviewed Storm/Zeta hosts despite their HTML content type', async () => {
     const bytes = new Uint8Array(564); bytes[0] = bytes[188] = bytes[376] = 0x47
     for (const [provider, host] of [['stormboron', 'celestialdreamer.lol'], ['stormboron', 'moonfirekeeper.lol'], ['stormboron', 'emberwindkeeper.lol'], ['zeta', 'remoteconsultinggroup.site']]) {
@@ -206,10 +289,10 @@ describe('Worker delivery boundary', () => {
     const other = setup(new Response(encoded))
     expect((await other.worker.fetch(await request(), env)).status).toBe(502)
   })
-  it('bounds BingeBang large playlists separately and still denies off-host encoded references', async () => {
+  it.each(['bingebangymovies', 'rigel'])('bounds %s large playlists separately and still denies off-host references', async (provider) => {
     const large = '#EXTM3U\n# comment ' + 'x'.repeat(600_000) + '\n#EXTINF:6,\nseg.mp4\n'
-    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ bingebangymovies: ['os.bingebangstream.online'] }) }
-    const grant = { provider: 'bingebangymovies', url: 'https://os.bingebangstream.online/master.m3u8', headerHost: 'os.bingebangstream.online' }
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ [provider]: ['os.bingebangstream.online'] }) }
+    const grant = { provider, url: 'https://os.bingebangstream.online/master.m3u8', headerHost: 'os.bingebangstream.online' }
     expect((await setup(new Response(large)).worker.fetch(await request(grant), settings)).status).toBe(200)
     expect((await setup(new Response(large)).worker.fetch(await request(), env)).status).toBe(502)
     expect((await setup(new Response('#EXTM3U\n#EXTINF:6,\nhttps://evil.example/a.mp4\n')).worker.fetch(await request(grant), settings)).status).toBe(502)

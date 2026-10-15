@@ -6,6 +6,7 @@ import { loadEnv } from '../config/env.ts'
 import { createPlayback } from './playback.ts'
 import { createMemoryPlaybackStore } from './state.ts'
 import { createSeparateAudio } from './separate-audio.ts'
+import { createPlaybackRelay } from './relay.ts'
 
 const apps: Awaited<ReturnType<typeof buildApp>>[] = []
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())) })
@@ -16,6 +17,21 @@ const master = '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aac",NAME="Hindi",LAN
 const media = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\naudio.ts\n#EXT-X-ENDLIST'
 
 describe('separate audio without replacing video', () => {
+  it('keeps other recordings when a provider throws and uses only a configured relay for relay audio', async () => {
+    const movie = { kind: 'movie' as const, id: 550 }, input = { ...body, ref: movie }
+    const registration: ProviderRegistration = { adapter: createStaticProvider('audio-relay', [{ ref: movie, sources: [source] }]), role: 'audio', deliveryMode: 'relay', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'audio-relay', concurrency: 1, requestsPerMinute: 30, mediaKinds: ['movie'] }
+    const broken: ProviderRegistration = { ...registration, adapter: { id: 'broken', async resolve() { throw new Error('Controlled provider outage') } }, deliveryMode: 'direct', upstreamGroup: 'broken' }
+    const http = vi.fn(async (url: string) => ({ status: 200, url, text: url.endsWith('master.m3u8') ? master : media, headers: new Headers() }))
+    const store = createMemoryPlaybackStore(), relay = createPlaybackRelay({ origin: 'https://edge.example', secret: 'fixture-audio-relay-secret-32-characters', providers: { 'audio-relay': ['media.example'] } })
+    const audio = createSeparateAudio([broken, registration], 'US', http, 'https://consumit.example', { store, relay }), signal = new AbortController().signal
+    const tracks = await audio.list(input, signal)
+    expect(tracks).toHaveLength(1)
+    const prepared = await audio.prepare(input, tracks[0]!.id, signal)
+    expect(prepared.src).toMatch(/^https:\/\/edge\.example\/media\//)
+    expect(prepared.src).not.toContain('media.example')
+    expect(await relay.accepts(prepared.src, 'audio-relay')).toBe(true)
+    await store.close()
+  })
   it('finds movie audio behind a wrapper master and bounds unsafe or cyclic wrappers', async () => {
     const movie = { kind: 'movie' as const, id: 1007757 }
     const p: ProviderRegistration = {

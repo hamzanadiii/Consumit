@@ -88,17 +88,14 @@ describe('FilScreenShell', () => {
     expect(within(navigation).getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))).toHaveLength(1)
   })
 
-  it('keeps archive destinations accessible when collapsed', async () => {
-    const user = userEvent.setup()
+  it('keeps archive destinations accessible in the desktop icon rail', () => {
     renderShell(undefined, '/profile/hamzanadi/likes')
-    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(within(navigation).getByRole('link', { name: 'Likes' })).toHaveAttribute('aria-current', 'page')
     expect(within(navigation).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
   })
 
   it('keeps personal shortcuts visible with a shared guest avatar while sending archive guests through authentication', async () => {
-    const user = userEvent.setup()
     render(<SessionProvider initialStatus="anonymous"><ShellStateProvider><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></ShellStateProvider></SessionProvider>)
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(within(navigation).getAllByRole('link')).toHaveLength(6)
@@ -112,7 +109,6 @@ describe('FilScreenShell', () => {
     expect(window.sessionStorage.getItem('consumit.guest-character')).toBeNull()
     expect(screen.getByRole('button', { name: 'Search titles' }).nextElementSibling).toBe(guest)
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
     expect(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
     expect(guest).toBeInTheDocument()
   })

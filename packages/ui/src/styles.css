@@ -116,6 +116,38 @@
   caret-color: var(--consumit-orange);
 }
 
+@media (pointer: coarse) {
+  [data-consumit-button], [data-consumit-filter-chip],
+  [data-consumit-select] > button, [data-consumit-select] [role='option'],
+  [data-consumit-segmented-control] label > span { min-height: 44px; }
+  [data-consumit-button][data-size='icon'] { min-width: 44px; }
+  [data-consumit-input] { min-height: 48px; font-size: 16px; }
+}
+
+/* Ten explicit choices replace tiny half-star hit areas on touch phones.
+   The original native radios and clear-on-reselection behavior stay intact. */
+@media (max-width: 639px) and (pointer: coarse) {
+  [data-consumit-rating-input] { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); max-width: 280px; gap: 6px; }
+  [data-consumit-rating-input] > span { display: contents; }
+  [data-consumit-rating-input] > span > span { display: none; }
+  [data-consumit-rating-input] label {
+    position: relative;
+    inset: auto;
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    width: auto;
+    border: 1px solid var(--consumit-control-outline);
+    border-radius: var(--consumit-radius-control);
+    color: var(--consumit-copy);
+    font-size: 14px;
+  }
+  [data-consumit-rating-input] label::after { content: attr(data-rating); }
+  [data-consumit-rating-input] label:has(input:checked) { background: var(--consumit-orange); border-color: var(--consumit-orange); color: var(--consumit-canvas); font-weight: 700; }
+  [data-consumit-rating-input] label:has(input:focus-visible) { outline: 2px solid var(--consumit-orange); outline-offset: 2px; }
+  [data-consumit-rating-input] label:has(input:disabled) { opacity: .45; cursor: default; }
+}
+
 [data-consumit-tabs],
 [data-consumit-carousel-scroller] {
   scrollbar-width: none;
@@ -256,6 +288,9 @@
   .consumit-saved-display { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 639px) {
+  .consumit-poster-label > span:first-child { display: none; }
+  .consumit-poster-label { opacity: 1; }
+  [data-consumit-watch-card] [data-consumit-artwork-frame] > div:has(> button) { top: 8px; right: 8px; }
   .consumit-home-masthead { min-height: 0; padding: 76px 20px 28px; }
   .consumit-home-masthead .consumit-masthead-copy > img { max-height: 80px; }
   .consumit-home-masthead .consumit-masthead-copy > h2:not(.sr-only) { font-size: 40px; }
@@ -272,11 +307,37 @@
   .consumit-saved-display { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-video::cue {
+/* Browsers without container fullscreen retain the complete player, captions
+ * and controls in the visual viewport. The video stays attached and inline. */
+.consumit-player-viewport-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.consumit-player-viewport-fullscreen [data-player-header],
+.consumit-player-viewport-fullscreen [data-player-controls] {
+  padding-left: max(1.5rem, env(safe-area-inset-left));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+}
+
+video:not([data-native-fullscreen='true'])::cue {
   display: none !important;
   opacity: 0 !important;
   color: transparent !important;
   background: transparent !important;
+}
+
+[data-consumit-player][data-native-fullscreen='true'] [data-consumit-player-caption] {
+  visibility: hidden;
 }
 
 /* Player next: the image owns the room; transport and choices recede until intent. */
@@ -320,9 +381,10 @@ video::cue {
   .consumit-player-volume-slider { transition: none; }
 }
 
+[data-consumit-player] { container: consumit-player / inline-size; }
+
 /* Desktop cinema controls share one visual treatment across both media cores. */
 @media (min-width: 1024px) {
-  [data-consumit-player] { container: consumit-player / inline-size; }
   [data-consumit-player-screen][data-layout='fullscreen'] [data-player-stage] {
     aspect-ratio: auto;
     height: 100%;
@@ -597,12 +659,162 @@ video::cue {
     justify-content: center;
   }
 }
+
+/* Touch layouts follow the device, including a wide phone held sideways.
+ * Keep every player action reachable without wrapping controls into the video. */
+@media (hover: none) and (max-width: 900px) {
+  [data-consumit-player] [data-consumit-player-pause] { display: none; }
+  [data-consumit-player] [data-player-controls] { padding-inline: 12px; }
+  [data-consumit-player] [data-player-skip-button] { display: none; }
+  [data-consumit-player] [data-player-stage] video { touch-action: manipulation; }
+  [data-consumit-player] [data-player-control-row] {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  [data-consumit-player] [data-player-transport] {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  [data-consumit-player] [data-player-transport] > button:not([data-player-play-button]) {
+    width: 44px;
+    height: 44px;
+  }
+  [data-consumit-player] [data-player-play-button] { width: 48px; height: 48px; }
+  [data-consumit-player] [data-player-transport] [data-player-icon-button] { width: 44px; height: 44px; }
+  [data-consumit-player] [data-player-actions] {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding: 2px 1px 5px;
+    scrollbar-width: thin;
+    touch-action: pan-x;
+  }
+  [data-consumit-player] [data-player-actions] > button,
+  [data-consumit-player] [data-player-actions] > span > button {
+    width: 44px;
+    height: 44px;
+  }
+  [data-consumit-player] [data-player-caption-slot] { padding-inline: 8px; }
+  [data-consumit-player] [data-consumit-player-caption] {
+    max-width: min(100%, 40rem);
+    line-height: 1.3;
+    text-shadow: 0 1px 2px var(--consumit-canvas), 0 2px 8px var(--consumit-canvas);
+  }
+  [data-consumit-player] [data-consumit-player-caption][data-caption-size='small'] { font-size: 16px; }
+}
+
+/* Landscape phones have enough width for transport and actions in one row,
+ * but desktop breakpoints should not enlarge their spacing or targets. */
+@media (hover: none) and (max-height: 520px) {
+  [data-consumit-player] [data-player-skip-button] { display: none; }
+  [data-consumit-player] [data-player-stage] video { touch-action: manipulation; }
+  [data-consumit-player] [data-player-controls] {
+    padding: 42px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  [data-consumit-player] [data-player-control-row] { flex-wrap: nowrap; gap: 8px; }
+  [data-consumit-player] [data-player-transport] { width: auto; flex: 0 0 auto; }
+  [data-consumit-player] [data-player-actions] {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+  [data-consumit-player] [data-player-timeline] { height: 28px; }
+  [data-consumit-player] [data-player-controls] > div:nth-child(2) { margin-top: 4px; }
+}
 @media (prefers-reduced-motion: reduce) {
   [data-player-core='next'] [data-player-controls],
   [data-player-core='next'] [data-player-header] { transition-duration: 0ms; }
 }
 
 /* Flat subtitle controls stay compact within the player's overlay. */
+/* Narrow players use the same touch layout with a mouse or a touch screen.
+ * Inline transport sits below the picture; fullscreen keeps its overlay. */
+@media (max-width: 1023px) {
+  [data-consumit-player] div.consumit-player-setting-row {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+    color: var(--consumit-ink);
+  }
+  [data-consumit-player] div.consumit-player-setting-row > svg { flex-shrink: 0; }
+  [data-consumit-player] div.consumit-player-setting-row > span { min-width: 0; flex: 1; }
+}
+@container consumit-player (max-width: 600px) {
+  [data-consumit-player] [data-consumit-player-pause] { display: none; }
+  [data-consumit-player][data-fullscreen='false'] [data-player-header] { display: none; }
+  [data-consumit-player][data-fullscreen='false'] [data-player-stage] { aspect-ratio: auto; min-height: 0; }
+  [data-consumit-player][data-fullscreen='false'] [data-player-stage] > video {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    max-height: none;
+  }
+  [data-consumit-player][data-fullscreen='false'] [data-player-controls] {
+    position: relative;
+    padding: 8px 12px 12px;
+    background: #050506;
+  }
+  [data-consumit-player] [data-player-control-row] { flex-wrap: wrap; gap: 8px; }
+  [data-consumit-player] [data-player-transport] { width: 100%; justify-content: space-between; gap: 8px; }
+  [data-consumit-player] [data-player-transport] > button:not([data-player-play-button]) { display: grid; width: 44px; height: 44px; }
+  [data-consumit-player] [data-player-play-button] { width: 48px; height: 48px; }
+  [data-consumit-player] [data-player-actions] {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 8px 0 0;
+    border-top: 1px solid rgb(255 255 255 / 12%);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+  [data-consumit-player] [data-player-actions] > button,
+  [data-consumit-player] [data-player-actions] > span > button { width: 44px; height: 44px; flex-shrink: 0; }
+  [data-consumit-player] [data-player-timeline] { height: 32px; }
+  [data-consumit-player] [data-player-header] { padding: 12px 16px 40px; }
+  [data-consumit-player] [data-player-title] { padding-left: 0; text-align: left; }
+  [data-consumit-player] [data-player-title] > p:first-child { font-size: 18px; line-height: 1.3; }
+  [data-consumit-player] [data-player-caption-slot] { padding-inline: 4px; }
+  [data-consumit-player] [data-player-transport] [data-player-icon-button] { width: 44px; height: 44px; }
+  [data-consumit-player] .consumit-player-volume-slider { display: none; }
+}
+
+@container consumit-player (max-width: 330px) {
+  [data-consumit-player] [data-player-actions] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(44px, 1fr));
+    justify-items: center;
+    overflow: visible;
+  }
+}
+
+@container consumit-player (min-width: 601px) and (max-width: 900px) {
+  @media (max-height: 520px) {
+    [data-consumit-player] [data-consumit-player-pause] { display: none; }
+    [data-consumit-player] [data-player-transport] > button,
+    [data-consumit-player] [data-player-icon-button] { width: 44px; height: 44px; }
+    [data-consumit-player] [data-player-transport] > button[data-player-play-button] { width: 48px; height: 48px; }
+    [data-consumit-player] .consumit-player-volume-slider { display: none; }
+  }
+}
+
 [data-consumit-player] [data-player-panel].consumit-subtitle-panel { display: flex; flex-direction: column; overflow: hidden; }
 .consumit-subtitle-panel .consumit-player-panel-header { flex-shrink: 0; }
 [data-player-panel] > .consumit-subtitle-body:last-child { display: flex; flex-direction: column; min-height: 0; padding: 0; }
@@ -620,6 +832,7 @@ video::cue {
 .consumit-subtitle-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; gap: 4px; padding: 8px; border-top: 1px solid var(--consumit-border); background: var(--consumit-canvas); }
 .consumit-subtitle-tools button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: var(--consumit-radius-control); font-size: 12px; color: var(--consumit-copy); cursor: pointer; }
 .consumit-subtitle-tools button:hover { background: var(--consumit-surface-raised); color: var(--consumit-ink); }
+.consumit-subtitle-tools button:disabled { opacity: 0.55; cursor: wait; }
 .consumit-subtitle-tools button:focus-visible, .consumit-subtitle-notice button:focus-visible { outline: 2px solid var(--consumit-orange); outline-offset: -2px; }
 @media (min-width: 640px) { [data-consumit-player] [data-player-panel].consumit-subtitle-panel { width: 360px; max-width: calc(100% - 32px); } }
 .consumit-caption-choice { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 48px; border-bottom: 1px solid var(--consumit-border); }

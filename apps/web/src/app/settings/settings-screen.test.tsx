@@ -120,9 +120,9 @@ describe('settings honest playback surface', () => {
 
     const rail = screen.getByRole('navigation', { name: 'Settings' })
     expect(within(rail).getByRole('link', { name: /Account/ })).toHaveTextContent('01')
-    expect(within(rail).getByRole('link', { name: /Data & security/ })).toHaveTextContent('06')
+    expect(within(rail).getByRole('link', { name: /Data & security/ })).toHaveTextContent('07')
     expect(screen.getByRole('heading', { name: 'Privacy & social' })).toHaveTextContent('02')
-    expect(screen.getByRole('heading', { name: 'Data & security' })).toHaveTextContent('06')
+    expect(screen.getByRole('heading', { name: 'Data & security' })).toHaveTextContent('07')
   })
 })
 

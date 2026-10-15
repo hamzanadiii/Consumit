@@ -113,6 +113,7 @@ function matchScore(query: string, titles: readonly (string | null)[]): number {
 export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void; open: boolean }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const requestIdRef = useRef(0)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<SearchScope>('all')
@@ -212,10 +213,18 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
   }
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto p-4 pt-[8vh] sm:p-8 sm:pt-[10vh]">
+    <div className="fs-search-overlay fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto p-4 pt-[8vh] sm:p-8 sm:pt-[10vh]" onKeyDown={event => {
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape') { event.preventDefault(); onClose() }
+      if (event.key !== 'Tab') return
+      const controls = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input, [tabindex="0"]') ?? []).filter(control => control.tabIndex >= 0 && control.getClientRects().length > 0)
+      const first = controls[0], last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }}>
       <style>{OVERLAY_ANIMATION}</style>
       <button
-        aria-label="Close search"
+        aria-label="Dismiss search backdrop"
         className="fs-search-backdrop fixed inset-0 cursor-default bg-black/70 backdrop-blur-md"
         onClick={onClose}
         tabIndex={-1}
@@ -226,12 +235,13 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
         aria-modal="true"
         className="fs-search-panel relative flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.65)]"
         role="dialog"
+        ref={panelRef}
       >
         <form onSubmit={handleSubmit} role="search">
-          <div className="flex items-center gap-2 border-b border-[var(--fs-line)] px-4 py-3 sm:gap-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--fs-line)] px-4 py-3 sm:flex-nowrap sm:gap-3 sm:px-5">
             <Search aria-hidden="true" className="size-5 shrink-0 text-[var(--fs-muted)]" />
             <Select
-              className="w-28 shrink-0"
+              className="mr-auto w-40 shrink-0 sm:mr-0 sm:w-28"
               hideLabel
               label="Search scope"
               onValueChange={(value) => {
@@ -246,6 +256,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               options={SCOPES.map(({ label, value }) => ({ label, value }))}
               value={scope}
             />
+            <button aria-label="Close search" className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-muted)] outline-none hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:order-last" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
             <label className="sr-only" htmlFor="filscreen-command-search">
               {scope === 'people' ? 'Search people' : 'Search movies, series, and anime'}
             </label>
@@ -255,7 +266,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               aria-controls="filscreen-search-results"
               aria-expanded={results.length > 0}
               autoComplete="off"
-              className="h-12 min-w-0 flex-1 bg-transparent text-lg text-[var(--fs-ink)] caret-[var(--fs-focus)] outline-none placeholder:text-[var(--fs-muted)]"
+              className="fs-search-query order-2 h-12 min-w-0 flex-[1_1_calc(100%-52px)] bg-transparent text-lg text-[var(--fs-ink)] caret-[var(--fs-focus)] outline-none placeholder:text-[var(--fs-muted)] sm:order-none sm:flex-1"
               id="filscreen-command-search"
               maxLength={100}
               onChange={(event) => handleQuery(event.currentTarget.value)}
@@ -281,7 +292,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
             {query ? (
               <button
                 aria-label="Clear search"
-                className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg text-[var(--fs-muted)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
+                className="order-2 grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-muted)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:order-none"
                 onClick={() => {
                   handleQuery('')
                   inputRef.current?.focus()
@@ -297,7 +308,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
           </div>
         </form>
 
-        <div className="min-h-0 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {!showResults ? (
             <div className="flex flex-col items-center px-5 py-14 text-center sm:px-8">
               <span aria-hidden="true" className="grid size-14 place-items-center rounded-full border border-[var(--fs-line)] bg-[var(--fs-rail)]">
@@ -345,7 +356,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                     onMouseEnter={() => setActiveIndex(index)}
                     role="option"
                   >
-                    {item.member ? <Avatar name={item.title} size="md" src={memberAvatarSrc(item.member.avatarUrl, item.member.id)} treatment={item.member.avatarStyle} /> : <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
+                    {item.member ? <Avatar name={item.title} size="md" src={memberAvatarSrc(item.member)} treatment={item.member.avatarStyle} /> : <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
                       {item.posterUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- tiny command-palette thumb avoids Next image overhead
                         <img alt="" className="h-full w-full object-cover" loading="lazy" src={item.posterUrl} />
@@ -404,7 +415,7 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
               <ArrowRight aria-hidden="true" className="size-3.5" />
             </Link>
           ) : (
-            <span className="ml-auto" aria-hidden="true">
+            <span className="ml-auto hidden sm:inline" aria-hidden="true">
               ⌘K to toggle
             </span>
           )}

@@ -1,17 +1,21 @@
 import { createHash } from 'node:crypto'
-import { allowedMediaUrl, assertHlsManifest, isRelayMediaUrl, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration, validatedSources, type ProviderHttp, type ProviderRegistration } from '@consumit/provider-sdk'
+import { allowedMediaUrl, assertHlsManifest, isRelayMediaUrl, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration, validatedSources, type ProviderHttp, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import type { ResolvePlaybackRequest, SeparateAudioTrack } from '@consumit/contracts'
 import { ApiError } from '../http/errors.ts'
 import { createProviderHttp } from './provider-http.ts'
+import { acquireProviderBudget } from './provider-budget.ts'
+import type { PlaybackStore } from './state.ts'
+import type { PlaybackRelay } from './relay.ts'
+import { MAX_GRANT_MS } from '@consumit/media-relay'
 
-type Candidate = SeparateAudioTrack & { src: string; expiresAt: string; registration: ProviderRegistration; headers: Record<string, string> }
+type Candidate = SeparateAudioTrack & { src: string; expiresAt: string; registration: ProviderRegistration; headers: Record<string, string>; source: ProviderSource }
 /** Explicit, bounded role-opted discovery (ADR 0004). Discovery never changes the video session. */
-export function createSeparateAudio(providers: readonly ProviderRegistration[], region: string, injectedHttp?: ProviderHttp, appOrigin?: string) {
+export function createSeparateAudio(providers: readonly ProviderRegistration[], region: string, injectedHttp?: ProviderHttp, appOrigin?: string, delivery?: { store: PlaybackStore; relay?: PlaybackRelay | undefined }) {
   const cache = new Map<string, { until: number; tracks: Candidate[] }>()
   const budget = new Map<string, { active: number; count: number; since: number }>()
-  const eligible = () => providers.filter(p => p.enabled && (p.role === 'audio' || p.role === 'both') && p.approvedRegions.includes(region))
+  const eligible = () => providers.filter(p => p.enabled && (p.role === 'audio' || p.role === 'both') && p.approvedRegions.includes(region) && p.deliveryMode !== 'embed' && (p.deliveryMode !== 'relay' || delivery?.relay?.includes(p.adapter.id)))
   const safe = (url: string, p: ProviderRegistration) => allowedMediaUrl(url, p.mediaHosts, p.mediaHostPatterns) && !isRelayMediaUrl(url)
-  const httpFor = (p: ProviderRegistration) => injectedHttp ?? createProviderHttp(p.mediaHosts)
+  const httpFor = (p: ProviderRegistration) => injectedHttp ?? createProviderHttp(p.mediaHosts, undefined, false, p.mediaHostPatterns)
   async function audioMaster(src: string, headers: Record<string, string>, p: ProviderRegistration, signal: AbortSignal) {
     let current = src
     // Some movie URLs are a wrapper master. Follow one variant at each
@@ -42,6 +46,8 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
       budget.set(p.adapter.id, b)
       // One busy row must not hide the other opted-in rows' tracks.
       if (b.active >= p.concurrency || b.count >= p.requestsPerMinute) continue
+      const release = await acquireProviderBudget(p, region, delivery?.store)
+      if (!release) continue
       b.active++; b.count++
       attempted++
       try {
@@ -62,10 +68,11 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
           let language: string
           try { language = Intl.getCanonicalLocales(a.LANGUAGE)[0]! } catch { continue }
           if (!/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(language)) continue
-          tracks.push({ id: createHash('sha256').update(JSON.stringify([input.ref, p.adapter.id, a['GROUP-ID'], a.NAME, language])).digest('hex').slice(0, 32), label: a.NAME.slice(0, 128), language, provider: p.adapter.separateAudio?.label ?? p.adapter.id, src, expiresAt: source.expiresAt, registration: p, headers })
+          if (tracks.length < 40) tracks.push({ id: createHash('sha256').update(JSON.stringify([input.ref, p.adapter.id, a['GROUP-ID'], a.NAME, language])).digest('hex').slice(0, 32), label: a.NAME.slice(0, 128), language, provider: p.adapter.separateAudio?.label ?? p.adapter.id, src, expiresAt: source.expiresAt, registration: p, headers, source })
           if (tracks.length >= 40) break
         }
-      } finally { b.active-- }
+      } catch { if (signal.aborted) throw signal.reason }
+      finally { b.active--; await release() }
     }
     // Nothing was even attempted: every opted-in row is at its own budget.
     if (rows.length && !attempted) throw new ApiError('CONFLICT', 'Audio discovery is busy. Try again shortly.', { retryable: true })
@@ -88,7 +95,10 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
       }
       const duration = sumMediaPlaylistDuration(response.text)
       if (!duration || duration > 86400) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio timeline is unavailable.')
-      return { id: track.id, label: track.label, language: track.language, provider: track.provider, src: response.url, duration, expiresAt: track.expiresAt }
+      const expiry = Math.min(Date.parse(track.expiresAt) - 5000, Date.now() + MAX_GRANT_MS - 5000)
+      const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source: { ...track.source, url: response.url, key: `audio-${track.id}`, type: 'hls' }, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '') : response.url
+      if (!src || expiry <= Date.now() || !eligible().includes(track.registration)) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio delivery path is unavailable.')
+      return { id: track.id, label: track.label, language: track.language, provider: track.provider, src, duration, expiresAt: new Date(expiry).toISOString() }
     },
   }
 }

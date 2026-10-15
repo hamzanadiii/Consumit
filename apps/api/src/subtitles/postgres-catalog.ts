@@ -33,6 +33,7 @@ export function createPostgresSubtitleCatalog(prisma: PrismaClient): SubtitleCat
             ...(wanted.length ? { language: { in: wanted } } : {}),
           },
           orderBy: [{ updatedAt: 'desc' }],
+          take: 500,
         })
         // Wanted langs first (caller priority), then recency.
         const rank = (language: string) => {

@@ -1,7 +1,46 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { parseEnv } from 'node:util'
 import { assertProductionBackupConfig, assertProductionRuntimeConfig, productionEnvironmentIssues, productionProcessEnvironment } from './production-config.mjs'
 import { assertProductionDatabaseUrl } from './production-config.mjs'
+import { serializeProductionEnvironment } from './production-config.mjs'
+
+test('preparing and rebuilding production preserves relay JSON policies for the Node reader', () => {
+  const configured = {
+    APP_ORIGIN: 'https://consumit.online', PLAYBACK_RELAY_ENABLED: 'true',
+    PLAYBACK_RELAY_PROVIDERS: JSON.stringify({ fixture: ['media.example'] }),
+    PLAYBACK_RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ stormboron: 'storm-boron-v1' }),
+  }
+  const prepared = parseEnv(serializeProductionEnvironment(configured))
+  assert.deepEqual(prepared, configured)
+  const rebuilt = parseEnv(serializeProductionEnvironment({ ...prepared, CONSUMIT_RELEASE: 'fixture-release' }))
+  assert.deepEqual(JSON.parse(rebuilt.PLAYBACK_RELAY_PROVIDERS), { fixture: ['media.example'] })
+  assert.equal(rebuilt.PLAYBACK_RELAY_DISCOVERY_PROVIDERS, configured.PLAYBACK_RELAY_DISCOVERY_PROVIDERS)
+})
+
+test('production serialization preserves literal private characters and rejects ambiguous values safely', () => {
+  const configured = { PRIVATE_VALUE: 'fixture$literal\\path#suffix', AUTH_EMAIL_FROM: "Consumit's auth <auth@example.test>" }
+  assert.deepEqual(parseEnv(serializeProductionEnvironment(configured)), configured)
+  for (const value of ['fixture\nsecret', 'fixture\'"secret']) {
+    assert.throws(() => serializeProductionEnvironment({ PRIVATE_VALUE: value }), error => error.message.includes('PRIVATE_VALUE') && !error.message.includes('secret'))
+  }
+})
+
+test('provider resolver production configuration requires its own exact HTTPS origin and secret', () => {
+  assert.ok(productionEnvironmentIssues({ PLAYBACK_ENABLED: 'true', PLAYBACK_RESOLVER_ENABLED: 'true' }).some(issue => issue.startsWith('PLAYBACK_RESOLVER_SECRET')))
+  assert.ok(productionEnvironmentIssues({ PLAYBACK_ENABLED: 'false', PLAYBACK_RESOLVER_ENABLED: 'true' }).some(issue => issue.includes('requires playback to be enabled')))
+  const valid = {
+    APP_ORIGIN: 'https://consumit.online', NEXT_PUBLIC_SITE_URL: 'https://consumit.online',
+    AUTH_CODE_PEPPER: 'fixture-production-pepper-at-least-32-characters', AUTH_EMAIL_FROM: 'Consumit <auth@consumit.online>',
+    DATABASE_URL: 'postgresql://fixture@managed.postgres.test/production?sslmode=verify-full', DATABASE_SSL_MODE: 'require',
+    RESEND_API_KEY: 'fixture-email-key', TMDB_API_READ_TOKEN: 'fixture-catalog-token',
+    CLOUDFLARE_TUNNEL_TOKEN: 'fixture-tunnel-token', RESTIC_REPOSITORY: 'sftp:storage-box:/backups/consumit',
+    PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json', PLAYBACK_RESOLVER_ENABLED: 'true',
+    PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48),
+  }
+  assert.deepEqual(productionEnvironmentIssues(valid), [])
+  assert.ok(productionEnvironmentIssues({ ...valid, PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example/path' }).some(issue => issue.startsWith('PLAYBACK_RESOLVER_ORIGIN')))
+})
 
 const fixture = () => ({ services: {
   api: { environment: { DATABASE_URL: 'postgresql://fixture@database.example/production' } },

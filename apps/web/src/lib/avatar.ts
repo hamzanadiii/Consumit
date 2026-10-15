@@ -14,7 +14,8 @@ export function randomAvatarSeed(): string {
   return crypto.randomUUID().replaceAll('-', '')
 }
 
-/** A member-chosen portrait when set, otherwise the generated tile seed. */
-export function memberAvatarSrc(avatarUrl: string | null | undefined, fallbackSeed: string): string {
-  return avatarUrl ?? dicebearAvatarUrl(fallbackSeed)
+/** One portrait across session and profile projections. Callers pass the
+ * public identity so a private member id cannot become a different seed. */
+export function memberAvatarSrc(member: { avatarUrl?: string | null | undefined; username: string }): string {
+  return member.avatarUrl ?? dicebearAvatarUrl(member.username)
 }

@@ -6,6 +6,21 @@ const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLan
 const metadata = vi.fn(async () => ({ title: 'Fight Club', year: 1999 }))
 
 describe('Lookmovie direct adapter', () => {
+  it('keeps Direct unchanged and verifies each explicit relay quality through the bound graph', async () => {
+    const http = Object.assign(vi.fn<ProviderHttp>(async url => {
+      if (url.includes('/v1/movies?')) return { status: 200, url, text: JSON.stringify({ items: [{ id_movie: 'fight-club', title: 'Fight Club', year: 1999 }] }) }
+      if (url.includes('/v1/movies/view?')) return { status: 200, url, text: JSON.stringify({ streams: { '1080p': 'https://srv310.seclar.cyou/movie.m3u8?expires=1800001000', '720p': 'https://unrelated.example/movie.m3u8' } }) }
+      if (url.includes('.m3u8')) return { status: 200, url, text: '#EXTM3U\n#EXTINF:6,\nhttps://srv313.seclar.cyou/part.ts\n' }
+      const bytes = new Uint8Array(564); bytes[0] = bytes[188] = bytes[376] = 71
+      return { status: 200, url, text: '', bytes, headers: new Headers({ 'content-type': 'video/mp2t' }) }
+    }), { mediaScope: () => http })
+    const relay = createLookmovieProvider(http, metadata, () => 1_800_000_000_000, { id: 'lookmovie-relay', relayHostDiscovery: true })
+    expect(relay.id).toBe('lookmovie-relay')
+    const result = await relay.resolve(input, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ height: 1080, relayRecipe: 'lookmovie-v1', relayHosts: ['srv310.seclar.cyou', 'srv313.seclar.cyou'] }] })
+    if (result.ok) expect(result.sources).toHaveLength(1)
+    expect(http.mock.calls.some(([url]) => url.includes('unrelated.example'))).toBe(false)
+  })
   it('selects the matching movie and returns bounded HTTPS media and subtitle candidates', async () => {
     const http = vi.fn<ProviderHttp>(async (url) => url.includes('/v1/movies?')
       ? {

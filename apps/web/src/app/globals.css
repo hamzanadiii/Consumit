@@ -77,3 +77,75 @@ select {
   border-radius: 999px;
   background: var(--consumit-faint);
 }
+
+/* The phone shell keeps discovery in view; personal destinations live in a
+   modal navigation sheet with native focus containment and Escape support. */
+.fs-mobile-dialog {
+  margin: 0 0 0 auto;
+  padding: 0;
+  width: min(360px, calc(100% - 16px));
+  max-width: none;
+  height: 100dvh;
+  max-height: 100dvh;
+  border: 0;
+  border-left: 1px solid var(--fs-line);
+  background: var(--fs-shell);
+  color: var(--fs-ink);
+}
+
+.fs-mobile-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.fs-mobile-menu {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 24px;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+}
+.fs-mobile-menu nav { display: grid; overflow: visible; }
+.fs-mobile-menu a, .fs-mobile-menu button { min-height: 44px; }
+.fs-mobile-menu .fs-navigation-label { display: inline; }
+.consumit-settings-savebar { padding-bottom: env(safe-area-inset-bottom); }
+
+@media (max-width: 1023px) {
+  .fs-content {
+    padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  .fs-utility { gap: 8px; }
+  .fs-utility > button, .fs-utility > a { min-height: 44px; }
+  .fs-utility > a, .fs-menu-trigger { min-width: 44px; }
+  .fs-utility nav a { min-height: 44px; }
+  .fs-utility > nav { scrollbar-width: none; }
+  .fs-utility > nav::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 639px) {
+  :root { --text-sm: 14px; --text-xs: 12px; --text-base: 16px; }
+  .fs-utility > nav { gap: 0; justify-content: space-between; padding-bottom: 8px; }
+  .fs-utility > nav a { justify-content: center; flex: 1; padding-inline: 10px; }
+  .fs-utility > button[aria-label='Search titles'] { padding-inline: 12px; }
+  [data-filscreen-home] button:not([data-consumit-player] button) { min-height: 44px; min-width: 44px; }
+  [data-filscreen-home] a[class*='min-h-'] { min-height: 44px; }
+  /* Keep iOS from zooming into a field and losing the surrounding task. */
+  input:not([type='range']):not([type='checkbox']):not([type='radio']), textarea, select { font-size: 16px; }
+  [data-consumit-select] > button { min-height: 44px; }
+  [data-consumit-select] [role='option'] { min-height: 44px; }
+  [data-consumit-empty-state] > div > div { flex-wrap: wrap; gap: 12px; }
+  [data-consumit-error-state] > div { display: flex; flex-wrap: wrap; gap: 12px; }
+  .fs-search-overlay { padding: 0; }
+  .fs-search-panel {
+    height: 100dvh;
+    max-height: 100dvh;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .fs-utility > button[aria-label='Search titles'] { justify-content: center; padding-inline: 0; }
+  .fs-utility > button[aria-label='Search titles'] > span { display: none; }
+}

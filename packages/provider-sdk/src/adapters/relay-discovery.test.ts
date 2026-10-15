@@ -3,6 +3,11 @@ import {discoverRelaySource} from './relay-discovery.ts'
 import type {ProviderHttp} from './http.ts'
 const source={key:'city',url:'https://moon.zenoak.top/vod/title.m3u8',type:'hls' as const,language:'original',headers:{referer:'https://movy.sx/'},expiresAt:'2099-01-01T00:00:00Z',subtitles:[]}
 describe('provider-scoped media discovery',()=>{
+ it('rejects an unrelated public host in a LookMovie graph before fetching it',async()=>{
+  const http=Object.assign(vi.fn<ProviderHttp>(async url=>({status:200,url,text:'#EXTM3U\n#EXTINF:6,\nhttps://unrelated.example/part.ts\n',bytes:new Uint8Array([1])})),{mediaScope:()=>http})
+  await expect(discoverRelaySource({...source,url:'https://srv310.seclar.cyou/movie.m3u8'},http,'lookmovie-v1',new AbortController().signal)).rejects.toThrow('LookMovie')
+  expect(http).toHaveBeenCalledTimes(1)
+ })
  it.each(['proudhawk.top','next-title-cdn.example'])('leases verified per-title hosts without a title-specific list (%s)',async host=>{
   const bytes=new Uint8Array(564);bytes[0]=bytes[188]=bytes[376]=71
   const http=Object.assign(vi.fn<ProviderHttp>(async url=>url.endsWith('.m3u8')?{status:200,url,text:`#EXTM3U\n#EXTINF:6,\nhttps://${host}/part.ts\n`}:{status:200,url,text:'',bytes,headers:new Headers({'content-type':'video/mp2t'})}),{mediaScope:()=>http})

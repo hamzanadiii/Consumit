@@ -1,7 +1,9 @@
 'use client'
 
 import { buttonVariants, Input, Label, Select, type SelectionOption } from '@consumit/ui'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import type { PlaybackDiagnostics } from '@consumit/contracts'
+import { readPlaybackDiagnostics, formatPlaybackDiagnostics } from '@/lib/playback-diagnostics'
 
 import { SupportShell } from '../support/support-shell'
 import { buildIssueMailto, MAX_ISSUE_DESCRIPTION_LENGTH, normalizeSupportEmail, parseIssueCategory, type IssueCategory } from './issue-report'
@@ -23,11 +25,14 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [replyEmail, setReplyEmail] = useState('')
+  const [diagnostics, setDiagnostics] = useState<PlaybackDiagnostics | null>(null)
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(false)
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) setDiagnostics(readPlaybackDiagnostics()) }); return () => { active = false } }, [])
   const mailto = useMemo(() => {
     if (!recipient || title.trim().length < 4 || description.trim().length < 10) return null
     if (replyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail.trim())) return null
-    return buildIssueMailto(recipient, { category: issueCategory, description, replyEmail, title })
-  }, [description, issueCategory, recipient, replyEmail, title])
+    return buildIssueMailto(recipient, { category: issueCategory, description, replyEmail, title, ...(includeDiagnostics && diagnostics ? { diagnostics: formatPlaybackDiagnostics(diagnostics) } : {}) })
+  }, [description, issueCategory, recipient, replyEmail, title, includeDiagnostics, diagnostics])
 
   function updateField(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -63,6 +68,7 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
                 <FieldHint><span id="issue-reply-email-hint">{replyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail.trim()) ? 'Enter a valid email address or clear this field.' : 'This address and your report are added to an email draft on your device.'}</span></FieldHint>
               </div>
 
+              {diagnostics && issueCategory === 'playback' ? <div><label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input checked={includeDiagnostics} onChange={event => setIncludeDiagnostics(event.target.checked)} type="checkbox" />Include playback diagnostics</label><p className="text-xs leading-5 text-copy">Only title/episode, provider, browser, delivery path and failure category. No cookies, credentials or media URLs.</p>{includeDiagnostics ? <pre className="mt-2 whitespace-pre-wrap text-xs text-copy">{formatPlaybackDiagnostics(diagnostics)}</pre> : null}</div> : null}
               <div className="flex flex-wrap items-center gap-4 border-t border-[var(--fs-line)] pt-5">
                 {mailto ? (
                   <a className={buttonVariants({ size: 'lg', variant: 'accent' })} href={mailto}>Prepare email</a>
@@ -89,7 +95,7 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
             <li>The movie, series, or anime episode involved</li>
             <li>Any plain-language error shown by Consumit</li>
           </ul>
-          <p className="mt-6 border-t border-[var(--fs-line)] pt-4 text-xs leading-5 text-[var(--fs-muted)]">The report form does not attach your watch history, provider details, or page activity.</p>
+          <p className="mt-6 border-t border-[var(--fs-line)] pt-4 text-xs leading-5 text-[var(--fs-muted)]">Playback diagnostics are optional and shown for review. Your watch history and page activity are never attached.</p>
         </aside>
       </main>
     </SupportShell>

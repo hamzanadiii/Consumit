@@ -1,7 +1,12 @@
 import { timingSafeEqual } from 'node:crypto'
 
 import {
+  ACCOUNT_CONFIRM_MAX_ATTEMPTS,
+  ACCOUNT_CONFIRM_WINDOW_MS,
+  ACCOUNT_SEND_MAX,
+  ACCOUNT_SEND_WINDOW_MS,
   CHALLENGE_COOLDOWN_MS,
+  CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
   MAX_MEMBER_SESSIONS,
@@ -34,6 +39,8 @@ function equalHash(left: string, right: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
+type Counter = { count: number; expiresAt: Date }
+
 export function createMemoryAuthState(options: {
   clock?: () => Date
   codePepper?: string
@@ -45,9 +52,39 @@ export function createMemoryAuthState(options: {
   const challenges = new Map<string, StoredChallenge>()
   const usernameReservations = new Map<string, { email: string; expiresAt: Date }>()
   const sessions = new Map<string, SessionRecord>()
+  const attemptCounters = new Map<string, Counter>()
+  const sendCounters = new Map<string, Counter>()
+  const tombstones = new Map<string, Date>()
 
   function challengeKey(purpose: AuthChallenge['kind'], email: string) {
     return challengeLookup(codePepper, purpose, email)
+  }
+
+  function liveCounter(counters: Map<string, Counter>, key: string) {
+    const counter = counters.get(key)
+    if (!counter) return null
+    if (counter.expiresAt.getTime() <= clock().getTime()) {
+      counters.delete(key)
+      return null
+    }
+    return counter
+  }
+
+  function bumpCounter(counters: Map<string, Counter>, key: string, windowMs: number) {
+    const existing = liveCounter(counters, key)
+    const count = (existing?.count ?? 0) + 1
+    counters.set(key, { count, expiresAt: new Date(clock().getTime() + windowMs) })
+    return count
+  }
+
+  function accountLocked(purpose: AuthChallenge['kind'], email: string) {
+    const key = `${purpose}:${challengeLookup(codePepper, purpose, email)}`
+    return (liveCounter(attemptCounters, key)?.count ?? 0) >= ACCOUNT_CONFIRM_MAX_ATTEMPTS
+      || (tombstones.get(key)?.getTime() ?? 0) > clock().getTime()
+  }
+
+  function lockAccount(purpose: AuthChallenge['kind'], email: string) {
+    tombstones.set(`${purpose}:${challengeLookup(codePepper, purpose, email)}`, new Date(clock().getTime() + CHALLENGE_DESTROYED_BACKOFF_MS))
   }
 
   function removeSession(hash: string) {
@@ -72,6 +109,10 @@ export function createMemoryAuthState(options: {
   return {
     async beginChallenge(input) {
       const key = challengeKey(input.purpose, input.email)
+      const scoped = `${input.purpose}:${key}`
+      if (accountLocked(input.purpose, input.email)) return 'cooldown'
+      const sends = liveCounter(sendCounters, scoped)
+      if ((sends?.count ?? 0) >= ACCOUNT_SEND_MAX) return 'cooldown'
       const current = challenges.get(key)
       const now = clock()
       if (current && current.createdAt.getTime() + CHALLENGE_COOLDOWN_MS > now.getTime()) return 'cooldown'
@@ -95,11 +136,22 @@ export function createMemoryAuthState(options: {
         expiresAt: new Date(now.getTime() + CHALLENGE_TTL_MS),
         payload: input.payload,
       })
+      bumpCounter(sendCounters, scoped, ACCOUNT_SEND_WINDOW_MS)
       return 'stored'
     },
     async close() {},
     async consumeChallenge(input) {
       const key = challengeKey(input.purpose, input.email)
+      const scoped = `${input.purpose}:${key}`
+      if (accountLocked(input.purpose, input.email)) {
+        const held = challenges.get(key)
+        if (held) {
+          releaseRegistration(held)
+          challenges.delete(key)
+        }
+        lockAccount(input.purpose, input.email)
+        return 'locked'
+      }
       const challenge = challenges.get(key)
       if (!challenge || challenge.expiresAt.getTime() <= clock().getTime()) {
         releaseRegistration(challenge)
@@ -109,9 +161,11 @@ export function createMemoryAuthState(options: {
       const expected = challengeCodeHash(codePepper, input.purpose, input.email, input.code)
       if (!equalHash(challenge.codeHash, expected)) {
         challenge.attempts += 1
-        if (challenge.attempts >= CHALLENGE_MAX_ATTEMPTS) {
+        const counted = bumpCounter(attemptCounters, scoped, ACCOUNT_CONFIRM_WINDOW_MS)
+        if (challenge.attempts >= CHALLENGE_MAX_ATTEMPTS || counted >= ACCOUNT_CONFIRM_MAX_ATTEMPTS) {
           releaseRegistration(challenge)
           challenges.delete(key)
+          lockAccount(input.purpose, input.email)
         }
         return null
       }

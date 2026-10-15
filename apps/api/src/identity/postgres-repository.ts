@@ -94,7 +94,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         prisma.releaseNotification.findMany({ where: { memberId }, include: { episode: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
         prisma.$queryRaw<{ preferences: unknown }[]>`SELECT "preferences" FROM "ExperiencePreference" WHERE "memberId"=${memberId}`,
       ])
-      const [row, watched, diary, saved, favorites, lists, ratings, reviews, watchHistory] = await Promise.all([
+      const [row, watched, diary, saved, favorites, lists, ratings, reviews, watchHistory, hiddenContinue, recommendationDismissals] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
         prisma.watchedTitle.findMany({ where: { memberId } }),
         prisma.diaryEntry.findMany({ orderBy: { watchedOn: 'desc' }, where: { memberId } }),
@@ -104,11 +104,15 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         prisma.rating.findMany({ where: { memberId } }),
         prisma.review.findMany({ orderBy: { reviewedOn: 'desc' }, where: { memberId } }),
         prisma.watchHistoryEntry.findMany({ orderBy: [{ completedAt: 'desc' }, { id: 'desc' }], where: { memberId } }),
+        prisma.playbackProgress.findMany({ where: { memberId, hiddenFromContinueAt: { not: null } }, distinct: ['catalogKind', 'tmdbId'], orderBy: { hiddenFromContinueAt: 'desc' } }),
+        prisma.recommendationDismissal.findMany({ where: { memberId }, orderBy: { createdAt: 'desc' } }),
       ])
       if (!row) return null
       const member = toRecord(row)
       return {
         exportedAt: exportedAt.toISOString(),
+        continueWatchingDismissals: hiddenContinue.map(item => ({ kind: catalogKind(item.catalogKind), id: item.tmdbId, hiddenAt: item.hiddenFromContinueAt!.toISOString() })),
+        recommendationDismissals: recommendationDismissals.map(item => ({ kind: catalogKind(item.catalogKind), id: item.tmdbId })),
         experiencePreferences: experience[0] ? experiencePreferencesSchema.parse(experience[0].preferences) : null,
         notificationPreferences: { newEpisodes: Boolean(preference?.enabledAt) },
         notifications: notifications.map(row => ({ id: row.id, episode: episodeView(row.episode, row.checkedAt), createdAt: row.createdAt.toISOString(), readAt: row.readAt?.toISOString() ?? null })),
@@ -228,6 +232,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         await tx.watchedTitle.deleteMany({ where: { memberId } })
         await tx.watchHistoryEntry.deleteMany({ where: { memberId } })
         await tx.playbackProgress.deleteMany({ where: { memberId } })
+        await tx.recommendationDismissal.deleteMany({ where: { memberId } })
         await tx.credential.deleteMany({ where: { memberId } })
         await tx.profile.deleteMany({ where: { memberId } })
         await tx.member.update({

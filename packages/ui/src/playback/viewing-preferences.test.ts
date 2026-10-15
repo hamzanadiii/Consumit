@@ -6,6 +6,51 @@ import type { MediaEngine } from './media-engine'
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks() })
 for (const [name, create] of [['original', createPlaybackController], ['next core', createPlaybackControllerNext]] as const) {
   describe(`${name} semantic viewing preferences`, () => {
+    it.each([true, false])('saves a stream language only after activation succeeds (%s)', async success => {
+      const video = document.createElement('video'), preferenceChange = vi.fn()
+      let finish!: (ok: boolean) => void
+      const adapter: MediaEngine = { destroy: vi.fn(), recover: () => false, quality() {}, subtitle() {}, audio: vi.fn() }
+      const controller = create(video, { change: vi.fn(), fatal: vi.fn(), preferenceChange, initialPreferences: { audioLanguage: 'en', qualityHeight: null, subtitlesEnabled: false, subtitleLanguages: ['en'] } }, async (_video, _source, events) => {
+        events.tracks({ qualities: [], subtitles: [], audio: [{ value: 'en', label: 'English', language: 'en' }, { value: 'hi', label: 'Hindi', language: 'hi' }] }); return adapter
+      })
+      await controller.load({ type: 'native', src: 'https://media.example/video.mp4' })
+      vi.mocked(adapter.audio).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+      const selected = controller.audio('hi')
+      expect(preferenceChange).not.toHaveBeenCalled()
+      finish(success); expect(await selected).toBe(success)
+      if (success) expect(preferenceChange).toHaveBeenCalledWith(expect.objectContaining({ audioLanguage: 'hi' }))
+      else expect(preferenceChange).not.toHaveBeenCalled()
+      controller.destroy()
+    })
+    it('keeps an uploaded track through discovery and source changes without saving an unknown language', async () => {
+      localStorage.setItem('consumit.player.subtitle-language', 'en')
+      const video = document.createElement('video')
+      const adapter: MediaEngine = { destroy: vi.fn(), recover: vi.fn(() => false), quality: vi.fn(), audio: vi.fn(), subtitle: vi.fn() }
+      const change = vi.fn(), preferenceChange = vi.fn()
+      const controller = create(video, { change, fatal: vi.fn(), preferenceChange, initialPreferences: { qualityHeight: null, subtitlesEnabled: false, subtitleLanguages: ['ar', 'en'] } }, async (_video, _source, events) => {
+        events.tracks({ qualities: [], audio: [], subtitles: [] })
+        return adapter
+      })
+      const upload = { id: 'upload', label: 'captions.srt', language: 'und', url: `blob:${window.location.origin}/upload` }
+      const arabic = { id: 'arabic', label: 'Arabic', language: 'ar', url: 'https://media.example/arabic.vtt' }
+      await controller.load({ type: 'native', src: 'https://media.example/movie.mp4' })
+      controller.externalSubtitles([upload])
+      controller.subtitle('external:consumit-external-upload')
+      controller.externalSubtitles([upload, arabic])
+      expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'external:consumit-external-upload', subtitleNotice: undefined }))
+      expect(preferenceChange).toHaveBeenLastCalledWith({ subtitlesEnabled: true })
+      expect(localStorage.getItem('consumit.player.subtitle-language')).toBe('en')
+      await controller.load({ type: 'native', src: 'https://media.example/replacement.mp4' })
+      controller.externalSubtitles([upload, arabic])
+      expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'external:consumit-external-upload' }))
+      controller.subtitle('off')
+      controller.externalSubtitles([upload, arabic])
+      expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'off' }))
+      controller.subtitle('external:consumit-external-upload')
+      controller.externalSubtitles([arabic])
+      expect(change).toHaveBeenLastCalledWith(expect.objectContaining({ subtitleTrack: 'external:consumit-external-arabic' }))
+      controller.destroy()
+    })
     it('upgrades English fallback to late Arabic without overriding an intentional Off', async () => {
       const video = document.createElement('video')
       const adapter: MediaEngine = { destroy: vi.fn(), recover: vi.fn(() => false), quality: vi.fn(), audio: vi.fn(), subtitle: vi.fn() }

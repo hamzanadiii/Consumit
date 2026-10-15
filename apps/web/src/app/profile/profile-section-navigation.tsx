@@ -1,6 +1,7 @@
 'use client'
 
 import { Tabs, type TabItem } from '@consumit/ui'
+import { useEffect, useRef } from 'react'
 
 export type ProfileSectionId = 'overview' | 'activity' | 'films' | 'diary' | 'history' | 'reviews' | 'watchlist' | 'lists' | 'likes' | 'tags' | 'ratings' | 'followers' | 'following' | 'network'
 
@@ -16,6 +17,22 @@ export function ProfileSectionNavigation({ active = 'overview', counts, name, ow
   username: string
 }) {
   const root = `/profile/${encodeURIComponent(username)}`
+  const navigation = useRef<HTMLElement>(null)
+  useEffect(() => {
+    function revealActiveSection() {
+      const nav = navigation.current
+      const selected = nav?.querySelector('[aria-current="page"]')
+      if (!nav || !selected || nav.scrollWidth <= nav.clientWidth) return
+      const bounds = nav.getBoundingClientRect()
+      const activeBounds = selected.getBoundingClientRect()
+      const offset = activeBounds.left < bounds.left ? activeBounds.left - bounds.left
+        : activeBounds.right > bounds.right ? activeBounds.right - bounds.right : 0
+      if (offset) nav.scrollTo({ left: nav.scrollLeft + offset, behavior: 'instant' })
+    }
+    revealActiveSection()
+    window.addEventListener('resize', revealActiveSection)
+    return () => window.removeEventListener('resize', revealActiveSection)
+  }, [active, username])
 
   const items: TabItem[] = [
     { href: root, label: 'Overview', value: 'overview' },
@@ -38,6 +55,7 @@ export function ProfileSectionNavigation({ active = 'overview', counts, name, ow
       aria-label={`${name} profile sections`}
       className="[&_ul]:gap-5 [&_a]:min-h-12 [&_a]:text-[0.875rem] [&_a]:font-medium"
       items={items}
+      ref={navigation}
     />
   )
 }

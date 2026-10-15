@@ -2,24 +2,30 @@ import { z } from 'zod'
 import type { FrameSandbox } from '@consumit/contracts'
 import type { ProviderInput, ProviderSource } from '../index.ts'
 import type { AnimeTitleVariantsResolver } from './animeparadise.ts'
-import { adapter, document, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
+import { adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
 
-export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe'] as const
+export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe', 'vixsrcframe', 'vidfastframe', 'vidapiframe', 'moviesapiframe', 'vidlinkframe', 'vidnestframe'] as const
 export type FrameId = typeof FRAME_IDS[number]
+export function isFrameProviderId(value: string): value is FrameId { return FRAME_IDS.some(id => id === value) }
+
+/** Browser entry origins for the additional movie/series frame choices.
+ * VidAPI publishes vaplayer.ru as its player host. These are documents,
+ * never media/CDN authority for their separate Direct adapters. */
+export const MOVIE_FRAME_HOSTS = {
+  vidapiframe: 'vaplayer.ru', vidfastframe: 'vidfast.vc', vidcoreioframe: 'vidcore.io',
+  vidriftframe: 'embed.vidrift.net', moviesapiframe: 'moviesapi.to',
+  vidlinkframe: 'vidlink.pro', vidnestframe: 'vidnest.fun',
+} as const
 /** Published players that refuse any sandboxed frame (browser-verified
  *  2026-10-08: MegaPlay plays and VsEmbed loads its player only without one,
- *  while every sandbox, including pop-ups and top navigation, is refused).
+ *  while every sandbox, including pop-ups and top navigation, is refused;
+ *  2026-10-11: Vixsrc movie and series decode only in the plain-frame control).
  *  They are framed as plain iframes; the rest keep the standard sandbox. */
-const SANDBOX_REFUSING = new Set<FrameId>(['megaplayframe', 'vsembedframe'])
+const SANDBOX_REFUSING = new Set<FrameId>(['megaplayframe', 'vsembedframe', 'vixsrcframe'])
 const serversSchema = z.object({ servers: z.array(z.object({ dataLink: z.string().max(4096), dataType: z.string().max(16) })).max(32) })
 const searchSchema = z.object({ data: z.array(z.object({ slug: z.string().min(1).max(100), anilistId: z.number() })).max(100) })
 const lanesSchema = z.object({ servers: z.array(z.object({ id: z.string(), subTypes: z.array(z.string()).default([]) })).max(32) })
 const embedsSchema = z.object({ embeds: z.array(z.object({ status: z.string(), url: z.string().max(4096) })).max(32) })
-
-/** VidRift keys its catalog by the same subtitles its player consumes; a
- *  200 WEBVTT answer for any reviewed language means the title is cataloged
- *  and its in-frame lanes will play. */
-const VIDRIFT_SUB_LANGS = ['en', 'es', 'fr', 'de', 'pt', 'ar'] as const
 
 function frameUrl(value: string, host: string, path: RegExp) {
   const url = new URL(value)
@@ -32,10 +38,21 @@ function frameUrl(value: string, host: string, path: RegExp) {
  *  episode and the member chooses the exact episode inside the player. */
 function movieSeriesFrameUrl(id: FrameId, ref: ProviderInput['ref']): string {
   if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
+  if (id === 'vidapiframe') return ref.kind === 'movie' ? `https://vaplayer.ru/embed/movie/${ref.id}` : `https://vaplayer.ru/embed/tv/${ref.id}/${ref.season}/${ref.episode}`
+  if (id === 'moviesapiframe' || id === 'vidlinkframe' || id === 'vidnestframe') {
+    const host = MOVIE_FRAME_HOSTS[id]
+    return ref.kind === 'movie' ? `https://${host}/movie/${ref.id}` : `https://${host}/tv/${ref.id}/${ref.season}/${ref.episode}`
+  }
+  if (id === 'vixsrcframe') return ref.kind === 'movie' ? `https://vixsrc.to/movie/${ref.id}` : `https://vixsrc.to/tv/${ref.id}/${ref.season}/${ref.episode}`
   if (id === 'vidcoreioframe') {
     return ref.kind === 'movie'
       ? `https://vidcore.io/movie/${ref.id}`
       : `https://vidcore.io/tv/${ref.id}/${ref.season}/${ref.episode}`
+  }
+  if (id === 'vidfastframe') {
+    return ref.kind === 'movie'
+      ? `https://vidfast.vc/movie/${ref.id}`
+      : `https://vidfast.vc/tv/${ref.id}/${ref.season}/${ref.episode}`
   }
   if (id === 'cinesrcframe') return `https://cinesrc.st/embed/${ref.kind === 'movie' ? 'movie' : 'tv'}/${ref.id}`
   if (id === 'vidriftframe') {
@@ -48,29 +65,8 @@ function movieSeriesFrameUrl(id: FrameId, ref: ProviderInput['ref']): string {
     : `https://vsembed.ru/embed/${ref.kind === 'movie' ? 'movie' : 'tv'}?tmdb=${ref.id}${ref.kind === 'series' ? `&season=${ref.season}&episode=${ref.episode}` : ''}`
 }
 
-/** Page-liveness markers; a player shell must be present before the frame
- *  becomes a source. Page liveness is not playback evidence. */
-function pageShellMatches(id: FrameId, text: string): boolean {
-  if (id === 'apiplayerframe') return /jw-server-list/i.test(text)
-  if (id === 'embedapiframe') return /embeddable movie and tv player/i.test(text)
-  if (id === 'vidcoreioframe') return text.length >= 10_000 && /vidcore/i.test(text)
-  if (id === 'cinesrcframe') return /streaming servers/i.test(text)
-  return true
-}
-
-async function vidriftCatalogued(http: ProviderHttp, ref: ProviderInput['ref'], embedUrl: string, signal: AbortSignal): Promise<boolean> {
-  const id = String(ref.id)
-  const settled = await Promise.allSettled(VIDRIFT_SUB_LANGS.map(async (lang) => {
-    const url = ref.kind === 'movie'
-      ? `https://embed.vidrift.net/api/subtitles/movie/${encodeURIComponent(id)}/${lang}`
-      : `https://embed.vidrift.net/api/subtitles/tv/${encodeURIComponent(id)}/${ref.season}/${ref.episode}/${lang}`
-    const response = await http(url, { 'user-agent': userAgent, accept: '*/*', referer: embedUrl }, signal)
-    return response.status >= 200 && response.status < 300 && response.text.includes('WEBVTT')
-  }))
-  return settled.some((result) => result.status === 'fulfilled' && result.value)
-}
-
-/** Third-party controls stay inside the frame. Page liveness is not playback evidence. */
+/** Third-party controls stay inside the frame. Lookup maps reviewed identity
+ *  to a published player URL; the viewer loads that page from their network. */
 export function createFrameProvider(id: FrameId, http: ProviderHttp, titles?: AnimeTitleVariantsResolver, now = Date.now) {
   return adapter(id, async (input, signal) => {
     const { ref } = input
@@ -111,13 +107,18 @@ export function createFrameProvider(id: FrameId, http: ProviderHttp, titles?: An
       if (ref.kind === 'anime') throw new ProviderFailure('empty')
       url = movieSeriesFrameUrl(id, ref)
     }
-    // VidRift bot-walls the embed page to datacenter fetches, so its
-    // keyless subtitle API doubles as the catalog gate instead.
-    if (id === 'vidriftframe') {
-      if (!(await vidriftCatalogued(http, ref, url, signal))) throw new ProviderFailure('empty')
-    } else {
-      const page = await document(http, url, signal, { accept: 'text/html' })
-      if (!pageShellMatches(id, page.text)) throw new ProviderFailure('empty')
+    // Frame pages load from the viewer, not from the resolving Worker.
+    // A page probe from a different egress can falsely reject a playable
+    // frame. Canonical URLs and mapped anime URLs are already host/path
+    // constrained; browser frame recovery handles unavailable titles.
+    if (id === 'vixsrcframe') {
+      // Published canonical browser player. OVH page lookup is challenged,
+      // so this is a frame candidate, never server/playback health evidence.
+      // The viewer loads it; existing frame failure/reload controls apply.
+      const frame = new URL(url)
+      frame.searchParams.set('autoplay', 'true')
+      if (/^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(input.audioLanguage) && input.audioLanguage.length <= 32) frame.searchParams.set('lang', input.audioLanguage.split('-')[0]!)
+      url = frame.href
     }
     const frameSandbox: FrameSandbox | undefined = SANDBOX_REFUSING.has(id) ? 'none' : undefined
     return [{ key: 'frame', url, type: 'iframe', language, expiresAt: new Date(now() + 1_800_000).toISOString(), headers: {}, subtitles: [], ...(frameSandbox ? { frameSandbox } : {}) } satisfies ProviderSource]

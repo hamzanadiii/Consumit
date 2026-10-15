@@ -10,14 +10,14 @@ const CACHE_MAX = 1000
  *  addition to AniList ids. Backed by the anime catalog; the signal is
  *  accepted for interface parity (the catalog bounds its own upstream work).
  *  Secrets stay server-side. */
-export function createAnimeTitleResolver(catalog: AnimeCatalog): AnimeTitleResolver {
+export function createAnimeTitleResolver(catalog: Pick<AnimeCatalog, 'title'>): AnimeTitleResolver {
   const meta = createAnimeMetaResolver(catalog)
   return async (anilistId: number, signal: AbortSignal) => meta(anilistId, signal).then(({ title }) => title)
 }
 
 /** AniList title aliases for anime providers whose catalogs index alternate
  *  English, romaji, or native names. The catalog client caches this detail. */
-export function createAnimeTitleVariantsResolver(catalog: AnimeCatalog): AnimeTitleVariantsResolver {
+export function createAnimeTitleVariantsResolver(catalog: Pick<AnimeCatalog, 'title'>): AnimeTitleVariantsResolver {
   return async (anilistId) => {
     const detail = await catalog.title(anilistId)
     return [...new Set([
@@ -34,7 +34,7 @@ export type AnimeMetaResolver = (anilistId: number, signal: AbortSignal) => Prom
 /** Title plus MAL id for adapters addressed by external identities (Zoko
  *  speaks MAL ids). Shares the title cache shape; one catalog read serves
  *  both fields. */
-export function createAnimeMetaResolver(catalog: AnimeCatalog): AnimeMetaResolver {
+export function createAnimeMetaResolver(catalog: Pick<AnimeCatalog, 'title'>): AnimeMetaResolver {
   const cache = new Map<number, { title: string; malId: number | null; expires: number }>()
   return async (anilistId: number) => {
     const cached = cache.get(anilistId)

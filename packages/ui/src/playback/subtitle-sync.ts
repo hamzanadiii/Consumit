@@ -54,7 +54,7 @@ function sanitizeCueText(text: string): string {
 export function parseVttCues(content: string): SubtitleCue[] {
   const cues: SubtitleCue[] = []
   const safeContent = content.length > MAX_SUBTITLE_CHARS ? content.slice(0, MAX_SUBTITLE_CHARS) : content
-  const lines = safeContent.replace(/\r\n/g, '\n').split('\n')
+  const lines = safeContent.replace(/\r\n?/g, '\n').split('\n')
   let current: { startTime: number; endTime: number; text: string } | null = null
   const limit = Math.min(lines.length, MAX_LINES)
   for (let i = 0; i < limit; i++) {
@@ -80,7 +80,7 @@ export function parseVttCues(content: string): SubtitleCue[] {
     }
   }
   if (current) cues.push(current)
-  return cues.filter((cue) => cue.text.length > 0)
+  return cues.filter((cue) => cue.text.length > 0).sort((a, b) => a.startTime - b.startTime)
 }
 
 /** Binary-search cue lookup. Returns every cue containing `time` so
@@ -289,7 +289,9 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
   if (!reader) {
     const text = await response.text()
     if (text.length > MAX_FETCH_BYTES) throw new Error('Subtitle file too large.')
-    return parseVttCues(text)
+    const cues = parseVttCues(text)
+    if (!cues.length) throw new Error('Subtitle file has no usable cues.')
+    return cues
   }
   const chunks: Uint8Array[] = []
   let total = 0
@@ -314,5 +316,7 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
-  return parseVttCues(new TextDecoder().decode(merged))
+  const cues = parseVttCues(new TextDecoder().decode(merged))
+  if (!cues.length) throw new Error('Subtitle file has no usable cues.')
+  return cues
 }

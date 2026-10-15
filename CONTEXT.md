@@ -158,6 +158,9 @@ _Avoid_: Watch / Embed, provider frame
 The first-party playback surface through which a member watches a validated configured media source while keeping one consistent set of controls.
 _Avoid_: Embed frame, provider player
 
+**Consumit Server**:
+The Watch selection group containing currently permitted Direct and Relay providers that use the Consumit Player. Opening it reveals individual numbered provider choices. External players remain separate named choices. This is a presentation group; provider media delivery, personal recovery order and member progress ownership retain their existing boundaries.
+
 **Provider Candidate**:
 A reviewed, shipped adapter recipe available in Admin's isolated Provider scout. It is outside the live provider roster until an operator installs its approved base configuration. A successful exact-title test is evidence for that sample, not a guarantee of provider availability or recording compatibility.
 _Avoid_: Verified provider, automatically discovered host

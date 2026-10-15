@@ -11,6 +11,7 @@ import type { IdentityRecord, IdentityRepository } from './repository.ts'
 
 const invalidCredentials = () => new IdentityError('INVALID_CREDENTIALS', 'Invalid email or password.')
 const invalidCode = () => new IdentityError('INVALID_VERIFICATION_CODE', 'The code is invalid or has expired.')
+const lockedCode = () => new IdentityError('TOO_MANY_ATTEMPTS', 'Too many incorrect codes. Wait a few minutes before trying again.', { retryable: true })
 const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000
 let dummyHash: Promise<string> | null = null
 
@@ -52,7 +53,7 @@ function profileView(member: IdentityRecord, now: Date): MemberProfile {
 }
 
 function verificationCode(): string {
-  return randomInt(0, 1_000_000).toString().padStart(6, '0')
+  return randomInt(0, 100_000_000).toString().padStart(8, '0')
 }
 
 function challengeIdempotencyKey(purpose: 'recovery' | 'verification', email: string, code: string): string {
@@ -187,6 +188,7 @@ export function createIdentity(options: {
     async recoverPassword({ code, email, newPassword }) {
       const normalized = normalizeEmail(email)
       const challenge = await state.consumeChallenge({ code, email: normalized, purpose: 'recovery' })
+      if (challenge === 'locked') throw lockedCode()
       if (!challenge || challenge.kind !== 'recovery') throw invalidCode()
       const updated = await repository.changePassword(challenge.memberId, await hashPassword(newPassword))
       if (!updated) throw invalidCode()
@@ -195,14 +197,17 @@ export function createIdentity(options: {
     async register({ email, password, username }) {
       const normalized = normalizeEmail(email)
       const existing = await repository.findByEmail(normalized)
-      if (existing?.status === 'ACTIVE') {
-        await sendQuietly(() => notifier.sendRegistrationNotice({ email: normalized, idempotencyKey: `registration-notice/${randomUUID()}` }))
-        return
-      }
+      // Both branches perform identical checks and work (username availability,
+      // argon2 hashing) and answer the same way, so responses and timing do
+      // not reveal whether the email is already registered.
       if (!await repository.isUsernameAvailable(username) || await state.isUsernameReserved(username)) {
         throw new IdentityError('USERNAME_UNAVAILABLE', 'That username is unavailable.')
       }
       const passwordHash = await hashPassword(password)
+      if (existing?.status === 'ACTIVE') {
+        await sendQuietly(() => notifier.sendRegistrationNotice({ email: normalized, idempotencyKey: `registration-notice/${randomUUID()}` }))
+        return
+      }
       await startRegistrationChallenge({ email: normalized, kind: 'registration', passwordHash, username })
     },
     async requestRecovery(email) {
@@ -264,6 +269,7 @@ export function createIdentity(options: {
     async verifyEmail({ code, email }) {
       const normalized = normalizeEmail(email)
       const challenge = await state.consumeChallenge({ code, email: normalized, purpose: 'registration' })
+      if (challenge === 'locked') throw lockedCode()
       if (!challenge || challenge.kind !== 'registration') throw invalidCode()
       let member: IdentityRecord
       try {

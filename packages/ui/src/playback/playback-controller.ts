@@ -12,6 +12,9 @@ export type ControllerSnapshot = EngineTracks & {
 }
 export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' | 'error' | 'ended'; position: number; elapsedMs?: number }
 
+// Pending seeks have their own recovery budget; ordinary stalls keep the shorter one.
+const SEEK_TIMEOUT_MS = 30_000
+
 /** One controller per media element; async engine loads are serialized and generation-guarded. */
 export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   change: (snapshot: ControllerSnapshot) => void
@@ -97,7 +100,10 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     }
   }
   let subtitlePreference = 'en'
+  // Keep an explicit session track ahead of automatic language matching.
+  let manualSubtitle: string | undefined
   let audioPreference = 'original'
+  let audioSelection = 0, selectingAudio = false
   const qualityPreference = createQualityPreference(callbacks.initialPreferences?.qualityHeight)
   let fixedQualityHint: string | undefined
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Storage is optional. */ }
@@ -119,6 +125,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   let bufferedAt = 0
   let lastPlaybackProgressAt = performance.now()
   let lastPlaybackPosition = 0
+  let seekDeadlineAt = 0
   let firstFrame = false
   let snapshot: ControllerSnapshot = { phase: 'loading', needsGesture: false, qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [], quality: 'auto', audioTrack: '', subtitleTrack: 'off' }
   function update(value: Partial<ControllerSnapshot>) { if (destroyed) return; snapshot = { ...snapshot, ...value }; callbacks.change(snapshot) }
@@ -150,6 +157,11 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     clearTimeout(recoveryTimer)
     const inspect = () => {
       if (destroyed || video.paused || snapshot.phase !== 'buffering') return
+      if (seekDeadlineAt) {
+        if (performance.now() >= seekDeadlineAt) { fatal('network', 'timeout'); return }
+        recoveryTimer = setTimeout(inspect, 1000)
+        return
+      }
       const position = video.currentTime
       if (Number.isFinite(position) && position > lastPlaybackPosition + 0.1) {
         lastPlaybackPosition = position
@@ -170,7 +182,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
         const isSelected = value === `external:${track.id}`
         // Keep cues active for Consumit's caption overlay without also
         // drawing a second native caption line over the video.
-        textTrack.mode = isSelected ? 'hidden' : 'disabled'
+        textTrack.mode = isSelected ? (video.hasAttribute('data-native-fullscreen') ? 'showing' : 'hidden') : 'disabled'
         track.default = isSelected
       }
     })
@@ -188,7 +200,8 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     update({ subtitleTrack: value })
   }
   function preferredSubtitle(currentValue?: string) {
-    const match = preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
+    const match = snapshot.subtitles.find(option => option.value === manualSubtitle)
+      ?? preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
     selectSubtitle(subtitlePreference === 'off' ? 'off' : match?.value ?? 'off')
     update({ subtitleNotice: subtitlePreference !== 'off' && !match ? 'Your preferred subtitles are unavailable on this source. Choose another track or keep watching.' : undefined })
   }
@@ -205,15 +218,19 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     }
     if (value !== 'off' && !target) return
     const resolvedValue = target ? target.value : 'off'
-    subtitlePreference = resolvedValue === 'off' ? 'off' : target?.language ?? 'en'
     const language = semanticSubtitleLanguage(target?.language)
+    manualSubtitle = resolvedValue
+    subtitlePreference = resolvedValue === 'off' ? 'off' : language ?? subtitleLanguages[0] ?? 'en'
     if (resolvedValue !== 'off' && language) subtitleLanguages = [language, ...subtitleLanguages.filter(value => value !== language)].slice(0, 3)
     callbacks.preferenceChange?.({ subtitlesEnabled: resolvedValue !== 'off', ...(resolvedValue !== 'off' && language ? { subtitleLanguages } : {}) })
-    try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Storage is optional. */ }
+    if (resolvedValue === 'off' || language) {
+      try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Storage is optional. */ }
+    }
     selectSubtitle(resolvedValue)
     update({ subtitleNotice: undefined })
   }
   function preferredAudio() {
+    if (selectingAudio) return
     const match = preferredAudioOption(snapshot.audio, audioPreference)
     if (match) { engine?.audio(match.value); update({ audioTrack: match.value, audioNotice: undefined }) }
     else update({ audioTrack: '', audioNotice: snapshot.audio.length && audioPreference !== 'original' ? `${audioPreference} audio unavailable on this source. Using default audio.` : undefined })
@@ -225,22 +242,36 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   }
   function audio(value: string) {
     const option = snapshot.audio.find((entry) => entry.value === value)
-    if (!option) return
-    audioPreference = option.language || option.label.toLowerCase()
-    try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Storage is optional. */ }
-    engine?.audio(value); update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
-    callbacks.preferenceChange?.(mediaPreferences(qualityPreference.height, audioPreference))
+    if (!option || !engine) return Promise.resolve(false)
+    const request = ++audioSelection, source = generation
+    selectingAudio = true
+    const finish = (ok = true) => {
+      if (request !== audioSelection || source !== generation) { if (request === audioSelection) selectingAudio = false; return false }
+      selectingAudio = false
+      if (!ok) { update({ audioNotice: 'This language could not start. Your previous audio preference was kept.' }); return false }
+      audioPreference = option.language || option.label.toLowerCase()
+      try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Storage is optional. */ }
+      update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+      callbacks.preferenceChange?.(mediaPreferences(qualityPreference.height, audioPreference)); return true
+    }
+    try { const result = engine.audio(value); return result ? result.then(finish, () => finish(false)) : Promise.resolve(finish()) }
+    catch { return Promise.resolve(finish(false)) }
   }
   const listeners: [string, EventListener][] = [
-    ['playing', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
-    ['pause', () => { if (snapshot.phase !== 'loading' && snapshot.phase !== 'switching') clearTimeout(startupTimer); clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
+    ['playing', () => { seekDeadlineAt = 0; clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
+    ['pause', () => { seekDeadlineAt = 0; if (snapshot.phase !== 'loading' && snapshot.phase !== 'switching') clearTimeout(startupTimer); clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
     ['waiting', () => { if (!video.paused && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); lastPlaybackProgressAt = bufferedAt; lastPlaybackPosition = video.currentTime; update({ phase: 'buffering' }); event('buffer-start') } watchForStall() } }],
     ['seeking', () => {
       clearTimeout(recoveryTimer)
       if (video.paused || snapshot.phase === 'failed') return
+      seekDeadlineAt = performance.now() + SEEK_TIMEOUT_MS
       lastPlaybackProgressAt = performance.now(); lastPlaybackPosition = video.currentTime
       if (snapshot.phase !== 'buffering') { bufferedAt = lastPlaybackProgressAt; update({ phase: 'buffering' }); event('buffer-start') }
       watchForStall()
+    }],
+    ['seeked', () => {
+      seekDeadlineAt = 0
+      lastPlaybackProgressAt = performance.now(); lastPlaybackPosition = video.currentTime
     }],
     ['timeupdate', () => { if (video.currentTime > lastPlaybackPosition + 0.1) { lastPlaybackPosition = video.currentTime; lastPlaybackProgressAt = performance.now() } }],
     ['ended', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); update({ phase: 'ended' }); event('ended') }],
@@ -258,7 +289,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
       startedAt = performance.now(); firstFrame = false
       lastPlaybackProgressAt = startedAt; lastPlaybackPosition = position
       attachment?.abort(); metadataCleanup()
-      clearTimeout(startupTimer); clearTimeout(recoveryTimer); retries = 0
+      clearTimeout(startupTimer); clearTimeout(recoveryTimer); retries = 0; seekDeadlineAt = 0
       const previousSubtitle = snapshot.subtitleTrack
       update({ phase: engine ? 'switching' : 'loading', needsGesture: false, quality: 'auto', audioTrack: '', subtitleTrack: 'off', qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [] })
       queue = queue.catch(() => undefined).then(async () => {
@@ -310,13 +341,9 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
             engineOptions = next
             publishTracks()
             if (engine) {
-              // A server switch must not steal an explicit caption pick:
-              // when the previous external track survives the reload, keep
-              // it instead of re-solving the language preference.
-              const kept = previousSubtitle.startsWith('external:') &&
-                snapshot.subtitles.some((option) => option.value === previousSubtitle)
-              if (kept) selectSubtitle(previousSubtitle)
-              else preferredSubtitle()
+              // Fragment/track updates must respect choices made after load
+              // began, including a new upload or Off.
+              preferredSubtitle(snapshot.subtitleTrack)
               preferredAudio()
               preferredQuality()
             }
@@ -343,15 +370,8 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
           destroy() { cleanupMetadata(); attached.destroy() },
         }
         if (snapshot.phase === 'loading' || snapshot.phase === 'switching') watchStartup()
-        // The tracks callback above runs before any engine exists, so an
-        // explicit pick can only be honored here: when the pre-load
-        // external track survives the reload, keep it instead of
-        // re-solving the language preference. Otherwise solve the
-        // preference (first-load auto-select takes this branch).
-        const reselected = previousSubtitle.startsWith('external:') &&
-          snapshot.subtitles.some((option) => option.value === previousSubtitle)
-        if (reselected) selectSubtitle(previousSubtitle)
-        else preferredSubtitle()
+        // Manual intent can change while the engine is attaching.
+        preferredSubtitle(previousSubtitle)
         preferredAudio()
         preferredQuality()
         // The old source can keep readyState >= 1 briefly after destroy() in

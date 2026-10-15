@@ -45,8 +45,10 @@ describe('Postgres username advisory locks', () => {
       const exported = await repository.exportMember(member.id, new Date('2026-09-28T00:00:00.000Z'))
       expect(exported?.watchHistory).toMatchObject([{ episode: 4, id: 95396, kind: 'series', season: 2 }])
       expect(exported?.library.diary).toMatchObject([{ episode: 4, id: 95396, kind: 'series', season: 2 }])
-      expect(exported?.profile.visibility).toBe('private')
-      expect(exported?.library.lists).toMatchObject([{ visibility: 'private' }])
+      // Export retains deliberate publication after the public-profile migration.
+      // Watch History and Diary remain private independently of this choice.
+      expect(exported?.profile.visibility).toBe('public')
+      expect(exported?.library.lists).toMatchObject([{ visibility: 'public' }])
       expect(exported?.library).not.toHaveProperty('savedLists')
       expect((await db.prisma.profile.findUniqueOrThrow({ where: { memberId: member.id } })).visibility).toBe('public')
       expect((await db.prisma.memberList.findUniqueOrThrow({ where: { id: legacyList.id } })).visibility).toBe('public')

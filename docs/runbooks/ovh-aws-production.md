@@ -6,6 +6,12 @@ Cloudflare Free exposes the private gateway through Tunnel. AWS Canada Central
 provides SES and S3. The deployment project is always `consumit-production`;
 local `consumit` databases, volumes, environment files and UI work are preserved.
 
+ADR 0008 adds a separate bounded LookMovie media fallback in the `consumit-media`
+project. Only its DNS-only media hostname exposes public TCP 80/443 through Caddy;
+the application gateway and database retain their private exposure. Follow the
+[OVH media runbook](./ovh-media-relay.md) for its independent configuration,
+admission limits and rollback.
+
 ## Budget and owner account steps
 
 | Component | Eligible credit available | After credit |
@@ -89,6 +95,29 @@ self-hosted URLs without changing development configuration or volumes. Install
 the production provider file and TMDB read token privately; provider values never
 belong in Git. The existing Free playback relay is retained. Configure optional
 relay settings only with the already reviewed origin and host policies.
+
+Relay providers require `PLAYBACK_RELAY_ENABLED=true`, the deployed Worker origin,
+its matching private secret and the reviewed provider/host and discovery maps in
+the production environment. The production template leaves relay disabled. A
+Worker restricted to `http://localhost:8080` cannot serve production grants; use
+a separate Worker with `APP_ORIGIN=https://consumit.online` to retain local playback.
+Keep the maps as single-quoted JSON in the environment file. The production
+wrapper preserves those values through preparation and image builds; JSON-style
+escaped double quoting corrupts them when Node reads the file. A basic smoke
+pass does not verify individual providers or browser decoding.
+
+To copy the current local provider controls, capture the database used by the
+running local API rather than an obsolete development container. The private
+`sync-provider-settings.js` recovery command accepts a validated versioned base
+and override snapshot on stdin; `--validate-only` needs no database, and
+`--verify` checks exact stored controls. It changes provider settings and audit
+rows in one transaction, increments the registry revision and never imports
+member identities or history. Snapshot provider configuration and overrides
+before replacement, keep credentials out of the transfer, and retain disabled
+rows/tombstones and their saved positions. Recreate the API after changing its
+base file/environment, refresh gateway DNS, verify settings and HTTPS, then run
+separate resolution and browser checks. The [2026-10-10 parity audit](../audits/provider-production-parity-2026-10-10.md)
+records the prepared guarded package and its pending installation status.
 
 ## VPS installation and initial release
 

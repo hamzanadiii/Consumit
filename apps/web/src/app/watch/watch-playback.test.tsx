@@ -8,6 +8,7 @@ import { WatchPlayback } from './watch-playback'
 import { readExperience } from '@/lib/experience-storage'
 
 const mocks = vi.hoisted(() => ({
+  adsEnabled: true,
   playerSources: vi.fn((source: DirectMediaSource | undefined) => source),
   selected: vi.fn(), request: vi.fn(), list: vi.fn(), swap: vi.fn(), subs: vi.fn(), page: vi.fn(), prepare: vi.fn(), push: vi.fn(), pref: vi.fn(), savePref: vi.fn(), write: vi.fn(async (...args: unknown[]) => { void args }), member: null as null | { id: string },
   cast: {
@@ -24,12 +25,15 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../session/session', () => ({ useSession: () => ({ member: mocks.member }) }))
 vi.mock('../experience/experience-provider', () => ({ useExperience: () => ({ ready: true, owner: mocks.member?.id ?? null, preferences: readExperience(null), patch: async () => {}, retry: async () => {} }) }))
-vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
+vi.mock('../shared/ad-status', () => ({ useAdStatus: () => ({ enabled: mocks.adsEnabled, ready: true }) }))
+vi.mock('./server-strip', () => ({ ServerStrip: () => null, serverName: (index: number) => `Server ${index + 1}` }))
+vi.mock('@/lib/playback-browser', () => ({ playbackCapabilities: () => ({ hls: true, native: true, dash: false, nativeHls: true }), playbackRequest: mocks.request, runPlaybackAttempt: (input: unknown, signal: AbortSignal, _progress: unknown, previous?: { sessionId: string; failure: unknown }) => previous ? mocks.request(`${previous.sessionId}/fallback`, previous.failure, signal) : mocks.request('resolve', input, signal), listPlaybackProviders: mocks.list, switchPlaybackProvider: mocks.swap }))
 vi.mock('@/lib/cast-sender', () => ({ createCastSender: () => mocks.cast, castContentType: (type: string) => type }))
 vi.mock('@/lib/subtitles-browser', () => ({ discoverSubtitles: (...args: unknown[]) => mocks.subs(...args), pageSubtitles: (...args: unknown[]) => mocks.page(...args), prepareSubtitle: (...args: unknown[]) => mocks.prepare(...args), fetchSubtitlePreference: (...args: unknown[]) => mocks.pref(...args), saveSubtitlePreference: (...args: unknown[]) => mocks.savePref(...args) }))
 vi.mock('@/lib/playback-progress', () => ({ readPlaybackProgress: async () => 0, writePlaybackProgress: mocks.write, PROGRESS_SYNC_INTERVAL_MS: 25000, hasMeaningfulProgressChange: () => true }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }))
-vi.mock('@consumit/ui', () => ({
+vi.mock('@consumit/ui', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@consumit/ui')>(),
   createQualityPreference: () => ({ choose: (option: { height: number }) => localStorage.setItem('consumit.player.quality-height', String(option.height)) }),
   readQualityPreference: () => { const value = Number(localStorage.getItem('consumit.player.quality-height')); return value >= 144 && value <= 4320 ? value : null },
   SUBTITLE_LANGUAGES_EVENT: 'consumit:test-languages-changed',
@@ -50,6 +54,30 @@ async function waitForSourceResolved() {
 }
 
 describe('watch request lifecycle', () => {
+  it('places the audio selector immediately below an external player without unsupported autoplay controls', async () => {
+    mocks.request.mockReset().mockResolvedValue({ ...session, ref: { kind: 'anime', id: movieDetail.id, episode: 1 }, source: { ...session.source, type: 'iframe', delivery: 'embed', providerId: 'external', frameSandbox: 'standard', src: 'https://frame.example/player' } })
+    mocks.list.mockReset().mockResolvedValue([])
+    render(<WatchPlayback title={{ ...movieDetail, kind: 'anime' }} episode={{ episodeNumber: 1, title: 'Episode 1' }} audioControl={<button>Choose anime audio</button>} />)
+    await waitForSourceResolved()
+    const preferences = screen.getByRole('navigation', { name: 'Playback preferences' })
+    expect(screen.getByRole('button', { name: 'Choose anime audio' }).closest('nav')).toBe(preferences)
+    expect(preferences.previousElementSibling?.tagName).toBe('SECTION')
+    expect(screen.queryByRole('switch', { name: 'Autoplay next episode' })).not.toBeInTheDocument()
+  })
+  it('rejects a late unsandboxed frame after advertising is turned off', async () => {
+    let resolve!: (value: unknown) => void
+    mocks.request.mockReset().mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    mocks.list.mockReset().mockResolvedValue([{ id: 'backup', label: 'Backup' }])
+    const view = render(<WatchPlayback title={movieDetail} />)
+    try {
+      await waitFor(() => expect(mocks.request).toHaveBeenCalled())
+      mocks.adsEnabled = false; view.rerender(<WatchPlayback title={movieDetail} />)
+      await act(async () => resolve({ ...session, source: { ...session.source, type: 'iframe', delivery: 'embed', providerId: 'external', frameSandbox: 'none', src: 'https://frame.example/player' } }))
+      expect((await screen.findAllByText(/requires pop-up permissions/)).length).toBeGreaterThan(0)
+      expect(screen.queryByTitle(movieDetail.title + ' external player')).not.toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Server 1 · Backup' })).toBeInTheDocument()
+    } finally { mocks.adsEnabled = true; view.unmount() }
+  })
   it('keeps the anime name on the first line and episode title on the second', async () => {
     const title = { kind: 'anime' as const, id: 21, title: "Takopi's Original Sin", year: 2025, episodeRuntimeMinutes: 24 }
     const episode = { episodeNumber: 1, title: 'To You in 2016' }
@@ -67,8 +95,7 @@ describe('watch request lifecycle', () => {
     mocks.list.mockReset().mockResolvedValue([{ id: 'backup', label: 'Backup' }])
     mocks.swap.mockReset()
     render(<WatchPlayback title={movieDetail} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Choose another server' }))
-    await screen.findByRole('option', { name: 'Backup' })
+    await screen.findByRole('option', { name: 'Server 1 · Backup' })
     fireEvent.change(screen.getByRole('combobox', { name: 'Server' }), { target: { value: 'backup' } })
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', selected.source.src))
     expect(mocks.request).toHaveBeenLastCalledWith('resolve', expect.objectContaining({ ref: session.ref, providerId: 'backup' }), expect.any(AbortSignal))
@@ -114,9 +141,8 @@ describe('watch request lifecycle', () => {
     mocks.swap.mockReset().mockResolvedValue({ ...initial, source: { ...initial.source, type: 'native', delivery: 'direct', providerId: 'backup', src: 'https://media.example/backup.mp4' } })
     render(<WatchPlayback title={movieDetail} />)
     await waitForSourceResolved()
-    fireEvent.focus(screen.getByRole('combobox', { name: 'Server' }))
-    await screen.findByRole('option', { name: 'Backup' })
-    fireEvent.change(screen.getByRole('combobox', { name: 'Server' }), { target: { value: 'backup' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Server Server 1 · APIPlayer' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Server 2 · Backup' }))
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', 'https://media.example/backup.mp4'))
     expect(screen.queryByTitle(movieDetail.title + ' external player')).not.toBeInTheDocument()
   })
@@ -129,12 +155,12 @@ describe('watch request lifecycle', () => {
     mocks.swap.mockReset().mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
     render(<WatchPlayback title={movieDetail} />)
     await waitForSourceResolved()
-    expect(mocks.list).not.toHaveBeenCalled()
+    expect(mocks.list).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('player')).toHaveAttribute('data-server-auto', 'true')
     act(() => screen.getByText('open-servers').click())
-    await screen.findByText('Backup')
-    act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-play').click(); screen.getByText('Backup').click() })
-    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null, audioLanguage: 'en' } }, expect.any(AbortSignal)))
+    await screen.findByText('Server 2')
+    act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-play').click(); screen.getByText('Server 2').click() })
+    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: expect.objectContaining({ qualityHeight: null, audioLanguage: 'en', providerOrder: [], adsEnabled: true }) }, expect.any(AbortSignal)))
     // Retain a seek/pause made while the old source is still playing.
     act(() => { screen.getByText('simulate-seek').click(); if (!playing) screen.getByText('simulate-pause').click(); release(next) })
     await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', next.source.src))
@@ -157,8 +183,8 @@ describe('watch request lifecycle', () => {
     render(<WatchPlayback title={movieDetail} />)
     await waitForSourceResolved()
     act(() => screen.getByText('open-servers').click())
-    await screen.findByText('Broken')
-    act(() => screen.getByText('Broken').click())
+    await screen.findByText('Server 2')
+    act(() => screen.getByText('Server 2').click())
     await screen.findByText(fallback ? 'Playback resumed from another source.' : 'Couldn’t switch sources. Playback is still available.')
     expect(screen.getByTestId('player')).toHaveAttribute('data-server', fallback ? 'backup' : 'primary')
     expect(screen.getByTestId('player')).toHaveAttribute('data-source', fallback ? 'https://media.example/backup.mp4' : initial.source.src)
@@ -171,11 +197,10 @@ describe('watch request lifecycle', () => {
     mocks.list.mockReset().mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce([{ id: 'backup', label: 'Backup' }])
     render(<WatchPlayback title={{ ...movieDetail, kind: 'anime', id: 1 }} episode={{ episodeNumber: 1, title: 'First episode' }} audioLanguage="en" />)
     await waitForSourceResolved()
-    act(() => screen.getByText('open-servers').click())
     await screen.findByText('Servers are unavailable right now. Playback can continue.')
     expect(screen.getByTestId('player')).toHaveAttribute('data-source', initial.source.src)
     act(() => screen.getByText('open-servers').click())
-    await screen.findByText('Backup')
+    await screen.findByText('Server 1')
     expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ ref: initial.ref, audioLanguage: 'en' }), expect.any(AbortSignal))
     expect(screen.queryByText('Servers are unavailable right now. Playback can continue.')).not.toBeInTheDocument()
   })
@@ -188,8 +213,8 @@ describe('watch request lifecycle', () => {
     render(<WatchPlayback title={movieDetail} />)
     await waitForSourceResolved()
     act(() => screen.getByText('open-servers').click())
-    await screen.findByText('Primary')
-    act(() => { screen.getByText('Primary').click(); screen.getByText('simulate-time').click(); screen.getByText('simulate-pause').click() })
+    await screen.findByText('Server 1')
+    act(() => { screen.getByText('Server 1').click(); screen.getByText('simulate-time').click(); screen.getByText('simulate-pause').click() })
     expect(screen.getByTestId('player')).toHaveAttribute('data-server-auto', 'false')
     expect(mocks.swap).not.toHaveBeenCalled()
     act(() => screen.getByText('simulate-gone').click())
@@ -212,7 +237,7 @@ describe('watch request lifecycle', () => {
     await waitForSourceResolved()
     act(() => { screen.getByText('simulate-time').click(); screen.getByText('simulate-play').click() })
     act(() => { screen.getByText('720p').click() })
-    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith('fixture-session', { providerId: 'wecollege-miami', preferences: { qualityHeight: 720, audioLanguage: 'en' } }, expect.any(AbortSignal)))
+    await waitFor(() => expect(mocks.swap).toHaveBeenCalledWith('fixture-session', { providerId: 'wecollege-miami', preferences: { qualityHeight: 720, audioLanguage: 'en', adsEnabled: true } }, expect.any(AbortSignal)))
     if (success) {
       await waitFor(() => expect(screen.getByTestId('player')).toHaveAttribute('data-source', 'https://edge.example/720'))
       expect(screen.getByTestId('player')).toHaveAttribute('data-resume-at', '42')
@@ -266,15 +291,15 @@ describe('watch request lifecycle', () => {
     await screen.findByRole('alert')
     expect(screen.getByRole('link', { name: 'Watch SUB instead' })).toHaveAttribute('href', '/watch/anime/21?episode=3&audio=sub')
   })
-  it('keeps provider rosters out of ordinary playback', async () => {
+  it('loads the server strip roster once without switching the current playback', async () => {
     mocks.request.mockReset().mockResolvedValue(session)
     mocks.list.mockReset().mockResolvedValue([{ id: 'secret-provider', label: 'secret-provider' }])
     mocks.swap.mockReset()
     render(<Activity mode="visible"><WatchPlayback title={movieDetail} /></Activity>)
     await waitForSourceResolved()
-    expect(mocks.list).not.toHaveBeenCalled()
+    expect(mocks.list).toHaveBeenCalledTimes(1)
     expect(mocks.swap).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'secret-provider' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Server 1' })).toBeInTheDocument()
   })
   it('discovers saved Arabic and English captions before playing or opening controls', async () => {
     localStorage.setItem('consumit.player.subtitles', 'ar')
@@ -475,7 +500,7 @@ describe('watch request lifecycle', () => {
     render(<Activity mode="visible"><WatchPlayback title={movieDetail} pinnedProvider="backup" /></Activity>)
     await waitForSourceResolved()
     await waitFor(() => expect(mocks.swap).toHaveBeenCalledTimes(1))
-    expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: { qualityHeight: null, audioLanguage: 'en' } }, expect.any(AbortSignal))
+    expect(mocks.swap).toHaveBeenCalledWith(session.id, { providerId: 'backup', preferences: expect.objectContaining({ qualityHeight: null, audioLanguage: 'en' }) }, expect.any(AbortSignal))
   })
   it('shows a visible switching status while recovering', async () => {
     let release!: (value: unknown) => void
@@ -505,9 +530,10 @@ describe('watch request lifecycle', () => {
     expect(screen.getByRole('switch', { name: 'Autoplay next episode' })).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByRole('switch', { name: 'Show up-next card' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('switch', { name: 'Auto-skip intros' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('navigation', { name: 'Playback preferences' }).previousElementSibling).toBe(screen.getByTestId('player').closest('section'))
     window.localStorage.clear()
   })
-  it('autoplay advances to the next episode on ended', async () => {
+  it('autoplay waits for a cancelable ten-second countdown before advancing', async () => {
     window.localStorage.setItem('consumit.player.autoplay', '1')
     try {
       mocks.request.mockReset().mockResolvedValue(session)
@@ -515,11 +541,33 @@ describe('watch request lifecycle', () => {
       mocks.push.mockReset()
       render(<Activity mode="visible"><WatchPlayback title={movieDetail} nextHref="/watch/series/1?season=1&episode=3" /></Activity>)
       await waitForSourceResolved()
-      screen.getByRole('button', { name: 'simulate-ended' }).click()
-      await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/watch/series/1?season=1&episode=3'))
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'simulate-ended' }))
+      expect(screen.getByText('Next episode in 10s')).toBeInTheDocument()
+      expect(mocks.push).not.toHaveBeenCalled()
+      for (let second = 0; second < 10; second++) await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+      expect(mocks.push).toHaveBeenCalledWith('/watch/series/1?season=1&episode=3')
     } finally {
+      vi.useRealTimers()
       window.localStorage.clear()
     }
+  })
+  it.each(['Cancel', 'Play now'])('handles the next-episode %s action', async action => {
+    window.localStorage.setItem('consumit.player.autoplay', '1')
+    try {
+      mocks.request.mockReset().mockResolvedValue(session)
+      mocks.list.mockReset().mockResolvedValue([])
+      mocks.push.mockReset()
+      render(<Activity mode="visible"><WatchPlayback title={movieDetail} nextHref="/watch/series/1?season=1&episode=3" /></Activity>)
+      await waitForSourceResolved()
+      vi.useFakeTimers()
+      fireEvent.click(screen.getByRole('button', { name: 'simulate-ended' }))
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${action}$`) }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(11000) })
+      expect(screen.queryByText(/Next episode in/)).not.toBeInTheDocument()
+      if (action === 'Cancel') expect(mocks.push).not.toHaveBeenCalled()
+      else expect(mocks.push).toHaveBeenCalledExactlyOnceWith('/watch/series/1?season=1&episode=3')
+    } finally { vi.useRealTimers(); window.localStorage.clear() }
   })
   it('writes one durable completion attempt across duplicate end events and a new one for a rewatch', async () => {
     mocks.member = { id: 'member-1' }

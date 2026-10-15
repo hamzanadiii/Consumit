@@ -29,6 +29,10 @@ export type SubtitleQuery = {
 }
 
 export type RawSubtitle = {
+  /** Streaming-provider authority. Never exposed in the public candidate. */
+  authority?: string | undefined
+  expiresAt?: string | undefined
+  hls?: boolean | undefined
   /** Direct file URL (srt/vtt) or zip URL (set needsExtract). */
   url: string
   /** Adapter-owned file identity for rotating signed URLs. Downloads always
@@ -42,13 +46,26 @@ export type RawSubtitle = {
   hi?: boolean | undefined
   release?: string | undefined
   provider: string
+  providerName?: string | undefined
   needsExtract?: boolean | undefined
   headers?: Record<string, string> | undefined
 }
 
 export type SubtitleSearchProvider = {
+  discoveryOnly?: boolean | undefined
   readonly id: string
   readonly name: string
+  /** Host scope for downloadable file URLs (zip/srt/vtt/ass). When declared,
+   *  the engine fetches nothing outside it (`*.suffix` wildcards and regex
+   *  patterns allowed), and candidates outside it are rejected at intake.
+   *  Provider output is hostile input — declare the adapter's own
+   *  infrastructure so an injected URL cannot steer the fetch. Absent keeps
+   *  the historical self-host-only rule (the URL's own hostname). */
+  fileHosts?: readonly string[] | undefined
+  fileHostPatterns?: readonly RegExp[] | undefined
   supports(query: SubtitleQuery): boolean
   search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]>
+  /** Recheck mutable configuration and signed-source lifetime on reuse. */
+  accepts?: ((raw: RawSubtitle) => boolean) | undefined
+  download?: ((raw: RawSubtitle, signal: AbortSignal) => Promise<Buffer>) | undefined
 }

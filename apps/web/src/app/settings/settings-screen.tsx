@@ -28,14 +28,16 @@ import { changeMemberPassword, deleteMemberAccount, downloadMemberExport, Identi
 import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avatar'
 import { NotificationPreference } from './notification-preference'
 import { PreferenceEditor } from '../experience/preference-fields'
+import { AdStatus } from '../shared/ad-status'
 
 const SETTINGS_ITEMS = [
   { href: '#account', label: 'Account', index: '01' },
   { href: '#privacy', label: 'Privacy & social', index: '02' },
   { href: '#playback', label: 'Streaming & playback', index: '03' },
   { href: '#language', label: 'Language & subtitles', index: '04' },
-  { href: '#notifications', label: 'Notifications', index: '05' },
-  { href: '#data', label: 'Data & security', index: '06' },
+  { href: '#advertising', label: 'Browsing & advertising', index: '05' },
+  { href: '#notifications', label: 'Notifications', index: '06' },
+  { href: '#data', label: 'Data & security', index: '07' },
 ] as const
 
 export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
@@ -193,7 +195,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
           <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
             <SettingsRail
               activeHref={activeSection}
-              avatarSrc={session.member ? memberAvatarSrc(session.member.avatarUrl, session.member.id) : undefined}
+              avatarSrc={session.member ? memberAvatarSrc(session.member) : undefined}
               avatarTreatment={session.member?.avatarStyle ?? profile.avatarStyle}
               className="min-w-0 max-w-full overflow-hidden [&_nav]:w-full [&_nav]:max-w-full [&_nav]:overflow-x-auto [&_ul]:flex [&_ul]:w-max [&_ul]:gap-2 [&_a]:whitespace-nowrap lg:[&_nav]:overflow-visible lg:[&_ul]:block lg:[&_ul]:w-auto lg:[&_ul]:space-y-1"
               username={`@${profile.username}`}
@@ -225,7 +227,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                 <div className="sm:col-span-2">
                   <span className="text-xs font-bold uppercase tracking-[0.12em] text-copy" id="settings-avatar-label">Avatar portrait</span>
                   <div className="mt-3 flex flex-wrap items-center gap-5">
-                    <Avatar imageAlt={`${profile.displayName ?? profile.username} portrait preview`} name={profile.displayName ?? profile.username} size="lg" src={memberAvatarSrc(avatarUrl, session.member?.id ?? profile.username)} treatment={profile.avatarStyle} />
+                    <Avatar imageAlt={`${profile.displayName ?? profile.username} portrait preview`} name={profile.displayName ?? profile.username} size="lg" src={memberAvatarSrc({ ...profile, avatarUrl })} treatment={profile.avatarStyle} />
                     <div className="flex flex-wrap gap-3">
                       <Button onClick={() => { setAvatarUrl(dicebearAvatarUrl(randomAvatarSeed())); markDirty() }} type="button" variant="secondary">
                         <RefreshCw aria-hidden="true" /> Randomize
@@ -313,11 +315,15 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               <SettingsFact lead="Adjust a title in Watch.">Track selection, subtitle timing, and text appearance stay available in the player&apos;s Audio and Subtitles menus.</SettingsFact>
             </SettingsSection>
 
+            <SettingsSection className="scroll-mt-8" description="Choose whether Consumit can show sandboxed banner ads while you browse." id="advertising" index="05" title="Browsing & advertising">
+              <AdStatus />
+            </SettingsSection>
+
             <SettingsSection
               className="scroll-mt-8"
               description="Only useful changes—never private chat or attention traps."
               id="notifications"
-              index="05"
+              index="06"
               title="Notifications"
             >
               <NotificationPreference />
@@ -327,7 +333,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Download your contribution or close the account with clear consequences."
               id="data"
-              index="06"
+              index="07"
               title="Data & security"
             >
               <PreferenceRow control={<Button onClick={exportAccount} variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Download the member and profile data currently held for your account." label="Export your data" />
@@ -359,7 +365,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
         </div>
 
         {dirty || accountError ? (
-          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--fs-line)] bg-[var(--fs-page)]" role={accountError ? 'alert' : 'region'} aria-label={accountError ? 'Settings error' : 'Unsaved profile changes'}>
+          <div className="consumit-settings-savebar fixed inset-x-0 bottom-0 z-40 border-t border-[var(--fs-line)] bg-[var(--fs-page)]" role={accountError ? 'alert' : 'region'} aria-label={accountError ? 'Settings error' : 'Unsaved profile changes'}>
             <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1 py-3 sm:px-3 lg:px-4">
               <p className={`text-sm font-bold ${accountError ? 'text-danger' : 'text-ink'}`}>
                 {accountError ?? 'You have unsaved changes to your profile.'}

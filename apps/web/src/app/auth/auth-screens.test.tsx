@@ -148,10 +148,10 @@ describe('server-backed authentication screens', () => {
     expect(await screen.findByRole('heading', { name: 'Check your email.' })).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Sign-up step 3 of 3' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Verification code'), '123456')
+    await user.type(screen.getByLabelText('Verification code'), '12345678')
     await user.click(screen.getByRole('button', { name: 'Verify and continue' }))
 
-    await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalledWith({ code: '123456', email: member.email }))
+    await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalledWith({ code: '12345678', email: member.email }))
     expect(mocks.updateMemberProfile).toHaveBeenCalledWith({ displayName: 'Cinema Fan' })
     expect(mocks.push).toHaveBeenCalledWith('/onboarding')
     expect(window.localStorage).toHaveLength(0)
@@ -191,7 +191,7 @@ describe('server-backed authentication screens', () => {
     await user.click(screen.getByRole('button', { name: 'Send verification code' }))
     expect(await screen.findByRole('heading', { name: 'Check your email.' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Verification code'), '123456')
+    await user.type(screen.getByLabelText('Verification code'), '12345678')
     await user.click(screen.getByRole('button', { name: 'Verify and continue' }))
 
     await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalled())

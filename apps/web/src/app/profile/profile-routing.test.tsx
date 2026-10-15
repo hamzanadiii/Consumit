@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders as render } from '@/test/render'
-import type { MemberProfileData } from '@consumit/contracts'
+import type { MemberProfileData, PublicProfile } from '@consumit/contracts'
 import ListsRedirect from '../lists/page'
 import WatchlistRedirect from '../watchlist/page'
 import LibraryRedirect from '../library/page'
@@ -9,6 +9,7 @@ import ProfileArchivePage from './[username]/[section]/page'
 import { ProfileArchiveScreen } from './profile-archive-screen'
 import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 import userEvent from '@testing-library/user-event'
+import { SessionProvider } from '../session/session'
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), profile: vi.fn(), library: vi.fn(), archive: vi.fn(), list: vi.fn(), catalog: vi.fn(), ratings: vi.fn(), collection: vi.fn() }))
 vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`) }, notFound: () => { throw new Error('not-found') }, useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }), usePathname: () => '/profile/hamza/lists' }))
@@ -17,6 +18,7 @@ vi.mock('@/lib/member-server', () => ({ getPublicProfile: mocks.profile, getProf
 vi.mock('@/lib/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
 const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
 const ownList = { id: 'private-list', slug: 'private-list', name: 'My private collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }
+const visitorProfile: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'hamza', profile: { id: 'public-member-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, isFollowing: false }, favorites: [], ratingDistribution: [], statistics: { ratings: 4, reviews: 2, lists: 1 }, social: { followers: 3, following: 5 } }
 
 describe('profile archive routing', () => {
   beforeEach(() => {
@@ -73,16 +75,49 @@ describe('profile archive routing', () => {
     mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })
     render(await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({}) }))
     expect(mocks.collection).toHaveBeenCalledWith('hamza', 'followers')
-    expect(screen.getByRole('link', { name: 'Followers', current: 'page' })).toHaveAttribute('href', '/profile/hamza/network?view=followers')
-    expect(screen.getByRole('link', { name: 'Following' })).toHaveAttribute('href', '/profile/hamza/network?view=following')
+    expect(screen.getByRole('link', { name: 'Followers, 0', current: 'page' })).toHaveAttribute('href', '/profile/hamza/network?view=followers')
+    expect(screen.getByRole('link', { name: 'Following, 0' })).toHaveAttribute('href', '/profile/hamza/network?view=following')
     expect(screen.getByText('No followers to show yet.')).toBeInTheDocument()
+  })
+  it('renders the owner Network as a compact archive without offering to follow yourself', async () => {
+    mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })
+    const member = { id: 'owner-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-01-01T00:00:00Z', email: 'owner@example.test', emailVerified: true, role: 'member' } as const
+    render(<SessionProvider initialMember={member} initialStatus="authenticated">{await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({}) })}</SessionProvider>)
+    expect(screen.queryByRole('button', { name: 'Follow' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Edit profile' })).toHaveAttribute('href', '/settings')
+    expect(screen.getByRole('heading', { name: 'Network', level: 1 })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Hamza' })).not.toBeInTheDocument()
+    const views = screen.getByRole('navigation', { name: 'Network views' })
+    expect(within(views).getByRole('link', { name: 'Followers, 0', current: 'page' })).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Hamza profile sections' })).getByRole('link', { name: 'Watched, 0' })).toBeInTheDocument()
   })
   it('reads the Following Network view from the query', async () => {
     mocks.collection.mockResolvedValue({ collection: 'following', items: [], nextCursor: null })
     render(await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({ view: 'following' }) }))
     expect(mocks.collection).toHaveBeenCalledWith('hamza', 'following')
-    expect(screen.getByRole('link', { name: 'Following', current: 'page' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Following, 0', current: 'page' })).toBeInTheDocument()
     expect(screen.getByText('No following to show yet.')).toBeInTheDocument()
+  })
+  it('keeps visitor Network compact with public counts and a sign-in return path', async () => {
+    mocks.session.mockResolvedValue({ status: 'anonymous' })
+    mocks.profile.mockResolvedValue(visitorProfile)
+    mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })
+    render(await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({}) }))
+    expect(screen.getByRole('heading', { name: 'Network', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in to follow' })).toHaveAttribute('href', '/sign-in?next=%2Fprofile%2Fhamza')
+    expect(screen.getByRole('link', { name: 'Ratings, 4' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Followers, 3', current: 'page' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Following, 5' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Hamza profile sections' })).queryByRole('link', { name: /Watched/ })).not.toBeInTheDocument()
+    expect(mocks.library).not.toHaveBeenCalled()
+  })
+  it('uses the API owner discriminator before showing private navigation', async () => {
+    mocks.profile.mockResolvedValue(visitorProfile)
+    mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })
+    render(await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({}) }))
+    expect(screen.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Hamza profile sections' })).queryByRole('link', { name: /Watched/ })).not.toBeInTheDocument()
   })
   it('rejects an invalid Network view before loading member data', async () => {
     await expect(ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({ view: 'mutuals' }) })).rejects.toThrow('not-found')

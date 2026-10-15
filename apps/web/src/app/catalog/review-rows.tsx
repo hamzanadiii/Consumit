@@ -41,7 +41,7 @@ export function ReviewRows({ items }: { items: readonly TitleReview[] }) {
     const name = item.author.displayName || item.author.username
     return <article className="border-b border-[var(--fs-line)] pb-6 last:border-b-0" key={item.reviewId}>
       <div className="flex items-start gap-3">
-        <Avatar className="size-10" name={name} size="md" src={memberAvatarSrc(item.author.avatarUrl, item.author.username)} treatment={item.author.avatarStyle} />
+        <Avatar className="size-10" name={name} size="md" src={memberAvatarSrc(item.author)} treatment={item.author.avatarStyle} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 text-sm">
             <span className="font-bold text-[var(--fs-ink)]">{name}</span>

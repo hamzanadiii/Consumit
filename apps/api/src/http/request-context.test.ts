@@ -49,4 +49,8 @@ describe('request context', () => {
     expect(result).toMatchObject({ method: 'GET', url: '/v1/playback/relay-manifest', id: 'request-1' })
     expect(JSON.stringify(result)).not.toContain('private-capability')
   })
+  it('projects exceptions without provider URLs, messages, causes or stacks', () => {
+    const error = new Error('https://provider.example/?token=credential', { cause: new Error('password=secret') })
+    expect(loggerOptions().serializers.err(error)).toEqual({ type: 'Error', message: 'Exception details withheld.', stack: '' })
+  })
 })

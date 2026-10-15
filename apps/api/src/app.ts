@@ -1,3 +1,12 @@
+import { createInternalClient } from '@consumit/server'
+import { providerResultSchema } from '@consumit/provider-sdk'
+import { registerProductInternal } from './internal/routes.ts'
+import { createPlaybackRuntime } from '../../playback/src/runtime.ts'
+import { registerOpenApi } from './http/openapi.ts'
+import { registerClientErrors } from './telemetry/client-errors.ts'
+import { observePool } from '@consumit/observability'
+import { releaseProbeSourceSchema } from '@consumit/contracts'
+import { z } from 'zod'
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
@@ -34,9 +43,10 @@ import { createPostgresMemberData } from './member-data/postgres-member-data.ts'
 import { registerMemberDataRoutes } from './member-data/routes.ts'
 import { createPublicMembers, type PublicMembers } from './member-data/public-members.ts'
 import { unavailableMemberData } from './member-data/unavailable-member-data.ts'
-import { createPlayback, type Playback } from './playback/playback.ts'
+import { type Playback } from './playback/playback.ts'
 import { createPlaybackRelay } from './playback/relay.ts'
 import { registerPlaybackRoutes } from './playback/routes.ts'
+import { registerProviderComputeRoutes } from './playback/provider-compute.ts'
 import { createSkipTimes } from './playback/skip-times.ts'
 import { registerSkipTimesRoutes } from './playback/skip-times-routes.ts'
 import { createMemoryPlaybackStore, createValkeyPlaybackStore } from './playback/state.ts'
@@ -44,33 +54,35 @@ import { loadConfiguredProviders } from './playback/configured-providers.ts'
 import { createAnimeService } from './anime/anime-service.ts'
 import type { KitsuCatalog } from './catalog/kitsu/kitsu.ts'
 import { createAnimeMetaResolver, createAnimeTitleResolver, createAnimeTitleVariantsResolver } from './anime/title-resolver.ts'
-import { createProbeScheduler } from './playback/probe.ts'
+
 import { registerAnimeRoutes } from './anime/routes.ts'
 import { createKitsuCatalog } from './catalog/kitsu/adapter.ts'
 import { createTmdbEpisodeArt, type TmdbEpisodeArtResolver } from './anime/tmdb-episode-art.ts'
 import { createAnizipEpisodeArt, type CanonicalEpisodeArt } from './anime/anizip-episode-art.ts'
-import { createCastleSubsProvider } from './subtitles/castlesubs.ts'
-import { createAnimeToshoProvider } from './subtitles/animetosho.ts'
+
+
 import { createAnizipClient } from './subtitles/anizip.ts'
 import { createSubtitleHttp } from './subtitles/http.ts'
-import { createJimakuProvider } from './subtitles/jimaku.ts'
-import { createNatsukiProvider } from './subtitles/natsuki.ts'
-import { createNxshaSubsProvider } from './subtitles/nxshasubs.ts'
+
+
+
 import { createPostgresSubtitleCatalog } from './subtitles/postgres-catalog.ts'
 import { createPostgresSubtitlePreferences } from './subtitles/postgres-preferences.ts'
 import type { SubtitlePreferences } from './subtitles/preferences.ts'
-import { createRiveSubsProvider } from './subtitles/rivesubs.ts'
-import { createOpenSubtitlesProvider } from './subtitles/opensubtitles.ts'
-import { createSubDlProvider } from './subtitles/subdl.ts'
-import { createSubSourceProvider } from './subtitles/subsource.ts'
-import { createDiskFileStore } from './subtitles/storage.ts'
+
+
+
+
+
 import { createSubtitleService, type SubtitleService } from './subtitles/subtitles.ts'
 import { registerSubtitleRoutes } from './subtitles/routes.ts'
-import { createTvSubtitlesProvider } from './subtitles/tvsubtitles.ts'
-import { createVdrkProvider } from './subtitles/vdrk.ts'
-import { createVdrkV2Provider } from './subtitles/vdrkv2.ts'
-import { createYifyProvider } from './subtitles/yify.ts'
+
+
+
+
 import { createTmdbMetadataResolver } from './playback/tmdb-metadata.ts'
+import { createTmdbIdentityResolver } from './playback/tmdb-identity.ts'
+import { createResolverMetadata } from './playback/cloudflare-resolver.ts'
 import { registerAdminRoutes } from './admin/routes.ts'
 import { createScoutCatalog, scoutRecipes } from './admin/scout-catalog.ts'
 import { applyOrdersInPlace, createProviderConfigStore, type ProviderConfigStore, type ProviderKind } from './admin/provider-config.ts'
@@ -122,6 +134,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
 
   await app.register(helmet)
   await app.register(cookie)
+  await registerOpenApi(app, 'Consumit product API')
   // Credential and public budgets survive restarts and apply across API
   // instances. Never silently fall back to per-process limits in production.
   const requestLimits = env.nodeEnv === 'production' && env.valkeyUrl
@@ -158,10 +171,11 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
       sslMode: env.databaseSslMode,
     }) : null
   const catalogCacheStore = db && env.nodeEnv !== 'test' ? createPostgresCatalogCacheStore(db.prisma) : undefined
+  if (db) { const closePoolMetrics = observePool(db.stats); app.addHook('onClose', async () => closePoolMetrics()) }
   const catalogCache = new StaleCache(Date.now, catalogCacheStore, (error) => {
     app.log.warn({ err: error }, 'catalog cache persistence failed')
   })
-  if (catalogCacheStore && env.nodeEnv !== 'test') {
+  if (!env.backgroundJobs && catalogCacheStore && env.nodeEnv !== 'test') {
     const pruneExpiredCatalogCache = () => {
       void catalogCacheStore.deleteExpired(new Date()).catch((error) => {
         app.log.warn({ err: error }, 'catalog cache cleanup failed')
@@ -194,7 +208,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
       await Promise.allSettled([state.close(), db.close()])
     }
   }
-  if (!memberData && db) resolvedMemberData = createPostgresMemberData(db.prisma)
+  if (!memberData && db) resolvedMemberData = createPostgresMemberData(db.prisma, env.backgroundJobs)
 
   app.addHook('onClose', async () => {
     await closeReleaseScheduler?.()
@@ -207,9 +221,11 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     probes: {
       ...(db ? { database: () => db.prisma.$queryRaw`SELECT 1` } : {}),
       ...(requestLimits ? { rateLimits: () => requestLimits.ping() } : {}),
+      ...(db && env.backgroundJobs ? { outboxSchema: () => db.prisma.$queryRaw`SELECT 1 FROM "OutboxEvent" LIMIT 1` } : {}),
     },
   })
   registerWebVitalsRoutes(app)
+  registerClientErrors(app)
   registerIdentityRoutes(app, { env, identity: resolvedIdentity })
   const repository = overrideRepository ?? (identity === undefined && db ? createPostgresIdentityRepository(db.prisma) : undefined)
   registerMemberDataRoutes(app, { env, identity: resolvedIdentity, memberData: resolvedMemberData, publicMembers: publicMembers ?? (db ? createPublicMembers(db.prisma) : undefined) })
@@ -224,18 +240,19 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     ...(animeTmdbEpisodeArt ? { tmdbEpisodeArt: animeTmdbEpisodeArt } : resolvedCatalog !== unavailableCatalogAdapter ? { tmdbEpisodeArt: createTmdbEpisodeArt(resolvedCatalog, catalogCache) } : {}),
   })
   registerCatalogRoutes(app, { anime: animeService, catalog: resolvedCatalog })
-  registerSkipTimesRoutes(app, env.nodeEnv === 'test' ? { read: async () => [] } : createSkipTimes({ animeMalId: async (id) => (await animeService.title(id)).malId }))
+  if (env.applicationMode !== 'product') registerSkipTimesRoutes(app, env.nodeEnv === 'test' ? { read: async () => [] } : createSkipTimes({ animeMalId: async (id) => (await animeService.title(id)).malId }))
   registerAnimeRoutes(app, { anime: animeService })
-  const playbackStore = env.playback?.enabled && env.playback.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore()
+  const productMode = env.applicationMode === 'product'
   const providerOptions = {
     tmdbToken: env.tmdbToken,
+    ...(env.playback?.relay?.discovery?.['lookmovie-relay'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
     animeTitleResolver: createAnimeTitleResolver(resolvedAnimeCatalog),
     animeTitleVariantsResolver: createAnimeTitleVariantsResolver(resolvedAnimeCatalog),
     animeMetaResolver: createAnimeMetaResolver(resolvedAnimeCatalog),
   }
   const rawProviders = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, providerOptions) : []
   const legacyProviderConfig = env.playback?.mediaConfig ? createProviderConfigStore(env.playback.mediaConfig.replace(/\.json$/, '.overrides.json')) : null
-  const durableProviderConfig = db && env.playback?.enabled && env.nodeEnv !== 'test' ? createPostgresProviderConfigStore(db.prisma) : null
+  const durableProviderConfig = db && env.playback?.enabled && env.nodeEnv !== 'test' ? createPostgresProviderConfigStore(db.prisma, env.backgroundJobs) : null
   if (durableProviderConfig && legacyProviderConfig && !providerConfigStore) {
     await durableProviderConfig.migrateLegacy(await legacyProviderConfig.getAll(), rawProviders.map((provider) => provider.adapter.id))
   }
@@ -243,7 +260,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
   const providerOverrides = resolvedProviderConfig ? await resolvedProviderConfig.getAll() : {}
   const providers = rawProviders
   applyOverridesInPlace(providers, providerOverrides)
-  const providerOrders: Record<ProviderKind, string[]> = { movie: [], series: [], anime: [] }
+  let providerOrders: Record<ProviderKind, string[]> = { movie: [], series: [], anime: [] }
   applyOrdersInPlace(providerOrders, providers, providerOverrides)
   if (resolvedProviderConfig?.getRevision) {
     let revision = await resolvedProviderConfig.getRevision()
@@ -259,9 +276,20 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     }, 5000)
     app.addHook('onClose', async () => clearInterval(timer))
   }
-  const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders, audioOrigin: env.appOrigin,
-    ...(env.playback?.relay ? { relay: createPlaybackRelay(env.playback.relay), relayOrigin: env.appOrigin } : {}) })
-  registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
+
+  const remotePlayback = productMode && env.internal?.playbackOrigin ? createInternalClient({ origin: env.internal.playbackOrigin, secret: env.internal.secret }) : undefined
+  if (remotePlayback) for (const provider of providers) {
+    provider.adapter = { ...provider.adapter, async resolve(input, signal) {
+      try { return providerResultSchema.parse(await remotePlayback('/v1/internal/playback/attempt', { providerId: provider.adapter.id, ...input }, { signal, timeoutMs: 16000 })) }
+      catch { return { ok: false as const, code: 'unavailable' as const, retryable: true } }
+    } }
+  }
+  const runtime = productMode ? null : await createPlaybackRuntime({ env, animeCatalog: resolvedAnimeCatalog, providerConfigStore: resolvedProviderConfig ?? undefined, subtitleCatalog: db ? createPostgresSubtitleCatalog(db.prisma) : undefined, playback, subtitles, scheduleProbes: !env.backgroundJobs, log: fields => app.log.info(fields, 'playback operation') })
+  if (runtime) { providers.splice(0, providers.length, ...runtime.providers); providerOrders = runtime.providerOrders }
+  const playbackStore = runtime?.store ?? (env.playback?.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore())
+  const resolvedPlayback = runtime?.playback
+  if (resolvedPlayback) registerPlaybackRoutes(app, { playback: resolvedPlayback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
+  if (resolvedPlayback && env.playback?.resolver?.computeSecret) registerProviderComputeRoutes(app, env.playback.resolver.computeSecret)
   const releaseRelay = env.playback?.relay ? createPlaybackRelay(env.playback.relay) : undefined
   const releaseRepository = db ? createReleaseRepository(db.prisma, row => {
     const provider = providers.find(provider => provider.adapter.id === row.providerId)
@@ -270,6 +298,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
       && (provider.deliveryMode !== 'relay' || releaseRelay?.includes(provider.adapter.id)))
   }) : undefined
   const releaseService = releases ?? (releaseRepository ? createReleaseService(releaseRepository, {
+    ...(remotePlayback ? { resolvePreview: async (providerId: string, ref: import('@consumit/contracts').PlaybackRef, audioLanguage: string) => z.object({ source: releaseProbeSourceSchema.nullable() }).parse(await remotePlayback('/v1/internal/playback/release-source', { providerId, ref, audioLanguage, region: env.tmdbRegion }, { timeoutMs: 20000 })).source } : {}),
     providers, orders: providerOrders, region: env.tmdbRegion, origin: env.appOrigin, store: playbackStore, relay: releaseRelay, relayOrigin: env.playback?.relay?.origin,
   }) : undefined)
   registerReleaseRoutes(app, { env, identity: resolvedIdentity, service: releaseService })
@@ -277,74 +306,31 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
   if (releaseRepository && env.releases?.enabled && env.nodeEnv !== 'test') {
     const scheduler = createReleaseScheduler(releaseRepository, createReleaseCatalog(resolvedCatalog, resolvedAnimeCatalog),
       event => app.log.info({ component: 'release-catalog', ...event }, 'episode release refresh'))
-    scheduler.start()
+    if (!env.backgroundJobs) scheduler.start()
     closeReleaseScheduler = () => scheduler.stop()
   }
-  // Synthetic probes run in-process on a stagger (off in tests and when the
-  // interval is zero). Past one instance every host probes; the reads are
-  // idempotent and the 30-minute cadence makes duplication negligible.
-  const probeScheduler = env.playback?.enabled && env.nodeEnv !== 'test' && env.playback.probeIntervalMs > 0
-    ? createProbeScheduler({
-      providers, region: env.tmdbRegion, intervalMs: env.playback.probeIntervalMs, store: playbackStore,
-      log: (fields) => app.log.info({ component: 'provider-probe', ...fields }, 'provider probe finished'),
-    })
-    : null
-  probeScheduler?.start()
-  app.addHook('onClose', async () => probeScheduler?.stop())
-  // Aggregated captions: thirteen subtitle providers plus the streaming
-  // adapters' own tracks downstream. Converted VTT files are cached in the
-  // playback store (Valkey when configured, memory otherwise) and served
-  // first-party — the approved exception to browser-direct delivery.
-  // AnimeTosho answers anime queries by AniList id; the ani.zip bridge maps
-  // canonical anime episodes to TMDB identity so the TMDB-keyed fleet
-  // (VDRK, VDRK v2, RiveSubs, Natsuki, NxshaSubs, plus SubDL/OpenSubtitles
-  // when keyed) answers them too. CastleSubs and SubSource answer anime by
-  // title on the TV path; TVSubtitles already did.
-  const subtitleService = subtitles ?? createSubtitleService({
-    providers: [
-      createYifyProvider(createSubtitleHttp(['yifysubtitles.ch'])),
-      createTvSubtitlesProvider(createSubtitleHttp(['www.tvsubtitles.net'])),
-      createAnimeToshoProvider(createSubtitleHttp(['api.ani.zip', 'feed.animetosho.xyz', 'feed.animetosho.net'])),
-      createSubSourceProvider(createSubtitleHttp(['subsource.net'])),
-      createCastleSubsProvider(createSubtitleHttp(['api.hlowb.com'])),
-      createNxshaSubsProvider(createSubtitleHttp(['nxsha.space'])),
-      createVdrkProvider(createSubtitleHttp(['sub.vdrk.site'])),
-      createVdrkV2Provider(createSubtitleHttp(['sub.vdrk.site'])),
-      createRiveSubsProvider(createSubtitleHttp(['scrapper.rivestream.app'])),
-      createNatsukiProvider(createSubtitleHttp(['natsuki.hls.lol'])),
-      // Key-gated providers decline without credentials (no keys set).
-      createSubDlProvider(createSubtitleHttp(['api.subdl.com']), env.subtitleKeys.subdl),
-      createJimakuProvider(createSubtitleHttp(['jimaku.cc']), env.subtitleKeys.jimaku),
-      createOpenSubtitlesProvider(createSubtitleHttp(['api.opensubtitles.com']), env.subtitleKeys.openSubtitles),
-    ],
-    metadata: env.tmdbToken?.trim() ? createTmdbMetadataResolver(env.tmdbToken) : undefined,
-    animeTitle: async (id) => {
-      const detail = await animeService.title(id)
-      return { title: detail.titles.preferred }
-    },
-    animeMapping: async (anilistId, episode, signal) => {
-      const mapped = await anizip.episodeFor(anilistId, episode, signal)
-      if (!mapped?.tmdbId) return null
-      return { tmdbId: mapped.tmdbId, season: mapped.season }
-    },
-    store: playbackStore,
-    origin: env.appOrigin,
-    ...(env.subtitlesDir ? { files: createDiskFileStore(env.subtitlesDir, playbackStore) } : {}),
-    ...(db ? { catalog: createPostgresSubtitleCatalog(db.prisma) } : {}),
-    requirements: {
-      ...(!env.subtitleKeys.subdl ? { subdl: 'SUBDL_API_KEY' } : {}),
-      ...(!env.subtitleKeys.jimaku ? { jimaku: 'JIMAKU_API_KEY' } : {}),
-      ...(!env.subtitleKeys.openSubtitles ? { opensubtitles: 'OpenSubtitles API key and account credentials' } : {}),
-    },
-  })
-  registerAdminRoutes(app, { env, identity: resolvedIdentity, repository, providers, scoutCatalog: env.playback?.enabled ? createScoutCatalog(providerOptions) : undefined, scoutRecipes, providerOrders, playbackStore, playback: resolvedPlayback, subtitles: subtitleService, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined })
+  const probeScheduler = runtime?.probeScheduler
+  const subtitleService = runtime?.subtitles ?? createSubtitleService({ providers: [], animeTitle: async id => ({ title: (await animeService.title(id)).titles.preferred }), store: playbackStore, origin: env.appOrigin })
+  registerAdminRoutes(app, { env, identity: resolvedIdentity, repository, providers, scoutCatalog: env.playback?.enabled ? createScoutCatalog(providerOptions) : undefined, scoutRecipes, providerOrders, playbackStore, playback: resolvedPlayback, subtitles: subtitleService, providerConfig: resolvedProviderConfig ?? undefined, probeStatus: probeScheduler ? () => probeScheduler.status() : undefined, ...(remotePlayback ? { diagnostics: remotePlayback } : {}) })
   registerSubtitleRoutes(app, {
     subtitles: subtitleService,
+    ...(productMode ? { mode: 'preferences' as const } : {}),
     env,
     identity: resolvedIdentity,
     ...(subtitlePreferences ? { preferences: subtitlePreferences } : db ? { preferences: createPostgresSubtitlePreferences(db.prisma) } : {}),
   })
-  app.addHook('onClose', async () => playbackStore.close())
+  app.addHook('onClose', async () => { if (runtime) await runtime.close(); else await playbackStore.close() })
+
+
+  const canonicalMetadata = createResolverMetadata({
+    ...(env.tmdbToken ? { tmdb: createTmdbMetadataResolver(env.tmdbToken), identity: createTmdbIdentityResolver(env.tmdbToken) } : {}),
+    animeTitle: createAnimeTitleResolver(resolvedAnimeCatalog), animeTitles: createAnimeTitleVariantsResolver(resolvedAnimeCatalog), animeMeta: createAnimeMetaResolver(resolvedAnimeCatalog),
+  })
+  registerProductInternal(app, { env, config: resolvedProviderConfig ?? undefined, anime: resolvedAnimeCatalog, metadata: canonicalMetadata,
+    tmdb: env.tmdbToken ? createTmdbMetadataResolver(env.tmdbToken) : undefined, subtitles: db ? createPostgresSubtitleCatalog(db.prisma) : undefined,
+    releaseRefresh: async () => { if (releaseRepository && env.releases?.enabled) await createReleaseScheduler(releaseRepository, createReleaseCatalog(resolvedCatalog, resolvedAnimeCatalog), event => app.log.info(event, 'release refresh')).runOnce() },
+    catalogCleanup: async () => { await catalogCacheStore?.deleteExpired(new Date()) },
+  })
 
   return app
 }

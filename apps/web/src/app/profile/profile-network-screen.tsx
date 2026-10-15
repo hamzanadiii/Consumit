@@ -9,7 +9,8 @@ export type ProfileNetworkView = 'followers' | 'following'
  * collections behind one destination. The view query keeps each list
  * shareable while the shared Tabs component owns the active underline.
  */
-export function ProfileNetworkScreen({ initialPage, owner = false, username, view }: {
+export function ProfileNetworkScreen({ counts, initialPage, owner = false, username, view }: {
+  counts?: { followers: number; following: number } | undefined
   initialPage: Parameters<typeof PublicCollection>[0]['initialPage']
   owner?: boolean
   username: string
@@ -23,12 +24,12 @@ export function ProfileNetworkScreen({ initialPage, owner = false, username, vie
         aria-label="Network views"
         className="[&_ul]:gap-5 [&_a]:min-h-12 [&_a]:text-[0.875rem] [&_a]:font-medium"
         items={[
-          { href: `${root}?view=followers`, label: 'Followers', value: 'followers' },
-          { href: `${root}?view=following`, label: 'Following', value: 'following' },
+          { href: `${root}?view=followers`, label: 'Followers', value: 'followers', ...(counts ? { count: counts.followers } : {}) },
+          { href: `${root}?view=following`, label: 'Following', value: 'following', ...(counts ? { count: counts.following } : {}) },
         ]}
       />
       <div className="mt-6">
-        <PublicCollection collection={view} initialPage={initialPage} owner={owner} username={username} />
+        <PublicCollection collection={view} initialPage={initialPage} key={`${username}:${view}`} owner={owner} username={username} />
       </div>
     </div>
   )

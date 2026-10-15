@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToString } from 'react-dom/server'
 
 import { ConsumitPlayer } from './consumit-player'
 import { WatchHeader } from './playback'
+import * as volumeBoost from './volume-boost'
+afterEach(() => vi.restoreAllMocks())
 
 const chapters = [
   { startTime: 0, title: 'The missing street' },
@@ -176,6 +178,7 @@ it('shows fixed source qualities in one player and delegates their selection to 
 })
 
 it('merges stream and separate languages without provider labels and retains video after failed preparation', async () => {
+  vi.spyOn(volumeBoost, 'createVolumeBoost').mockReturnValue({ unlock: vi.fn(async () => {}), output: vi.fn(async () => {}), set: vi.fn(async value => value), dispose: vi.fn() })
   const request = vi.fn(), select = vi.fn().mockRejectedValue(new Error('Unavailable')), change = vi.fn()
   const { container } = render(<ConsumitPlayer title="Lanterns" src="/episode.mp4" audioOptions={[{ value: 'main-en', label: '1. English', language: 'eng' }, { value: 'duplicate-en', label: '2. English', language: 'en' }]} selectedAudio="main-en" onAudioChange={change} onAudioRequest={request} onSeparateAudioSelect={select} separateAudioTracks={[{ id: 'en', label: '3. English', language: 'en', provider: 'Apogee' }, { id: 'hi', label: '4. Hindi', language: 'hi', provider: 'Apogee' }, { id: 'hi-duplicate', label: 'Hindi', language: 'hin', provider: 'Another provider' }]} />)
   const video = container.querySelector('video')!
@@ -187,13 +190,14 @@ it('merges stream and separate languages without provider labels and retains vid
   expect(within(panel).queryByText(/Apogee|Another provider|Added audio/)).not.toBeInTheDocument()
   expect(within(panel).getByRole('menuitemradio', { name: 'English' })).toHaveAttribute('aria-checked', 'true')
   fireEvent.click(within(panel).getByRole('menuitemradio', { name: 'Hindi' }))
-  await waitFor(() => expect(screen.getByText(/Your current audio is still playing/)).toBeVisible())
+  await waitFor(() => expect(screen.getByText(/No compatible recording of this language could start/)).toBeVisible())
   expect(select).toHaveBeenCalledWith('hi')
   expect(container.querySelector('video')).toBe(video)
   expect(video.getAttribute('src')).toBe('/episode.mp4')
   fireEvent.click(within(panel).getByRole('menuitemradio', { name: 'English' }))
   expect(change).toHaveBeenCalledWith('main-en')
-  expect(select).toHaveBeenCalledOnce()
+  expect(select).toHaveBeenCalledWith('hi-duplicate')
+  expect(select).toHaveBeenCalledTimes(2)
 })
 
 function prototypePlayer() {
@@ -782,7 +786,7 @@ describe('playback shell components', () => {
   it('hides a discovered row once its track is selected', async () => {
     const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
     try {
-      const prepare = vi.fn(async (candidate: { id: string }) => ({ id: candidate.id, label: 'Arabic (vdrkv2)', language: 'ar', url: `https://subs.example/${candidate.id}.vtt` }))
+      const prepare = vi.fn(async (candidate: { id: string }) => ({ id: candidate.id, label: 'Arabic (vdrkv2)', language: 'ar', url: `https://subs.example/${candidate.id}.vtt`, cues: [{ startTime: 0, endTime: 10, text: 'Controlled Arabic captions' }] }))
       render(
         <ConsumitPlayer
           title="X"

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defaultExperiencePreferences, experiencePreferencesSchema, hasPlaybackPreferences, type ExperiencePatch, type ExperiencePreferences } from '@consumit/contracts'
 import { experienceRequest } from '@/lib/experience-browser'
-import { applyPlayerDefaults, readExperience, storeExperience, readPendingExperience, storePendingExperience } from '@/lib/experience-storage'
+import { applyPlayerDefaults, readExperience, storeExperience, readPendingExperience, storePendingExperience, experienceStorageKey } from '@/lib/experience-storage'
 
 type State = { owner: string | null; preferences: ExperiencePreferences; ready: boolean; saved: boolean; error: string | null }
 type Context = State & { patch: (patch: ExperiencePatch) => Promise<void>; retry: () => Promise<void>; deviceChoices: () => ExperiencePreferences }
@@ -37,7 +37,17 @@ export function ExperienceProvider({ memberId, status, children }: { memberId: s
       current.current = merged; setState(merged)
     }
     window.addEventListener(changedEvent, receive)
-    return () => window.removeEventListener(changedEvent, receive)
+    const storage = (event: StorageEvent) => {
+      if (event.key !== experienceStorageKey(scope.current.owner) || !event.newValue) return
+      let raw: unknown
+      try { raw = JSON.parse(event.newValue) } catch { return }
+      const parsed = experiencePreferencesSchema.safeParse(raw)
+      if (!parsed.success) return
+      const next = { ...current.current, preferences: experiencePreferencesSchema.parse({ ...parsed.data, ...pending.current }) }
+      current.current = next; setState(next)
+    }
+    window.addEventListener('storage', storage)
+    return () => { window.removeEventListener(changedEvent, receive); window.removeEventListener('storage', storage) }
   }, [])
 
   useEffect(() => {
@@ -116,3 +126,4 @@ export function useExperience() {
   if (!value) throw new Error('ExperienceProvider is required.')
   return value
 }
+export function useOptionalExperience() { return useContext(ExperienceContext) }

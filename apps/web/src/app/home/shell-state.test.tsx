@@ -35,24 +35,24 @@ describe('shell state provider', () => {
 
   it('keeps the collapsed sidebar across shell remounts without resetting', async () => {
     const user = userEvent.setup()
-    const { unmount } = render(<FilScreenShell currentPathname="/"><p>Page one</p></FilScreenShell>)
+    const { unmount } = render(<><Probe /><FilScreenShell currentPathname="/"><p>Page one</p></FilScreenShell></>)
 
-    await user.click(screen.getByRole('button', { name: 'Hide sidebar' }))
+    await user.click(screen.getByRole('button', { name: 'Toggle sidebar' }))
     expect(window.localStorage.getItem('consumit.home-sidebar')).toBe('collapsed')
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
+    expect(screen.getByTestId('sidebar')).toHaveTextContent('collapsed')
 
     // A navigation remounts the shell; the persisted choice must survive it.
     unmount()
-    render(<FilScreenShell currentPathname="/movies"><p>Page two</p></FilScreenShell>)
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: 'Hide sidebar' })).not.toBeInTheDocument()
+    render(<><Probe /><FilScreenShell currentPathname="/movies"><p>Page two</p></FilScreenShell></>)
+    expect(screen.getByTestId('sidebar')).toHaveTextContent('collapsed')
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('restores a stored collapsed sidebar on first mount', () => {
     window.localStorage.setItem('consumit.home-sidebar', 'collapsed')
-    render(<FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell>)
+    render(<><Probe /><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></>)
 
-    expect(screen.getAllByRole('button', { name: 'Show sidebar' })).toHaveLength(1)
+    expect(screen.getByTestId('sidebar')).toHaveTextContent('collapsed')
   })
 
   it('leaves the clicked row untouched and announces page loading at the top', async () => {

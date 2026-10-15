@@ -16,6 +16,9 @@ function withPreferences(input: ResolvePlaybackRequest, preferences?: PlaybackPr
   return { ...input, preferences: { ...input.preferences, ...preferences }, ...(preferences.audioLanguage ? { audioLanguage: preferences.audioLanguage } : {}) }
 }
 export interface Playback {
+  beginAttempt?(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal, sessionId?: string, failure?: PlaybackFailureRequest): Promise<import('@consumit/contracts').PlaybackAttempt>
+  continueAttempt?(owner: string, id: string, signal: AbortSignal): Promise<import('@consumit/contracts').PlaybackAttempt>
+  cancelAttempt?(owner: string, id: string): Promise<void>
   relayManifest(token: string, origin: string, signal: AbortSignal): Promise<string>
   listAudio(owner: string, id: string, sourceId: string, signal: AbortSignal): Promise<import('@consumit/contracts').SeparateAudioTrack[]>
   prepareAudio(owner: string, id: string, sourceId: string, trackId: string, signal: AbortSignal): Promise<import('@consumit/contracts').SeparateAudioSource>
@@ -50,12 +53,20 @@ function prunedFallbacks(fallbackAt: readonly number[] | undefined, now = Date.n
 }
 
 export function createPlayback({ providers, store, region, providerOrders, audioHttp, audioOrigin, relay, relayOrigin }: { providers: readonly ProviderRegistration[]; store: PlaybackStore; region: string; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> | undefined; audioHttp?: ProviderHttp; audioOrigin?: string; relay?: PlaybackRelay; relayOrigin?: string }): Playback {
-  const separateAudio = createSeparateAudio(providers, region, audioHttp, audioOrigin)
+  const separateAudio = createSeparateAudio(providers, region, audioHttp, audioOrigin, { store, relay })
   // The resolver gates every source on hostile-output validation
   // (schema, expiry, allowlisted https media, no credentials/transforms).
   // Only explicitly declared relay rows enter that tier. Worker host
   // approval and browser failures never convert a direct provider to relay.
-  const resolver = createResolver(providers, { region, store, providerFilter: provider => (provider.deliveryMode ?? 'direct') === 'direct', ...(providerOrders ? { providerOrders } : {}) })
+  const resolver = createResolver(providers, {
+    region, store,
+    providerFilter: provider => (provider.deliveryMode ?? 'direct') === 'direct',
+    // CookieBakers is intermittent but frequently recovers between requests.
+    // Keep it in the automatic Direct waterfall during cooldown; resolver
+    // deadlines, concurrency and per-minute budgets still bound each attempt.
+    alwaysAttemptProviderIds: ['cookiebakers'],
+    ...(providerOrders ? { providerOrders } : {}),
+  })
   const relayResolver = relay ? createResolver(providers, {
     region, store, healthScope: 'relay', providerFilter: provider => provider.deliveryMode === 'relay' && relay.includes(provider.adapter.id), sourceFilter: (source, registration) => relay.permits({ source, registration }),
     ...(providerOrders ? { providerOrders } : {}),
@@ -131,7 +142,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
       id: previous?.session.id ?? randomUUID(), ref: input.ref,
-      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.frameSandbox ? { frameSandbox: source.frameSandbox } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
+      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.frameSandbox ? { frameSandbox: source.frameSandbox } : {}), ...(source.type === 'hls' && source.hlsSubtitlePlaylistFormat ? { hlsSubtitlePlaylistFormat: source.hlsSubtitlePlaylistFormat } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
       fallbackCount: windowedFallbacks.length,
       capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.some((track) => track.format === 'vtt') },
@@ -142,7 +153,96 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     return session
   }
 
+  const eligible = (input: ResolvePlaybackRequest) => {
+    const admin = providerOrders?.[input.ref.kind] ?? []
+    const personal = input.preferences?.providerOrder ?? []
+    const rank = (id: string, order: string[]) => { const index = order.indexOf(id); return index < 0 ? 10000 : index }
+    const tier = (provider: ProviderRegistration) => provider.deliveryMode === 'embed' ? 2 : provider.deliveryMode === 'relay' ? 1 : 0
+    return providers.filter(provider => provider.enabled && suppliesVideo(provider) && provider.approvedRegions.includes(region)
+      && provider.mediaKinds.includes(input.ref.kind) && supportsRequestedAudio(provider, input)
+      && (provider.deliveryMode !== 'relay' || relay?.includes(provider.adapter.id)))
+      .sort((a, b) => rank(a.adapter.id, personal) - rank(b.adapter.id, personal) || tier(a) - tier(b)
+        || rank(a.adapter.id, admin) - rank(b.adapter.id, admin) || (b.priority ?? 0) - (a.priority ?? 0))
+  }
+  type AttemptRecord = { owner: string; input: ResolvePlaybackRequest; order: string[]; visited: string[]; sessionId?: string; result?: PlaybackSession; cancelled?: boolean }
+  const readAttempt = async (owner: string, id: string) => {
+    const raw = await store.get(`attempt:${id}`)
+    if (!raw) throw new ApiError('NOT_FOUND', 'This source search expired. Try again.')
+    const record = JSON.parse(raw) as AttemptRecord
+    if (record.owner !== owner || record.cancelled || await store.get(`attempt-cancelled:${id}`)) throw new ApiError('NOT_FOUND', 'Source search not found.')
+    return record
+  }
+  const attemptView = (id: string, record: AttemptRecord): import('@consumit/contracts').PlaybackAttempt => record.result
+    ? { status: 'ready', attemptId: id, tried: record.visited.length, total: record.order.length, session: record.result }
+    : { status: record.visited.length >= record.order.length ? 'exhausted' : 'pending', attemptId: id, tried: record.visited.length, total: record.order.length }
+  async function advanceAttempt(owner: string, id: string, signal: AbortSignal, update?: (record: AttemptRecord) => void) {
+    const token = randomUUID(), lock = `attempt-lock:${id}`
+    if (!await store.claim(lock, token, 30)) throw new ApiError('CONFLICT', 'This source search is already running.', { retryable: true })
+    try {
+      const record = await readAttempt(owner, id)
+      if (update) {
+        update(record)
+        await store.set(`attempt:${id}`, JSON.stringify(record), 300)
+      }
+      if (record.result) {
+        const source = record.result.source
+        const registration = eligible(record.input).find(provider => provider.adapter.id === source.providerId)
+        if (registration && Date.parse(source.expiresAt) > Date.now() + 5000 && (source.delivery === 'relay' ? await relay?.accepts(source.src, source.providerId) : allowedMediaUrl(source.src, registration.mediaHosts, registration.mediaHostPatterns))) return attemptView(id, record)
+        delete record.result
+      }
+      const providerId = record.order.find(id => !record.visited.includes(id))
+      if (!providerId) return attemptView(id, record)
+      signal.throwIfAborted()
+      record.visited.push(providerId)
+      await store.set(`attempt:${id}`, JSON.stringify(record), 300)
+      const registration = eligible(record.input).find(provider => provider.adapter.id === providerId)
+      if (registration) {
+        const delivery = registration.deliveryMode ?? 'direct'
+        const result = await resolverFor(delivery)?.resolve(record.input, AbortSignal.any([signal, AbortSignal.timeout(10_000)]), [], providerId)
+        signal.throwIfAborted()
+        // Cancellation is separate from the step lock, so a long adapter cannot block it.
+        await readAttempt(owner, id)
+        if (result && eligible(record.input).some(provider => provider.adapter.id === providerId)) {
+          const previous = record.sessionId ? await read(owner, record.sessionId) : undefined
+          record.result = await save(owner, record.input, result, previous, delivery)
+          record.sessionId = record.result.id
+          await store.set(`session-attempt:${record.result.id}`, id, 4 * 3600)
+        }
+      }
+      await readAttempt(owner, id)
+      await store.set(`attempt:${id}`, JSON.stringify(record), 300)
+      return attemptView(id, record)
+    } finally { await store.release(lock, token) }
+  }
+
   return {
+    async beginAttempt(owner, input, signal, sessionId, failure) {
+      const lock = sessionId ? await claimRecovery(sessionId) : undefined
+      try {
+      const previous = sessionId ? await read(owner, sessionId) : undefined
+      if (previous && JSON.stringify(previous.input.ref) !== JSON.stringify(input.ref)) throw new ApiError('BAD_REQUEST', 'Use the current playback title.')
+      if (previous && failure && previous.session.source.id !== failure.sourceId) throw new ApiError('CONFLICT', 'The playback source changed. Try again.')
+      const mapped = sessionId ? await store.get(`session-attempt:${sessionId}`) : null
+      let id = mapped ?? randomUUID(), record: AttemptRecord | undefined
+      if (mapped) { try { record = await readAttempt(owner, mapped) } catch { id = randomUUID() } }
+      const fresh = !record
+      if (fresh) {
+        record = { owner, input, order: eligible(input).map(provider => provider.adapter.id).slice(0, 128), visited: previous ? [previous.session.source.providerId] : [], ...(sessionId ? { sessionId } : {}) }
+        await store.set(`attempt:${id}`, JSON.stringify(record), 300)
+      }
+      // Recovery and continuation mutate the same record under the step lock.
+      return await advanceAttempt(owner, id, signal, current => {
+        current.input = { ...withPreferences(current.input, input.preferences), audioLanguage: input.audioLanguage, capabilities: input.capabilities }
+        if (failure && previous) {
+          if (current.result?.source.id === failure.sourceId || fresh) resolverFor(previous.session.source.delivery)?.recordFailure(previous.session.source.providerId, input.ref.kind, failureCause(failure))
+          delete current.result
+        }
+        current.visited = current.visited.filter(providerId => current.order.includes(providerId))
+      })
+      } finally { if (sessionId && lock) await store.release(`recovery:${sessionId}`, lock) }
+    },
+    continueAttempt: advanceAttempt,
+    async cancelAttempt(owner, id) { await readAttempt(owner, id); await store.set(`attempt-cancelled:${id}`, '1', 300) },
     async relayManifest(token: string, origin: string, signal: AbortSignal) {
       if (!relay) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This relay is unavailable.')
       return relay.manifest(token, origin, signal)
@@ -186,17 +286,10 @@ export function createPlayback({ providers, store, region, providerOrders, audio
       // Watch requests this fixed snapshot only when opening Server. No
       // existing session or upstream probe is needed, so it consumes no
       // provider quota, including when automatic startup has failed.
-      const eligible = providers
-        .filter((registration) => {
-          if (!registration.enabled || !suppliesVideo(registration) || !registration.approvedRegions.includes(region)) return false
-          if (registration.deliveryMode === 'relay' && !relay?.includes(registration.adapter.id)) return false
-          if (!supportsRequestedAudio(registration, input)) return false
-          return (registration.mediaKinds as readonly string[]).includes(input.ref.kind)
-        })
-        .sort((a, b) => (providerOrders ? providerOrders[input.ref.kind].indexOf(a.adapter.id) - providerOrders[input.ref.kind].indexOf(b.adapter.id) : (b.priority ?? 0) - (a.priority ?? 0)))
+      const permitted = eligible(input)
       const seen = new Set<string>()
       const listed: PlaybackProvider[] = []
-      for (const registration of eligible) {
+      for (const registration of permitted) {
         if (seen.has(registration.adapter.id)) continue
         seen.add(registration.adapter.id)
         const dash = registration.adapter.id.indexOf('-')
@@ -235,7 +328,10 @@ export function createPlayback({ providers, store, region, providerOrders, audio
         record.excluded = []
         record.excludedAt = {}
         record.restartFallback = true
-        return save(owner, record.input, result, record, delivery)
+        const session = await save(owner, record.input, result, record, delivery)
+        const attemptId = await store.get(`session-attempt:${id}`)
+        if (attemptId) await store.set(`attempt-cancelled:${attemptId}`, '1', 300)
+        return session
       } finally { await store.release(`recovery:${id}`, lock) }
     },
     async recover(owner, id, failure, refresh, signal) {

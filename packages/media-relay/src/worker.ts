@@ -3,10 +3,22 @@ import { bingeFetchUrl, decodeRelayManifest } from './bingebang.ts'
 import { mediaHeaders } from './provider-headers.ts'
 import { createPublicHostCheck } from './public-host.ts'
 import { rewriteRelayManifest } from './manifest.ts'
+import { createLookmovieProvider } from '../../provider-sdk/src/adapters/lookmovie.ts'
+import type { ProviderHttp, ProviderHttpResponse } from '../../provider-sdk/src/adapters/http.ts'
+import { playbackRefSchema } from '@consumit/contracts'
 
 export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string }
-type Dependencies = { fetch?: typeof fetch; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number }) => void }
+type Dependencies = { fetch?: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => ReturnType<typeof fetch>; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number; stage: string }) => void }
 const MAX_MANIFEST_BYTES = 512 * 1024
+const LOOKMOVIE_HOST = /^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/
+/** Constant-time bearer secret check so auth timing does not leak secret bytes. */
+function authorized(request: Request, secret: string) {
+  const actual = new TextEncoder().encode(request.headers.get('authorization') ?? '')
+  const expected = new TextEncoder().encode(`Bearer ${secret}`)
+  let diff = actual.length ^ expected.length
+  for (let i = 0; i < Math.max(actual.length, expected.length); i++) diff |= (actual[i] ?? 0) ^ (expected[i] ?? 0)
+  return diff === 0
+}
 function policies(raw: string): Record<string, string[]> {
   const value: unknown = JSON.parse(raw)
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid relay policy.')
@@ -72,20 +84,62 @@ export function createRelayWorker(deps: Dependencies = {}) {
       headers.set('access-control-allow-headers', 'Range')
       headers.set('access-control-expose-headers', 'Content-Length, Content-Range, Accept-Ranges')
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers })
-      if (!['GET', 'HEAD'].includes(request.method)) return fail(405)
       const path = new URL(request.url)
-      if (!path.pathname.startsWith('/media/') || path.search) return fail(404)
+      if (path.pathname === '/v1/lookmovie/resolve') {
+        if (request.method !== 'POST' || !authorized(request, env.RELAY_SECRET)) return fail(403)
+        try {
+          const raw = await request.text()
+          if (raw.length > 4096) return fail(413)
+          const input = JSON.parse(raw) as { title?: unknown; year?: unknown; ref?: unknown }
+          if (typeof input.title !== 'string' || !input.title.trim() || input.title.length > 200
+            || !Number.isInteger(input.year) || Number(input.year) < 1888 || Number(input.year) > 2200) return fail(400)
+          const parsedRef = playbackRefSchema.safeParse(input.ref)
+          if (!parsedRef.success) return fail(400)
+          const ref = parsedRef.data
+          if (ref.kind !== 'movie') return fail(400)
+          const title = input.title.trim(), year = Number(input.year)
+          let lastHop = 'none'
+          const http = workerLookmovieHttp(upstreamFetch, verifyPublicHost, entry => { lastHop = `${entry.host}${entry.path}:${entry.status}` })
+          const provider = createLookmovieProvider(http, async () => ({ title, year }), now, { id: 'lookmovie-relay', relayHostDiscovery: true })
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(new DOMException('LookMovie resolution timed out.', 'TimeoutError')), 24_000)
+          try {
+            const result = await provider.resolve({ ref, region: 'WW', audioLanguage: 'original' }, controller.signal)
+            headers.set('content-type', 'application/json; charset=utf-8')
+            if (!result.ok) headers.set('x-lookmovie-last-hop', lastHop)
+            if (!result.ok) return new Response(JSON.stringify({ ok: false, code: result.code, retryable: result.retryable }), { status: result.code === 'empty' ? 404 : 502, headers })
+            return new Response(JSON.stringify({ ok: true, sources: result.sources }), { status: 200, headers })
+          } finally { clearTimeout(timer) }
+        } catch { return fail(502) }
+      }
+      const control = path.pathname === '/v1/relay-manifest'
+      let controlToken: string | undefined
+      if (control) {
+        if (request.method !== 'POST' || !authorized(request, env.RELAY_SECRET) || path.search) return fail(403)
+        try {
+          const raw = await boundedManifest(new Response(request.body), 4096)
+          const input = JSON.parse(new TextDecoder().decode(raw)) as { grant?: unknown }
+          if (typeof input.grant !== 'string' || input.grant.length > 3600) return fail(400)
+          controlToken = input.grant
+        } catch { return fail(400) }
+      } else {
+        if (!['GET', 'HEAD'].includes(request.method)) return fail(405)
+        if (!path.pathname.startsWith('/media/') || path.search) return fail(404)
+      }
       let grant: RelayGrant, hosts: string[], staticHosts: string[], codec: GrantCodec
       try {
         if (!cached || cached.secret !== env.RELAY_SECRET) cached = { secret: env.RELAY_SECRET, codec: createGrantCodec(env.RELAY_SECRET) }
         codec = await cached.codec
-        grant = await codec.open(path.pathname.slice(7), now())
+        grant = await codec.open(controlToken ?? path.pathname.slice(7), now())
+        if (control && (grant.provider !== 'rigel' || grant.kind !== 'hls')) return fail(403)
         staticHosts = policies(env.RELAY_PROVIDERS)[grant.provider] ?? []
         hosts = staticHosts
         if (grant.recipe) {
           const discovery = JSON.parse(env.RELAY_DISCOVERY_PROVIDERS ?? '{}') as Record<string, string>
           const reviewed = grant.provider === 'stormboron' && grant.recipe === 'storm-boron-v1'
             || ['wecollege-miami', 'wecollege-boise'].includes(grant.provider) && grant.recipe === 'wecollege-city-v1'
+            || grant.provider === 'lookmovie-relay' && grant.recipe === 'lookmovie-v1'
+              && grant.hosts?.every(host => /^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/.test(host))
           if (!staticHosts.length || !reviewed || discovery[grant.provider] !== grant.recipe || !grant.hosts?.length) return fail(403)
           hosts = grant.hosts
         }
@@ -97,20 +151,22 @@ export function createRelayWorker(deps: Dependencies = {}) {
       const signal = AbortSignal.any([request.signal, abort.signal])
       let timer = setTimeout(() => abort.abort(), 10_000)
       const started = now()
-      let bytes = 0, status = 502, kind = 'media'
+      let bytes = 0, status = 502, kind = 'media', stage = 'grant'
       let bytesKnown = true
-      const report = () => { try { deps.report?.({ provider: grant.provider, kind, status, bytes, bytesKnown, durationMs: Math.max(0, now() - started) }) } catch { /* Telemetry cannot interrupt playback. */ } }
+      const report = () => { try { deps.report?.({ provider: grant.provider, kind, status, bytes, bytesKnown, durationMs: Math.max(0, now() - started), stage }) } catch { /* Telemetry cannot interrupt playback. */ } }
       try {
         let url = bingeFetchUrl(grant.provider, grant.url, grant.kind === 'hls')
         let response: Response | undefined
         for (let redirects = 0; redirects <= 3; redirects++) {
           if (!relayDestination(url, hosts)) throw new Error('Blocked redirect.')
-          if (grant.recipe && !staticHosts.includes(new URL(url).hostname)) await verifyPublicHost(new URL(url).hostname, signal)
+          if (grant.recipe && !staticHosts.includes(new URL(url).hostname)) { stage = 'dns-check'; await verifyPublicHost(new URL(url).hostname, signal) }
           const outgoing = new Headers(mediaHeaders(grant.provider, new URL(url).hostname, grant.headerHost, grant.headers, grant.recipe))
           outgoing.set('accept-encoding', 'identity')
           if (!outgoing.has('user-agent')) outgoing.set('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
           if (range) outgoing.set('range', range)
-          response = await upstreamFetch(url, { method: request.method, headers: outgoing, redirect: 'manual', signal, cache: 'no-store' })
+          stage = 'upstream-fetch'
+          response = await upstreamFetch(url, { method: control ? 'GET' : request.method, headers: outgoing, redirect: 'manual', signal, cache: 'no-store' })
+          stage = 'upstream-response'
           if (![301, 302, 303, 307, 308].includes(response.status)) break
           await response.body?.cancel()
           const location = response.headers.get('location')
@@ -129,8 +185,30 @@ export function createRelayWorker(deps: Dependencies = {}) {
         kind = manifest ? 'manifest' : 'media'
         if (manifest && range) { await response!.body?.cancel(); clearTimeout(timer); status = 416; report(); return fail(416) }
         if (manifest && request.method !== 'HEAD' && status === 200) {
-          const text = decodeRelayManifest(await boundedManifest(response!, grant.provider === 'bingebangymovies' ? 1024 * 1024 : MAX_MANIFEST_BYTES), grant.provider, url)
-          const rewritten = await rewriteRelayManifest(text, url, grant, hosts, codec, path.origin, now())
+          stage = 'manifest-read'
+          const text = decodeRelayManifest(await boundedManifest(response!, control ? 2 * 1024 * 1024 : ['bingebangymovies', 'rigel'].includes(grant.provider) ? 1024 * 1024 : MAX_MANIFEST_BYTES), grant.provider, url)
+          if (control) {
+            if (!text.startsWith('#EXTM3U')) throw new Error('Invalid control playlist.')
+            clearTimeout(timer)
+            headers.set('content-type', 'application/vnd.apple.mpegurl')
+            headers.set('x-consumit-manifest-base', url)
+            bytes = new TextEncoder().encode(text).length
+            report()
+            return new Response(text, { status: 200, headers })
+          }
+          stage = 'manifest-rewrite'
+          let rewritten: string
+          try { rewritten = await rewriteRelayManifest(text, url, grant, hosts, codec, path.origin, now()) }
+          catch (error) {
+            const message = error instanceof Error ? error.message : ''
+            stage = message === 'Blocked manifest destination.' ? 'manifest-host-scope'
+              : message === 'Unsupported manifest.' && /#EXT-X-DEFINE\b|\{\$/.test(text) ? 'manifest-variables'
+                : message === 'Unsupported manifest.' && /#EXT-X-CONTENT-STEERING\b/.test(text) ? 'manifest-content-steering'
+                  : message === 'Unsupported manifest.' ? 'manifest-unsupported'
+              : message === 'Invalid manifest.' ? 'manifest-invalid'
+                : message === 'Invalid grant.' ? 'manifest-grant-invalid' : 'manifest-rewrite-failed'
+            throw error
+          }
           clearTimeout(timer)
           headers.set('content-type', 'application/vnd.apple.mpegurl')
           bytes = new TextEncoder().encode(rewritten).length
@@ -203,5 +281,50 @@ export function createRelayWorker(deps: Dependencies = {}) {
       } catch { abort.abort(); clearTimeout(timer); status = 502; report(); return fail(502) }
     },
   }
+}
+
+function workerLookmovieHttp(fetcher: NonNullable<Dependencies['fetch']>, verifyPublicHost: NonNullable<Dependencies['verifyPublicHost']>, report?: (entry: { host: string; path: string; status: number | string }) => void): ProviderHttp {
+  const request = async (url: string, requestHeaders: Record<string, string>, signal: AbortSignal, init: { method?: 'POST'; body?: string | Uint8Array; readPrefixBytes?: number } = {}, hosts?: readonly string[]): Promise<ProviderHttpResponse> => {
+    const target = new URL(url)
+    const catalog = target.origin === 'https://lmscript.xyz' && (target.pathname === '/v1/movies' || target.pathname === '/v1/movies/view')
+    if (!catalog && (!hosts?.includes(target.hostname) || !LOOKMOVIE_HOST.test(target.hostname))) throw new Error('Blocked LookMovie destination.')
+    if (!catalog) await verifyPublicHost(target.hostname, signal)
+    const body = typeof init.body === 'string' ? init.body : init.body ? new Blob([new Uint8Array(init.body).buffer as ArrayBuffer]) : undefined
+    let response: Response
+    try { response = await fetcher(target.href, { method: init.method ?? 'GET', headers: requestHeaders, ...(body ? { body } : {}), redirect: 'error', signal, cache: 'no-store' }) }
+    catch (error) { report?.({ host: target.hostname, path: target.pathname, status: error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'network-error' }); throw error }
+    report?.({ host: target.hostname, path: target.pathname, status: response.status })
+    const finalUrl = response.url || target.href
+    if (finalUrl !== target.href) { await response.body?.cancel(); throw new Error('Unreviewed LookMovie redirect.') }
+    const limit = init.readPrefixBytes === undefined ? 1024 * 1024 : Math.max(1, Math.min(4096, init.readPrefixBytes))
+    const reader = response.body?.getReader()
+    let bytes = new Uint8Array()
+    if (reader) {
+      const chunks: Uint8Array[] = []
+      let size = 0
+      try {
+        while (size < limit) {
+          const part = await reader.read()
+          if (part.done) break
+          const take = part.value.subarray(0, limit - size)
+          chunks.push(take); size += take.length
+          if (init.readPrefixBytes !== undefined && size >= limit) break
+          if (size > limit) throw new Error('Oversized LookMovie response.')
+        }
+        if (init.readPrefixBytes === undefined) {
+          // Read one extra byte to distinguish an exactly-sized body from a truncated one.
+          const extra = await reader.read()
+          if (!extra.done) throw new Error('Oversized LookMovie response.')
+        }
+      } finally { await reader.cancel().catch(() => undefined) }
+      bytes = new Uint8Array(size); let offset = 0
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
+    }
+    const text = new TextDecoder().decode(bytes)
+    return { status: response.status, text, url: finalUrl, headers: response.headers, ...(init.readPrefixBytes !== undefined ? { bytes } : {}) }
+  }
+  const http = ((url, headers, signal, init) => request(url, headers, signal, init)) as ProviderHttp
+  http.mediaScope = (hosts: readonly string[]) => (url, headers, signal, init) => request(url, headers, signal, init, hosts)
+  return http
 }
 export default createRelayWorker({ report: entry => console.log(JSON.stringify({ event: 'relay.request', ...entry })) })

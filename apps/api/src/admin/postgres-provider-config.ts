@@ -1,5 +1,6 @@
 import type { PrismaClient } from '../../generated/prisma/client.js'
 import { z } from 'zod'
+import { appendOutbox } from '../jobs/outbox.ts'
 import { providerRoleSchema, providerDeliveryModeSchema } from '@consumit/contracts'
 import type { ProviderConfigStore, ProviderKind, ProviderOverridePatch, ProviderOverrides } from './provider-config.ts'
 
@@ -22,7 +23,7 @@ function parse(value: string): ProviderOverridePatch {
 
 /** Durable, revisioned provider controls. The audit write and config change
  * commit together; API instances poll the single revision row. */
-export function createPostgresProviderConfigStore(prisma: PrismaClient): ProviderConfigStore & {
+export function createPostgresProviderConfigStore(prisma: PrismaClient, outboxEnabled = false): ProviderConfigStore & {
   migrateLegacy(legacy: ProviderOverrides, allowedIds: readonly string[]): Promise<void>
 } {
   return {
@@ -45,7 +46,8 @@ export function createPostgresProviderConfigStore(prisma: PrismaClient): Provide
         const after = storedOverride.parse({ ...before, ...patch })
         await tx.providerOverride.upsert({ where: { id }, create: { id, configJson: JSON.stringify(after) }, update: { configJson: JSON.stringify(after), revision: { increment: 1 } } })
         await tx.providerChange.create({ data: { providerId: id, actorId, beforeJson: JSON.stringify(before), afterJson: JSON.stringify(after) } })
-        await tx.providerConfigRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1 }, update: { revision: { increment: 1 } } })
+        const revision = await tx.providerConfigRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1 }, update: { revision: { increment: 1 } } })
+        if (outboxEnabled) await appendOutbox(tx, { type: 'provider.config.v1', providerId: id, revision: revision.revision })
       }, { isolationLevel: 'Serializable' })
     },
     async setOrder(kind: ProviderKind, ids: readonly string[], expected: number, actorId: string) {
@@ -60,6 +62,7 @@ export function createPostgresProviderConfigStore(prisma: PrismaClient): Provide
           await tx.providerOverride.upsert({ where: { id }, create: { id, configJson: JSON.stringify(after) }, update: { configJson: JSON.stringify(after), revision: { increment: 1 } } })
           await tx.providerChange.create({ data: { providerId: id, actorId, beforeJson: JSON.stringify(before), afterJson: JSON.stringify(after) } })
         }
+        if (outboxEnabled) await appendOutbox(tx, { type: 'provider.config.v1', providerId: 'roster', revision: expected + 1 })
         return true
       }, { isolationLevel: 'Serializable' })
     },
@@ -72,7 +75,8 @@ export function createPostgresProviderConfigStore(prisma: PrismaClient): Provide
         if (after) await tx.providerOverride.update({ where: { id }, data: { configJson: JSON.stringify(after), revision: { increment: 1 } } })
         else await tx.providerOverride.delete({ where: { id } })
         await tx.providerChange.create({ data: { providerId: id, actorId, beforeJson: JSON.stringify(prior), afterJson: JSON.stringify(after) } })
-        await tx.providerConfigRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1 }, update: { revision: { increment: 1 } } })
+        const revision = await tx.providerConfigRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1 }, update: { revision: { increment: 1 } } })
+        if (outboxEnabled) await appendOutbox(tx, { type: 'provider.config.v1', providerId: id, revision: revision.revision })
       }, { isolationLevel: 'Serializable' })
     },
     async listChanges(limit) {

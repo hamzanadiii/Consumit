@@ -97,7 +97,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
     }
   }
 
-  const avatarSrc = member ? memberAvatarSrc(member.avatarUrl, member.id) : null
+  const avatarSrc = member ? memberAvatarSrc(member) : null
   const displayName = member?.displayName || member?.username || 'You'
   const recentItems = recent?.items ?? []
   const visibleRecent = showAllRecent ? recentItems : recentItems.slice(0, RECENT_PREVIEW_COUNT)

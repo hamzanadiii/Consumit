@@ -28,3 +28,12 @@ related_targets: ["apps/web/src/app/home/filscreen-home.tsx","apps/web/src/app/h
 **FORM:** The user confirmed the existing Cinema After Midnight interface as the target; restore its shipped code-led composition and remove the blue/gold Film Society variant.
 
 **FINISH:** unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Owner-confirmed interface refinement — 2026-10-15
+
+The owner confirmed one Consumit Server group that opens its existing provider choices and separate named external players. Episodic playback preferences sit directly below the picture. The recommendation row uses compact grouped filters, corner dismissal actions and visible phone titles. The welcome dialog follows the supplied centered share/support references within Consumit tokens. Controlled desktop/touch review and source regression evidence are recorded in docs/audits/interface-refinement-2026-10-15.md. This is a refinement of the incumbent world; the retained player controls and approved cinema topology remain the visual authority.
+
+
+## Browsing notification correction — 2026-10-15
+
+The owner moved ad-settings and feedback content out of the welcome card. One nonmodal browsing notification appears at a time after welcome dismissal, using existing Consumit tokens, explicit close/action controls and device-local persistence. No Watch interruption or replacement visual world. Desktop and mobile local/deployed review passed; see docs/audits/browsing-notifications-2026-10-15.md.

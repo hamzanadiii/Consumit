@@ -1,4 +1,6 @@
 import {
+  continueWatchingPageSchema,
+  recommendationDismissalsSchema,
   catalogRefSchema,
   createMemberListRequestSchema,
   createDiaryEntryRequestSchema,
@@ -77,6 +79,45 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
   function guardMutation(request: FastifyRequest) {
     if (!isAllowedOrigin(request.headers, deps.env.appOrigin, deps.env.nodeEnv !== 'production')) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
   }
+  app.get('/v1/me/continue-watching', async (request, reply) => {
+    const query = z.object({ cursor: z.string().max(512).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).parse(request.query)
+    if (query.cursor) {
+      try { z.object({ at: z.iso.datetime(), id: z.string().min(1).max(100) }).strict().parse(JSON.parse(query.cursor)) }
+      catch { throw new ApiError('BAD_REQUEST', 'Use a valid continuation cursor.') }
+    }
+    const memberId = (await viewer(request, true))!
+    reply.header('cache-control', 'private, no-store')
+    if (!deps.memberData.continueWatching) throw new ApiError('CONFLICT', 'Continue watching is unavailable. Try again.', { retryable: true })
+    return continueWatchingPageSchema.parse(await deps.memberData.continueWatching(memberId, query.cursor, query.limit))
+  })
+  app.put('/v1/me/continue-watching/hide', async (request, reply) => {
+    guardMutation(request)
+    const ref = catalogRefSchema.parse(request.body), memberId = (await viewer(request, true))!
+    if (!deps.memberData.hideContinueWatching) throw new ApiError('CONFLICT', 'This title could not be hidden.')
+    await deps.memberData.hideContinueWatching(memberId, ref)
+    return reply.header('cache-control', 'private, no-store').code(204).send()
+  })
+  app.get('/v1/me/recommendation-dismissals', async (request, reply) => {
+    const memberId = (await viewer(request, true))!
+    if (!deps.memberData.recommendationDismissals) throw new ApiError('CONFLICT', 'Recommendation choices are unavailable.')
+    return reply.header('cache-control', 'private, no-store').send(recommendationDismissalsSchema.parse({ items: await deps.memberData.recommendationDismissals(memberId) }))
+  })
+  app.post('/v1/me/recommendations/filter', async (request, reply) => {
+    guardMutation(request)
+    const parsed = z.object({ items: z.array(catalogRefSchema).max(24) }).safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a bounded list of titles.')
+    reply.header('cache-control', 'private, no-store')
+    if (!deps.memberData.filterRecommendations) throw new ApiError('CONFLICT', 'Recommendations are unavailable.')
+    return recommendationDismissalsSchema.parse({ items: await deps.memberData.filterRecommendations((await viewer(request, true))!, parsed.data.items) })
+  })
+  for (const method of ['PUT', 'DELETE'] as const) app.route({ method, url: '/v1/me/recommendation-dismissals', handler: async (request, reply) => {
+    guardMutation(request)
+    const memberId = (await viewer(request, true))!
+    if (!deps.memberData.dismissRecommendation) throw new ApiError('CONFLICT', 'Recommendation choices could not be saved.')
+    if (method === 'DELETE' && request.body === undefined) await deps.memberData.resetRecommendationDismissals?.(memberId)
+    else await deps.memberData.dismissRecommendation(memberId, catalogRefSchema.parse(request.body), method === 'PUT')
+    return reply.header('cache-control', 'private, no-store').code(204).send()
+  } })
 
   function recordId(request: FastifyRequest) {
     const id = (request.params as { id?: unknown }).id

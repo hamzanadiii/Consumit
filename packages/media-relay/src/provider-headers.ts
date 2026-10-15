@@ -17,6 +17,7 @@ export function mediaHeaders(provider: string, host: string, headerHost: string,
     return { referer: 'https://movy.sx/' }
   }
   if (provider === 'stormboron' && recipe === 'storm-boron-v1') return { referer: 'https://vidstorm.to/' }
+  if (provider === 'aphrodite' && hints.referer === 'https://atlantic.st/') return { referer: hints.referer }
   if (['vidnest', 'vaplayer', 'zeta'].includes(provider)) {
     const out: Record<string, string> = {}
     // Preserve the adapter-recorded public hints; drop anything unexpected.

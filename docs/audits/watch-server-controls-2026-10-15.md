@@ -1,0 +1,38 @@
+# Watch server controls and Settings advertising — 2026-10-15
+
+## Scope and status
+
+Deployed as **`web-20261015-servers-v1`** at `https://consumit.online` following the member's explicit “anyway deploy everything” request. The request moves the Ad status shield out of navigation into Settings, redesigns the server selector and external-player chrome, and replaces Main Server / Backup naming with Server 1, Server 2 onward. This is a local extension of Cinema After Midnight. Consumit's native player controls, source permissions, personal ordering, finite recovery, media delivery and progress ownership remain intact. The member authorized deployment despite the missing predeployment visual review; that authorization is not itself a visual pass.
+
+## Implementation
+
+- FilScreen desktop navigation and phone navigation no longer mount AdStatus. Member Settings adds Browsing & advertising. Anonymous `/settings` exposes that same device preference without sign-in; account/profile controls stay authenticated.
+- AdStatus uses the shared PreferenceRow and Toggle, with visible On/Off/Loading, the existing immediate device/account synchronization and retry behavior, and the original error detail. Advertising defaults, frequency limits, tab notification, fail-closed readiness and unsandboxed-source exclusion are unchanged. The privacy policy points to the new location.
+- The below-player server choices wrap into a two-column phone grid, expanding to three/four/five columns. Provider names are subordinate, external players are identified, and an orange outline/check marks selection. Management retains inline Move up/down, end-state disabling, Reset, recovery busy states and per-kind persistence.
+- Numbering is also applied to the native Settings server menu, external-player Select and startup failure picker. A current provider absent from the roster is shown separately as Current server; inserting it cannot shift the roster's assigned numbers.
+- ProviderFrame has one compact toolbar with External player, shared Select, Reload and Try another server. Watch removes the duplicate embed title/Return header while retaining page-level navigation. The frame uses a 16:9 picture followed by honest loading/failure and progress/auto-next limitations, plus the explicit new-tab link. Existing sandbox policies and new-tab protections are retained.
+- Root DESIGN.md and `.impeccable/design.json` are preserved. PRODUCT and COMPONENTS record the source-level extension; existing documentation drift is not repaired as a side effect.
+
+## Recorded checks and limits
+
+- Initial web type checking, changed-source lint and optimized Next build passed. The second build after the privacy/error-copy changes passed. The final build after the source-review numbering correction and final changed-source lint both exited 0 (`local/server-ui-build-reviewed.log`, `local/server-ui-lint-reviewed.log`). Final scoped `git diff --check` passed.
+- The Impeccable detector returned no findings for server-strip, ProviderFrame, AdStatus and GuestSettingsScreen (`local/server-ui-detector.json`). This is static evidence, not rendered acceptance.
+- Existing label/selector expectations were adapted; no regression tests were added or run for this request. No new upstream/provider, physical-device or capacity evidence is claimed.
+- Automatic approval review rejected the local preview launch command, and rejected it again after the member explicitly authorized starting `127.0.0.1:28128`. The rejection supplied no substantive reason beyond blocked by policy. No alternative launch route was used to evade it. An earlier combined command also included a Git local-exclude edit; neither the ignore edit nor preview started.
+- The independent finish reviewer returned **recapture** because current desktop/mobile Watch, embed and member/guest Settings captures are unavailable. Its source-only numbering observation was corrected, without changing that visual disposition. The independent documenter preserved the design files and recorded the source-only scope. Their records are `.impeccable/review/server-ui/reviewer.md` and `documenter.md`.
+
+## Production deployment
+
+The VPS built the frozen source as `consumit-web:web-20261015-servers-v1`, image `sha256:e7d7700a8512c156a5ce64842ed36b2dcdb57b52bc9ec2ac72237a482a8998a3`. The payload overlays the requested web changes on the prior deployed source; three concurrent provider source edits and new provider work stay preserved locally and are excluded from this web-only release. No migration or backend/Worker deployment was required.
+
+A fresh incremental off-host PostgreSQL backup and archive check passed before activation. Only the web container was recreated. The `.env.rebuild` web release selector and web image pin changed; other environment values, `.env.production`, provider file and every unrelated application container ID/image were verified unchanged. The prior full backup/PITR restore remains recorded in the reliable-playback audit; this web-only release did not repeat a restore drill. Live counts at baseline and verification were 11 members, 76 progress rows, 18 saved titles and 51 provider overrides, with no fixture writes by deployment verification.
+
+Verification at `2026-10-15T15:43:22.363Z` passed new web readiness/image identity, HTTPS production smoke, guest Settings/Watch responses and private gateway/member boundaries. Separate playback remains a 1% canary. Private rollback/configuration/source evidence is `/home/ubuntu/.consumit-server-ui-20261015`; local evidence is `local/server-ui-deploy-20261015/{baseline,build,backup,activate,check}.log` and `result.public.json`. `deploy.mjs rollback` restores the previous web image and environment/pins without touching member records.
+
+## Visual and device acceptance
+
+Eight current post-rollout captures cover desktop 1440px and narrow 390px guest Settings, native Watch grid, open management and external-player layout. These use production web assets/metadata, controlled browser-only Watch media/provider responses and an explicitly labeled external still fixture. Actual guest Off → On → Off → reload persistence, native-to-frame selection, iframe Reload, frame-to-native Select, Move up and Reset were observed. All six recorded page/viewport observations have no horizontal overflow, page errors, popups or ad requests. The server grid itself does not horizontally scroll; iframe geometry is 16:9. See `.impeccable/review/server-ui/visual-observations.json` for the explicit scope and paths.
+
+Earlier harness failures remain retained: the initial networkidle timeout, an incorrectly shaped fixture ref, a Play/Pause locator race, offscreen iframe painting and an interrupted embedded-video seek wait. The final desktop captures were valid before its later phone locator timeout; an isolated phone repeat passed after removing that race. The still fixture supersedes the invalid embedded-video captures. These are separate checkpoints, not a claim that every harness run passed.
+
+The fresh independent reviewer confirmed that all eight supplied screenshots are valid for their pictured states and returned **recapture** for the remaining matrix: authenticated Settings; On/loading/failure/focus variants; server loading/error/empty/busy/long-label/focus states; lower management rows and boundary evidence; and iframe loading/slow/failure/open-Select/busy. No full visual ship verdict is claimed. The documenter retains the incumbent design files. Physical Android/Safari, the brother's PC and live upstream coverage remain unverified. Backend production remains `rebuild-20261015-reliable-v1` with the existing 1% separate-playback canary.

@@ -59,7 +59,7 @@ export function createPlaybackCoordinator(transport: PlaybackTransport, now = Da
         } catch {
           if (signal.aborted) throw signal.reason
           const remaining = providers.filter((provider) => !tried.has(provider.id) && provider.available !== false)
-          candidate = (remaining.find((provider) => provider.health !== 'degraded') ?? remaining[0])?.id
+          candidate = remaining[0]?.id
         }
       }
       throw new Error('No other provider is available.')

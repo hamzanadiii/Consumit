@@ -1,4 +1,4 @@
-import { playbackRefSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
+import { playbackRefSchema, subtitleDiscoveryResponseSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { metrics } from '@opentelemetry/api'
 import { z } from 'zod'
@@ -26,7 +26,7 @@ const querySchema = z.object({
 
 const fileParamsSchema = z.object({ key: z.string().min(1).max(64) })
 const discoveryPageSchema = z.object({
-  searchId: z.uuid(), language: z.string().regex(/^[a-z]{2,3}$/), cursor: z.coerce.number().int().min(0).max(100000).default(0),
+  searchId: z.uuid(), language: z.string().max(32).regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/), cursor: z.coerce.number().int().min(0).max(100000).default(0),
   langs: z.string().max(64).optional(),
 })
 const discoverySearchSchema = z.object({ searchId: z.uuid(), q: z.string().trim().min(1).max(80), cursor: z.coerce.number().int().min(0).max(100000).default(0) })
@@ -71,7 +71,7 @@ function sendSubtitleError(error: unknown): never {
 
 export function registerSubtitleRoutes(
   app: FastifyInstance,
-  deps: { subtitles: SubtitleService; env?: ApiEnv | undefined; identity?: Identity | undefined; preferences?: SubtitlePreferences | undefined },
+  deps: { subtitles: SubtitleService; mode?: 'all' | 'preferences' | 'delivery'; env?: ApiEnv | undefined; identity?: Identity | undefined; preferences?: SubtitlePreferences | undefined },
 ) {
   const meter = metrics.getMeter('consumit.subtitles')
   const searches = meter.createCounter('subtitle.searches')
@@ -99,6 +99,7 @@ export function registerSubtitleRoutes(
   // Aggregated captions for one title/episode across every subtitle
   // provider plus the member's streaming-provider tracks downstream — the
   // menu never depends on which streaming provider is selected.
+  if (deps.mode !== 'preferences') {
   app.get('/v1/subtitles', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = querySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a title kind, a positive numeric id, and a valid season/episode.')
@@ -131,7 +132,7 @@ export function registerSubtitleRoutes(
 
   app.get('/v1/subtitles/discover', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
-    const parsed = querySchema.safeParse(request.query)
+    const parsed = querySchema.extend({ format: z.enum(['stream', 'json']).default('stream'), cursor: z.string().regex(/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/).optional() }).safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a title kind, numeric id, and valid season/episode.')
     const { kind, id, season, episode } = parsed.data
     const controller = new AbortController()
@@ -141,7 +142,7 @@ export function registerSubtitleRoutes(
     reply.raw.once('close', cancel)
     const stream = Readable.from((async function* () {
       try {
-        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal)) {
+        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor)) {
           yield `${JSON.stringify(event)}\n`
         }
       } finally {
@@ -151,6 +152,15 @@ export function registerSubtitleRoutes(
       }
     })())
     reply.header('cache-control', 'no-store')
+    if (parsed.data.format === 'json') {
+      // A normal JSON response is a bounded alternative when a browser or
+      // network intermediary interrupts NDJSON delivery.
+      const events = []
+      try {
+        for await (const event of deps.subtitles.discovery.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor)) events.push(event)
+        return subtitleDiscoveryResponseSchema.parse({ events })
+      } finally { clearTimeout(timer); reply.raw.off('close', cancel); controller.abort() }
+    }
     reply.header('x-accel-buffering', 'no')
     return reply.type('application/x-ndjson; charset=utf-8').send(stream)
   })
@@ -218,6 +228,8 @@ export function registerSubtitleRoutes(
   // Per-member sync correction for one title/episode. Session-authenticated;
   // one row per member/content. Crowdsourced correction reads this table
   // later without ever rewriting shared files.
+  }
+  if (deps.mode === 'delivery') return
   app.get('/v1/subtitles/preferences', async (request, reply) => {
     reply.header('cache-control', 'private, no-store')
     const memberId = await viewer(request)

@@ -99,4 +99,21 @@ describe('provider probe scheduler', () => {
     expect(status['stuck:movie:US']).toMatchObject({ ok: false, code: 'error' })
     expect(status['healthy:movie:US']).toMatchObject({ ok: true })
   })
+  it('bounds due batches and advances across the configured roster', async () => {
+    let now = 100000
+    const seen: string[] = []
+    const providers = ['first', 'second', 'third'].map(id => {
+      const row = registration(id, async () => { seen.push(id); now += 1000; return { ok: true as const, sources: [source] } })
+      row.mediaKinds = ['movie']; return row
+    })
+    const scheduler = createProbeScheduler({ providers, region: 'US', intervalMs: 60000, now: () => now, gapMs: 0, timeoutMs: 1000 })
+    await scheduler.runOnce({ budgetMs: 1500, onlyDue: true })
+    expect(seen).toEqual(['first'])
+    await scheduler.runOnce({ budgetMs: 1500, onlyDue: true })
+    expect(seen).toEqual(['first', 'second'])
+    await scheduler.runOnce({ budgetMs: 1500, onlyDue: true })
+    expect(seen).toEqual(['first', 'second', 'third'])
+    await scheduler.runOnce({ budgetMs: 1500, onlyDue: true })
+    expect(seen).toHaveLength(3)
+  })
 })

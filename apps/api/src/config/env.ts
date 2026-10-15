@@ -1,7 +1,13 @@
 import { z } from 'zod'
-import { parseRelayProviders, parseRelayDiscovery, type PlaybackRelayConfig } from '../playback/relay.ts'
+import { parseResolverOrigins, type CloudflareResolverConfig } from '../playback/cloudflare-resolver.ts'
+import { parseRelayProviders, parseRelayDiscovery, parseRelayControlProviders, validateRelayNode, type PlaybackRelayConfig } from '../playback/relay.ts'
 
 const envSchema = z.object({
+  APPLICATION_MODE: z.enum(['combined', 'product', 'playback']).default('combined'),
+  INTERNAL_SERVICE_SECRET: z.string().min(32).max(256).optional(),
+  INTERNAL_API_ORIGIN: z.url().optional(),
+  INTERNAL_PLAYBACK_ORIGIN: z.url().optional(),
+  BACKGROUND_JOBS_ENABLED: z.enum(['true', 'false']).default('false'),
   APP_ORIGIN: z.url().default('http://localhost:3000'),
   RELEASE_TRACKING_ENABLED: z.enum(['true', 'false']).default('false'),
   RELEASE_WORKER_SECRET: z.string().min(32).max(256).optional(),
@@ -23,7 +29,20 @@ const envSchema = z.object({
   PLAYBACK_RELAY_ORIGIN: z.url().optional(),
   PLAYBACK_RELAY_SECRET: z.string().min(32).optional(),
   PLAYBACK_RELAY_PROVIDERS: z.string().max(30000).optional(),
+  PLAYBACK_RELAY_PROVIDER_ORIGINS: z.string().max(20000).optional(),
+  PLAYBACK_RELAY_CONTROL_PROVIDERS: z.string().max(128).optional(),
   PLAYBACK_RELAY_DISCOVERY_PROVIDERS: z.string().max(512).optional(),
+  PLAYBACK_RESOLVER_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_RESOLVER_ORIGIN: z.url().optional(),
+  PLAYBACK_RESOLVER_SECRET: z.string().min(32).optional(),
+  PLAYBACK_RESOLVER_API_PROVIDERS: z.string().max(128).optional(),
+  PLAYBACK_RESOLVER_PROVIDER_ORIGINS: z.string().max(20000).optional(),
+  PLAYBACK_RESOLVER_COMPUTE_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_RESOLVER_COMPUTE_SECRET: z.string().min(32).max(256).optional(),
+  PLAYBACK_NODE_ENABLED: z.enum(['true', 'false']).default('false'),
+  PLAYBACK_NODE_ORIGIN: z.url().optional(),
+  PLAYBACK_NODE_SECRET: z.string().min(32).optional(),
+  PLAYBACK_NODE_PROVIDERS: z.string().max(30000).optional(),
   PLAYBACK_VALKEY_URL: z.string().min(1).optional(),
   PLAYBACK_MEDIA_CONFIG: z.string().min(1).optional(),
   PLAYBACK_INSTANCES: z.coerce.number().int().min(1).max(100).default(1),
@@ -44,9 +63,13 @@ const envSchema = z.object({
 })
 
 export type ApiEnv = {
+  applicationMode?: 'combined' | 'product' | 'playback'
+  internal?: { secret: string; apiOrigin?: string; playbackOrigin?: string }
+  backgroundJobs?: boolean
   releases?: { enabled: boolean; workerSecret: string | undefined }
   playback?: {
     relay?: PlaybackRelayConfig
+    resolver?: CloudflareResolverConfig
     enabled: boolean; stateUrl: string | undefined; mediaConfig: string | undefined;
     /** Advertised API/resolver instance count. Past one, shared Valkey state
      *  is mandatory (resolver cache, sessions, rate limits, health). */
@@ -89,6 +112,13 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  if (value.APPLICATION_MODE !== 'combined' && (!value.INTERNAL_SERVICE_SECRET || (value.APPLICATION_MODE === 'product' ? !value.INTERNAL_PLAYBACK_ORIGIN : !value.INTERNAL_API_ORIGIN))) {
+    throw new Error('Separated applications require an internal origin and a dedicated service secret.')
+  }
+  for (const origin of [value.INTERNAL_API_ORIGIN, value.INTERNAL_PLAYBACK_ORIGIN].filter((entry): entry is string => Boolean(entry))) {
+    const url = new URL(origin)
+    if (!['http:', 'https:'].includes(url.protocol) || url.origin !== origin || url.username || url.password) throw new Error('Internal applications require exact HTTP(S) origins.')
+  }
   if (value.RELEASE_TRACKING_ENABLED === 'true' && (!value.DATABASE_URL || !value.RELEASE_WORKER_SECRET || value.PLAYBACK_ENABLED !== 'true')) {
     throw new Error('Release tracking requires a database, playback, and RELEASE_WORKER_SECRET.')
   }
@@ -101,25 +131,77 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error('Invalid API configuration: APP_ORIGIN requires HTTPS in production.')
   }
   let relay: PlaybackRelayConfig | undefined
+  if (value.PLAYBACK_RELAY_ENABLED !== 'true' && (value.PLAYBACK_RELAY_PROVIDER_ORIGINS || value.PLAYBACK_RELAY_CONTROL_PROVIDERS)) {
+    let configured = false
+    try {
+      configured = Object.keys(parseResolverOrigins(value.PLAYBACK_RELAY_PROVIDER_ORIGINS ?? '{}')).length > 0
+        || parseRelayControlProviders(value.PLAYBACK_RELAY_CONTROL_PROVIDERS ?? '[]').length > 0
+    } catch { throw new Error('Relay provider routes require valid origins and reviewed control providers.') }
+    if (configured) throw new Error('Relay provider routes require an enabled Cloudflare relay.')
+  }
+  let resolver: CloudflareResolverConfig | undefined
+  let providerOrigins: Record<string, string> = {}
+  if (value.PLAYBACK_RESOLVER_PROVIDER_ORIGINS) {
+    try { providerOrigins = parseResolverOrigins(value.PLAYBACK_RESOLVER_PROVIDER_ORIGINS) }
+    catch { throw new Error('Provider resolver routes require a bounded map of exact HTTPS origins.') }
+  }
+  if (Object.keys(providerOrigins).length && value.PLAYBACK_RESOLVER_ENABLED !== 'true') throw new Error('Provider resolver routes require the Cloudflare resolver.')
+  let apiProviders: 'wecollege-miami'[] = []
+  if (value.PLAYBACK_RESOLVER_API_PROVIDERS) {
+    try {
+      apiProviders = z.array(z.literal('wecollege-miami')).max(1)
+        .refine(items => new Set(items).size === items.length).parse(JSON.parse(value.PLAYBACK_RESOLVER_API_PROVIDERS))
+    } catch { throw new Error('Provider resolver API lookup exceptions must contain only the reviewed Miami route.') }
+  }
+  if (apiProviders.length && value.PLAYBACK_RESOLVER_ENABLED !== 'true') throw new Error('Provider resolver API lookup exceptions require the Cloudflare resolver.')
+  if (value.PLAYBACK_RESOLVER_ENABLED === 'true') {
+    if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RESOLVER_ORIGIN || !value.PLAYBACK_RESOLVER_SECRET) throw new Error('Provider resolver requires playback, an origin, and a secret.')
+    const url = new URL(value.PLAYBACK_RESOLVER_ORIGIN)
+    if (url.protocol !== 'https:' || url.origin !== value.PLAYBACK_RESOLVER_ORIGIN || url.username || url.password) throw new Error('Provider resolver requires an exact HTTPS origin.')
+    resolver = { origin: url.origin, secret: value.PLAYBACK_RESOLVER_SECRET, ...(apiProviders.length ? { apiProviders } : {}), ...(Object.keys(providerOrigins).length ? { providerOrigins } : {}) }
+  }
+  if (value.PLAYBACK_RESOLVER_COMPUTE_ENABLED === 'true') {
+    if (!resolver || !value.PLAYBACK_RESOLVER_COMPUTE_SECRET) throw new Error('Provider computation requires the enabled resolver and its separate secret.')
+    if (value.PLAYBACK_RESOLVER_COMPUTE_SECRET === resolver.secret) throw new Error('Provider computation requires a separate secret.')
+    resolver.computeSecret = value.PLAYBACK_RESOLVER_COMPUTE_SECRET
+  }
   if (value.PLAYBACK_RELAY_ENABLED === 'true') {
     if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RELAY_ORIGIN || !value.PLAYBACK_RELAY_SECRET || !value.PLAYBACK_RELAY_PROVIDERS) throw new Error('Relay requires playback, an origin, a secret, and approved providers.')
     const url = new URL(value.PLAYBACK_RELAY_ORIGIN)
     if (url.protocol !== 'https:' || url.origin !== value.PLAYBACK_RELAY_ORIGIN || url.username || url.password) throw new Error('Relay requires an exact HTTPS origin.')
-    relay = { origin: url.origin, secret: value.PLAYBACK_RELAY_SECRET, providers: parseRelayProviders(value.PLAYBACK_RELAY_PROVIDERS), ...(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS ? { discovery: parseRelayDiscovery(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS) } : {}) }
+      relay = { origin: url.origin, secret: value.PLAYBACK_RELAY_SECRET, providers: parseRelayProviders(value.PLAYBACK_RELAY_PROVIDERS), ...(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS ? { discovery: parseRelayDiscovery(value.PLAYBACK_RELAY_DISCOVERY_PROVIDERS) } : {}) }
+      if (value.PLAYBACK_RELAY_PROVIDER_ORIGINS) {
+        try { relay.providerOrigins = parseResolverOrigins(value.PLAYBACK_RELAY_PROVIDER_ORIGINS) }
+        catch { throw new Error('Relay provider routes require a bounded map of exact HTTPS origins.') }
+        if (Object.keys(relay.providerOrigins).some(id => !relay?.providers[id]?.length)) throw new Error('Relay provider routes require an approved media policy.')
+      }
+      if (value.PLAYBACK_RELAY_CONTROL_PROVIDERS) {
+        try { relay.controlProviders = parseRelayControlProviders(value.PLAYBACK_RELAY_CONTROL_PROVIDERS) }
+        catch { throw new Error('Relay control providers accept only the reviewed Rigel route.') }
+        if (relay.controlProviders.some(id => !relay?.providers[id]?.length)) throw new Error('Relay control providers require an approved media policy.')
+      }
   }
   if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_MEDIA_CONFIG) throw new Error('Playback requires PLAYBACK_MEDIA_CONFIG.')
+  if (value.PLAYBACK_NODE_ENABLED === 'true') {
+    if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_NODE_ORIGIN || !value.PLAYBACK_NODE_SECRET || !value.PLAYBACK_NODE_PROVIDERS) throw new Error('Media node requires playback, an origin, a secret, and approved providers.')
+    const node = validateRelayNode({ origin: value.PLAYBACK_NODE_ORIGIN, secret: value.PLAYBACK_NODE_SECRET, providers: parseRelayProviders(value.PLAYBACK_NODE_PROVIDERS) })
+    relay = relay ? { ...relay, node } : { origin: node.origin, secret: `${node.secret}:unused-edge`, providers: {}, node }
+  }
   // Single-instance launches run playback on bounded in-process state; shared
   // Valkey becomes mandatory past one instance, where split-brain resolvers
   // would otherwise diverge on cache, sessions, and health.
   if (value.PLAYBACK_ENABLED === 'true' && !value.PLAYBACK_VALKEY_URL && value.PLAYBACK_INSTANCES > 1) {
     throw new Error('Multi-instance playback requires PLAYBACK_VALKEY_URL.')
   }
-  if (value.PLAYBACK_VALKEY_URL && value.VALKEY_URL) {
-    const playbackUrl = new URL(value.PLAYBACK_VALKEY_URL)
-    const authUrl = new URL(value.VALKEY_URL)
-    if (playbackUrl.hostname === authUrl.hostname && playbackUrl.port === authUrl.port) throw new Error('Playback and authentication must use separate Valkey instances.')
+  if (value.NODE_ENV === 'production' && value.APPLICATION_MODE === 'playback' && (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_VALKEY_URL || !value.VALKEY_URL)) {
+    throw new Error('Split playback requires enabled playback, shared playback state, and authentication rate-limit Valkey.')
   }
-  if (value.NODE_ENV === 'production') {
+  if (value.PLAYBACK_VALKEY_URL && value.VALKEY_URL) {
+    let playbackUrl: URL, authUrl: URL
+    try { playbackUrl = new URL(value.PLAYBACK_VALKEY_URL); authUrl = new URL(value.VALKEY_URL) } catch { throw new Error('Use valid separate authentication and playback Valkey URLs.') }
+    if (playbackUrl.hostname === authUrl.hostname && (playbackUrl.port || '6379') === (authUrl.port || '6379')) throw new Error('Playback and authentication must use separate Valkey instances.')
+  }
+  if (value.NODE_ENV === 'production' && value.APPLICATION_MODE !== 'playback') {
     if (/^(?:replace[-_]|consumit-local|missing[-_])/i.test(value.AUTH_CODE_PEPPER ?? '')) {
       throw new Error('Invalid API configuration: AUTH_CODE_PEPPER must be a new production secret, not an example value.')
     }
@@ -153,8 +235,12 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     }
   }
   return {
+    applicationMode: value.APPLICATION_MODE,
+    backgroundJobs: value.BACKGROUND_JOBS_ENABLED === 'true',
+    ...(value.INTERNAL_SERVICE_SECRET ? { internal: { secret: value.INTERNAL_SERVICE_SECRET, ...(value.INTERNAL_API_ORIGIN ? { apiOrigin: value.INTERNAL_API_ORIGIN } : {}), ...(value.INTERNAL_PLAYBACK_ORIGIN ? { playbackOrigin: value.INTERNAL_PLAYBACK_ORIGIN } : {}) } } : {}),
     playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
       ...(relay ? { relay } : {}),
+      ...(resolver ? { resolver } : {}),
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
     adminMetricsUrl: value.ADMIN_METRICS_URL,
     appOrigin: appUrl.origin,

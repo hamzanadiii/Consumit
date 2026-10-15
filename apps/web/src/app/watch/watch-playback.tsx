@@ -1,16 +1,16 @@
 'use client'
 
-import { Keyboard, Moon, SkipBack, SkipForward, Tv } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Keyboard, SkipBack, SkipForward, Tv } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { titleHref, experiencePreferencesSchema, type PlaybackProvider, type PlaybackRef, type PlaybackSession, type DeliveryFailure, type SeparateAudioTrack, type ExperiencePreferences, type ExperiencePatch } from '@consumit/contracts'
-import { Button, ConsumitPlayer, Toggle, buttonVariants, SUBTITLE_LANGUAGES_EVENT, readStoredSubtitleLanguages, readQualityPreference, createQualityPreference } from '@consumit/ui'
+import { Button, ConsumitPlayer, Select, Toggle, buttonVariants, SUBTITLE_LANGUAGES_EVENT, readStoredSubtitleLanguages, readQualityPreference, createQualityPreference } from '@consumit/ui'
 import { useSession } from '../session/session'
 import { useExperience } from '../experience/experience-provider'
 import { applyPlayerDefaults } from '@/lib/experience-storage'
 import { browserSkipTimes } from '@/lib/skip-times-browser'
-import { listPlaybackProviders, playbackCapabilities, playbackRequest, switchPlaybackProvider, listSeparateAudio, prepareSeparateAudio } from '@/lib/playback-browser'
+import { listPlaybackProviders, playbackCapabilities, playbackRequest, runPlaybackAttempt, switchPlaybackProvider, listSeparateAudio, prepareSeparateAudio } from '@/lib/playback-browser'
 import { discoverSubtitles, pageSubtitles, searchSubtitles, prepareSubtitle, fetchSubtitlePreference, saveSubtitlePreference, type SubtitleDiscoveryEvent, type SubtitleCandidate, type SubtitleProviderStatus } from '@/lib/subtitles-browser'
 import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, readPlaybackProgress, writePlaybackProgress, type ProgressCheckpoint } from '@/lib/playback-progress'
 import { createPlaybackEvents } from '@/lib/playback-events'
@@ -20,6 +20,9 @@ import { castContentType, createCastSender, type CastStatus } from '@/lib/cast-s
 import type { WatchEpisode, WatchTitle } from './watch-screen'
 import { ProviderFrame } from '../shared/provider-frame'
 import { watchPoster } from './watch-poster'
+import { ServerStrip, serverName } from './server-strip'
+import { storePlaybackDiagnostics, browserName } from '@/lib/playback-diagnostics'
+import { useAdStatus } from '../shared/ad-status'
 
 function formatClock(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return '0:00'
@@ -28,15 +31,21 @@ function formatClock(totalSeconds: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-type WatchPlaybackProps = { audioLanguage?: string | undefined; title: WatchTitle; episode?: WatchEpisode | undefined; nextHref?: string | undefined; prevHref?: string | undefined; layout?: 'fullscreen' | 'embedded' | undefined; pinnedProvider?: string | undefined }
+type WatchPlaybackProps = { audioControl?: ReactNode; audioLanguage?: string | undefined; title: WatchTitle; episode?: WatchEpisode | undefined; nextHref?: string | undefined; prevHref?: string | undefined; layout?: 'fullscreen' | 'embedded' | undefined; pinnedProvider?: string | undefined }
+function assertAdDelivery(session: PlaybackSession, enabled: boolean) {
+  if (!enabled && session.source.type === 'iframe' && session.source.frameSandbox === 'none') throw new Error('This external player requires pop-up permissions. Choose a compatible server with ads off.')
+}
 export function WatchPlayback(props: WatchPlaybackProps) {
   const experience = useExperience()
   if (!experience.ready) return <ConsumitPlayer title={props.title.title} preparing posterSrc={watchPoster(props.title.backdropUrl ?? props.title.posterUrl)} />
   return <WatchPlaybackReady {...props} key={`${experience.owner ?? 'guest'}:${props.title.kind}:${props.title.id}:${props.episode?.seasonNumber}:${props.episode?.episodeNumber}`} initialPreferences={experience.preferences} />
 }
-function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, nextHref, prevHref, layout = 'fullscreen', pinnedProvider, initialPreferences }: WatchPlaybackProps & { initialPreferences: ExperiencePreferences }) {
+function WatchPlaybackReady({ audioControl, audioLanguage: audioLanguageProp, title, episode, nextHref, prevHref, layout = 'fullscreen', pinnedProvider, initialPreferences }: WatchPlaybackProps & { initialPreferences: ExperiencePreferences }) {
   const { member } = useSession()
   const experience = useExperience()
+  const ads = useAdStatus()
+  const adsEnabled = useRef(false)
+  adsEnabled.current = ads.enabled
   const [openingPreferences] = useState(initialPreferences)
   const saveExperience = experience.patch
   const intent = useRef(openingPreferences)
@@ -87,17 +96,16 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   const selectSeparateAudio = useCallback(async (id: string) => {
     if (!session) throw new Error('Playback has not started')
     const result = await prepareSeparateAudio(session, id, AbortSignal.timeout(12_000))
-    const language = separateAudioTracks.find(track => track.id === id)?.language
-    if (language && language !== 'und' && /^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(language)) remember({ audioLanguage: language })
     return result
-  }, [session, separateAudioTracks, remember])
+  }, [session])
   const sourceFailed = useRef(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [syncError, setSyncError] = useState(false)
   const [ended, setEnded] = useState(false)
+  const [countdown, setCountdown] = useState<number | null>(null)
   const [servers, setServers] = useState<PlaybackProvider[]>([])
-  const [serverRequested, setServerRequested] = useState(false)
+  const [serverRequested, setServerRequested] = useState(true)
   const [serverLoading, setServerLoading] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
   const [serverAttempt, setServerAttempt] = useState(0)
@@ -105,15 +113,17 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   const requestRef = useRef<AbortController | null>(null)
   const activeRef = useRef(false)
   const interruptedRequest = useRef<(() => Promise<void>) | null>(null)
+  const [recoveryProgress, setRecoveryProgress] = useState<{ tried: number; total: number } | null>(null)
+  const requestInput = useCallback((currentRef: PlaybackRef, preferences?: import('@consumit/contracts').PlaybackPreferences) => ({ ref: currentRef, capabilities: playbackCapabilities(), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, preferences: { qualityHeight: intent.current.qualityHeight, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, providerOrder: intent.current.serverOrders[currentRef.kind], ...preferences, adsEnabled: adsEnabled.current } }), [audioLanguageProp])
   const clock = useRef({ position: 0, duration: 0, playing: false, completed: false })
   const completionId = useRef<string | null>(null)
   const [resume, setResume] = useState({ position: 0, playing: false })
   const coordinator = useMemo(() => createPlaybackCoordinator({
-    resolve: (input, signal) => playbackRequest('resolve', input, signal),
+    resolve: (input, signal) => input.providerId ? playbackRequest('resolve', input, signal) : runPlaybackAttempt(input, signal, setRecoveryProgress),
     providers: listPlaybackProviders,
-    recover: (current, action, failure, signal) => playbackRequest(`${current.id}/${action}`, failure, signal),
+    recover: (current, action, failure, signal) => action === 'refresh' ? playbackRequest(`${current.id}/${action}`, failure, signal) : runPlaybackAttempt(requestInput(current.ref, failure.preferences), signal, setRecoveryProgress, { sessionId: current.id, failure }),
     switch: (current, providerId, signal, preferences) => switchPlaybackProvider(current.id, { providerId, ...(preferences ? { preferences } : {}) }, signal),
-  }), [])
+  }), [requestInput])
   // Resolve-time audio: an explicit prop (anime SUB/DUB toggle) always wins;
   // otherwise the member's stored player preference flows through so Hindi
   // (and other) selections reach language-aware providers. Storage reads stay
@@ -135,7 +145,6 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   const [autoplay, setAutoplay] = useState(openingPreferences.autoplayNextEpisode)
   const [autoNext, setAutoNext] = useState(true)
   const [autoSkip, setAutoSkip] = useState(true)
-  const [lightsOff, setLightsOff] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   useEffect(() => {
     let active = true
@@ -270,8 +279,18 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     // after it settles so its late position cannot reopen a finished stream.
     completionWrite.current = precedingWrite ? Promise.all([precedingWrite, immediate]).then(() => save(true, true)) : immediate
     void completionWrite.current
-    if (autoplay && nextHref) router.push(nextHref)
-  }, [autoplay, nextHref, router, save])
+    if (autoplay && nextHref && !frameActive.current) setCountdown(10)
+  }, [autoplay, nextHref, save])
+  const playNext = useCallback(async () => {
+    setCountdown(null)
+    await completionWrite.current
+    if (nextHref && activeRef.current) router.push(nextHref)
+  }, [nextHref, router])
+  useEffect(() => {
+    if (countdown === null || !autoplay || isFrame) return
+    const timer = setTimeout(() => { if (countdown <= 1) void playNext(); else setCountdown(countdown - 1) }, 1000)
+    return () => clearTimeout(timer)
+  }, [countdown, autoplay, isFrame, playNext])
 
   // Chromecast (P1): the TV plays while the phone keeps the session, progress,
   // and telemetry. The TV never authenticates; disconnect resumes the phone
@@ -371,14 +390,15 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     if (requestRef.current) return
     if ((ref.kind === 'series' || ref.kind === 'anime') && !episode) { setError(ref.kind === 'anime' ? 'Choose an episode to start watching.' : 'Choose an available episode from the series page.'); return }
     const controller = new AbortController(); requestRef.current = controller
-    setBusy(true); setError(null); setEnded(false); setManualServer(providerId)
+    setBusy(true); setError(null); setEnded(false); setCountdown(null); setRecoveryProgress(null); setManualServer(providerId)
     try {
       const [next, position] = await Promise.all([
-        coordinator.resolve({ ref, capabilities: playbackCapabilities(), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, ...(providerId ? { providerId } : {}), preferences: { qualityHeight: intent.current.qualityHeight, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage } }, controller.signal),
+        coordinator.resolve({ ...requestInput(ref), ...(providerId ? { providerId } : {}) }, controller.signal),
         readPlaybackProgress(ref, controller.signal, member?.id),
       ])
       if (controller.signal.aborted) return
       if (next.ref.id !== ref.id || next.ref.kind !== ref.kind || next.ref.season !== ref.season || next.ref.episode !== ref.episode) throw new Error('Playback returned a different title.')
+      assertAdDelivery(next, adsEnabled.current)
       if (providerId && next.source.providerId !== providerId) throw new Error('The selected server couldn’t start. Choose another server.')
       const resumePosition = session && !clock.current.completed ? clock.current.position : position
       setResume({ position: resumePosition, playing: true }); clock.current.position = resumePosition; clock.current.playing = true; clock.current.completed = false
@@ -389,6 +409,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   }
 
   const recover = useCallback(async (reason: 'network' | 'media' | 'expired' | 'gone', deliveryFailure?: DeliveryFailure) => {
+    storePlaybackDiagnostics({ ref, browser: browserName(), category: reason, ...(session ? { provider: session.source.providerId, delivery: session.source.delivery } : {}) })
     if (reason !== 'expired') sourceFailed.current = true
     if (!session || requestRef.current) return
     if (reason !== 'expired' && !castSender.status && localSource &&
@@ -401,11 +422,12 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
       return
     }
     const controller = new AbortController(); requestRef.current = controller
-    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(45000)])
-    if (reason !== 'expired') setBusy(true)
+    const signal = controller.signal
+    if (reason !== 'expired') { setBusy(true); setRecoveryProgress(null) }
     setError(null)
     try {
       const next = await coordinator.recover(session, reason, signal, deliveryFailure)
+      assertAdDelivery(next, adsEnabled.current)
       if (!controller.signal.aborted) {
         if (next.ref.id !== session.ref.id || next.ref.kind !== session.ref.kind || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Playback returned a different title.')
         // The clock can advance while a healthy renewal is in flight.
@@ -421,9 +443,9 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           catch { castSender.endSession(false); showNotice('Lost the TV connection. Playing here.') }
         }
       }
-    } catch { if (!controller.signal.aborted) setError('We couldn’t restore playback. Try again or return to the title.') }
+    } catch (cause) { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'We couldn’t restore playback. Try again or return to the title.') }
     finally { finishRequest(controller, () => recover(reason, deliveryFailure)) }
-  }, [session, localSource, finishRequest, coordinator, castSender, loadCastMedia, showNotice])
+  }, [session, localSource, finishRequest, coordinator, castSender, loadCastMedia, showNotice, ref])
 
   useEffect(() => {
     // Renew every active playback lease, regardless of whether the diagnostic
@@ -441,14 +463,13 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   useEffect(() => {
     // Fetch only after opening Server (or an explicit diagnostic pin).
     // Lease renewal and source changes do not restart this title snapshot.
-    if (!serverRequested && !pinnedProvider) return
     // The server list is a read-only snapshot: never abort it on session
     // change or unmount. Aborting leaked an AbortError rejection outside our
     // catches (surfaced as an uncaught Runtime error in some browsers), and
     // cancelling buys nothing — a late response is simply ignored below.
     // The request stays bounded by its own timeout instead.
     let stale = false
-    void coordinator.providers({ ref, capabilities: playbackCapabilities(), audioLanguage }, AbortSignal.timeout(12000))
+    void coordinator.providers({ ...requestInput(ref), audioLanguage }, AbortSignal.timeout(12000))
       .then((servers) => { if (!stale) { setServers(servers); setServerError(null) } })
       .catch(() => {
         if (stale) return
@@ -457,7 +478,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
       })
       .finally(() => { if (!stale) setServerLoading(false) })
     return () => { stale = true }
-  }, [audioLanguage, ref, coordinator, pinnedProvider, serverRequested, serverAttempt])
+  }, [audioLanguage, ref, coordinator, pinnedProvider, serverRequested, serverAttempt, requestInput])
 
   const switchServer = useCallback(async (providerId: string) => {
     if (!session || requestRef.current) return
@@ -467,6 +488,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     setBusy(true); setError(null)
     try {
       const next = await coordinator.switchAvailable(session, providerId, servers, signal)
+      assertAdDelivery(next, adsEnabled.current)
       if (controller.signal.aborted) return
       if (next.ref.id !== session.ref.id || next.ref.kind !== session.ref.kind || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Playback returned a different title.')
       if (next.source.providerId !== providerId) {
@@ -499,12 +521,13 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     const retained = { position: clock.current.position, playing: clock.current.playing }
     setBusy(true)
     try {
-      const next = await switchPlaybackProvider(session.id, { providerId: session.source.providerId, preferences: { qualityHeight: height, audioLanguage } }, controller.signal)
+      const next = await switchPlaybackProvider(session.id, { providerId: session.source.providerId, preferences: { qualityHeight: height, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, adsEnabled: adsEnabled.current } }, controller.signal)
       if (controller.signal.aborted) return
+      assertAdDelivery(next, adsEnabled.current)
       if (next.source.providerId !== session.source.providerId || next.ref.kind !== session.ref.kind || next.ref.id !== session.ref.id || next.ref.season !== session.ref.season || next.ref.episode !== session.ref.episode) throw new Error('Unexpected quality source.')
       createQualityPreference().choose({ value, label: `${height}p`, height })
       remember({ qualityHeight: height })
-      coordinator.setPreferences({ qualityHeight: height, audioLanguage })
+      coordinator.setPreferences({ qualityHeight: height, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage })
       setResume(retained); setSession(next); setLocalSource(next.source); sourceFailed.current = false
       if (castSender.status) {
         try { await loadCastMedia(next) }
@@ -513,7 +536,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     } catch {
       if (!controller.signal.aborted) showNotice('Couldn’t change quality. Keeping the current stream.')
     } finally { finishRequest(controller, () => switchQuality(value)) }
-  }, [session, audioLanguage, coordinator, castSender, loadCastMedia, showNotice, finishRequest, remember])
+  }, [session, audioLanguageProp, coordinator, castSender, loadCastMedia, showNotice, finishRequest, remember])
 
   // Lab pin (?provider=): after the opening resolve lands on another
   // provider, switch once to the pinned one. Consumed immediately so
@@ -555,7 +578,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
     const controller = new AbortController()
     void discoverSubtitles(
       { kind: ref.kind, id: ref.id, ...(ref.season ? { season: ref.season } : {}), ...(ref.episode ? { episode: ref.episode } : {}) },
-      AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      controller.signal,
       (event) => {
         if (!active) return
         setSubtitleSearchId(event.searchId)
@@ -579,13 +602,13 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   }, [subtitleSearchId])
   const selectSubtitleCandidate = useCallback(async (candidate: SubtitleCandidate) => {
     if (!subtitleSearchId) throw new Error('Search subtitles again.')
-    const track = candidate.preparedUrl
-      ? { id: candidate.id, label: candidate.label, language: candidate.language, url: candidate.preparedUrl }
-      : await prepareSubtitle(subtitleSearchId, candidate.id, AbortSignal.timeout(11_000))
+    // Preparation rechecks provider disable switches and cached-file existence.
+    const track = await prepareSubtitle(subtitleSearchId, candidate.id, AbortSignal.timeout(11_000))
     const attached = preparedSubtitleFiles.current.get(track.url)
     if (attached) return attached
-    preparedSubtitleFiles.current.set(track.url, track)
-    setEngineSubtitles((current) => [...current, track])
+    const file = { id: track.id, label: track.label, language: track.language, url: track.url }
+    preparedSubtitleFiles.current.set(track.url, file)
+    setEngineSubtitles((current) => [...current, file])
     return track
   }, [subtitleSearchId])
   // Per-member subtitle sync correction: signed-in members reload their
@@ -664,9 +687,9 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   const episodeMeta = episode ? [episode.seasonNumber != null ? `S${episode.seasonNumber}` : null, `E${episode.episodeNumber}`].filter(Boolean).join(' · ') + (episode.title ? ` — ${episode.title}` : '') : null
   const qualityMeta = session?.source.qualityHint ? `Playing from Consumit · ${session.source.qualityHint}` : null
   const serverOptions = useMemo(() => {
-    const options = servers.map(server => ({ value: server.id, label: server.label, detail: server.detail, health: server.health, available: server.available }))
+    const options = servers.map((server, index) => ({ value: server.id, label: serverName(index), providerLabel: server.label, detail: [server.label, server.detail].filter(Boolean).join(' · '), health: server.health, available: server.available }))
     const current = session?.source.providerId
-    if (current && !options.some(option => option.value === current)) options.unshift({ value: current, label: current, detail: session.source.qualityHint, health: 'ok', available: true })
+    if (current && !options.some(option => option.value === current)) options.unshift({ value: current, label: 'Current server', providerLabel: current, detail: [current, session.source.qualityHint].filter(Boolean).join(' · '), health: 'ok', available: true })
     return options
   }, [servers, session])
   // Pause-overlay context from real catalog records only: year, runtime,
@@ -695,9 +718,9 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
   // movie/series watch.
   const embedded = layout === 'embedded'
   return (
-    <main className={embedded ? 'flex w-full flex-col overflow-hidden rounded-[16px] border border-[var(--fs-field-border)] bg-black' : 'flex h-dvh flex-col bg-black'} data-consumit-player-screen data-layout={layout} data-session={session ? 'ready' : 'searching'}>
+    <main className={embedded ? 'flex w-full min-w-0 flex-col overflow-hidden bg-black' : 'flex h-dvh flex-col bg-black'} data-consumit-player-screen data-layout={layout} data-session={session ? 'ready' : 'searching'}>
       {preferenceSyncError || experience.error ? <div className="flex flex-wrap items-center gap-3 bg-black px-4 py-2 text-xs text-copy" role="alert">{experience.error ?? 'Your choices could not sync. Playback continues.'}<Button size="sm" variant="ghost" onClick={() => { void experience.retry().then(() => setPreferenceSyncError(false), () => setPreferenceSyncError(true)) }}>Retry preference sync</Button></div> : null}
-      <section aria-label={`${name} playback`} className={embedded ? 'relative flex aspect-video w-full flex-col' : 'relative flex min-h-0 w-full flex-1 flex-col justify-center'}>
+      <section aria-label={`${name} playback`} className={embedded ? `relative flex w-full flex-col ${isFrame ? '' : 'aspect-video'}` : 'relative flex min-h-0 w-full flex-1 flex-col justify-center'}>
         <p className="sr-only" role="status">{stateText}</p>
         {busy && session ? (
           <p className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-control border border-border bg-black/80 px-3 py-1.5 text-xs font-bold text-ink">
@@ -718,23 +741,19 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           </div>
         ) : (
         isFrame && localSource ? <div className="flex min-h-0 w-full flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-3 border-b border-white/10 px-3 py-2 text-white">
-            <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href={titleHref(title)}>Return to title</Link>
-            <p className="min-w-0 flex-1 truncate text-sm font-bold max-sm:order-first max-sm:basis-full">{name}</p>
-            <label className="flex items-center gap-2 text-sm">Server<select aria-label="Server" className="h-11 max-w-48 rounded-control border border-white/30 bg-black px-3 text-white outline-none focus-visible:ring-2 focus-visible:ring-orange" value={localSource.providerId} disabled={busy} onFocus={requestServers} onPointerDown={requestServers} onChange={event => void switchServer(event.target.value)}>
-              {serverOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select></label>
-            {serverLoading ? <span role="status" className="text-xs">Loading servers…</span> : null}
-            {serverError ? <Button size="sm" variant="ghost" onClick={requestServers}>Retry server list</Button> : null}
-          </div>
-          <ProviderFrame key={localSource.id} src={localSource.src} title={name} audioLanguage={title.kind === 'anime' ? audioLanguage : undefined} frameSandbox={localSource.frameSandbox} onFallback={() => void recover('network', 'manual')} />
-          <p className="px-3 py-2 text-xs leading-5 text-white/80">This external player may require choosing audio and subtitles inside its own controls.</p>
+          <ProviderFrame key={localSource.id} src={localSource.src} title={name} audioLanguage={title.kind === 'anime' ? audioLanguage : undefined} frameSandbox={localSource.frameSandbox} onFallback={busy ? undefined : () => void recover('network', 'manual')}
+            serverControl={<>
+              <Select className="min-w-0 sm:w-60 max-sm:w-full [&_button[aria-haspopup]]:min-h-11" hideLabel label="Server" value={localSource.providerId} disabled={busy} onFocus={requestServers} onPointerDown={requestServers} onValueChange={id => void switchServer(id)} options={serverOptions.map(option => ({ value: option.value, label: `${option.label} · ${option.providerLabel}` }))} />
+              {serverLoading ? <span role="status" className="text-xs text-copy">Loading servers…</span> : null}
+              {serverError ? <Button className="min-h-11" size="sm" variant="ghost" onClick={requestServers}>Retry server list</Button> : null}
+            </>} />
         </div> : <ConsumitPlayer
           initialViewingPreferences={{ ...openingPreferences, audioLanguage }}
           subtitleLanguages={openingPreferences.subtitleLanguages}
           onViewingPreferencesChange={change => { const { audioLanguage: selectedAudio, subtitleLanguages, ...rest } = change; remember({ ...rest, ...(subtitleLanguages ? { subtitleLanguages: [...subtitleLanguages] } : {}), ...(title.kind !== 'anime' && selectedAudio ? { audioLanguage: selectedAudio } : {}) }) }}
           className="flex w-full flex-1 flex-col rounded-none border-0" title={name} posterSrc={watchPoster(episode?.stillUrl ?? title.backdropUrl ?? title.posterUrl)}
           source={playerSource} extraSubtitles={extraSubtitles} resumeAt={resume.position} resumePlaying={resume.playing}
+          audioContinuityKey={`${title.kind}:${title.id}:${episode?.seasonNumber ?? 0}:${episode?.episodeNumber ?? 0}:${localSource?.providerId ?? ''}`}
           onSkipSegmentsRequest={requestSkipTimes}
           {...(session ? {
             serverOptions, selectedServer: session.source.providerId,
@@ -750,7 +769,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           } : {})}
           {...(title.kind !== 'anime' ? { separateAudioTracks, separateAudioLoading, separateAudioError, onAudioRequest: requestAudio, onSeparateAudioSelect: selectSeparateAudio } : {})}
           castAvailable={castAvailable} castConnected={false} onCastCheck={checkCast} onCastClick={() => handleCastClick()}
-          subtitleDiscovery={{ languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
+          subtitleDiscovery={{ searchId: subtitleSearchId, languages: subtitleLanguages, providers: subtitleProviders, loading: subtitleLoading, error: subtitleError }}
           onSubtitlePage={loadSubtitlePage} onSubtitleSearch={searchSubtitleCandidates} onSubtitleCandidateSelect={selectSubtitleCandidate}
           topMeta={(title.kind === 'anime' ? episodeMeta : [episodeMeta, qualityMeta].filter(Boolean).join(' · ')) || undefined}
           preparing={!session && !error}
@@ -758,10 +777,10 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           onPreviousEpisode={prevHref ? () => router.push(prevHref) : undefined}
           onNextEpisode={nextHref ? () => router.push(nextHref) : undefined}
           pauseFacts={pauseFacts} pauseOverview={pauseOverview} pauseLogoUrl={title.logoUrl ?? undefined} pauseTitle={title.title}
-          onBack={() => router.push(titleHref(title))}
           {...(memberId ? { subtitleDelayMs: syncedDelay ?? undefined, onSubtitleDelayMsChange: persistDelay } : {})}
           onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)} onRetry={() => void start()}
           onSubtitleRequest={() => { if (!subtitleRequested || subtitleError) { setSubtitleLoading(true); setSubtitleError(null); setSubtitleRequested(true); setSubtitleAttempt((attempt) => attempt + 1) } }}
+          onSubtitleRefresh={() => { if (!subtitleLoading) { setSubtitleLoading(true); setSubtitleError(null); setSubtitleProviders([]); setSubtitleRequested(true); setSubtitleAttempt(attempt => attempt + 1) } }}
           onTimeUpdate={(event) => { clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration; if (localSource) eventsRef.current?.sample(clock.current.position, clock.current.playing, localSource.delivery) }}
           onSeeking={(event) => { eventsRef.current?.resetViewing(); clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration }}
           onPlay={() => { const replay = clock.current.completed; if (replay) completionId.current = null; clock.current.playing = true; clock.current.completed = false; setEnded(false); if (replay) { const previous = completionWrite.current; void (previous ?? Promise.resolve()).then(() => { if (!clock.current.completed) void save(true, true) }) } if (!subtitleRequested) { setSubtitleLoading(true); setSubtitleRequested(true) } }}
@@ -771,7 +790,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           onAutoSkipChange={handleAutoSkip}
           onSeeked={() => { void save(false, true) }}
           onPlaybackEvent={(event) => eventsRef.current?.push({ ...event, ...(localSource ? { delivery: localSource.delivery } : {}) })}
-          onMediaPreferencesChange={(preferences) => coordinator.setPreferences({ ...preferences, ...(localSource?.qualityHeights?.length ? { qualityHeight: readQualityPreference() } : {}), ...(audioLanguageProp ? { audioLanguage: audioLanguageProp } : {}) })}
+          onMediaPreferencesChange={(preferences) => coordinator.setPreferences({ ...preferences, ...(localSource?.qualityHeights?.length ? { qualityHeight: readQualityPreference() } : {}), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, adsEnabled: adsEnabled.current })}
         />
         )}
         {error && !session ? (
@@ -787,7 +806,7 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
               {serverRequested ? <div className="mt-4 space-y-2">
                 <label className="flex items-center gap-3 text-sm text-ink">Server<select aria-label="Server" className="h-11 min-w-0 flex-1 rounded-control border border-control-outline bg-black px-3 text-white outline-none focus-visible:ring-2 focus-visible:ring-orange" value={manualServer ?? ''} disabled={busy || serverLoading} onChange={event => void start(event.target.value || null)}>
                   <option value="">Auto</option>
-                  {servers.map(server => <option key={server.id} value={server.id} disabled={server.available === false}>{server.label}</option>)}
+                  {servers.map((server, index) => <option key={server.id} value={server.id} disabled={server.available === false}>{serverName(index)} · {server.label}</option>)}
                 </select></label>
                 {serverLoading ? <p role="status" className="text-sm text-copy">Loading servers…</p> : null}
                 {serverError ? <div><p className="text-sm text-copy">Servers are unavailable right now.</p><Button size="sm" variant="ghost" onClick={requestServers}>Retry server list</Button></div> : null}
@@ -809,53 +828,48 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           <p className="pointer-events-none absolute right-4 top-4 max-w-[40ch] rounded-control border border-border bg-black/80 px-3 py-1.5 text-xs text-muted">Progress is saved on this device. Account sync will retry.</p>
         ) : null}
       </section>
-      {isFrame && (prevHref || nextHref) ? <nav aria-label="Episode" className="flex justify-end gap-2 border-t border-white/10 bg-black px-3 py-2">{prevHref ? <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href={prevHref}>Previous episode</Link> : null}{nextHref ? <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href={nextHref}>Next episode</Link> : null}</nav> : null}
-      {(prevHref || nextHref) && !isFrame && (
+      {(audioControl || ((prevHref || nextHref) && !isFrame)) && (
         <>
-          <nav aria-label="Episode" className={`flex flex-wrap items-center gap-1 border-t border-white/10 bg-black px-3 py-2 sm:gap-2 sm:px-4 ${lightsOff ? 'opacity-30 transition-opacity hover:opacity-100 focus-within:opacity-100' : ''}`}>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Toggle checked={autoplay} label="Autoplay next episode" onCheckedChange={(value) => { persistPref('consumit.player.autoplay', value, setAutoplay); remember({ autoplayNextEpisode: value }) }} />
-              <span className="text-xs font-bold text-copy">Autoplay</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Toggle checked={autoSkip} label="Auto-skip intros" onCheckedChange={handleAutoSkip} />
-              <span className="text-xs font-bold text-copy">Auto Skip</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Toggle checked={autoNext} label="Show up-next card" onCheckedChange={(value) => persistPref('consumit.player.auto-next', value, setAutoNext)} />
-              <span className="text-xs font-bold text-copy">Auto Next</span>
-            </div>
-            <button
-              aria-expanded={showShortcuts}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold text-copy outline-none hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-              onClick={() => setShowShortcuts((current) => !current)}
-              type="button"
-            >
-              <Keyboard aria-hidden="true" className="size-4" /> Shortcuts
-            </button>
-            <button
-              aria-pressed={lightsOff}
-              className={`inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange ${lightsOff ? 'text-orange' : 'text-copy hover:text-ink'}`}
-              onClick={() => setLightsOff((current) => !current)}
-              title="Dim everything except the video"
-              type="button"
-            >
-              <Moon aria-hidden="true" className="size-4" /> Lights Off
-            </button>
-            <div className="ml-auto flex shrink-0 items-center gap-1">
-              {prevHref ? (
-                <Link aria-label="Previous episode" title="Previous episode" className="inline-flex size-11 shrink-0 items-center justify-center rounded-control text-copy outline-none hover:bg-white/10 hover:text-orange focus-visible:ring-2 focus-visible:ring-orange" href={prevHref}>
-                  <SkipBack aria-hidden="true" className="size-5" />
-                </Link>
-              ) : null}
-              {nextHref ? (
-                <Link aria-label="Next episode" title="Next episode" className="inline-flex size-11 shrink-0 items-center justify-center rounded-control text-copy outline-none hover:bg-white/10 hover:text-orange focus-visible:ring-2 focus-visible:ring-orange" href={nextHref}>
-                  <SkipForward aria-hidden="true" className="size-5" />
-                </Link>
-              ) : null}
-            </div>
+          <nav aria-label="Playback preferences" data-watch-playback-tools className="flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-white/10 bg-surface/40 px-3 py-3 sm:px-4">
+            {audioControl}
+            {(prevHref || nextHref) && !isFrame ? (
+              <>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Toggle checked={autoplay} label="Autoplay next episode" onCheckedChange={(value) => { persistPref('consumit.player.autoplay', value, setAutoplay); remember({ autoplayNextEpisode: value }) }} />
+                  <span className="text-xs font-bold text-copy">Autoplay</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Toggle checked={autoSkip} label="Auto-skip intros" onCheckedChange={handleAutoSkip} />
+                  <span className="text-xs font-bold text-copy">Auto Skip</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Toggle checked={autoNext} label="Show up-next card" onCheckedChange={(value) => persistPref('consumit.player.auto-next', value, setAutoNext)} />
+                  <span className="text-xs font-bold text-copy">Auto Next</span>
+                </div>
+                <button
+                  aria-expanded={showShortcuts}
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-control px-2 text-sm font-bold text-copy outline-none hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
+                  onClick={() => setShowShortcuts((current) => !current)}
+                  type="button"
+                >
+                  <Keyboard aria-hidden="true" className="size-4" /> Shortcuts
+                </button>
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {prevHref ? (
+                    <Link aria-label="Previous episode" title="Previous episode" className="inline-flex size-11 shrink-0 items-center justify-center rounded-control text-copy outline-none hover:bg-white/10 hover:text-orange focus-visible:ring-2 focus-visible:ring-orange" href={prevHref}>
+                      <SkipBack aria-hidden="true" className="size-5" />
+                    </Link>
+                  ) : null}
+                  {nextHref ? (
+                    <Link aria-label="Next episode" title="Next episode" className="inline-flex size-11 shrink-0 items-center justify-center rounded-control text-copy outline-none hover:bg-white/10 hover:text-orange focus-visible:ring-2 focus-visible:ring-orange" href={nextHref}>
+                      <SkipForward aria-hidden="true" className="size-5" />
+                    </Link>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
           </nav>
-          {showShortcuts ? (
+          {showShortcuts && !isFrame ? (
             <div className="border-t border-white/10 bg-black px-4 py-3">
               <ul className="mx-auto grid max-w-3xl grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-muted sm:grid-cols-3">
                 {[
@@ -878,6 +892,13 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
           ) : null}
         </>
       )}
+      <div className="flex justify-end bg-canvas px-4"><Link className="inline-flex min-h-11 items-center text-xs text-copy underline underline-offset-4 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href="/report-issue?category=playback" onClick={() => storePlaybackDiagnostics({ ref, browser: browserName(), category: 'unknown', ...(session ? { provider: session.source.providerId, delivery: session.source.delivery } : {}) })}>Report playback issue</Link></div>
+      {error && session ? <div className="flex flex-wrap items-center gap-3 border-t border-white/10 bg-canvas px-4 py-3 text-sm text-copy" role="alert"><p className="min-w-0 flex-1">{error}</p><Button onClick={() => { void start(null) }} size="sm" variant="ghost">Try again</Button></div> : null}
+      {busy && recoveryProgress ? <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2 text-sm text-copy" role="status"><span>Checked {recoveryProgress.tried} of {recoveryProgress.total} servers</span><Button size="sm" variant="ghost" onClick={() => { const request = requestRef.current; requestRef.current = null; request?.abort(); setBusy(false); setError(session ? null : 'Source search cancelled. Choose a server to start.'); setRecoveryProgress(null) }}>Cancel search</Button></div> : null}
+      {countdown !== null && autoplay && nextHref && !isFrame ? <div className="flex flex-wrap items-center justify-center gap-3 border-t border-white/10 bg-canvas px-4 py-3"><span className="text-sm text-ink" role="status">Next episode in {countdown}s</span><Button onClick={() => { void playNext() }} size="sm">Play now</Button><Button onClick={() => setCountdown(null)} size="sm" variant="ghost">Cancel</Button></div> : null}
+      <ServerStrip servers={servers} active={session?.source.providerId} busy={busy} loading={serverLoading} error={serverError} onRetry={requestServers} onSelect={id => { if (session) void switchServer(id); else void start(id) }} onOrder={ids => { if (busy) return; remember({ serverOrders: { ...intent.current.serverOrders, [title.kind]: ids } }); if (ids.length) setServers(current => ids.flatMap(id => current.filter(server => server.id === id))); else { setServerLoading(true); setServerAttempt(value => value + 1) }; coordinator.setPreferences({ providerOrder: ids }) }} />
+      {isFrame && (prevHref || nextHref) ? <nav aria-label="Episode" className="flex justify-end gap-2 border-t border-white/10 bg-black px-3 py-2">{prevHref ? <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href={prevHref}>Previous episode</Link> : null}{nextHref ? <Link className={buttonVariants({ variant: 'ghost', size: 'sm' })} href={nextHref}>Next episode</Link> : null}</nav> : null}
+
     </main>
   )
 }

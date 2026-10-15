@@ -17,6 +17,8 @@ export function createSubDlProvider(http: SubtitleHttp, apiKey?: string | undefi
   return {
     id: 'subdl',
     name: 'SubDL',
+    // unpack URLs are SubDL download hosts (dl.subdl.com).
+    fileHosts: ['subdl.com', '*.subdl.com'],
     supports(query: SubtitleQuery) {
       if (!apiKey) return false
       if (query.type === 'anime') return !!query.tmdbId

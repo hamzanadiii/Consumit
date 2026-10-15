@@ -36,6 +36,12 @@ function frame() {
   return element
 }
 
+function loadFrame() {
+  act(() => {
+    frame().dispatchEvent(new Event('load'))
+  })
+}
+
 function resize() {
   act(() => {
     window.dispatchEvent(new Event('resize'))
@@ -65,6 +71,16 @@ describe('live advertisement slot', () => {
     expect(frame().getAttribute('width')).toBe('728')
     expect(frame().getAttribute('height')).toBe('90')
     expect(frame().getAttribute('srcdoc')).toContain('3930b97bd3841d660aa9cc7c8344216d')
+  })
+
+  it('sandboxes the creative frame without same-origin access', () => {
+    render(<AdSlot placement="home" />)
+    layOut(800)
+    intersect()
+
+    const sandbox = frame().getAttribute('sandbox') ?? ''
+    expect(sandbox).toContain('allow-scripts')
+    expect(sandbox).not.toContain('allow-same-origin')
   })
 
   it('picks the mobile banner in a narrow slot and stays empty when no unit fits', () => {
@@ -103,7 +119,7 @@ describe('live advertisement slot', () => {
     expect(document.querySelector('iframe')).toBeNull()
   })
 
-  it('collapses the slot when the creative never fills, as with a blocked ad script', () => {
+  it('collapses the slot when the frame never finishes loading', () => {
     render(<AdSlot placement="home" />)
     layOut(800)
     intersect()
@@ -116,18 +132,30 @@ describe('live advertisement slot', () => {
     expect(document.querySelector('[data-ad-slot]')).toBeNull()
   })
 
-  it('keeps a filled slot once the creative lands', () => {
+  it('keeps the stage hidden until the settle window elapses after load', () => {
     render(<AdSlot placement="home" />)
     layOut(800)
     intersect()
 
-    const stage = document.querySelector('[data-ad-slot] div:last-child')
-    expect(stage).toHaveStyle({ visibility: 'hidden' })
+    expect(document.querySelector('[data-ad-slot] div:last-child')).toHaveStyle({ visibility: 'hidden' })
 
-    const creative = document.createElement('iframe')
-    frame().contentDocument?.body.appendChild(creative)
+    loadFrame()
     act(() => {
-      vi.advanceTimersByTime(10_000)
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(document.querySelector('[data-ad-slot]')).not.toBeNull()
+    expect(document.querySelector('[data-ad-slot] div:last-child')).toHaveStyle({ visibility: 'hidden' })
+  })
+
+  it('reveals a filled slot once the frame loads and settles', () => {
+    render(<AdSlot placement="home" />)
+    layOut(800)
+    intersect()
+
+    loadFrame()
+    act(() => {
+      vi.advanceTimersByTime(2_000)
     })
 
     expect(screen.getByText('Advertisement')).toBeInTheDocument()

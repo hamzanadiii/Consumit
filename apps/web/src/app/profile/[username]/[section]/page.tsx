@@ -6,6 +6,7 @@ import { publicProfileCollectionSchema, type ProfileReadResponse, type CatalogRe
 import { VisitorProfileScreen } from '../../visitor-profile-screen'
 import { PublicCollection } from '../../public-collection'
 import { ProfileNetworkScreen } from '../../profile-network-screen'
+import { ProfileArchiveShell } from '../../profile-archive-shell'
 import { ProfileArchiveScreen } from '../../profile-archive-screen'
 import { ProfileHistoryScreen } from '../../profile-history-screen'
 import { ProfileWatchlistScreen } from '../../profile-watchlist-screen'
@@ -66,14 +67,15 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
   const canonicalQuery = [selectedRating !== undefined ? `rating=${selectedRating}` : '', networkView !== undefined ? `view=${networkView}` : ''].filter(Boolean).join('&')
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}/${section}${canonicalQuery ? `?${canonicalQuery}` : ''}`)
   if (section === 'followers' || section === 'following') redirect(`/profile/${profile.canonicalUsername}/network?view=${section}`)
-  const owner = session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  const owner = profile.viewerIsOwner && session.status === 'authenticated' && session.member.username === profile.canonicalUsername
+  if (profile.viewerIsOwner && !owner) notFound()
   if (!profile.viewerIsOwner || ['ratings', 'network'].includes(section)) {
     if (section === 'network') {
       const view = networkView ?? 'followers'
       let page = null
       try { page = await getPublicCollection(profile.canonicalUsername, view) }
       catch (error) { if (error instanceof MemberApiError && error.status === 404) notFound() }
-      return <VisitorProfileScreen data={profile} owner={owner} section="network"><ProfileNetworkScreen initialPage={page} owner={owner} username={profile.canonicalUsername} view={view} /></VisitorProfileScreen>
+      return <ProfileArchiveShell data={profile} heading="Network" owner={owner} section="network"><div className="py-6"><ProfileNetworkScreen counts={profile.social} initialPage={page} owner={owner} username={profile.canonicalUsername} view={view} /></div></ProfileArchiveShell>
     }
     const collection = publicProfileCollectionSchema.safeParse(section)
     if (!collection.success) notFound()
@@ -84,7 +86,9 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
     if (page?.collection === 'ratings' || page?.collection === 'reviews') {
       try { titles = (await getCatalogBatchForRefs(page.items))?.items ?? [] } catch { /* Stored taste remains readable. */ }
     }
-    return <VisitorProfileScreen data={profile} owner={owner} section={activeSection}><PublicCollection collection={collection.data} initialPage={page} initialTitles={titles} owner={owner} username={profile.canonicalUsername} /></VisitorProfileScreen>
+    const content = <PublicCollection collection={collection.data} initialPage={page} initialTitles={titles} owner={owner} username={profile.canonicalUsername} />
+    if (profile.viewerIsOwner) return <ProfileArchiveShell data={profile} heading="Ratings" owner={owner} section="ratings"><div className="py-6">{content}</div></ProfileArchiveShell>
+    return <VisitorProfileScreen data={profile} section={activeSection}>{content}</VisitorProfileScreen>
   }
   if (!owner) notFound()
   if (selectedRating !== undefined && (!owner || activeSection !== 'films')) notFound()

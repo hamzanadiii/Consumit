@@ -1,5 +1,11 @@
 # Offer optional separate audio in the Consumit Player
 
+## 2026-10-15: reliable language activation
+
+The owner authorized trying remaining compatible recordings of a deliberately selected language. A failed preparation or start can advance to another recording without committing that language. Pending and active audio channels preserve the previous audible output until the new recording decodes and starts. Failure restores the previous selection/preference; selecting a stream track also requires engine/clock confirmation before its language is saved. Browser audio capabilities resume within the selection gesture, with a fresh Enable audio action after policy denial. Duration checks, manual sync, hostile playlist validation and per-provider budgets remain mandatory.
+
+This amendment supersedes the one-element, native-HLS and cross-provider-fallback deferrals below. Native HLS can prepare a separate channel where the browser supports it, but physical Safari remains unverified. Same-provider quality changes may retain the active recording through an explicit canonical continuity key; title/episode/provider changes still reset it. Relay is allowed only for a separately configured Audio/Both Relay registration with independent exact-host approval and an audio-only bounded capability. A Direct recording is never silently proxied, and audio/video bytes never transit the product API. Automatic mixing, fingerprint alignment, cast certification and universal language/title compatibility remain outside the evidence. See [the release audit](../audits/reliable-playback-2026-10-15.md).
+
 On 2026-10-03 the product owner explicitly chose to retain the current video while adding Apogee audio. The first experiment discovers the exact movie or series episode through a reviewed adapter capability, using only enabled Audio source or Both registrations. It does not aggregate arbitrary providers or activate added audio automatically.
 
 The owned playback session exposes an on-demand track list and preparation endpoint. Preparation validates the VOD audio playlist and every referenced URL against its configured provider. Media bytes remain browser-direct under ADR 0003. The video session, video engine, quality, progress and history are unchanged by selecting audio.

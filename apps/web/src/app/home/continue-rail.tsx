@@ -1,6 +1,6 @@
 'use client'
 
-import { titleHref, watchHref, progressWriteRequestSchema, type CatalogTitleSummary } from '@consumit/contracts'
+import { titleHref, type CatalogTitleSummary } from '@consumit/contracts'
 import { Check, Info, Pencil, X } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
@@ -9,83 +9,11 @@ import { ArtworkFrame } from '@consumit/ui'
 
 import { browserCatalogBatch } from '@/lib/catalog-browser'
 import { catalogKey } from '@/lib/catalog-registry'
+import { loadResumeEntries, hideResumeEntry, type ResumeEntry } from '@/lib/continue-watching'
+import { useSession } from '../session/session'
 
 import { SaveTitleButton } from '../catalog/save-title-button'
 import styles from './continue-rail.module.css'
-
-type ResumeEntry = {
-  durationSeconds: number | null | undefined
-  episode?: number | undefined
-  kind: 'movie' | 'series' | 'anime'
-  id: number
-  percent: number
-  positionSeconds: number
-  season?: number | undefined
-  storageKey: string
-  updatedAt: number
-}
-
-// Titles watched to (or past) this share of their runtime count as finished:
-// they drop out of Continue watching instead of lingering at 95%+.
-const FINISHED_RATIO = 0.95
-
-// One catalog batch holds at most 24 titles; 20 keeps every visible card in a
-// single request while leaving headroom for titles that fail to resolve.
-const MAX_CONTINUE_TITLES = 20
-
-function readResumeEntries(): ResumeEntry[] {
-  const entries = new Map<string, { entry: ResumeEntry; order: number }>()
-  let storage: Storage | null = null
-  try {
-    storage = window.localStorage
-  } catch {
-    return []
-  }
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index)
-    if (!key || !key.startsWith('consumit.progress:')) continue
-    let payload: unknown = null
-    try {
-      payload = JSON.parse(storage.getItem(key) ?? 'null')
-    } catch {
-      continue
-    }
-    const parsed = progressWriteRequestSchema.safeParse(payload)
-    if (!parsed.success || parsed.data.completed) continue
-    const { episode, id, kind, positionSeconds, season } = parsed.data
-    if (kind !== 'movie' && kind !== 'series') continue
-    if (positionSeconds < 60) continue
-    const mapKey = `${kind}:${id}:${season ?? 0}:${episode ?? 0}`
-    const durationSeconds = parsed.data.durationSeconds
-    if (durationSeconds && positionSeconds / durationSeconds >= FINISHED_RATIO) continue
-    const percent = durationSeconds
-      ? Math.min(99, Math.max(1, Math.round((positionSeconds / durationSeconds) * 100)))
-      : 0
-    // Last-watched-first: prefer an explicit updatedAt timestamp, falling back
-    // to insertion order for legacy records written without one.
-    const rawUpdatedAt = (payload as { updatedAt?: unknown } | null)?.updatedAt
-    const updatedAt = typeof rawUpdatedAt === 'string' ? Date.parse(rawUpdatedAt) : NaN
-    if (entries.has(mapKey)) continue
-    entries.set(mapKey, {
-      entry: {
-        durationSeconds,
-        episode,
-        id,
-        kind,
-        percent,
-        positionSeconds,
-        season,
-        storageKey: key,
-        updatedAt: Number.isFinite(updatedAt) ? (updatedAt as number) : 0,
-      },
-      order: index,
-    })
-  }
-  return [...entries.values()]
-    .sort((a, b) => b.entry.updatedAt - a.entry.updatedAt || b.order - a.order)
-    .map((item) => item.entry)
-    .slice(0, MAX_CONTINUE_TITLES)
-}
 
 function remainingLabel(positionSeconds: number, durationSeconds: number | null | undefined): string | null {
   if (!durationSeconds) return null
@@ -97,70 +25,47 @@ function remainingLabel(positionSeconds: number, durationSeconds: number | null 
 }
 
 export function ContinueRail() {
+  const {member,status:sessionStatus}=useSession()
+  const memberId=member?.id
+  const [editError,setEditError]=useState<string|null>(null)
   const [status, setStatus] = useState<'loading' | 'empty' | 'ready' | 'error'>('loading')
   const [rows, setRows] = useState<readonly { entry: ResumeEntry; title: CatalogTitleSummary }[]>([])
+  const [rowsOwner, setRowsOwner] = useState<string | undefined>(undefined)
   const [editing, setEditing] = useState(false)
 
   const load = useCallback(() => {
     let cancelled = false
     setEditing(false)
     setStatus('loading')
-    const entries = readResumeEntries()
-    if (entries.length === 0) {
-      setRows([])
-      setStatus('empty')
-      return
-    }
-    // No AbortController here on purpose: aborting the shared catalog fetch
-    // surfaces a reasonless AbortError rejection outside this chain in some
-    // browsers. Late responses are ignored through `cancelled` instead while
-    // the request layer keeps its own timeout for hung calls.
-    void browserCatalogBatch(
-      entries.map((entry) => ({ id: entry.id, kind: entry.kind })),
-    ).then(
-      (batch) => {
-        if (cancelled) return
-        const byKey = new Map(batch.items.map((item) => [catalogKey(item), item]))
-        const resolved = entries.flatMap((entry) => {
-          const title = byKey.get(`${entry.kind}:${entry.id}`)
-          return title ? [{ entry, title }] : []
-        })
-        setRows(resolved)
-        setStatus(resolved.length === 0 ? 'empty' : 'ready')
-      },
-      () => {
-        if (cancelled) return
-        setRows([])
-        setStatus('error')
-      },
-    )
+    const controller = new AbortController()
+    void loadResumeEntries(memberId, controller.signal).then(async entries => {
+      if(cancelled) return
+      if(!entries.length) {setRows([]);setStatus('empty');return}
+      const batch=await browserCatalogBatch(entries.map(entry=>({kind:entry.kind,id:entry.id})),controller.signal)
+      if(cancelled) return
+      const byKey=new Map(batch.items.map(item=>[catalogKey(item),item]))
+      const resolved=entries.flatMap(entry=>{const title=byKey.get(catalogKey(entry));return title?[{entry,title}]:[]})
+      setRows(resolved);setRowsOwner(memberId);setStatus(resolved.length?'ready':'empty')
+    }).catch(()=>{if(!cancelled){setRows([]);setStatus('error')}})
     return () => {
-      cancelled = true
+      cancelled = true;controller.abort()
     }
-  }, [])
+  }, [memberId])
 
-  // Removal is device-local, like the rail itself: dropping the stored
-  // progress record hides the title here. Watching it again re-adds it.
-  function removeEntry(storageKey: string) {
-    try {
-      window.localStorage.removeItem(storageKey)
-    } catch {
-      // Storage denial leaves the row visible; the next load restores it.
-    }
-    const next = rows.filter(({ entry }) => entry.storageKey !== storageKey)
-    setRows(next)
-    if (next.length === 0) {
-      setEditing(false)
-      setStatus('empty')
-    }
+  async function removeEntry(storageKey:string) {
+    const row=rows.find(row=>row.entry.storageKey===storageKey)
+    if(!row)return
+    setEditError(null)
+    try {await hideResumeEntry(row.entry,memberId);setRows(current=>current.filter(item=>item.entry.storageKey!==storageKey))}
+    catch(error){setEditError(error instanceof Error?error.message:'This title could not be hidden.')}
   }
 
   // State follows the awaited batch response; the empty path resolves the
   // mount default synchronously so no network work starts without progress.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => load(), [load])
+  useEffect(() => {if(sessionStatus==='loading'){setRows([]);return}return load()}, [load,sessionStatus])
 
-  if (status !== 'ready' || rows.length === 0) return null
+  if (sessionStatus === 'loading' || sessionStatus === 'unavailable' || rowsOwner !== memberId || status !== 'ready' || rows.length === 0) return null
 
   const showEditToggle = status === 'ready' && rows.length > 0
 
@@ -185,14 +90,11 @@ export function ContinueRail() {
         ) : null}
       </div>
 
+        {editError?<p className="text-sm text-[var(--fs-secondary)]" role="alert">{editError}</p>:null}
         <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" role="region" tabIndex={0}>
           {rows.map(({ entry, title }) => {
-        const href = watchHref(title, entry.season !== undefined || entry.episode !== undefined
-          ? { episode: entry.episode ?? 1, season: entry.season ?? 1 }
-          : undefined)
-        const episodeLabel = entry.kind === 'series' && (entry.season !== undefined || entry.episode !== undefined)
-          ? `S${entry.season ?? 1} E${entry.episode ?? 1} · `
-          : ''
+        const href=entry.href
+        const episodeLabel=entry.kind==='anime'?`E${entry.episode??1} · `:entry.kind==='series'?`S${entry.season??1} E${entry.episode??1} · `:''
         const remaining = remainingLabel(entry.positionSeconds, entry.durationSeconds)
         const positionMinutes = Math.floor(entry.positionSeconds / 60)
         const totalMinutes = entry.durationSeconds ? Math.max(1, Math.round(entry.durationSeconds / 60)) : null

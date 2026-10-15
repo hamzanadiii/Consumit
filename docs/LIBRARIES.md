@@ -2,9 +2,9 @@
 
 ## Runtime and workspace
 
-- Bun 1.4.0 is the package manager, script runner, API runtime, and workspace orchestrator.
-- Node 24 LTS is the supported Node.js line for framework tooling and ecosystem compatibility.
-- Bun's native workspace filtering is sufficient for the current six workspaces. Add a build graph or remote cache only when measured build time or dependency ordering requires one.
+- Bun 1.4.0 is the package manager, builder, script runner and workspace orchestrator. Active server bundles target Node.
+- Node 24.21.0 is the pinned production runtime for web, product API, playback and workers. tsx 4.23.15 runs API/playback/worker development.
+- Bun's native workspace filtering is sufficient for the current workspaces. Add a build graph or remote cache only when measured build time or dependency ordering requires one.
 
 ## Web application
 
@@ -20,12 +20,12 @@
 - OpenTelemetry API/SDK and OTLP HTTP exporters provide opt-in playback traces and metrics. A separate disposable Valkey instance holds playback sessions, leases, and access caches.
 - Playwright with branded Chrome verifies controlled H.264/AAC decoding and touch layouts. k6 supplies a local admission/load scenario. Physical Safari remains a separate release gate; see [PLAYBACK.md](./PLAYBACK.md).
 
-- Fastify 5.12.5 on Bun.
+- Fastify 5.12.5 on Node 24.21.0. Zod remains the contract authority; @fastify/swagger 9.9.2 and fastify-type-provider-zod 7.0.0 integrate request/response schemas and OpenAPI. Existing handler errors and refinements remain authoritative.
 - `@fastify/cookie`, `@fastify/helmet`, and `@fastify/rate-limit` establish the same-origin HTTP boundary baseline.
 - API modules expose an app factory so tests do not need to bind a network port.
 - Native `fetch` is the TMDB transport. No provider wrapper is used, keeping retry, timeout, validation, and normalization policy inside the catalog adapter.
 - Prisma with its PostgreSQL adapter and `pg` owns durable records through one bounded process pool. `iovalkey` provides separate authentication and disposable playback state. Authentication is application-owned; `hash-wasm` supplies password hashing and native HTTP supplies the email transport.
-- A separate queue framework is not installed; the active product runs no background worker.
+- BullMQ 6.3.14 with ioredis 6.0.0 runs on a third dedicated Valkey 9.1.1 instance with AOF/noeviction. PostgreSQL outbox intent and domain idempotency recover lost/repeated jobs. The browser entrypoint reuses the existing sandboxed release-check implementation.
 
 ## Catalog contracts
 
@@ -45,6 +45,6 @@
 
 ## Deliberately deferred
 
-Do not add these until a named vertical slice needs them: a client state manager, form framework, external queue framework, Storybook, or monorepo task runner. Database, authentication, Valkey, and telemetry dependencies above are already part of shipped slices.
+Do not add these until a named vertical slice needs them: a client state manager, form framework, Storybook, or monorepo task runner. Database, authentication, Valkey, and telemetry dependencies above are already part of shipped slices.
 
 When shared dependency versions become repetitive across more workspaces, introduce Bun catalogs. When lint or TypeScript configuration needs reuse beyond the root baseline, create explicit config packages rather than duplicating configuration.

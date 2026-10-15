@@ -20,8 +20,11 @@ export function publicAddress(address: string) {
 }
 
 export type MediaResponse = { status: number; headers: Headers; body: Readable; url: string }
-export type MediaRequest = { method?: 'POST'; body?: string | Uint8Array }
-export type MediaTransport = (url: string, hosts: readonly string[], headers: Record<string, string>, signal: AbortSignal, init?: MediaRequest) => Promise<MediaResponse>
+export type MediaRequest = { method?: 'POST' | 'HEAD'; body?: string | Uint8Array }
+/** `patterns` carries the row's configured flux-host regexes so the
+ *  destination gate admits rotating provider CDNs (e.g. KissKH's hlsN
+ *  masters) while still failing closed on anything else. */
+export type MediaTransport = (url: string, hosts: readonly string[], headers: Record<string, string>, signal: AbortSignal, init?: MediaRequest, patterns?: readonly RegExp[]) => Promise<MediaResponse>
 
 /** Bounded DNS reuse avoids multiplying uncancellable OS lookups across
  * concurrent adapter hops. Every socket still pins a validated public IP. */
@@ -43,13 +46,13 @@ export function createMediaTransport(): MediaTransport {
     pending.set(host, work)
     return work
   }
-  return async (value, hosts, headers, signal, init) => {
+  return async (value, hosts, headers, signal, init, patterns) => {
     let current = value
     let forwarded = { ...headers }
     let method = init?.method ?? 'GET'
     let body: string | Uint8Array | undefined = init?.body
     for (let redirect = 0; redirect <= 3; redirect++) {
-      if (!allowedMediaUrl(current, hosts)) throw new Error('Blocked media destination.')
+      if (!allowedMediaUrl(current, hosts, patterns)) throw new Error('Blocked media destination.')
       signal.throwIfAborted()
       const url = new URL(current)
       let dnsTimer: ReturnType<typeof setTimeout> | undefined

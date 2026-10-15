@@ -100,6 +100,8 @@ export {
   SUBTITLE_LANGUAGES_EVENT,
   SUBTITLE_LANGUAGES_KEY,
   cleanSubtitleLanguages,
+  fetchVttCues,
+  type SubtitleCue,
   nativeLanguageName,
   readStoredSubtitleLanguages,
   savePreferredSubtitleLanguages,

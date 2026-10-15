@@ -1,7 +1,7 @@
 'use client'
 
 import type { ChangeEvent, ComponentProps, ReactNode } from 'react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 
 import { cn } from '../lib/cn'
@@ -221,6 +221,7 @@ export function Select({
   const [activeIndex, setActiveIndex] = useState(selectedIndex)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const listboxRef = useRef<HTMLUListElement>(null)
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   function openListbox(atIndex?: number) {
@@ -259,6 +260,26 @@ export function Select({
   useEffect(() => {
     if (open) optionRefs.current[activeIndex]?.focus()
   }, [activeIndex, open])
+
+  // Toolbar filters can sit at either screen edge. Contain their popup and
+  // use the room above a low trigger instead of placing options off-screen.
+  useLayoutEffect(() => {
+    if (!open || !listboxRef.current || !triggerRef.current) return
+    const listbox = listboxRef.current
+    const trigger = triggerRef.current.getBoundingClientRect()
+    const below = window.innerHeight - trigger.bottom - 16
+    const above = trigger.top - 16
+    if (below < 224 && above > below) {
+      listbox.style.top = 'auto'
+      listbox.style.bottom = '100%'
+      listbox.style.marginTop = '0'
+      listbox.style.marginBottom = '8px'
+    }
+    listbox.style.maxHeight = `${Math.min(224, Math.max(88, above > below && below < 224 ? above : below))}px`
+    const bounds = listbox.getBoundingClientRect()
+    const shift = bounds.left < 16 ? 16 - bounds.left : bounds.right > window.innerWidth - 16 ? window.innerWidth - 16 - bounds.right : 0
+    listbox.style.translate = `${shift}px 0`
+  }, [open])
 
   function move(delta: 1 | -1) {
     if (options.length === 0) return
@@ -341,6 +362,7 @@ export function Select({
           id={listboxId}
           onKeyDown={onListboxKeyDown}
           role="listbox"
+          ref={listboxRef}
           tabIndex={-1}
         >
           {options.map((option, index) => {

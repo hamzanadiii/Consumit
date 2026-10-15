@@ -17,6 +17,8 @@ const EMPTY_TRACKS: EngineTracks = { qualities: [{ value: 'auto', label: 'Auto' 
 const ATTACH_TIMEOUT_MS = 8_000
 const FIRST_FRAME_TIMEOUT_MS = 12_000
 const STALL_TIMEOUT_MS = 8_000
+// Pending seeks have their own recovery budget; ordinary stalls keep the shorter one.
+const SEEK_TIMEOUT_MS = 30_000
 
 function playableCaption(url: string): boolean {
   if (isSafeMediaUrl(url)) return true
@@ -53,10 +55,14 @@ export function createPlaybackControllerNext(
   let engineOptions: EngineTracks = EMPTY_TRACKS
   let lastAdvanceAt = performance.now()
   let lastPosition = 0
+  let seekDeadlineAt = 0
   let audioPreference = 'original'
+  let audioSelection = 0, selectingAudio = false
   const qualityPreference = createQualityPreference(callbacks.initialPreferences?.qualityHeight)
   let fixedQualityHint: string | undefined
   let subtitlePreference = 'en'
+  // Keep an explicit session track ahead of automatic language matching.
+  let manualSubtitle: string | undefined
   try { audioPreference = localStorage.getItem('consumit.player.audio-language') ?? 'original' } catch { /* Optional storage. */ }
   try { subtitlePreference = localStorage.getItem('consumit.player.subtitle-language') ?? 'en' } catch { /* Optional storage. */ }
   let subtitleLanguages = callbacks.initialPreferences?.subtitleLanguages ?? [subtitlePreference]
@@ -94,6 +100,7 @@ export function createPlaybackControllerNext(
     clearTimeout(stallTimer)
     seekTimers.forEach(clearTimeout)
     seekTimers = []
+    seekDeadlineAt = 0
   }
   const fail = (reason: EngineFailure, deliveryFailure?: EngineDeliveryFailure) => {
     if (disposed || snapshot.phase === 'failed') return
@@ -112,6 +119,11 @@ export function createPlaybackControllerNext(
   }
   const inspectStall = () => {
     if (disposed || snapshot.phase !== 'buffering' || video.paused) return
+    if (seekDeadlineAt) {
+      if (performance.now() >= seekDeadlineAt) { fail('network', 'timeout'); return }
+      stallTimer = setTimeout(inspectStall, 1_000)
+      return
+    }
     if (video.currentTime > lastPosition + 0.1) {
       lastPosition = video.currentTime
       lastAdvanceAt = performance.now()
@@ -132,7 +144,7 @@ export function createPlaybackControllerNext(
     engine?.subtitle(value.startsWith('external:') ? 'off' : value)
     for (const track of tracks) {
       const selected = value === `external:${track.id}`
-      if (track.track) track.track.mode = selected ? 'hidden' : 'disabled'
+      if (track.track) track.track.mode = selected ? (video.hasAttribute('data-native-fullscreen') ? 'showing' : 'hidden') : 'disabled'
       track.default = selected
     }
     Array.from(video.textTracks ?? []).forEach((track) => {
@@ -143,11 +155,13 @@ export function createPlaybackControllerNext(
     update({ subtitleTrack: value })
   }
   const preferredSubtitle = (currentValue?: string) => {
-    const selected = preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
+    const selected = snapshot.subtitles.find(option => option.value === manualSubtitle)
+      ?? preferredSubtitleOption(snapshot.subtitles, subtitleLanguages, currentValue)
     selectSubtitle(subtitlePreference === 'off' ? 'off' : selected?.value ?? 'off')
     update({ subtitleNotice: subtitlePreference !== 'off' && !selected ? 'Your preferred subtitles are unavailable on this source. Choose another track or keep watching.' : undefined })
   }
   const preferredAudio = () => {
+    if (selectingAudio) return
     const selected = preferredAudioOption(snapshot.audio, audioPreference)
     if (selected) { engine?.audio(selected.value); update({ audioTrack: selected.value, audioNotice: undefined }) }
     else update({ audioTrack: '', audioNotice: snapshot.audio.length && audioPreference !== 'original' ? `${audioPreference} audio unavailable on this source. Using default audio.` : undefined })
@@ -178,6 +192,7 @@ export function createPlaybackControllerNext(
   }
   const onPlaying = () => {
     if (tearingDown || snapshot.phase === 'failed') return
+    seekDeadlineAt = 0
     clearTimeout(fatalTimer); clearTimeout(stallTimer)
     const resumed = snapshot.phase === 'buffering'
     update({ phase: 'playing', needsGesture: false })
@@ -212,10 +227,16 @@ export function createPlaybackControllerNext(
   }
   const onSeeking = () => {
     if (tearingDown || video.paused || snapshot.phase === 'failed') return
+    seekDeadlineAt = performance.now() + SEEK_TIMEOUT_MS
     lastAdvanceAt = performance.now(); lastPosition = video.currentTime
     onWaiting()
   }
+  const onSeeked = () => {
+    seekDeadlineAt = 0
+    lastAdvanceAt = performance.now(); lastPosition = video.currentTime
+  }
   const onPause = () => {
+    seekDeadlineAt = 0
     clearTimeout(stallTimer); clearTimeout(startupTimer)
     if (!['loading', 'switching', 'failed'].includes(snapshot.phase)) update({ phase: 'paused' })
   }
@@ -231,6 +252,7 @@ export function createPlaybackControllerNext(
   video.addEventListener('playing', onPlaying)
   video.addEventListener('waiting', onWaiting)
   video.addEventListener('seeking', onSeeking)
+  video.addEventListener('seeked', onSeeked)
   video.addEventListener('timeupdate', onTimeUpdate)
   video.addEventListener('pause', onPause)
   video.addEventListener('ended', onEnded)
@@ -301,8 +323,7 @@ export function createPlaybackControllerNext(
           engineOptions = value
           mergeTracks()
           if (engine) {
-            if (previousSubtitle.startsWith('external:') && snapshot.subtitles.some((option) => option.value === previousSubtitle)) selectSubtitle(previousSubtitle)
-            else preferredSubtitle()
+            preferredSubtitle(snapshot.subtitleTrack)
             preferredAudio()
             preferredQuality()
           }
@@ -327,8 +348,7 @@ export function createPlaybackControllerNext(
         engine = attached
         mergeTracks()
         if (!metadataRestored && !firstFrame) startupTimer = setTimeout(() => { if (current === generation && !metadataRestored && !firstFrame) fail('network', 'timeout') }, FIRST_FRAME_TIMEOUT_MS)
-        if (previousSubtitle.startsWith('external:') && snapshot.subtitles.some((option) => option.value === previousSubtitle)) selectSubtitle(previousSubtitle)
-        else preferredSubtitle()
+        preferredSubtitle(previousSubtitle)
         preferredAudio()
         preferredQuality()
       } catch {
@@ -355,21 +375,34 @@ export function createPlaybackControllerNext(
     },
     audio(value: string) {
       const selected = snapshot.audio.find((option) => option.value === value)
-      if (!selected) return
-      audioPreference = selected.language || selected.label.toLowerCase()
-      try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Optional storage. */ }
-      engine?.audio(value); update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
-      callbacks.preferenceChange?.({ audioLanguage: mediaPreferences(qualityPreference.height, audioPreference).audioLanguage })
+      if (!selected || !engine) return Promise.resolve(false)
+      const request = ++audioSelection, source = generation
+      selectingAudio = true
+      const finish = (ok = true) => {
+        if (request !== audioSelection || source !== generation || disposed) { if (request === audioSelection) selectingAudio = false; return false }
+        selectingAudio = false
+        if (!ok) { update({ audioNotice: 'This language could not start. Your previous audio preference was kept.' }); return false }
+        audioPreference = selected.language || selected.label.toLowerCase()
+        try { localStorage.setItem('consumit.player.audio-language', audioPreference) } catch { /* Optional storage. */ }
+        update({ audioTrack: value, audioNotice: undefined, preferences: mediaPreferences(qualityPreference.height, audioPreference) })
+        callbacks.preferenceChange?.({ audioLanguage: mediaPreferences(qualityPreference.height, audioPreference).audioLanguage })
+        return true
+      }
+      try { const result = engine.audio(value); return result ? result.then(finish, () => finish(false)) : Promise.resolve(finish()) }
+      catch { return Promise.resolve(finish(false)) }
     },
     subtitle(value: string) {
       const selected = snapshot.subtitles.find((option) => option.value === value || option.language === value || option.label.toLowerCase() === value.toLowerCase())
       if (value !== 'off' && !selected) return
       const resolved = selected?.value ?? 'off'
-      subtitlePreference = resolved === 'off' ? 'off' : selected?.language ?? 'en'
       const language = semanticSubtitleLanguage(selected?.language)
+      manualSubtitle = resolved
+      subtitlePreference = resolved === 'off' ? 'off' : language ?? subtitleLanguages[0] ?? 'en'
       if (resolved !== 'off' && language) subtitleLanguages = [language, ...subtitleLanguages.filter(value => value !== language)].slice(0, 3)
       callbacks.preferenceChange?.({ subtitlesEnabled: resolved !== 'off', ...(resolved !== 'off' && language ? { subtitleLanguages } : {}) })
-      try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Optional storage. */ }
+      if (resolved === 'off' || language) {
+        try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Optional storage. */ }
+      }
       selectSubtitle(resolved)
       update({ subtitleNotice: undefined })
     },
@@ -387,6 +420,7 @@ export function createPlaybackControllerNext(
       video.removeEventListener('playing', onPlaying)
       video.removeEventListener('waiting', onWaiting)
       video.removeEventListener('seeking', onSeeking)
+      video.removeEventListener('seeked', onSeeked)
       video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('pause', onPause)
       video.removeEventListener('ended', onEnded)

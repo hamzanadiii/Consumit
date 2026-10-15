@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { assertHlsManifest, isPlausibleManifestDuration, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration } from './manifest.ts'
+import { assertHlsManifest, inspectHlsManifest, isPlausibleManifestDuration, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration } from './manifest.ts'
 
 const base = 'https://media.example/master.m3u8'
 const master = '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",URI="audio.m3u8"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8'
 const media = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:6,\nseg.ts'
 
 describe('hls parser/tokenizer', () => {
+  it('classifies and collects the complete graph in one inspection, preserving segment provenance', () => {
+    expect(inspectHlsManifest(master, base)).toEqual({ kind: 'master', references: [
+      { url: 'https://media.example/audio.m3u8', media: false },
+      { url: 'https://media.example/video.m3u8', media: false },
+    ] })
+    expect(inspectHlsManifest(media, base)).toEqual({ kind: 'media', references: [{ url: 'https://media.example/seg.ts', media: true }] })
+    expect(() => inspectHlsManifest(`${media}\n#EXT-X-SESSION-DATA:URI="foreign.json"`, base)).toThrow('Unsupported manifest URI attribute.')
+  })
   it('collects plain URI lines and allowlisted URI attributes in line order', () => {
     expect(parseHlsReferences(master, base)).toEqual([
       'https://media.example/audio.m3u8',

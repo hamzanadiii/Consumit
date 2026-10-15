@@ -6,9 +6,9 @@ import { allowedBrowserUrl } from './network'
 const origin = z.url().refine(raw => { const url = new URL(raw); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash }).transform(raw => new URL(raw).origin)
 export const workerConfigSchema = z.object({ apiOrigin: origin, appOrigin: origin, secret: z.string().min(32).max(256) })
 export type WorkerConfig = z.infer<typeof workerConfigSchema>
-export function createWorker(config: WorkerConfig, browser: Browser, setSource: (source: ReleaseProbeSource | null) => void, log: (event: string) => void = () => {}) {
+export function createWorker(config: WorkerConfig, browser: Browser, setSource: (source: ReleaseProbeSource | null) => void, log: (event: string) => void = () => {}, fetcher?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>) {
   async function send(path: string, body: unknown, signal: AbortSignal) {
-    const response = await fetch(`${config.apiOrigin}${path}`, { method: 'POST', headers: { authorization: `Bearer ${config.secret}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal, redirect: 'error' })
+    const response = await (fetcher ?? fetch)(`${config.apiOrigin}${path}`, { method: 'POST', headers: { authorization: `Bearer ${config.secret}`, 'content-type': 'application/json' }, body: JSON.stringify(body), signal, redirect: 'error' })
     if (!response.ok) throw new Error('Worker interface unavailable')
     return response.status === 204 ? null : response.json()
   }

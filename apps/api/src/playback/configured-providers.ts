@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { playbackRefSchema, providerRoleSchema, providerDeliveryModeSchema } from '@consumit/contracts'
-import { createFrameProvider, createRigelProvider, createAnimeRelayProvider, createStormBoronProvider, createBingeBangYMoviesProvider, createStaticProvider, createVixsrcProvider, createNhdapiProvider, createVaPlayerProvider, createMappleProvider, createWecollegeProvider, createPersesProvider, createRivestreamProvider, createVidapiProvider, createScreenscapeProvider, createVidrockProvider, createVidnestProvider, createPoseidonProvider, createNetmirrorProvider, createVidstormProvider, createVidlinkProvider, createCinehdProvider, createNxshaProvider, createStellarProvider, createAphroditeProvider, createVidluxProvider, createVidsrcbuzzProvider, createVidsrcProvider, createVideasyProvider, createVidcoreProvider, createFilmuProvider, createVidzenProvider, createLookmovieProvider, createRiveApolloProvider, createEvionProvider, createCinejoyLisbonProvider, createStigstreamProvider, createCastletvProvider, createAnixoProvider, createKyrenProvider, createNagareProvider, createAnime123Provider, createZokoProvider, createAnimeParadiseProvider, createAnimeKaiProvider, createAnimeKitsuProvider, createRecloudProvider, createPurstreamProvider, createVidriftProvider, createStreamvaultProvider, createNetodaProvider, createVidukiProvider, createCookieBakersProvider, createKazoraProvider, createKisskhProvider, providerSourceSchema, type AnimeTitleResolver, type AnimeTitleVariantsResolver, type MediaKind, type ProviderRegistration, type ZokoMetaResolver } from '@consumit/provider-sdk'
+import { isFrameProviderId, MOVIE_FRAME_HOSTS, createFrameProvider, createRigelProvider, createAnimeRelayProvider, createStormBoronProvider, createBingeBangYMoviesProvider, createStaticProvider, createVixsrcProvider, createNhdapiProvider, createVaPlayerProvider, createMappleProvider, createWecollegeProvider, createPersesProvider, createRivestreamProvider, createVidapiProvider, createScreenscapeProvider, createVidrockProvider, createVidnestProvider, createPoseidonProvider, createNetmirrorProvider, createVidstormProvider, createVidlinkProvider, createCinehdProvider, createNxshaProvider, createStellarProvider, createAphroditeProvider, createVidluxProvider, createVidsrcbuzzProvider, createVidsrcProvider, createVideasyProvider, createVidcoreProvider, createFilmuProvider, createVidzenProvider, createLookmovieProvider, createLookmovieWorkerProvider, createRiveApolloProvider, createEvionProvider, createCinejoyLisbonProvider, createStigstreamProvider, createCastletvProvider, createAnixoProvider, createKyrenProvider, createNagareProvider, createAnime123Provider, createZokoProvider, createAnimeParadiseProvider, createAnimeKaiProvider, createAnimeKitsuProvider, createRecloudProvider, createPurstreamProvider, createVidriftProvider, createStreamvaultProvider, createNetodaProvider, createVidukiProvider, createCookieBakersProvider, createKazoraProvider, createKisskhProvider, createMoviesapiProvider, providerSourceSchema, type AnimeTitleResolver, type AnimeTitleVariantsResolver, type MediaKind, type ProviderIdentityResolver, type ProviderRegistration, type ZokoMetaResolver } from '@consumit/provider-sdk'
 import { createProviderHttp } from './provider-http.ts'
 import { createTmdbIdentityResolver } from './tmdb-identity.ts'
-import { createTmdbMetadataResolver } from './tmdb-metadata.ts'
+import { createTmdbMetadataResolver, type TitleMetadataResolver } from './tmdb-metadata.ts'
 import type { MediaTransport } from './transport.ts'
 
 const mediaKindsSchema = z.array(z.enum(['movie', 'series', 'anime'])).min(1).max(3)
@@ -34,7 +34,7 @@ const common = z.strictObject({
   enabled: z.boolean().default(true),
   role: providerRoleSchema.default('video'),
   deliveryMode: providerDeliveryModeSchema.default('direct'),
-  relayHostDiscovery: z.enum(['storm-boron-v1', 'wecollege-city-v1']).optional(),
+  relayHostDiscovery: z.enum(['storm-boron-v1', 'wecollege-city-v1', 'lookmovie-v1']).optional(),
   regions: z.array(z.string().regex(/^[A-Z]{2}$/)).min(1),
   mediaHosts: z.array(z.string().regex(/^(?:\*\.)?[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/)
     .refine((host) => !isCrossTenantWildcard(host), 'Wildcard media hosts cannot target a shared hosting domain.'))
@@ -64,11 +64,11 @@ const common = z.strictObject({
   attemptMs: z.number().int().min(1000).max(15000).default(3000),
   mediaKinds: mediaKindsSchema.default(['movie', 'series']),
 })
-const configurationSchema = z.array(z.union([
+const configurationSchema = z.array(z.discriminatedUnion('adapter', [
   common.extend({ adapter: z.literal('static').default('static'),
   entries: z.array(z.object({ ref: playbackRefSchema, sources: z.array(providerSourceSchema).max(32) })).max(1000),
   }),
-  common.extend({ adapter: z.enum(['vixsrc', 'vixsrc-it', 'nhdapi', 'vaplayer', 'mapple', 'wecollege', 'perses', 'rivestream', 'riveapex', 'rivevanguard', 'riveaura', 'riveapogee', 'rivecitadel', 'riverigel', 'riveapollo', 'evion', 'cinejoylisbon', 'vidapi', 'screenscape', 'vidrock', 'vidnest', 'catflix', 'poseidon', 'netmirror', 'vidstorm', 'vidlink', 'cinehd', 'nxsha', 'stellar', 'aphrodite', 'vidlux', 'purstream', 'vidrift', 'streamvault', 'netoda', 'viduki', 'cookiebakers', 'kazora', 'kisskh', 'vidsrcbuzz', 'vidsrc', 'videasy', 'vidcore', 'filmu', 'filmuainary', 'vidzen', 'lookmovie', 'stignebula', 'stigorion', 'castletv', 'anixo', 'kyren', 'nagare', 'anime123', 'zoko', 'animeparadise', 'animekai', 'animekitsu', 'recloud', 'megavid', '9anime', 'aniwave', 'stormboron', 'zeta', 'fabric', 'rivenebula', 'rivezephyr', 'bingebangymovies', 'rigel', 'stigstream', 'reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe']),
+  common.extend({ adapter: z.enum(['vixsrcframe', 'vixsrc', 'vixsrc-it', 'nhdapi', 'vaplayer', 'mapple', 'wecollege', 'perses', 'rivestream', 'riveapex', 'rivevanguard', 'riveaura', 'riveapogee', 'rivecitadel', 'riverigel', 'rivemirage', 'riveapollo', 'evion', 'cinejoylisbon', 'vidapi', 'screenscape', 'vidrock', 'vidnest', 'catflix', 'poseidon', 'netmirror', 'vidstorm', 'vidlink', 'cinehd', 'nxsha', 'stellar', 'aphrodite', 'vidlux', 'purstream', 'vidrift', 'streamvault', 'netoda', 'viduki', 'cookiebakers', 'kazora', 'kisskh', 'vidsrcbuzz', 'vidsrc', 'videasy', 'vidcore', 'filmu', 'filmuainary', 'vidzen', 'lookmovie', 'stignebula', 'stigorion', 'castletv', 'anixo', 'kyren', 'nagare', 'anime123', 'zoko', 'animeparadise', 'animekai', 'animekitsu', 'recloud', 'megavid', '9anime', 'aniwave', 'stormboron', 'zeta', 'fabric', 'rivenebula', 'rivezephyr', 'bingebangymovies', 'rigel', 'stigstream', 'reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe', 'vidfastframe', 'vidapiframe', 'moviesapiframe', 'vidlinkframe', 'vidnestframe', 'moviesapi']),
     resolutionHosts: z.array(z.string().regex(/^[a-z0-9.-]+$/)).max(30).default([]),
     upstreamGroup: z.string().regex(/^[a-z0-9-]{1,60}$/),
   }),
@@ -76,8 +76,12 @@ const configurationSchema = z.array(z.union([
   // concurrency, rate limits, and hedged resolution bound load instead.
 ])).max(64)
 
-type ProviderOptions = {
+export type ProviderOptions = {
+  animeKaiPowSolver?: ((nonce: string, difficulty: number, timeoutMs: number, signal?: AbortSignal) => Promise<string | null>) | undefined
   tmdbToken?: string | undefined
+  tmdbMetadataResolver?: TitleMetadataResolver | undefined
+  tmdbIdentityResolver?: ProviderIdentityResolver | undefined
+  lookmovieWorker?: { origin: string; secret: string } | undefined
   transport?: MediaTransport
   animeTitleResolver?: AnimeTitleResolver | undefined
   animeTitleVariantsResolver?: AnimeTitleVariantsResolver | undefined
@@ -101,9 +105,13 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
   // Register disabled rows too, so Admin can enable them without a restart.
   return parsed.map((entry) => {
     if (entry.relayHostDiscovery && !(entry.adapter === 'stormboron' && entry.id === 'stormboron' && entry.relayHostDiscovery === 'storm-boron-v1'
-      || entry.adapter === 'wecollege' && ['wecollege-miami', 'wecollege-boise'].includes(entry.id) && entry.relayHostDiscovery === 'wecollege-city-v1')) throw new Error('Relay discovery requires its reviewed adapter recipe.')
-    const frameAdapters = new Set(['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe'])
-    if (frameAdapters.has(entry.adapter) !== (entry.deliveryMode === 'embed') && entry.adapter !== 'static') throw new Error('Frame adapters require embed delivery; media adapters cannot use it.')
+      || entry.adapter === 'wecollege' && ['wecollege-miami', 'wecollege-boise'].includes(entry.id) && entry.relayHostDiscovery === 'wecollege-city-v1'
+      || entry.adapter === 'lookmovie' && entry.id === 'lookmovie-relay' && entry.deliveryMode === 'relay' && entry.relayHostDiscovery === 'lookmovie-v1')) throw new Error('Relay discovery requires its reviewed adapter recipe.')
+    if (entry.adapter === 'lookmovie' && entry.id !== 'lookmovie' && !(entry.id === 'lookmovie-relay' && entry.relayHostDiscovery === 'lookmovie-v1')) throw new Error('LookMovie aliases require the reviewed relay recipe.')
+    if (isFrameProviderId(entry.adapter) !== (entry.deliveryMode === 'embed') && entry.adapter !== 'static') throw new Error('Frame adapters require embed delivery; media adapters cannot use it.')
+    if (entry.adapter === 'vixsrcframe' && (entry.id !== 'vixsrcframe' || entry.mediaHosts.length !== 1 || entry.mediaHosts[0] !== 'vixsrc.to' || entry.mediaHostPatterns.length)) throw new Error('Vixsrc Frame requires its exact canonical row and origin.')
+    const exactFrameHost = Object.entries(MOVIE_FRAME_HOSTS).find(([id]) => id === entry.adapter)?.[1]
+    if (exactFrameHost && (entry.id !== entry.adapter || entry.mediaHosts.length !== 1 || entry.mediaHosts[0] !== exactFrameHost || entry.mediaHostPatterns.length)) throw new Error('Movie frame providers require their canonical recipe id and exact published player origin.')
     if (entry.adapter === 'megaplayframe' && !options.animeTitleVariantsResolver) throw new Error('MegaPlay Frame requires canonical anime title variants.')
     if (entry.adapter === 'evion' && (entry.id !== 'evion' || entry.mediaKinds.length !== 1 || entry.mediaKinds[0] !== 'series')) throw new Error('Evion TV requires one series-only row named evion.')
     for (const [kind, probe] of Object.entries(entry.probes ?? {})) {
@@ -122,21 +130,22 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
     const animeAdapters = new Set(['anixo', 'kyren', 'nagare', 'anime123', 'zoko', 'animeparadise', 'animekai', 'animekitsu', 'recloud', 'megavid', '9anime', 'aniwave', 'kazora', 'reanimeframe', 'megaplayframe'])
     if (animeAdapters.has(entry.adapter) && !(entry.mediaKinds as readonly string[]).includes('anime')) throw new Error(`Anime adapter "${entry.adapter}" must include "anime" in mediaKinds.`)
     if (!animeAdapters.has(entry.adapter) && (entry.mediaKinds as readonly string[]).includes('anime')) throw new Error(`Non-anime adapter "${entry.adapter}" cannot include "anime" in mediaKinds.`)
-    const origins = { rigel: 'movish.to', stigstream: 'api.stigstream.ru', reanimeframe: 'reanime.to', megaplayframe: 'anikage.cc', apiplayerframe: 'apiplayer.ru', embedapiframe: 'watch.embed-api.stream', vsembedframe: 'vsembed.ru', vidcoreioframe: 'vidcore.io', cinesrcframe: 'cinesrc.st', vidriftframe: 'embed.vidrift.net', vixsrc: 'vixsrc.to', 'vixsrc-it': 'vixsrc.to', nhdapi: 'nhdapi.com', vaplayer: 'streamdata.vaplayer.ru', mapple: 'mapple.rip', wecollege: 'api.wecollege.net', perses: 'streamguide.cfd', rivestream: 'scrapper.rivestream.app', riveapex: 'scrapper.rivestream.app', rivevanguard: 'scrapper.rivestream.app', riveaura: 'scrapper.rivestream.app', riveapogee: 'scrapper.rivestream.app', rivecitadel: 'scrapper.rivestream.app', riverigel: 'scrapper.rivestream.app', riveapollo: 'scrapper.rivestream.app', evion: 'api.bingr.one', cinejoylisbon: 'api.wing.st', vidapi: 'streamdata.vaplayer.ru', screenscape: 'screenscape.me', vidrock: 'vidrock.to', vidnest: 'new.vidnest.fun', catflix: 'new.vidnest.fun', poseidon: 'hahaevilcraft.site', netmirror: 'net27.cc', vidstorm: 'vidstorm.ru', vidlink: 'vidlink.pro', cinehd: 'cinehd.vc', nxsha: 'nxsha.space', stellar: 'stellar.maybeoneday.ch', aphrodite: 'cdn.hls.lol', vidlux: 'vidlux.xyz', purstream: 'api.purstream.ad', vidrift: 'embed.vidrift.net', streamvault: 'streamvaultsrc.click', netoda: 'cdn.vidspark.to', viduki: 'api.viduki.net', cookiebakers: 'stream.lfmx.app', kazora: 'kazora.cc', kisskh: 'kisskh.do', vidsrcbuzz: 'vidsrc.buzz', vidsrc: 'vsembed.ru', videasy: 'api.speedracelight.com', vidcore: 'vidrack.created.app', filmu: 'api.filmu.in', filmuainary: 'api.filmu.in', vidzen: 'vidzen.fun', lookmovie: 'lmscript.xyz', stignebula: 'api.stigstream.ru', stigorion: 'api.stigstream.ru', castletv: 'api.hlowb.com', anixo: 'anixo.buzz', kyren: 'kyren.moe', nagare: 'nagare.nexioapp.org', anime123: '123anime.la', zoko: 'zokoanime.video', animeparadise: 'api.animeparadise.moe', animekai: 'animekai.stream', animekitsu: 'animekitsu.com', recloud: 'cdn.4animo.xyz', megavid: 'megavid.buzz', '9anime': 'new.vidnest.fun', aniwave: 'new.vidnest.fun', stormboron: 'vidstorm.to', zeta: 'new.vidnest.fun', fabric: 'new.vidnest.fun', rivenebula: 'scrapper.rivestream.app', rivezephyr: 'scrapper.rivestream.app', bingebangymovies: 'bingebang.st' }
+    const origins = { ...MOVIE_FRAME_HOSTS, vixsrcframe: 'vixsrc.to', rigel: 'movish.to', stigstream: 'api.stigstream.ru', reanimeframe: 'reanime.to', megaplayframe: 'anikage.cc', apiplayerframe: 'apiplayer.ru', embedapiframe: 'watch.embed-api.stream', vsembedframe: 'vsembed.ru', vidcoreioframe: 'vidcore.io', cinesrcframe: 'cinesrc.st', vidriftframe: 'embed.vidrift.net', vidfastframe: 'vidfast.vc', moviesapi: 'w1.moviesapi.to', vixsrc: 'vixsrc.to', 'vixsrc-it': 'vixsrc.to', nhdapi: 'nhdapi.com', vaplayer: 'streamdata.vaplayer.ru', mapple: 'mapple.rip', wecollege: 'api.wecollege.net', perses: 'streamguide.cfd', rivestream: 'scrapper.rivestream.app', riveapex: 'scrapper.rivestream.app', rivevanguard: 'scrapper.rivestream.app', riveaura: 'scrapper.rivestream.app', riveapogee: 'scrapper.rivestream.app', rivecitadel: 'scrapper.rivestream.app', riverigel: 'scrapper.rivestream.app', rivemirage: 'scrapper.rivestream.app', riveapollo: 'scrapper.rivestream.app', evion: 'api.bingr.one', cinejoylisbon: 'api.wing.st', vidapi: 'streamdata.vaplayer.ru', screenscape: 'screenscape.me', vidrock: 'vidrock.to', vidnest: 'new.vidnest.fun', catflix: 'new.vidnest.fun', poseidon: 'hahaevilcraft.site', netmirror: 'net27.cc', vidstorm: 'vidstorm.ru', vidlink: 'vidlink.pro', cinehd: 'cinehd.vc', nxsha: 'nxsha.space', stellar: 'stellar.maybeoneday.ch', aphrodite: 'cdn.hls.lol', vidlux: 'vidlux.xyz', purstream: 'api.purstream.ad', vidrift: 'embed.vidrift.net', streamvault: 'streamvaultsrc.click', netoda: 'cdn.vidspark.to', viduki: 'api.viduki.net', cookiebakers: 'stream.lfmx.app', kazora: 'kazora.cc', kisskh: 'kisskh.do', vidsrcbuzz: 'vidsrc.buzz', vidsrc: 'vsembed.ru', videasy: 'api.speedracelight.com', vidcore: 'vidrack.created.app', filmu: 'api.filmu.in', filmuainary: 'api.filmu.in', vidzen: 'vidzen.fun', lookmovie: 'lmscript.xyz', stignebula: 'api.stigstream.ru', stigorion: 'api.stigstream.ru', castletv: 'api.hlowb.com', anixo: 'anixo.buzz', kyren: 'kyren.moe', nagare: 'nagare.nexioapp.org', anime123: '123anime.la', zoko: 'zokoanime.video', animeparadise: 'api.animeparadise.moe', animekai: 'animekai.stream', animekitsu: 'animekitsu.com', recloud: 'cdn.4animo.xyz', megavid: 'megavid.buzz', '9anime': 'new.vidnest.fun', aniwave: 'new.vidnest.fun', stormboron: 'vidstorm.to', zeta: 'new.vidnest.fun', fabric: 'new.vidnest.fun', rivenebula: 'scrapper.rivestream.app', rivezephyr: 'scrapper.rivestream.app', bingebangymovies: 'bingebang.st' }
     // Sibling resolution hosts an adapter fails over to on its own; kept
     // explicit so the DNS-pinned transport allowlist covers them by default.
-    const siblingHosts: Record<string, readonly string[]> = { videasy: ['api.videasy.to'], vidcore: ['hahaevilcraft.site', 'movie.streamrip.fun', 'streamguide.cfd'], filmu: ['embed.filmu.in'], filmuainary: ['embed.filmu.in'], aphrodite: ['stream.hls.lol'], animekai: ['mfw09.org'], stormboron: ['vidstorm.ru'], vidrift: ['mb.vidrift.net', 'img.animecurx.tech'], viduki: ['www.viduki.net'], kisskh: ['enc-dec.app'] }
-    const http = entry.adapter === 'static' ? undefined : createProviderHttp([origins[entry.adapter], ...siblingHosts[entry.adapter] ?? [], ...entry.resolutionHosts, ...entry.mediaHosts], options.transport, Boolean(entry.relayHostDiscovery))
+    const siblingHosts: Record<string, readonly string[]> = { videasy: ['api.videasy.to'], vidcore: ['hahaevilcraft.site', 'movie.streamrip.fun', 'streamguide.cfd'], filmu: ['embed.filmu.in'], filmuainary: ['embed.filmu.in'], aphrodite: ['stream.hls.lol'], animekai: ['mfw09.org'], stormboron: ['vidstorm.ru'], vidrift: ['mb.vidrift.net', 'img.animecurx.tech'], viduki: ['www.viduki.net'], kisskh: ['enc-dec.app'], vidlink: ['enc-dec.app'] }
+    const mediaHostPatterns = entry.mediaHostPatterns.map((source) => new RegExp(source, 'i'))
+    const http = entry.adapter === 'static' ? undefined : createProviderHttp([origins[entry.adapter], ...siblingHosts[entry.adapter] ?? [], ...entry.resolutionHosts, ...entry.mediaHosts], options.transport, Boolean(entry.relayHostDiscovery), mediaHostPatterns)
     const adapter = entry.adapter === 'static' ? createStaticProvider(entry.id, entry.entries)
       : entry.adapter === 'rigel' ? createRigelProvider(http!)
       : entry.adapter === 'stigstream' ? createStigstreamProvider(http!, Date.now, { id: 'stigstream', servers: ['Nova', 'Comet', 'Nebula', 'Cosmic', 'Obsidian', 'Flux'], mediaHosts: entry.mediaHosts })
-      : entry.adapter === 'reanimeframe' || entry.adapter === 'megaplayframe' || entry.adapter === 'apiplayerframe' || entry.adapter === 'embedapiframe' || entry.adapter === 'vsembedframe' || entry.adapter === 'vidcoreioframe' || entry.adapter === 'cinesrcframe' || entry.adapter === 'vidriftframe' ? createFrameProvider(entry.adapter, http!, options.animeTitleVariantsResolver)
+      : isFrameProviderId(entry.adapter) ? createFrameProvider(entry.adapter, http!, options.animeTitleVariantsResolver)
       : entry.adapter === 'vixsrc' ? createVixsrcProvider(http!)
       : entry.adapter === 'vixsrc-it' ? createVixsrcProvider(http!, Date.now, { id: 'vixsrc-it' })
       : entry.adapter === 'nhdapi' ? createNhdapiProvider(http!)
-      : entry.adapter === 'vaplayer' ? createVaPlayerProvider(http!, createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'vaplayer' ? createVaPlayerProvider(http!, options.tmdbIdentityResolver ?? createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport))
       : entry.adapter === 'mapple' ? createMappleProvider(http!)
-      : entry.adapter === 'wecollege' ? createWecollegeProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { mediaHosts: entry.mediaHosts, relayHostDiscovery: Boolean(entry.relayHostDiscovery), ...(entry.id !== 'wecollege' ? { id: entry.id, cities: [entry.id.replace(/^wecollege-/, '')] } : {}) })
+      : entry.adapter === 'wecollege' ? createWecollegeProvider(http!, options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { mediaHosts: entry.mediaHosts, relayHostDiscovery: Boolean(entry.relayHostDiscovery), ...(entry.id !== 'wecollege' ? { id: entry.id, cities: [entry.id.replace(/^wecollege-/, '')] } : {}) })
       : entry.adapter === 'perses' ? createPersesProvider(http!)
       : entry.adapter === 'rivestream' ? createRivestreamProvider(http!, Date.now, { ...(entry.id !== 'rivestream' ? { id: entry.id, subs: [entry.id.replace(/^rivestream-/, '')] } : {}) })
       : entry.adapter === 'riveapex' ? createRivestreamProvider(http!, Date.now, { id: 'riveapex', subs: ['apex'] })
@@ -145,8 +154,9 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
       : entry.adapter === 'riveapogee' ? createRivestreamProvider(http!, Date.now, { id: entry.id, subs: ['apogee'] })
       : entry.adapter === 'rivecitadel' ? createRivestreamProvider(http!, Date.now, { id: 'rivecitadel', subs: ['citadel'] })
       : entry.adapter === 'riverigel' ? createRivestreamProvider(http!, Date.now, { id: 'riverigel', subs: ['rigel'] })
+      : entry.adapter === 'rivemirage' ? createRivestreamProvider(http!, Date.now, { id: 'rivemirage', subs: ['mirage'], kinds: ['movie'] })
       : entry.adapter === 'evion' ? createEvionProvider(http!)
-      : entry.adapter === 'cinejoylisbon' ? createCinejoyLisbonProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'cinejoylisbon' ? createCinejoyLisbonProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
       : entry.adapter === 'riveapollo' ? createRiveApolloProvider(http!)
       : entry.adapter === 'vidapi' ? createVidapiProvider(http!)
       : entry.adapter === 'screenscape' ? createScreenscapeProvider(http!)
@@ -157,7 +167,8 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
       : entry.adapter === 'netmirror' ? createNetmirrorProvider(http!)
       : entry.adapter === 'vidstorm' ? createVidstormProvider(http!)
       : entry.adapter === 'vidlink' ? createVidlinkProvider(http!)
-      : entry.adapter === 'cinehd' ? createCinehdProvider(http!, createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport), Date.now, {
+      : entry.adapter === 'moviesapi' ? createMoviesapiProvider(http!)
+      : entry.adapter === 'cinehd' ? createCinehdProvider(http!, options.tmdbIdentityResolver ?? createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport), Date.now, {
         ...(entry.id !== 'cinehd' ? { id: entry.id } : {}),
         ...(entry.id === 'cinehd-hindi' ? { audio: 'hi' as const } : entry.id === 'cinehd-english' ? { audio: 'en' as const } : {}),
       })
@@ -165,46 +176,48 @@ export function configuredProviders(configuration: unknown, options: ProviderOpt
       : entry.adapter === 'stellar' ? createStellarProvider(http!)
       : entry.adapter === 'aphrodite' ? createAphroditeProvider(http!)
       : entry.adapter === 'vidlux' ? createVidluxProvider(http!)
-      : entry.adapter === 'purstream' ? createPurstreamProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'purstream' ? createPurstreamProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
       : entry.adapter === 'vidrift' ? createVidriftProvider(http!)
       : entry.adapter === 'streamvault' ? createStreamvaultProvider(http!)
       : entry.adapter === 'vidsrcbuzz' ? createVidsrcbuzzProvider(http!)
       : entry.adapter === 'vidsrc' ? createVidsrcProvider(http!)
       : entry.adapter === 'vidcore' ? createVidcoreProvider(http!, Date.now, { ...(entry.id !== 'vidcore' ? { id: entry.id, servers: [entry.id.replace(/^vidcore-/, '')] } : {}) })
-      : entry.adapter === 'filmu' ? createFilmuProvider(http!, createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport))
-      : entry.adapter === 'filmuainary' ? createFilmuProvider(http!, createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport), Date.now, { id: 'filmuainary', extractors: ['Ainary'] })
+      : entry.adapter === 'filmu' ? createFilmuProvider(http!, options.tmdbIdentityResolver ?? createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'filmuainary' ? createFilmuProvider(http!, options.tmdbIdentityResolver ?? createTmdbIdentityResolver(options.tmdbToken ?? '', options.transport), Date.now, { id: 'filmuainary', extractors: ['Ainary'] })
       : entry.adapter === 'vidzen' ? createVidzenProvider(http!)
-      : entry.adapter === 'lookmovie' ? createLookmovieProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'lookmovie' ? entry.id === 'lookmovie-relay' && options.lookmovieWorker
+        ? createLookmovieWorkerProvider(options.lookmovieWorker, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
+        : createLookmovieProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)), Date.now, { id: entry.id, relayHostDiscovery: entry.relayHostDiscovery === 'lookmovie-v1' })
       : entry.adapter === 'stignebula' ? createStigstreamProvider(http!, Date.now, { id: 'stignebula', server: 'Nebula', audioLanguage: 'original' })
       : entry.adapter === 'stigorion' ? createStigstreamProvider(http!, Date.now, { id: 'stigorion', server: 'Orion', audioLanguage: 'tr' })
-      : entry.adapter === 'castletv' ? createCastletvProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'castletv' ? createCastletvProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
       : entry.adapter === 'anixo' ? createAnixoProvider(http!, options.animeTitleResolver!)
       : entry.adapter === 'kyren' ? createKyrenProvider(http!, options.animeTitleResolver!, Date.now, { ...(entry.id !== 'kyren' ? { id: entry.id, servers: [entry.id.replace(/^kyren-/, '')] } : {}) })
       : entry.adapter === 'nagare' ? createNagareProvider(http!)
       : entry.adapter === 'anime123' ? createAnime123Provider(http!, options.animeTitleResolver!)
       : entry.adapter === 'zoko' ? createZokoProvider(http!, options.animeMetaResolver!)
       : entry.adapter === 'animeparadise' ? createAnimeParadiseProvider(http!, options.animeTitleResolver!, Date.now, options.animeTitleVariantsResolver)
-      : entry.adapter === 'animekai' ? createAnimeKaiProvider(http!, options.animeTitleResolver!)
+      : entry.adapter === 'animekai' ? createAnimeKaiProvider(http!, options.animeTitleResolver!, Date.now, options.animeKaiPowSolver)
       : entry.adapter === 'animekitsu' ? createAnimeKitsuProvider(http!, options.animeTitleResolver!, Date.now, options.animeTitleVariantsResolver)
       : entry.adapter === 'megavid' || entry.adapter === '9anime' || entry.adapter === 'aniwave' ? createAnimeRelayProvider(http!, entry.adapter)
       : entry.adapter === 'stormboron' ? createStormBoronProvider(http!)
-      : entry.adapter === 'bingebangymovies' ? createBingeBangYMoviesProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'bingebangymovies' ? createBingeBangYMoviesProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
       : entry.adapter === 'zeta' ? createVidnestProvider(http!, Date.now, { id: 'zeta', servers: ['zeta'] })
       : entry.adapter === 'fabric' ? createVidnestProvider(http!, Date.now, { id: 'fabric', servers: ['fabric'] })
       : entry.adapter === 'netoda' ? createNetodaProvider(http!)
       : entry.adapter === 'viduki' ? createVidukiProvider(http!)
       : entry.adapter === 'cookiebakers' ? createCookieBakersProvider(http!)
       : entry.adapter === 'kazora' ? createKazoraProvider(http!)
-      : entry.adapter === 'kisskh' ? createKisskhProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport))
+      : entry.adapter === 'kisskh' ? createKisskhProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)))
       : entry.adapter === 'rivenebula' || entry.adapter === 'rivezephyr' ? createRivestreamProvider(http!, Date.now, { id: entry.id, subs: [entry.adapter.slice(4)], relay: true })
       : entry.adapter === 'recloud' ? createRecloudProvider(http!)
-      : createVideasyProvider(http!, createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport), Date.now, { mediaHosts: entry.mediaHosts })
+      : createVideasyProvider(http!, (options.tmdbMetadataResolver ?? createTmdbMetadataResolver(options.tmdbToken ?? '', options.transport)), Date.now, { mediaHosts: entry.mediaHosts })
     return { adapter, enabled: entry.enabled, role: entry.role, deliveryMode: entry.deliveryMode, relayHostDiscovery: entry.relayHostDiscovery, approvedRegions: entry.regions, mediaHosts: entry.mediaHosts,
-      mediaHostPatterns: entry.mediaHostPatterns.map((source) => new RegExp(source, 'i')),
+      mediaHostPatterns,
       upstreamGroup: entry.upstreamGroup ?? entry.id, concurrency: entry.concurrency, requestsPerMinute: entry.requestsPerMinute,
       mediaKinds: entry.mediaKinds as readonly MediaKind[],
       ...(entry.priority ? { priority: entry.priority } : {}),
       ...(entry.attemptMs !== 3000 ? { attemptMs: entry.attemptMs } : {}),
-      ...(entry.probes ? { probes: entry.probes } : {}) }
+      ...(entry.probes ? { probes: entry.probes } : {}), workerConfig: entry }
   })
 }

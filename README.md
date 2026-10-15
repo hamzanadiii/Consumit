@@ -4,13 +4,13 @@ Consumit is a streaming and personal taste-discovery product for movies, series,
 
 ## Project status
 
-The project includes the shared interface system, core product screens, TMDB and AniList catalogs, durable member identity and private library records, and configured direct-first playback with an explicitly approved Worker relay tier. Circle, follows, public profiles/list discovery, and review engagement are retired from the active personal product; historical records are retained. See the [product foundation](./docs/PRODUCT.md) for scope and the [current project quality review](./docs/audits/project-quality-2026-10-03.md) for verification status.
+The project includes the shared interface system, core product screens, TMDB and AniList catalogs, durable member identity and private library records, and configured direct-first playback with an explicitly approved Worker relay tier. Existing personal records and opt-in publication surfaces remain as shipped; see PRODUCT for current scope. See the [product foundation](./docs/PRODUCT.md) for scope and the [latest full-release verification](./docs/audits/full-release-2026-10-13.md) for the current deployment snapshot.
 
 ## Local development
 
 Consumit has one frontend in `apps/web`, using the shared components in `packages/ui`.
 
-Use Bun 1.4.0 and Node 24 LTS (pinned in `.node-version`). The default loop is hybrid: data stores in Docker, app natively on the host for instant reload with no file-sync step and no restart.
+Use Bun 1.4.0 and Node 24.21.0 (pinned in `.node-version`). The default loop is hybrid: data stores in Docker, app natively on the host for instant reload with no file-sync step and no restart.
 
 ```powershell
 bun install
@@ -37,8 +37,7 @@ taskkill /PID <pid> /F
 bun run dev
 ```
 
-Run the complete local quality gate with `bun run check`.
-`bun run infra:validate` requires Docker and uses the host Terraform installation or its container fallback. Database integration tests and the k6 playback load scenario require their documented isolated test services. Integration suites truncate fixture tables: use disposable stores, never the running application's database.
+Run the workspace quality gate with `bun run check` for lint, TypeScript, unit tests, and builds. Pull requests also run the API integration suite, infrastructure validation, and Chromium playback checks in [the CI workflow](./.github/workflows/check.yml); these require the disposable CI services and installed browser. The additional `test:social`, `test:experience`, and `test:releases` browser suites are run separately when changing those surfaces. `bun run infra:validate` requires Docker and uses the host Terraform installation or its container fallback. The k6 playback load scenario requires its documented isolated test services. Integration suites truncate fixture tables: use disposable stores, never the running application's database.
 
 ## Docker stack
 
@@ -107,3 +106,9 @@ playback, alert delivery, and an offsite restore. See the
 ## Implementation foundation
 
 The repository uses Bun workspaces with a Next.js web application, Bun/Fastify API, shared Zod contracts, shared UI, and provider SDK. Postgres stores member data; dedicated Valkey instances hold authentication and optional shared playback state. Watch uses the first-party player with validated browser-direct media. Public embeds remain deferred.
+
+## Incremental architecture migration
+
+The candidate adds Node product/playback/worker processes, a transactional outbox and a dedicated durable Valkey queue. Existing screens, member data, URLs and provider order remain intact. Read [the migration runbook](./docs/runbooks/rebuild-migration.md) and [dated evidence](./docs/audits/rebuild-architecture-2026-10-13.md) before activation. Physical devices and measured budget/capacity remain release gates.
+
+`bun run dev:api`, `bun run dev:playback` and `bun run dev:worker` use tsx. Server bundles start with Node. Use `tests/rebuild/compose.yaml` only for the dedicated test database/stores; production recovery follows the existing off-host runbook. `bun run test:rebuild` exercises the complete member flow, and `scripts/forecast-rebuild.mjs` keeps ordinary, progress and media demand separate.

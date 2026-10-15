@@ -27,6 +27,22 @@ describe('Valkey authentication state', () => {
     }
   })
 
+  it('locks the account after exhausted attempts even when the challenge is re-issued', async () => {
+    const state = createValkeyAuthState(url, pepper)
+    try {
+      const payload = { email: 'locked@example.com', kind: 'registration' as const, passwordHash: 'hash', username: 'locked_member' }
+      await state.beginChallenge({ code: '123456', email: payload.email, payload, purpose: 'registration' })
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect(await state.consumeChallenge({ code: '000000', email: payload.email, purpose: 'registration' })).toBeNull()
+      }
+      expect(await state.consumeChallenge({ code: '123456', email: payload.email, purpose: 'registration' })).toBe('locked')
+      // The tombstone refuses fresh challenges during the backoff window.
+      expect(await state.beginChallenge({ code: '654321', email: payload.email, payload, purpose: 'registration' })).toBe('cooldown')
+    } finally {
+      await state.close()
+    }
+  })
+
   it('stores only hashed session keys and revokes all member sessions', async () => {
     const state = createValkeyAuthState(url, pepper)
     try {

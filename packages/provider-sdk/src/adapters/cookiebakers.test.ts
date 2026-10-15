@@ -17,6 +17,33 @@ function fixture(statuses: number[] = [200], body: unknown = { url: master }) {
 }
 
 describe('CookieBakers adapter', () => {
+  it('reserves time for another attempt when the first vault request hangs', async () => {
+    vi.useFakeTimers()
+    try {
+      const http = fixture()
+      http.mockImplementationOnce((_url, _headers, signal) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      }))
+      const result = createCookieBakersProvider(http, now).resolve(input, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(7800)
+      expect(http).toHaveBeenCalledTimes(2)
+      expect(await result).toMatchObject({ ok: true, sources: [{ url: master }] })
+    } finally { vi.useRealTimers() }
+  })
+  it('does not cut off a healthy cold lookup that needs five seconds', async () => {
+    vi.useFakeTimers()
+    try {
+      const http = fixture()
+      http.mockImplementationOnce((url, _headers, signal) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve({ url, status: 200, text: JSON.stringify({ url: master }), headers: new Headers() }), 5000)
+        signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason) }, { once: true })
+      }))
+      const result = createCookieBakersProvider(http, now).resolve(input, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(await result).toMatchObject({ ok: true })
+      expect(http).toHaveBeenCalledTimes(1)
+    } finally { vi.useRealTimers() }
+  })
   it('resolves the movie vault endpoint with the site origin and returns the master', async () => {
     const http = fixture()
     const result = await createCookieBakersProvider(http, now).resolve(input, new AbortController().signal)

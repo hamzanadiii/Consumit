@@ -2,11 +2,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 
-import { BrowserCatalogError, browserDiscoverCatalog, browserSearchCatalog } from './catalog-browser'
+import { BrowserCatalogError, browserDiscoverCatalog, browserSearchCatalog, catalogBrowseFeed } from './catalog-browser'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('browser catalog requests', () => {
+  it('accepts supported shelf links and defaults unknown or repeated feeds to Popular', () => {
+    expect(catalogBrowseFeed('top-rated')).toBe('top-rated')
+    expect(catalogBrowseFeed('trending')).toBe('trending')
+    for (const value of [undefined, 'popular', 'now-playing', 'invalid', ['trending', 'top-rated']]) {
+      expect(catalogBrowseFeed(value)).toBe('popular')
+    }
+  })
+
   it('encodes discovery filters and rejects wrong pages or media kinds', async () => {
     const page = {
       items: [movieSummary], page: 2, totalPages: 4, totalResults: 80,

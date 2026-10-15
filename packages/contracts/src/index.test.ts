@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   playbackProviderListSchema,
+  playbackSourceSchema,
   catalogTitleSummarySchema,
   accountDeletionRequestSchema,
   apiErrorResponseSchema,
@@ -38,6 +39,13 @@ import {
 } from './index'
 
 describe('catalog contracts', () => {
+  it('limits full VTT subtitle playlist handling to HLS sources', () => {
+    const source = { id: 'main', providerId: 'purstream', type: 'hls', src: 'https://media.example/master.m3u8', expiresAt: '2099-01-01T00:00:00.000Z', hlsSubtitlePlaylistFormat: 'vtt' }
+    expect(playbackSourceSchema.safeParse(source).success).toBe(true)
+    expect(playbackSourceSchema.safeParse({ ...source, type: 'native' }).success).toBe(false)
+    expect(playbackSourceSchema.safeParse({ ...source, type: 'iframe', delivery: 'embed' }).success).toBe(false)
+    expect(playbackSourceSchema.safeParse({ ...source, hlsSubtitlePlaylistFormat: 'unknown' }).success).toBe(false)
+  })
   it('rejects hostile prepared subtitle URLs and incomplete provider events', () => {
     const track = { id: 'one', provider: 'fixture', language: 'en', label: 'English' }
     expect(subtitleCandidateSchema.safeParse({ ...track, preparedUrl: 'https://consumit.example/v1/subtitles/file/abcdef0123456789' }).success).toBe(true)
@@ -97,7 +105,7 @@ describe('catalog contracts', () => {
     expect(bannerUrlSchema.safeParse('https://image.tmdb.org/t/p/w1280/abc.jpg').success).toBe(true)
     expect(bannerUrlSchema.safeParse('https://api.dicebear.com/7.x/notionists/svg?seed=abc').success).toBe(false)
     expect(bannerUrlSchema.safeParse('https://evil.example/t/p/w1280/abc.jpg').success).toBe(false)
-    expect(recoveryConfirmRequestSchema.safeParse({ code: '123456', email: 'hamza@example.com', newPassword: 'another-long-password' }).success).toBe(true)
+    expect(recoveryConfirmRequestSchema.safeParse({ code: '12345678', email: 'hamza@example.com', newPassword: 'another-long-password' }).success).toBe(true)
     expect(passwordChangeRequestSchema.safeParse({ currentPassword: 'long-enough-password', newPassword: 'another-long-password' }).success).toBe(true)
     expect(accountDeletionRequestSchema.safeParse({ password: 'long-enough-password' }).success).toBe(true)
   })

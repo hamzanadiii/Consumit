@@ -15,6 +15,8 @@ export function createYifyProvider(http: SubtitleHttp): SubtitleSearchProvider {
   return {
     id: 'yify',
     name: 'YIFYSubs',
+    // Zip URLs are built from BASE; an injected row must not steer the fetch.
+    fileHosts: ['yifysubtitles.ch'],
     supports(query: SubtitleQuery) {
       return query.type === 'movie' && !!query.imdbId
     },

@@ -10,12 +10,38 @@ function fixture() {
   video.src = 'https://media.example/video.m3u8'; video.currentTime = 40; video.volume = 0.4
   const play = vi.spyOn(audio, 'play').mockResolvedValue(); const pause = vi.spyOn(audio, 'pause').mockImplementation(() => {})
   const state = vi.fn<(value: SeparateAudioState) => void>(), output = vi.fn(async (value: 0 | 1) => { void value })
-  const destroy = vi.fn(), attach = vi.fn(async () => ({ destroy })), boost = { set: vi.fn(async (n: number) => n), output: vi.fn(async () => {}), dispose: vi.fn() }
+  const destroy = vi.fn(), attach = vi.fn(async () => ({ destroy })), boost = { unlock: vi.fn(async () => {}), set: vi.fn(async (n: number) => n), output: vi.fn(async () => {}), dispose: vi.fn() }
   const player = createSeparateAudioPlayer(video, audio, { state, output, attach, boost })
   return { video, audio, player, state, output, play, pause, destroy, attach }
 }
-async function ready(f: ReturnType<typeof fixture>) { await f.player.select(track); f.audio.currentTime = f.video.currentTime; f.audio.dispatchEvent(new Event('canplay')); await Promise.resolve(); await Promise.resolve() }
+async function ready(f: ReturnType<typeof fixture>) { const selected = f.player.select(track); await Promise.resolve(); f.audio.currentTime = f.video.currentTime; f.audio.dispatchEvent(new Event('canplay')); await selected }
 describe('independent audio playback', () => {
+  it('keeps the playing separate recording when its replacement cannot load', async () => {
+    const f = fixture(); await ready(f)
+    f.attach.mockRejectedValueOnce(new Error('Bad recording'))
+    expect(await f.player.select({ ...track, id: 'second' })).toBe(false)
+    expect(f.state).toHaveBeenLastCalledWith(expect.objectContaining({ active: true, track: expect.objectContaining({ id: track.id }), loading: false }))
+    expect(f.output).toHaveBeenLastCalledWith(0)
+    expect(f.destroy).not.toHaveBeenCalled(); f.player.dispose()
+  })
+  it('offers a new gesture after autoplay rejection and commits only after Enable audio', async () => {
+    const f = fixture(); f.play.mockRejectedValueOnce(new DOMException('Tap required', 'NotAllowedError'))
+    const selected = f.player.select(track); await Promise.resolve(); f.audio.dispatchEvent(new Event('canplay'))
+    expect(await selected).toBe(false)
+    expect(f.player.needsGesture()).toBe(true); expect(f.output).not.toHaveBeenCalledWith(0)
+    await f.player.enable()
+    expect(f.player.currentTrack()?.id).toBe(track.id); expect(f.output).toHaveBeenLastCalledWith(0); f.player.dispose()
+  })
+  it('keeps original audio until the replacement play promise succeeds', async () => {
+    const f = fixture(); let start!: () => void
+    f.play.mockImplementationOnce(() => new Promise(resolve => { start = resolve }))
+    const selected = f.player.select(track)
+    await Promise.resolve(); f.audio.currentTime = 40
+    f.audio.dispatchEvent(new Event('canplay')); await Promise.resolve()
+    expect(f.play).toHaveBeenCalledOnce()
+    expect(f.output).not.toHaveBeenCalledWith(0)
+    start(); await selected; f.player.dispose()
+  })
   it('changes only sound and follows seeking, pause, rate, volume and mute', async () => {
     const f = fixture(); await ready(f)
     expect(f.output).toHaveBeenLastCalledWith(0)
@@ -31,7 +57,7 @@ describe('independent audio playback', () => {
     f.player.dispose()
   })
   it('rejects a different recording length before suppressing the main audio', async () => {
-    const f = fixture(); await f.player.select({ ...track, duration: 130 }); f.audio.dispatchEvent(new Event('canplay')); await Promise.resolve()
+    const f = fixture(); const selected = f.player.select({ ...track, duration: 130 }); await Promise.resolve(); f.audio.dispatchEvent(new Event('canplay')); await selected
     expect(f.output).not.toHaveBeenCalledWith(0)
     expect(f.state).toHaveBeenLastCalledWith(expect.objectContaining({ active: false, error: expect.stringContaining('different length') }))
     f.player.dispose()

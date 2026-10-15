@@ -8,7 +8,10 @@ import { movieSummary } from '@/test/catalog-fixtures'
 
 import { CatalogBrowseContent } from './catalog-browse-content'
 
-vi.mock('@/lib/catalog-browser', () => ({ browserDiscoverCatalog: vi.fn() }))
+vi.mock('@/lib/catalog-browser', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/catalog-browser')>(),
+  browserDiscoverCatalog: vi.fn(),
+}))
 
 const page: CatalogPage = {
   items: [movieSummary],
@@ -27,6 +30,26 @@ async function chooseOption(user: ReturnType<typeof userEvent.setup>, triggerNam
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
 
 describe('catalog browsing', () => {
+  it.each(['top-rated', 'trending'] as const)('opens the requested %s shelf and retains it through filters and retry', async (initialFeed) => {
+    const user = userEvent.setup()
+    discover.mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue({ ...page, items: [second], totalPages: 1 })
+    render(<CatalogBrowseContent current={page} currentYear={2026} initialFeed={initialFeed} kind="movie" popular={page} />)
+    const heading = initialFeed === 'top-rated' ? 'Top rated' : 'Trending now'
+    expect(screen.getByRole('button', { name: `Sort by ${initialFeed === 'top-rated' ? 'Top rated' : 'Trending'}` })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('couldn’t load these titles')
+    expect(within(screen.getByRole('region', { name: heading })).queryByRole('link')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await within(screen.getByRole('region', { name: heading })).findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
+    await chooseOption(user, 'Genre All genres', 'Adventure')
+    await waitFor(() => expect(discover).toHaveBeenLastCalledWith(
+      { kind: 'movie', feed: initialFeed, genre: 'Adventure', year: undefined }, 1, expect.any(AbortSignal),
+    ))
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(screen.getByRole('button', { name: 'Sort by Popular' })).toBeInTheDocument()
+    expect(results().getByRole('link', { name: 'Dune: Part Two' })).toBeInTheDocument()
+  })
+
   it('appends unique titles and stops at the last page', async () => {
     const user = userEvent.setup()
     discover.mockResolvedValue({ ...page, items: [movieSummary, second], page: 2, totalPages: 2 })

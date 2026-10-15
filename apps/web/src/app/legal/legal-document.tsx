@@ -16,15 +16,16 @@ type LegalDocumentProps = {
   children: ReactNode
   intro: ReactNode
   title: string
+  lastUpdated?: string
 }
 
-export function LegalDocument({ children, intro, title }: LegalDocumentProps) {
+export function LegalDocument({ children, intro, title, lastUpdated = LEGAL_LAST_UPDATED }: LegalDocumentProps) {
   return (
     <FilScreenShell pageHeading={undefined}>
       <main className="mx-auto min-h-[70vh] w-full max-w-4xl py-10 sm:py-14" data-consumit-legal-document>
         <header className="text-center">
           <h1 className="text-balance font-display text-[clamp(2.75rem,7vw,4.5rem)] leading-[0.95] tracking-[-0.025em] text-ink">{title}</h1>
-          <p className="mt-5 text-sm text-muted">Last updated: {LEGAL_LAST_UPDATED}</p>
+          <p className="mt-5 text-sm text-muted">Last updated: {lastUpdated}</p>
         </header>
         <div className="mt-12 max-w-[74ch] text-base leading-7 text-copy">{intro}</div>
         <div className="mt-12 space-y-11">{children}</div>

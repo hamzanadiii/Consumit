@@ -10,6 +10,20 @@ datasource db {
   provider = "postgresql"
 }
 
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  payload     Json
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  availableAt DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil  DateTime? @db.Timestamptz(3)
+  leaseToken  String?
+  processedAt DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
+  attempts    Int       @default(0)
+  lastFailure String?
+  @@index([availableAt, createdAt])
+}
+
 model ReleaseTracking {
   memberId String
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
@@ -122,6 +136,7 @@ model Member {
   savedTitles     SavedTitle[]
   favorites       Favorite[]
   progress        PlaybackProgress[]
+  recommendationDismissals RecommendationDismissal[]
   watchHistory    WatchHistoryEntry[]
   lists           MemberList[]
   savedLists      SavedMemberList[]
@@ -372,11 +387,22 @@ model PlaybackProgress {
   positionSeconds Int         @default(0)
   durationSeconds Int?
   completed       Boolean     @default(false)
+  hiddenFromContinueAt DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   @@unique([memberId, catalogKind, tmdbId, season, episode])
   @@index([memberId, updatedAt(sort: Desc)])
+  @@index([memberId, catalogKind, tmdbId, updatedAt(sort: Desc)])
+}
+
+model RecommendationDismissal {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId Int
+  createdAt DateTime @default(now())
+  @@id([memberId, catalogKind, tmdbId])
 }
 
 // Private factual completions. An attempt id makes retries idempotent while a

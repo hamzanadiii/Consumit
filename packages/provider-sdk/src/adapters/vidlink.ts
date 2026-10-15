@@ -25,11 +25,12 @@ export function createVidlinkProvider(http: ProviderHttp, now = Date.now) {
     const { ref } = input
     const isTv = ref.kind === 'series'
 
-    // Get token from enc-dec.app with retry
+    // Encrypt the TMDB id through the enc-dec oracle; the API rejects raw ids.
     let token: string | undefined
+    const encryptUrl = `${encOrigin}/api/enc-vidlink?text=${encodeURIComponent(String(ref.id))}`
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const encRes = await document(http, `${encOrigin}/api/enc-vidlink`, signal)
+        const encRes = await document(http, encryptUrl, signal)
         const encData = JSON.parse(encRes.text)
         if (encData && typeof encData === 'object' && encData.result) {
           token = encData.result

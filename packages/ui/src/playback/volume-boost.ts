@@ -23,7 +23,7 @@ export function createVolumeBoost(video: HTMLMediaElement, contextFactory = () =
     const next = contextFactory()
     try {
       await next.resume()
-      if (disposed || (target === 1 && output === 1)) {
+      if (disposed) {
         await next.close()
         return
       }
@@ -42,6 +42,10 @@ export function createVolumeBoost(video: HTMLMediaElement, contextFactory = () =
   }
 
   return {
+    async unlock() {
+      if (!gain) { pending ??= initialize().finally(() => { pending = null }); await pending }
+      if (context?.state === 'suspended') await context.resume()
+    },
     async output(value: 0 | 1) {
       output = value
       if (!gain && output === 1) return

@@ -2,7 +2,12 @@ import { Valkey } from 'iovalkey'
 import { z } from 'zod'
 
 import {
+  ACCOUNT_CONFIRM_MAX_ATTEMPTS,
+  ACCOUNT_CONFIRM_WINDOW_MS,
+  ACCOUNT_SEND_MAX,
+  ACCOUNT_SEND_WINDOW_MS,
   CHALLENGE_COOLDOWN_MS,
+  CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
   MAX_MEMBER_SESSIONS,
@@ -45,6 +50,12 @@ const storedSessionSchema = z.object({
 })
 
 const beginChallengeLua = `
+local function accountLocked()
+  return tonumber(redis.call('GET', KEYS[5]) or '0') >= tonumber(ARGV[11])
+end
+if accountLocked() then return 0 end
+if redis.call('EXISTS', KEYS[3]) == 1 then return 0 end
+if tonumber(redis.call('GET', KEYS[4]) or '0') >= tonumber(ARGV[9]) then return 0 end
 local current = redis.call('GET', KEYS[1])
 if current then
   local parsed = cjson.decode(current)
@@ -63,6 +74,8 @@ if ARGV[5] == '1' then
   redis.call('SET', KEYS[2], ARGV[6], 'PX', ARGV[4])
 end
 redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[4])
+local budget = redis.call('INCR', KEYS[4])
+if budget == 1 then redis.call('PEXPIRE', KEYS[4], ARGV[10]) end
 return 1
 `
 
@@ -73,14 +86,27 @@ local function release(parsed)
     if redis.call('GET', key) == ARGV[4] then redis.call('DEL', key) end
   end
 end
+local function lock()
+  redis.call('SET', KEYS[3], '1', 'PX', ARGV[6])
+end
+local accountAttempts = tonumber(redis.call('GET', KEYS[2]) or '0')
+if accountAttempts >= tonumber(ARGV[5]) then
+  local held = redis.call('GET', KEYS[1])
+  if held then release(cjson.decode(held)); redis.call('DEL', KEYS[1]) end
+  lock()
+  return -2
+end
 local current = redis.call('GET', KEYS[1])
 if not current then return nil end
 local parsed = cjson.decode(current)
 if parsed.codeHash ~= ARGV[1] then
+  local counted = redis.call('INCR', KEYS[2])
+  if counted == 1 then redis.call('PEXPIRE', KEYS[2], ARGV[7]) end
   parsed.attempts = tonumber(parsed.attempts) + 1
-  if parsed.attempts >= tonumber(ARGV[2]) then
+  if parsed.attempts >= tonumber(ARGV[2]) or counted >= tonumber(ARGV[5]) then
     release(parsed)
     redis.call('DEL', KEYS[1])
+    lock()
   else
     local ttl = redis.call('PTTL', KEYS[1])
     if ttl > 0 then redis.call('SET', KEYS[1], cjson.encode(parsed), 'PX', ttl) end
@@ -184,6 +210,18 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
     return `${keyPrefix}challenge:${purpose}:${challengeLookup(codePepper, purpose, email)}`
   }
 
+  function challengeTombstoneKey(purpose: AuthChallenge['kind'], email: string) {
+    return `${keyPrefix}challenge-lock:${purpose}:${challengeLookup(codePepper, purpose, email)}`
+  }
+
+  function accountAttemptKey(purpose: AuthChallenge['kind'], email: string) {
+    return `${keyPrefix}confirm-attempts:${purpose}:${challengeLookup(codePepper, purpose, email)}`
+  }
+
+  function accountSendKey(purpose: AuthChallenge['kind'], email: string) {
+    return `${keyPrefix}sends:${purpose}:${challengeLookup(codePepper, purpose, email)}`
+  }
+
   function memberSessionsKey(memberId: string) {
     return `${keyPrefix}member-sessions:${memberId}`
   }
@@ -207,9 +245,12 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       }
       const result = await client.eval(
         beginChallengeLua,
-        2,
+        5,
         challengeKey(input.purpose, input.email),
         input.payload.kind === 'registration' ? usernameReservationKey(input.payload.username) : `${keyPrefix}unused`,
+        challengeTombstoneKey(input.purpose, input.email),
+        accountSendKey(input.purpose, input.email),
+        accountAttemptKey(input.purpose, input.email),
         JSON.stringify(stored),
         CHALLENGE_COOLDOWN_MS,
         now,
@@ -218,6 +259,9 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
         reservationOwner(input.email),
         usernameReservationPrefix,
         input.payload.kind === 'registration' ? input.payload.username : '',
+        ACCOUNT_SEND_MAX,
+        ACCOUNT_SEND_WINDOW_MS,
+        ACCOUNT_CONFIRM_MAX_ATTEMPTS,
       )
       return Number(result) === 1 ? 'stored' : Number(result) === -1 ? 'username-unavailable' : 'cooldown'
     }),
@@ -231,13 +275,19 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
     consumeChallenge: (input) => run(async () => {
       const raw = await client.eval(
         consumeChallengeLua,
-        1,
+        3,
         challengeKey(input.purpose, input.email),
+        accountAttemptKey(input.purpose, input.email),
+        challengeTombstoneKey(input.purpose, input.email),
         challengeCodeHash(codePepper, input.purpose, input.email, input.code),
         CHALLENGE_MAX_ATTEMPTS,
         usernameReservationPrefix,
         reservationOwner(input.email),
+        ACCOUNT_CONFIRM_MAX_ATTEMPTS,
+        CHALLENGE_DESTROYED_BACKOFF_MS,
+        ACCOUNT_CONFIRM_WINDOW_MS,
       )
+      if (raw === -2) return 'locked'
       if (typeof raw !== 'string') return null
       const parsed = storedChallengeSchema.safeParse(JSON.parse(raw))
       return parsed.success ? parsed.data.payload : null

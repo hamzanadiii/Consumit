@@ -2,6 +2,7 @@ import type { PlaybackRef } from '@consumit/contracts'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, mediaType, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
+import { discoverRelaySource } from './relay-discovery.ts'
 
 const apiOrigin = 'https://lmscript.xyz'
 const headers = { 'user-agent': userAgent, accept: 'application/json', referer: `${apiOrigin}/` }
@@ -78,8 +79,8 @@ function boundedRead(parent: AbortSignal) {
   return { signal: controller.signal, cleanup: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort) } }
 }
 
-export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieMetadataResolver, now = Date.now) {
-  return adapter('lookmovie', async ({ ref }, signal) => {
+export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieMetadataResolver, now = Date.now, scope: { id?: string; relayHostDiscovery?: boolean } = {}) {
+  return adapter(scope.id ?? 'lookmovie', async ({ ref }, signal) => {
     if (ref.kind !== 'movie') throw new ProviderFailure('empty')
     const identity = await metadata(ref, signal)
     const title = identity.title.trim()
@@ -182,6 +183,14 @@ export function createLookmovieProvider(http: ProviderHttp, metadata: LookmovieM
       if (sources.length >= 16) break
     }
     if (!sources.length) throw new ProviderFailure('empty')
-    return sources
+    if (!scope.relayHostDiscovery) return sources
+    const verified: ProviderSource[] = []
+    for (const source of sources) {
+      signal.throwIfAborted()
+      try { verified.push(await discoverRelaySource(source, http, 'lookmovie-v1', signal)) }
+      catch { if (signal.aborted) signal.throwIfAborted() }
+    }
+    if (!verified.length) throw new ProviderFailure('unavailable')
+    return verified
   })
 }

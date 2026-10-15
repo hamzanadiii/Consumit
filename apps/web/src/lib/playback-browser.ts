@@ -1,4 +1,27 @@
-import { apiErrorResponseSchema, playbackProviderListSchema, playbackSessionSchema, separateAudioListSchema, separateAudioSourceSchema, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackSwitchRequest, type ResolvePlaybackRequest } from '@consumit/contracts'
+import { apiErrorResponseSchema, playbackAttemptSchema, playbackProviderListSchema, playbackSessionSchema, separateAudioListSchema, separateAudioSourceSchema, type PlaybackAttempt, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackSwitchRequest, type ResolvePlaybackRequest } from '@consumit/contracts'
+
+export async function runPlaybackAttempt(input: ResolvePlaybackRequest, signal: AbortSignal, progress: (value: PlaybackAttempt) => void, previous?: { sessionId: string; failure: PlaybackFailureRequest }): Promise<PlaybackSession> {
+  let id: string | undefined
+  const cancel = () => { if (id) void fetch(`/v1/playback/attempts/${id}`, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {}) }
+  signal.addEventListener('abort', cancel, { once: true })
+  try {
+    for (let step = 0; step < 129; step++) {
+      signal.throwIfAborted()
+      const response = await fetch(id ? `/v1/playback/attempts/${id}/continue` : '/v1/playback/attempts', {
+        method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(id ? {} : { input, ...previous }), signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      })
+      if (!response.ok) throw new Error('Source search could not continue. Try again or choose a server.')
+      const result = playbackAttemptSchema.parse(await response.json())
+      id = result.attemptId
+      if (signal.aborted) { cancel(); signal.throwIfAborted() }
+      progress(result)
+      if (result.status === 'ready') return result.session
+      if (result.status === 'exhausted') throw new Error('Every compatible server was tried. Choose a server to retry, or try again later.')
+    }
+    throw new Error('Source search reached its limit. Try again later.')
+  } finally { signal.removeEventListener('abort', cancel) }
+}
 
 async function audioRequest(session: PlaybackSession, action: 'audio' | 'audio/prepare', signal: AbortSignal, trackId?: string) {
   const response = await fetch(`/v1/playback/${session.id}/${action}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceId: session.source.id, ...(trackId ? { trackId } : {}) }), signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) })

@@ -1,0 +1,20 @@
+{
+  "name": "@consumit/server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/internal.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^4.5.4",
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
+  }
+}

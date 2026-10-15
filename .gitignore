@@ -46,6 +46,8 @@ Thumbs.db
 worker/.wrangler/
 infra/cloudflare/.wrangler/
 infra/cloudflare/*.local.jsonc
+infra/cloudflare/*.secret.local
+scripts/*.local.mjs
 worker/.dev.vars
 **/.terraform/
 *.tfstate
@@ -53,3 +55,7 @@ worker/.dev.vars
 *.tfvars
 !*.tfvars.example
 infra/secrets/
+
+# Local provider investigation probes and captured scratch output.
+/scripts/debug-*
+/master.txt

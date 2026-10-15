@@ -1,0 +1,13 @@
+# Controlled fixture only; the production rollback uses rebuild-release.mjs.
+services:
+  api-legacy:
+    extends: {file: images.compose.yaml, service: api}
+    environment:
+      APPLICATION_MODE: combined
+      BACKGROUND_JOBS_ENABLED: 'true'
+      OTEL_SERVICE_NAME: consumit-api-legacy
+    stop_grace_period: 80s
+  gateway:
+    environment:
+      CONSUMIT_PLAYBACK_CANARY_PERCENT: '100'
+      CONSUMIT_PLAYBACK_PRIMARY_UPSTREAM: api-legacy:3001

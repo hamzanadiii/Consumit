@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createMemoryPlaybackStore } from '../playback/state.ts'
-import { detectTrackFlags, entryMatchesLang, resolveSubtitles } from './engine.ts'
+import { detectTrackFlags, entryMatchesLang, resolveSubtitles, safeFileHeaders } from './engine.ts'
 import { createStoreFileStore } from './storage.ts'
 import { cleanQueryLangs, createSubtitleService } from './subtitles.ts'
 import type { RawSubtitle, SubtitleSearchProvider } from './types.ts'
@@ -56,6 +56,49 @@ describe('resolveSubtitles', () => {
     const key = tracks[0]!.url.split('/').pop()!
     const stored = await createStoreFileStore(store).getVtt(key)
     expect(stored).toContain('WEBVTT')
+  })
+
+  it('enforces the declared file scope on both fetch and direct paths and drops mismatched provider ids', async () => {
+    const fetchFile = vi.fn(async (_url: string, _hosts?: readonly string[]) => Buffer.from('1\n00:00:01,000 --> 00:00:02,000\nHi\n', 'utf8'))
+    const scoped: SubtitleSearchProvider = {
+      ...provider('scoped', [{ url: 'https://subs.example/a.srt', lang: 'en', label: 'rel', format: 'srt', provider: 'scoped' }]),
+      fileHosts: ['subs.example'],
+    }
+    const tracks = await resolveSubtitles({ type: 'movie' }, [scoped], createStoreFileStore(createMemoryPlaybackStore()), 'https://api.example', signal, fetchFile as never)
+    expect(fetchFile).toHaveBeenCalledOnce()
+    expect(fetchFile.mock.calls[0]?.[1]).toEqual(['subs.example'])
+    expect(tracks).toHaveLength(1)
+    const hostile: SubtitleSearchProvider = {
+      ...provider('hostile', [
+        direct('hostile', 'fr', 'https://evil.example/fr.vtt'),
+        direct('hostile', 'de', 'https://evil.example/de.srt'),
+        direct('other', 'es', 'https://subs.example/es.vtt'),
+      ]),
+      fileHosts: ['subs.example'],
+    }
+    fetchFile.mockClear()
+    const blocked = await resolveSubtitles({ type: 'movie' }, [hostile], createStoreFileStore(createMemoryPlaybackStore()), 'https://api.example', signal, fetchFile as never)
+    expect(fetchFile).not.toHaveBeenCalled()
+    expect(blocked).toHaveLength(0)
+  })
+
+  describe('safeFileHeaders', () => {
+    const url = new URL('https://cdn.example/file.srt')
+    it('strips routing headers that could re-target the request', () => {
+      expect(safeFileHeaders({ Host: 'internal.example', Connection: 'keep-alive', Referer: 'https://cdn.example/page' }, url, null))
+        .toEqual({ Referer: 'https://cdn.example/page' })
+    })
+    it('binds undeclared-provider credentials to the destination host', () => {
+      expect(safeFileHeaders({ Cookie: 'a=1', Referer: 'https://other.example/page' }, url, null))
+        .toEqual({ Referer: 'https://other.example/page' })
+      expect(safeFileHeaders({ Cookie: 'a=1' }, url, null)).toEqual({})
+      expect(safeFileHeaders({ Cookie: 'a=1', Referer: 'https://cdn.example/page' }, url, null))
+        .toEqual({ Cookie: 'a=1', Referer: 'https://cdn.example/page' })
+    })
+    it('keeps credentials inside a declared provider scope', () => {
+      expect(safeFileHeaders({ Cookie: 'a=1', Authorization: 'Bearer t' }, url, { hosts: ['cdn.example'], patterns: [] }))
+        .toEqual({ Cookie: 'a=1', Authorization: 'Bearer t' })
+    })
   })
 
   it('extracts zips and caches the converted file', async () => {

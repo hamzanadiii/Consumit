@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
 import './globals.css'
@@ -9,8 +9,11 @@ import { SessionProvider } from './session/session'
 import { SIDEBAR_INIT_SCRIPT, THEME_INIT_SCRIPT } from './home/filscreen-theme'
 import { ShellStateProvider } from './home/shell-state'
 import { WebVitals } from './web-vitals'
+import { GoogleAnalytics } from './shared/google-analytics'
 
 const siteDescription = 'Watch movies, series, and anime. Remember what you love in your private library.'
+
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' }
 
 export const metadata: Metadata = {
   description: siteDescription,
@@ -24,6 +27,7 @@ export const metadata: Metadata = {
     url: siteUrl(),
   },
   robots: { follow: true, index: true },
+  referrer: 'strict-origin-when-cross-origin',
   title: 'Consumit',
   twitter: {
     card: 'summary_large_image',
@@ -46,6 +50,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <SessionProvider initialStatus="loading">
           <ShellStateProvider>
             <WebVitals />
+            <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
             {children}
           </ShellStateProvider>
         </SessionProvider>

@@ -1,13 +1,14 @@
 'use client'
 
-import { watchHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
+import { titleHref, watchHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
 import { SeasonSelector } from '@consumit/ui'
 import { useRouter } from 'next/navigation'
 import { useMemo } from 'react'
 
 import { EpisodeRail, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
-import { AdSlot } from '../../shared/ad-slot'
+import { WatchDetails, WatchSurface } from '../watch-surface'
+import styles from '../watch-surface.module.css'
 import type { WatchEpisode, WatchTitle } from '../watch-screen'
 
 function formatRuntime(minutes: number | null | undefined): string | null {
@@ -65,13 +66,9 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
     : undefined
 
   return (
-    <div className="min-h-screen bg-[var(--fs-page)]" data-consumit-series-watch>
-      <div className="mx-auto w-full max-w-[100rem] px-3 pt-4 pb-10 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <AdSlot placement="watch" position="early" />
-        </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="flex min-w-0 flex-col gap-6">
+    <WatchSurface backHref={titleHref(detail)}>
+        <div className={styles.columns} data-consumit-series-watch>
+          <div className={styles.primary}>
             <WatchPlayback
               episode={watchEpisode}
               key={`${tmdbId}:${seasonNumber}:${episodeNumber}`}
@@ -81,7 +78,14 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
               title={watchTitle}
               {...(pinnedProvider ? { pinnedProvider } : {})}
             />
+            <WatchDetails
+              episode={`Season ${seasonNumber} · Episode ${episodeNumber}${current?.title ? ` · ${current.title}` : ''}`}
+              meta={[detail.year, formatRuntime(current?.runtimeMinutes ?? watchTitle.episodeRuntimeMinutes), watchTitle.contentRating].filter(Boolean).join(' · ')}
+              overview={current?.overview || detail.overview}
+              title={detail.title}
+            />
           </div>
+          <div className={styles.aside}>
           <EpisodeRail
             actions={seasonOptions.length > 1 ? (
               <SeasonSelector
@@ -97,8 +101,8 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
             fallbackArt={detail.backdropUrl ?? detail.posterUrl}
             heading="Episodes"
           />
+          </div>
         </div>
-      </div>
-    </div>
+    </WatchSurface>
   )
 }

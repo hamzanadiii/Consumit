@@ -22,6 +22,21 @@ function fixture(providers: SubtitleSearchProvider[]) {
 }
 
 describe('subtitle discovery', () => {
+  it('continues a large roster without losing late providers and replays a batch without duplicate searches', async () => {
+    const searches = Array.from({ length: 29 }, (_, index) => vi.fn(async () => [raw(`p${index}`, index === 28 ? 'pt-BR' : 'en', index)]))
+    const { discovery } = fixture(searches.map((search, index) => provider(`p${index}`, search)))
+    const first = await Array.fromAsync(discovery.discover(ref, signal))
+    let cursor = first.at(-1)!.nextCursor!
+    const id = first[0]!.searchId
+    expect(searches.filter(search => search.mock.calls.length)).toHaveLength(12)
+    const second = await Array.fromAsync(discovery.discover(ref, signal, cursor))
+    expect(await Array.fromAsync(discovery.discover(ref, signal, cursor))).toEqual(second)
+    cursor = second.at(-1)!.nextCursor!
+    await Array.fromAsync(discovery.discover(ref, signal, cursor))
+    expect(searches.every(search => search.mock.calls.length === 1)).toBe(true)
+    expect((await discovery.page(id, 'pt-br'))?.tracks).toHaveLength(1)
+    await expect(Array.fromAsync(discovery.discover({ kind: 'movie', id: 999 }, signal, cursor))).rejects.toThrow('Search subtitles again')
+  })
   it('does not add the saved subtitle again when a fresh discovery finds its upstream candidate', async () => {
     const selected = raw('one', 'ar', 1)
     const rows: CatalogTrack[] = []
@@ -71,6 +86,20 @@ describe('subtitle discovery', () => {
     const snapshot = JSON.parse((await store.get(`subtitle:discovery:${searchId}`))!)
     expect(snapshot.candidates[0].raw.url).toBe(`${identityUrl}?Signature=second`)
     expect(await discovery.prepare(searchId, firstId, signal)).toEqual(prepared)
+  })
+  it('rejects candidates outside a declared provider file scope at intake', async () => {
+    const scoped: SubtitleSearchProvider = {
+      ...provider('one', async () => [raw('one', 'en', 1), { ...raw('one', 'fr', 2), url: 'https://evil.example/fr.srt' }]),
+      fileHosts: ['subs.example'],
+    }
+    const { discovery } = fixture([scoped])
+    const events = await Array.fromAsync(discovery.discover(ref, signal))
+    const outcome = events.find((event) => event.type === 'provider')
+    if (outcome?.type !== 'provider') throw new Error('missing provider event')
+    expect(outcome.provider).toMatchObject({ id: 'one', found: 1, failure: 'parse' })
+    const searchId = events[0]!.searchId
+    expect((await discovery.page(searchId, 'en'))?.total).toBe(1)
+    expect((await discovery.page(searchId, 'fr'))?.total).toBe(0)
   })
   it('emits cached snapshot first, then independent provider outcomes and all language counts', async () => {
     let finishSlow!: (raws: RawSubtitle[]) => void

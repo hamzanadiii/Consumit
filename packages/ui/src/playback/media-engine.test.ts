@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { attachMediaEngine, dedupeQualityHeights, orderQualityOptions, validQualityHeight } from './media-engine'
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
-const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }>; currentLevel: number }>)
+const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }>; currentLevel: number; audioTrack: number; nextAudioTrack: number }>)
 const startLoad = vi.hoisted(() => vi.fn())
 vi.mock('hls.js', () => ({
   default: class {
     static isSupported = () => true
-    static Events = { MANIFEST_PARSED: 'manifest', AUDIO_TRACKS_UPDATED: 'audio', SUBTITLE_TRACKS_UPDATED: 'subs', ERROR: 'error', FRAG_CHANGED: 'fragment' }
+    static Events = { MANIFEST_PARSED: 'manifest', AUDIO_TRACKS_UPDATED: 'audio', AUDIO_TRACK_SWITCHED: 'audio-switched', SUBTITLE_TRACKS_UPDATED: 'subs', ERROR: 'error', FRAG_CHANGED: 'fragment' }
     static ErrorTypes = { MEDIA_ERROR: 'media' }
     levels: Array<{ height?: number; bitrate: number }> = []
     audioTracks: unknown[] = []
@@ -16,8 +16,11 @@ vi.mock('hls.js', () => ({
     subtitleDisplay = false
     autoLevelCapping = 0
     currentLevel = -1
+    audioTrack = 0
+    nextAudioTrack = 0
     constructor() { instances.push(this) }
     on = (event: string, callback: (...args: unknown[]) => void) => { handlers.set(event, callback) }
+    off = (event: string, callback: (...args: unknown[]) => void) => { if (handlers.get(event) === callback) handlers.delete(event) }
     loadSource() {}
     attachMedia() {}
     destroy() {}
@@ -29,6 +32,19 @@ vi.mock('hls.js', () => ({
 const source = { type: 'hls' as const, src: 'https://cdn.consumit.example/master.m3u8' }
 
 describe('media engine native teardown', () => {
+  it('keeps playing HLS audio buffered until the selected track is active', async () => {
+    instances.length = 0
+    const video = document.createElement('video')
+    Object.defineProperties(video, { paused: { value: false }, readyState: { value: 3 } })
+    const engine = await attachMediaEngine(video, source, { tracks: vi.fn(), fatal: vi.fn() })
+    const pending = engine.audio('1')
+    expect(instances[0]!.audioTrack).toBe(0)
+    expect(instances[0]!.nextAudioTrack).toBe(1)
+    handlers.get('audio-switched')?.('audio-switched', { id: 1 })
+    video.currentTime = 1; video.dispatchEvent(new Event('timeupdate'))
+    expect(await pending).toBe(true)
+    engine.destroy()
+  })
   it('empties a native engine without an intermediate empty load', async () => {
     const video = document.createElement('video')
     const load = vi.spyOn(video, 'load')

@@ -1,0 +1,9 @@
+{
+  "name": "consumit-provider-resolver",
+  "main": "../../packages/media-relay/src/resolver-worker.ts",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } },
+  "vars": { "RESOLVER_ENABLED": "true" }
+}

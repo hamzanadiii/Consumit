@@ -5,6 +5,32 @@ import { validatedSources, type ProviderRegistration } from '../index.ts'
 const signal = new AbortController().signal
 const movie = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
 describe('reviewed provider frames', () => {
+  it.each(['apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe'] as const)('returns the published %s frame even when Worker page lookup is blocked', async id => {
+    const http = vi.fn(async () => { throw new Error('Worker lookup denied upstream') })
+    const result = await createFrameProvider(id, http).resolve(movie, signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ type: 'iframe', headers: {}, subtitles: [] }] })
+    expect(http).not.toHaveBeenCalled()
+  })
+  it.each([
+    { ref: { kind: 'movie' as const, id: 550 }, path: '/movie/550' },
+    { ref: { kind: 'series' as const, id: 1396, season: 1, episode: 1 }, path: '/tv/1396/1/1' },
+  ])('issues a canonical browser-owned Vixsrc frame without an OVH page probe: $path', async ({ ref, path }) => {
+    const http = vi.fn(async () => { throw new Error('Vixsrc blocks server lookup') })
+    const result = await createFrameProvider('vixsrcframe', http).resolve({ ...movie, ref }, signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ type: 'iframe', frameSandbox: 'none', headers: {}, subtitles: [] }] })
+    if (!result.ok) throw new Error('Missing canonical frame')
+    const url = new URL(result.sources[0]!.url)
+    expect(url.origin).toBe('https://vixsrc.to')
+    expect(url.pathname).toBe(path)
+    expect(url.searchParams.get('lang')).toBe('en')
+    expect(http).not.toHaveBeenCalled()
+    const registration: ProviderRegistration = { adapter: createFrameProvider('vixsrcframe', http), enabled: true, deliveryMode: 'embed', mediaHosts: ['vixsrc.to'], approvedRegions: ['US'], mediaKinds: ['movie', 'series'], upstreamGroup: 'vixsrcframe', concurrency: 2, requestsPerMinute: 30 }
+    expect(validatedSources(result, registration)).toHaveLength(1)
+    expect(validatedSources(result, { ...registration, deliveryMode: 'direct' })).toHaveLength(0)
+    expect((await registration.adapter.resolve({ ...movie, ref: { kind: 'anime', id: 21, episode: 1 } }, signal)).ok).toBe(false)
+    const cancelled = new AbortController(); cancelled.abort()
+    expect(await registration.adapter.resolve({ ...movie, ref }, cancelled.signal)).toMatchObject({ ok: false, code: 'cancelled' })
+  })
   it.each(['apiplayerframe', 'embedapiframe', 'vsembedframe'] as const)('keeps exact TMDB episode identity for %s', async id => {
     const http = vi.fn(async (url: string) => ({ status: 200, url, text: 'jw-server-list embeddable movie and tv player' }))
     const provider = createFrameProvider(id, http)
@@ -93,7 +119,7 @@ describe('reviewed provider frames', () => {
   })
 })
 describe('movie/series embed frames', () => {
-  it('builds VidCoreIO TMDB paths and requires a live vidcore page', async () => {
+  it('builds VidCoreIO TMDB paths without gating viewer access on page size', async () => {
     const http = vi.fn(async (url: string) => ({ status: 200, url, text: 'vidcore' + 'x'.repeat(10_000) }))
     const provider = createFrameProvider('vidcoreioframe', http)
     const movieResult = await provider.resolve(movie, signal)
@@ -101,9 +127,10 @@ describe('movie/series embed frames', () => {
     const seriesResult = await provider.resolve({ ...movie, ref: { kind: 'series', id: 235930, season: 2, episode: 3 } }, signal)
     expect(seriesResult.ok && seriesResult.sources[0]?.url).toBe('https://vidcore.io/tv/235930/2/3')
     http.mockImplementation(async url => ({ status: 200, url, text: 'vidcore' + 'x'.repeat(100) }))
-    expect((await provider.resolve(movie, signal)).ok).toBe(false)
+    expect((await provider.resolve(movie, signal)).ok).toBe(true)
+    expect(http).not.toHaveBeenCalled()
   })
-  it('gates CineSrc with its series picker in-frame', async () => {
+  it('keeps the CineSrc series picker identity without probing its frame page', async () => {
     const http = vi.fn(async (url: string) => ({ status: 200, url, text: 'streaming servers' }))
     const provider = createFrameProvider('cinesrcframe', http)
     const seriesResult = await provider.resolve({ ...movie, ref: { kind: 'series', id: 235930, season: 2, episode: 3 } }, signal)
@@ -111,9 +138,10 @@ describe('movie/series embed frames', () => {
     const movieResult = await provider.resolve(movie, signal)
     expect(movieResult.ok && movieResult.sources[0]?.url).toBe('https://cinesrc.st/embed/movie/550')
     http.mockImplementation(async url => ({ status: 200, url, text: 'no marker' }))
-    expect((await provider.resolve(movie, signal)).ok).toBe(false)
+    expect((await provider.resolve(movie, signal)).ok).toBe(true)
+    expect(http).not.toHaveBeenCalled()
   })
-  it('gates VidRift through its subtitle API without fetching the bot-walled page', async () => {
+  it('does not use subtitle availability as a VidRift frame eligibility gate', async () => {
     const http = vi.fn(async (url: string) => {
       if (url.includes('/api/subtitles/movie/550/en')) return { status: 200, url, text: 'WEBVTT\n' }
       if (url.includes('/api/subtitles/')) return { status: 404, url, text: '' }
@@ -122,8 +150,8 @@ describe('movie/series embed frames', () => {
     const provider = createFrameProvider('vidriftframe', http)
     const result = await provider.resolve(movie, signal)
     expect(result.ok && result.sources[0]?.url).toBe('https://embed.vidrift.net/embed/movie/550')
-    expect(http.mock.calls.every(([url]) => String(url).includes('/api/subtitles/'))).toBe(true)
+    expect(http).not.toHaveBeenCalled()
     http.mockImplementation(async url => ({ status: 404, url, text: '' }))
-    expect((await provider.resolve(movie, signal)).ok).toBe(false)
+    expect((await provider.resolve(movie, signal)).ok).toBe(true)
   })
 })

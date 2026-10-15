@@ -94,6 +94,60 @@ describe('unzipEntries', () => {
     expect(entries).toHaveLength(1)
     expect(srtToVtt(entries[0]!.data.toString('utf8'))).toContain('WEBVTT')
   })
+
+  /** Raw-deflate zip builder (method 8), mirroring the fallback fixture. */
+  function deflatedZip(files: { name: string; data: Buffer }[]): Buffer {
+    const chunks: Buffer[] = []
+    const central: Buffer[] = []
+    let offset = 0
+    for (const file of files) {
+      const comp = deflateRawSync(file.data)
+      const name = Buffer.from(file.name, 'utf8')
+      const head = Buffer.alloc(30)
+      head.writeUInt32LE(0x04034b50, 0)
+      head.writeUInt16LE(8, 8)
+      head.writeUInt32LE(comp.length, 18)
+      head.writeUInt32LE(file.data.length, 22)
+      head.writeUInt16LE(name.length, 26)
+      chunks.push(head, name, comp)
+      const entry = Buffer.alloc(46)
+      entry.writeUInt32LE(0x02014b50, 0)
+      entry.writeUInt16LE(8, 10)
+      entry.writeUInt32LE(comp.length, 20)
+      entry.writeUInt32LE(file.data.length, 24)
+      entry.writeUInt16LE(name.length, 28)
+      entry.writeUInt32LE(offset, 42)
+      central.push(entry, name)
+      offset += 30 + name.length + comp.length
+    }
+    const centralDir = Buffer.concat(central)
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(files.length, 10)
+    eocd.writeUInt32LE(centralDir.length, 12)
+    eocd.writeUInt32LE(offset, 16)
+    return Buffer.concat([...chunks, centralDir, eocd])
+  }
+
+  it('skips a single entry whose inflated size exceeds the per-entry cap', () => {
+    // 9 MiB of zeros deflates to a few KiB; without the cap the tiny
+    // archive would expand without bound during extraction.
+    const zip = deflatedZip([{ name: 'bomb.vtt', data: Buffer.alloc(9 * 1024 * 1024) }])
+    expect(unzipEntries(zip)).toHaveLength(0)
+  })
+
+  it('throws when stored entries expand past the cumulative cap', () => {
+    const big = Buffer.alloc(9 * 1024 * 1024)
+    expect(() => unzipEntries(storedZip([
+      { name: 'a.srt', data: big },
+      { name: 'b.srt', data: big },
+    ]))).toThrow('expands beyond its limit')
+  })
+
+  it('caps the number of extracted entries', () => {
+    const files = Array.from({ length: 600 }, (_, index) => ({ name: `f${index}.srt`, data: Buffer.from('x') }))
+    expect(unzipEntries(storedZip(files))).toHaveLength(512)
+  })
 })
 
 describe('decodeSubtitleText', () => {

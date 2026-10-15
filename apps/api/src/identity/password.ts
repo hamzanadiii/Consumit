@@ -3,9 +3,8 @@ import { randomBytes } from 'node:crypto'
 import { argon2id, argon2Verify } from 'hash-wasm'
 
 // OWASP minimums: 19 MiB memory (KiB units here), 2 iterations, 1 lane.
-// hash-wasm runs on Node and Bun alike — important because vitest executes
-// under Node while production runs on Bun, where a Bun-only API would leave
-// this module untestable.
+// hash-wasm uses the same Argon2id format in Node and the previous Bun runtime,
+// preserving existing credentials across the runtime migration.
 const MEMORY_KIB = 19456
 const ITERATIONS = 2
 const PARALLELISM = 1

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { allowedMediaUrl, isRelayMediaUrl, type ProviderSource } from '../index.ts'
-import { assertHlsManifest, parseHlsReferenceEntries } from '../manifest.ts'
+import { inspectHlsManifest } from '../manifest.ts'
 import { accessDeadline, adapter, document, mediaType, ProviderFailure, type ProviderHttp } from './http.ts'
 
 // Port of PROVE/providers/evion/evion.ts: exact TMDB TV episode, direct CDN.
@@ -12,9 +12,9 @@ const resultSchema = z.object({ sources: z.array(z.object({
 })).max(32).optional() })
 
 function directUrl(value: string, base?: string) {
-  const url = new URL(value, base).href
+  const url = new URL(value, base)
   if (!allowedMediaUrl(url, hosts) || isRelayMediaUrl(url)) throw new ProviderFailure('malformed')
-  return url
+  return url.href
 }
 
 async function verify(http: ProviderHttp, root: string, type: ProviderSource['type'], signal: AbortSignal) {
@@ -24,8 +24,7 @@ async function verify(http: ProviderHttp, root: string, type: ProviderSource['ty
     for (let depth = 0; depth < 3; depth++) {
       const response = await document(http, current, signal, { accept: 'application/vnd.apple.mpegurl' })
       directUrl(response.url)
-      const kind = assertHlsManifest(response.text)
-      const refs = parseHlsReferenceEntries(response.text, response.url)
+      const { kind, references: refs } = inspectHlsManifest(response.text, response.url)
       if (!refs.length) throw new ProviderFailure('malformed')
       for (const ref of refs) directUrl(ref.url)
       if (kind === 'master') {

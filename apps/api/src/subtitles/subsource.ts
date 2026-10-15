@@ -24,6 +24,9 @@ export function createSubSourceProvider(http: SubtitleHttp): SubtitleSearchProvi
   return {
     id: 'subsource',
     name: 'SubSource',
+    // Download links are extracted by a hardcoded api.subsource.net regex;
+    // the cookie + page Referer stay on SubSource infrastructure only.
+    fileHosts: ['subsource.net', '*.subsource.net'],
     supports(query: SubtitleQuery) {
       // Movies/TV need title + year for the slug; anime answers by title
       // alone (year is absent on anime queries) on the TV slug path with

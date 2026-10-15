@@ -5,12 +5,15 @@ import { sourceAccess, adapter, document, mediaType, ProviderFailure, type Provi
 const apiOrigin = 'https://scrapper.rivestream.app'
 const defaultReferer = 'https://nextgencloudfabric.com/'
 // Sub-provider map (languages as codes so resolve-time audio matching
-// works): citadel serves English, hindicast Hindi, apex/solstice multi-audio
-// (English-first with in-player track choice), quasar French, vanguard/aura
-// valhalla HLS (PROVE live roster 2026-09-22), the rest Original. Citadel
-// leads: proven English workhorse, deterministic order.
+// works): citadel serves English, mirage English 4K through the cine4k
+// worker (PROVE 2026-10-12, movies only upstream), hindicast Hindi,
+// apex/solstice multi-audio (English-first with in-player track choice),
+// quasar French, vanguard/aura valhalla HLS (PROVE live roster 2026-09-22),
+// the rest Original. Citadel leads: proven English workhorse,
+// deterministic order.
 const SUB_PROVIDERS = [
   { id: 'citadel', lang: 'en' },
+  { id: 'mirage', lang: 'en' },
   { id: 'apex', lang: 'en' },
   { id: 'vanguard', lang: 'original' },
   { id: 'aura', lang: 'original' },
@@ -44,14 +47,22 @@ const sourceEntrySchema = z.object({
   // proxied URLs (/content?v=...) that only classify via this hint —
   // PROVE reads the same field, so a missing hint keeps URL classification.
   format: z.string().max(16).optional(),
+  tmdbId: z.union([z.string().max(32), z.number()]).optional(),
+  tmdb_id: z.union([z.string().max(32), z.number()]).optional(),
 })
 
 const responseSchema = z.object({
   data: z.object({
+    tmdbId: z.union([z.string().max(32), z.number()]).optional(),
+    tmdb_id: z.union([z.string().max(32), z.number()]).optional(),
     sources: z.array(sourceEntrySchema).max(64).optional(),
     captions: z.array(captionSchema).max(64).optional(),
   }).optional(),
 })
+
+function matchesRequestedTmdbId(value: string | number | undefined, id: number): boolean {
+  return value === undefined || String(value) === String(id)
+}
 
 function parseQualityAndLang(q?: string): { height?: number; qualityHint?: string; language?: string } {  if (!q) return {}
   let qualityHint: string | undefined
@@ -161,6 +172,13 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
         try {
           const res = await document(http, url, controller.signal)
           const data = responseSchema.parse(JSON.parse(res.text))
+          // Some scraper responses include their catalog identity; if they
+          // do, reject a cross-wired result instead of trusting its streams.
+          // The current public endpoint omits this metadata, so the adapter
+          // continues to rely on the canonical TMDB ID in its request there.
+          if (data.data && !matchesRequestedTmdbId(data.data.tmdbId ?? data.data.tmdb_id, ref.id)) {
+            return { provider: sub.id, lang: sub.lang, data: undefined }
+          }
           return { provider: sub.id, lang: sub.lang, data: data.data }
         } catch {
           return { provider: sub.id, lang: sub.lang, data: undefined }
@@ -188,6 +206,7 @@ export function createRivestreamProvider(http: ProviderHttp, now = Date.now, sco
       for (let idx = 0; idx < data.sources.length; idx++) {
         const entry = data.sources[idx]
         if (!entry || !entry.url || seen.has(entry.url)) continue
+        if (!matchesRequestedTmdbId(entry.tmdbId ?? entry.tmdb_id, ref.id)) continue
 
         const { url, headers } = unwrapProxy(entry.url)
         // New relay rows preserve only noncredential playback hints from

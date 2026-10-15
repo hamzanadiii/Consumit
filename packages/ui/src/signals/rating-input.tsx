@@ -64,6 +64,7 @@ export function RatingInput({
               return (
                 <label
                   className={cn('absolute inset-y-0 w-1/2 cursor-pointer', half === 0 ? 'left-0' : 'right-0')}
+                  data-rating={step}
                   key={step}
                   onMouseEnter={() => {
                     if (!disabled) setHover(step)

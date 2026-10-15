@@ -69,7 +69,8 @@ describe('admin routes', () => {
     const response = await app.inject({ method: 'GET', url: '/v1/admin/subtitles', cookies: { consumit_session: admin } })
     expect(response.statusCode).toBe(200)
     const result = response.json() as { providers: Array<{ id: string; configured: boolean; last: unknown }> }
-    expect(result.providers).toHaveLength(13)
+    expect(result.providers.length).toBeGreaterThanOrEqual(13)
+    expect(new Set(result.providers.map(provider => provider.id)).size).toBe(result.providers.length)
     expect(result.providers.every((provider) => typeof provider.configured === 'boolean' && provider.last === null)).toBe(true)
     expect(response.body).not.toContain('subtitle-member@example.com')
   })

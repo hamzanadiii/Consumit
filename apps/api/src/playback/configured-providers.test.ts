@@ -8,6 +8,37 @@ import type { MediaTransport } from './transport.ts'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 
 const configuration = [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to', '*.vix-content.net'], upstreamGroup: 'vixsrc' }]
+describe('Vixsrc browser player registration', () => {
+  const row = { id: 'vixsrcframe', adapter: 'vixsrcframe', deliveryMode: 'embed', regions: ['US'], mediaHosts: ['vixsrc.to'], upstreamGroup: 'vixsrcframe', mediaKinds: ['movie', 'series'] }
+  it('registers the canonical frame without probing through OVH', async () => {
+    const transport = vi.fn<MediaTransport>(async () => { throw new Error('Lookup must remain browser-owned') })
+    const [provider] = configuredProviders([row], { transport })
+    const result = await provider!.adapter.resolve({ ref: { kind: 'movie', id: 550 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
+    expect(provider?.deliveryMode).toBe('embed')
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('Missing frame candidate')
+    expect(result.sources[0]).toMatchObject({ type: 'iframe', frameSandbox: 'none', headers: {} })
+    expect(new URL(result.sources[0]!.url).hostname).toBe('vixsrc.to')
+    expect(transport).not.toHaveBeenCalled()
+  })
+  it('rejects other delivery modes, identities and frame origins', () => {
+    for (const patch of [
+      { deliveryMode: 'direct' }, { deliveryMode: 'relay' }, { id: 'other-frame' },
+      { mediaHosts: ['evil.example'] }, { mediaHosts: ['*.vixsrc.to'] },
+      { mediaHosts: ['vixsrc.to', 'other.example'] }, { mediaHostPatterns: ['^vixsrc\\.to$'] },
+      { mediaKinds: ['anime'] },
+    ]) expect(() => configuredProviders([{ ...row, ...patch }])).toThrow()
+  })
+})
+
+describe('LookMovie relay registration', () => {
+  const row = { id: 'lookmovie-relay', adapter: 'lookmovie', deliveryMode: 'relay', relayHostDiscovery: 'lookmovie-v1', regions: ['US'], mediaKinds: ['movie'], mediaHosts: ['srv310.seclar.cyou'], upstreamGroup: 'lookmovie' }
+  it('requires the explicit relay namespace and reviewed recipe', () => {
+    expect(configuredProviders([row], { tmdbToken: 'fixture-token' })[0]?.adapter.id).toBe('lookmovie-relay')
+    expect(() => configuredProviders([{ ...row, deliveryMode: 'direct' }])).toThrow('reviewed adapter recipe')
+    expect(() => configuredProviders([{ ...row, id: 'lookmovie' }])).toThrow('reviewed adapter recipe')
+  })
+})
 
 describe('configured real provider integration', () => {
   it('keeps LookMovie fixed resolutions in one server and switches through its approved current CDN', async () => {
@@ -122,6 +153,26 @@ describe('configured real provider integration', () => {
     expect(transport.mock.calls[0]?.[0]).toBe('https://scrapper.rivestream.app/api/provider?provider=apogee&id=550')
     const playback = createPlayback({ providers: [video!], store: createMemoryPlaybackStore(), region: 'US' })
     expect((await playback.listProviders({ ...input, capabilities: { hls: true, native: true, dash: true, nativeHls: false } }, new AbortController().signal)).map(p => p.id)).toEqual(['riveapogee'])
+  })
+  it('registers Mirage as movie-only Direct through the Rive scraper', async () => {
+    const row = { id: 'rivemirage', adapter: 'rivemirage', regions: ['US'], mediaHosts: ['cine4k.mpddash.workers.dev', 'carwashonline.site', 'nectronincllc.store', 'buswashsolarpanel.click'], upstreamGroup: 'rivemirage', mediaKinds: ['movie'] }
+    const wrapped = `https://proxy.valhallastream.com/m3u8?url=${encodeURIComponent('https://cine4k.mpddash.workers.dev/movie/550.m3u8')}&headers=${encodeURIComponent(JSON.stringify({ 'User-Agent': 'Mozilla/5.0' }))}`
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify({ data: { sources: [{ url: wrapped, quality: '4K | English', format: 'hls' }] } })]) }))
+    const [provider] = configuredProviders([row], { transport })
+    expect(provider?.adapter.id).toBe('rivemirage')
+    expect(provider?.mediaKinds).toEqual(['movie'])
+    expect(provider?.deliveryMode).toBe('direct')
+    const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
+    const resolved = await provider!.adapter.resolve(input, new AbortController().signal)
+    expect(resolved).toMatchObject({ ok: true })
+    const sources = resolved.ok ? resolved.sources : []
+    expect(sources[0]?.url).toBe('https://cine4k.mpddash.workers.dev/movie/550.m3u8')
+    expect(sources[0]?.headers).toEqual({})
+    expect(allowedMediaUrl(sources[0]!.url, provider!.mediaHosts, [])).toBe(true)
+    expect(transport.mock.calls[0]?.[0]).toBe('https://scrapper.rivestream.app/api/provider?provider=mirage&id=550')
+    // Movies only: series never reaches the scraper.
+    expect(await provider!.adapter.resolve({ ...input, ref: { kind: 'series', id: 1396, season: 1, episode: 1 } }, new AbortController().signal)).toMatchObject({ ok: false })
+    expect(transport).toHaveBeenCalledTimes(1)
   })
   it('defaults to video and validates all configured roles', () => {
     expect(configuredProviders(configuration)[0]?.role).toBe('video')
@@ -275,6 +326,57 @@ describe('configured real provider integration', () => {
     expect(() => configuredProviders(
       [{ id: 'vixsrc', adapter: 'vixsrc', regions: ['US'], mediaHosts: ['vixsrc.to'], mediaHostPatterns: ['([invalid'], upstreamGroup: 'vixsrc' }],
     )).toThrow('Invalid media host pattern')
+  })
+  it('threads the row patterns into every KissKH resolution hop so a pattern-matched master passes the gate', async () => {
+    const transport = vi.fn<MediaTransport>(async (url) => {
+      const host = new URL(url).hostname
+      const payload = host === 'api.themoviedb.org' ? { title: 'Inception', release_date: '2010-09-15', runtime: 148 }
+        : url.includes('DramaList/Search') ? [{ id: 12139, title: 'Inception' }]
+        : url.includes('DramaList/Drama/') ? { episodes: [{ id: 777, number: 1 }] }
+        : url.includes('enc-kisskh') ? { result: url.includes('type=sub') ? 'subtok' : 'vidtok' }
+        : url.includes('DramaList/Episode/') ? { Video: 'https://hls03.cdnvideo11.shop/master.m3u8' }
+        : []
+      const text = host === 'hls03.cdnvideo11.shop'
+        ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8'
+        : JSON.stringify(payload)
+      return { status: 200, url, headers: new Headers(host === 'hls03.cdnvideo11.shop' ? { 'access-control-allow-origin': '*' } : {}), body: Readable.from([text]) }
+    })
+    const [kisskh] = configuredProviders(
+      [{ id: 'kisskh', adapter: 'kisskh', regions: ['US'], mediaHosts: ['sub.cdnvideo11.shop'], mediaHostPatterns: ['^hls[0-9]*\\.cdnvideo11\\.shop$', '^hls[0-9]+\\.[a-z0-9-]+\\.site$'], upstreamGroup: 'kisskh', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
+      { transport, tmdbToken: 'token' },
+    )
+    const result = await kisskh!.adapter.resolve({ ref: { kind: 'movie', id: 27205 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://hls03.cdnvideo11.shop/master.m3u8', type: 'hls' }] })
+    const masterCall = transport.mock.calls.find(([url]) => url === 'https://hls03.cdnvideo11.shop/master.m3u8')
+    expect(masterCall?.[5]?.map((pattern) => pattern.test('hls03.cdnvideo11.shop'))).toEqual([true, false])
+    for (const [url, , , , , patterns] of transport.mock.calls) {
+      if (url.includes('api.themoviedb.org')) expect(patterns).toEqual([])
+      else expect(patterns).toHaveLength(2)
+    }
+  })
+  it('reads bounded playlist prefixes so a Rigel variant larger than the document cap still verifies', async () => {
+    const hugeMedia = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n' + '#EXTINF:6.0,\nseg.ts\n'.repeat(55_000)
+    expect(Buffer.byteLength(hugeMedia)).toBeGreaterThan(1_048_576)
+    const transport = vi.fn<MediaTransport>(async (url) => {
+      const text = url.includes('movish.to')
+        ? JSON.stringify({ streams: [{ url: 'https://api.dlproxy.com/v1/play/huge.m3u8', quality: '1080p', label: 'Lyra' }] })
+        : url.endsWith('huge.m3u8')
+          ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvariant.m3u8'
+          : url.endsWith('variant.m3u8')
+            ? hugeMedia
+            : url.endsWith('seg.ts')
+              ? 'segment-bytes'
+              : ''
+      return { status: 200, url, headers: new Headers(), body: Readable.from([Buffer.from(text)]) }
+    })
+    const [rigel] = configuredProviders(
+      [{ id: 'rigel', adapter: 'rigel', regions: ['US'], mediaHosts: ['api.dlproxy.com'], upstreamGroup: 'rigel', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
+      { transport },
+    )
+    const result = await rigel!.adapter.resolve({ ref: { kind: 'movie', id: 550 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://api.dlproxy.com/v1/play/huge.m3u8', type: 'hls' }] })
+    const variantCall = transport.mock.calls.find(([url]) => url === 'https://api.dlproxy.com/v1/play/variant.m3u8')
+    expect(variantCall?.[0]).toBe('https://api.dlproxy.com/v1/play/variant.m3u8')
   })
   it('rejects wildcard allowlists for shared hosting tenants', () => {
     expect(() => configuredProviders([

@@ -52,6 +52,25 @@ const profile: MemberProfileData = {
 }
 
 describe('profile as a personal cinema', () => {
+  it.each([null, 'https://images.example/selected-portrait.svg'])('uses the same portrait in the signed-in header and own profile with avatarUrl %s', (avatarUrl) => {
+    const owner = { ...viewer, username: profile.profile.username, displayName: profile.profile.displayName, avatarUrl }
+    render(<SessionProvider initialMember={owner} initialStatus="authenticated"><ProfileScreen data={{ ...profile, profile: { ...profile.profile, avatarUrl } }} owner titles={[]} /></SessionProvider>)
+    const header = screen.getByRole('link', { name: `Your library, signed in as ${owner.username}` })
+    const headerPortrait = header.querySelector('img')!
+    const profilePortrait = screen.getByRole('img', { name: `${owner.displayName} avatar` })
+    expect(headerPortrait).toHaveAttribute('src', profilePortrait.getAttribute('src'))
+  })
+
+  it('keeps the signed-in portrait separate when visiting another member profile', () => {
+    render(<SessionProvider initialMember={{ ...viewer }} initialStatus="authenticated"><ProfileScreen data={profile} titles={[]} /></SessionProvider>)
+    const header = screen.getByRole('link', { name: `Your library, signed in as ${viewer.username}` })
+    const headerSource = header.querySelector('img')!.getAttribute('src')
+    const profileSource = screen.getByRole('img', { name: 'Alex avatar' }).getAttribute('src')
+    expect(headerSource).toContain('seed=cinema_fan&')
+    expect(profileSource).toContain('seed=alex_sample&')
+    expect(headerSource).not.toBe(profileSource)
+  })
+
   it('previews five saved titles with their original destinations and honest pagination language', () => {
     render(<ProfileScreen data={profile} owner savedPreview={{ hasMore: true, items: Array.from({ length: 5 }, (_, index) => ({ kind: 'anime', id: 100 + index })) }} titles={[]} />)
     const preview = screen.getByRole('region', { name: 'Watchlist' })

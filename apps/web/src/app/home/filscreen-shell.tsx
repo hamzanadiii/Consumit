@@ -1,6 +1,6 @@
 'use client'
 
-import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Moon, Search, Settings, Shield, Sun, X } from 'lucide-react'
+import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Menu, Moon, Search, Settings, Shield, Sun, X } from 'lucide-react'
 import Image from 'next/image'
 import * as NextNav from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -33,13 +33,6 @@ import { logoutMember } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc } from '@/lib/avatar'
 import { useSession } from '../session/session'
 import { OnDemandLink as Link } from '../shared/on-demand-link'
-import { PopunderAd } from '../shared/popunder-ad'
-
-/** Surfaces where a popunder must never fire: private work, account
- *  management, and admin. Browse surfaces (home, catalog, detail, search,
- *  profile, lists) keep the two-per-hour popunder. Watch and onboarding use
- *  reduced shells and never mount this component. */
-const POPUNDER_EXCLUDED_PATHS = ['/settings', '/admin']
 
 export { SIDEBAR_STORAGE_KEY, THEME_INIT_SCRIPT, THEME_STORAGE_KEY, THEME_STYLE, stampDocumentTheme, type FilScreenTheme } from './filscreen-theme'
 import { THEME_STYLE } from './filscreen-theme'
@@ -77,7 +70,11 @@ function SidebarRowLabel({
   children: ReactNode
   iconOnly?: boolean | undefined
 }) {
-  return <span className={iconOnly ? 'sr-only' : 'fs-fade fs-sidebar-label text-sm font-normal'}>{children}</span>
+  // The desktop rail is intentionally icon-only. Rendering these labels in
+  // its narrow column makes them flash/overflow during shell transitions, so
+  // icon-only controls get their accessible name from aria-label instead.
+  if (iconOnly) return null
+  return <span className="fs-navigation-label text-sm font-normal">{children}</span>
 }
 
 function SidebarLink({
@@ -107,6 +104,7 @@ function SidebarLink({
     <Link
       {...(active ? { 'aria-current': 'page' } : {})}
       {...(pending ? { 'aria-busy': true } : {})}
+      {...(iconOnly ? { 'aria-label': label } : {})}
       className={
         active
           ? 'fs-sidebar-item group flex min-h-11 shrink-0 items-center gap-3 rounded-control bg-[var(--fs-accent-soft)] px-3 text-sm font-bold whitespace-nowrap text-[var(--fs-ink)] border border-[var(--fs-accent)]/40 outline-none transition-all duration-200 ease-out active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
@@ -141,37 +139,37 @@ export function FilScreenShell({
   const defaultPath = activeKindTab === 'series' ? '/series' : activeKindTab === 'movies' ? '/movies' : activeKindTab === 'anime' ? '/anime' : '/'
   const pathname = currentPathname || hookPathname || defaultPath
   const { clearMember, member } = useSession()
-  // Sidebar/theme choices live in the root-layout provider so they survive
-  // page remounts (every screen renders its own shell). Local state here
-  // would reset to expanded/dark on each navigation.
-  const { sidebarOpen, toggleSidebar: persistSidebarToggle, theme, toggleTheme, pendingHref } = useShellState()
+  const { theme, toggleTheme, pendingHref } = useShellState()
   const [searchOpen, setSearchOpen] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [signOutError, setSignOutError] = useState<string | null>(null)
-  const showSidebarRef = useRef<HTMLButtonElement>(null)
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDialogElement>(null)
   const searchTriggerRef = useRef<HTMLButtonElement>(null)
-  const avatarSrc = member ? memberAvatarSrc(member.avatarUrl, member.id) : null
+  const avatarSrc = member ? memberAvatarSrc(member) : null
 
-  function toggleSidebar() {
-    const willCollapse = sidebarOpen
-    persistSidebarToggle()
-    if (willCollapse) {
-      requestAnimationFrame(() => showSidebarRef.current?.focus())
-    }
+  function closeMenu() {
+    setMobileOpen(false)
+    requestAnimationFrame(() => menuTriggerRef.current?.focus())
   }
 
-  // The desktop rail never expands: the brand mark links home instead of
-  // toggling, so any open state (a stored choice, the mobile strip) falls
-  // back to the rail at desktop widths.
   useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
+    const dialog = menuRef.current
+    if (!mobileOpen || !dialog) return
+    dialog.showModal()
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const desktop = window.matchMedia('(min-width: 1024px)')
-    const forceRail = () => {
-      if (desktop.matches && sidebarOpen) persistSidebarToggle()
+    const closeAtDesktop = () => {
+      if (desktop.matches) setMobileOpen(false)
     }
-    forceRail()
-    desktop.addEventListener('change', forceRail)
-    return () => desktop.removeEventListener('change', forceRail)
-  }, [sidebarOpen, persistSidebarToggle])
+    desktop.addEventListener('change', closeAtDesktop)
+    return () => {
+      dialog.close()
+      document.body.style.overflow = overflow
+      desktop.removeEventListener('change', closeAtDesktop)
+    }
+  }, [mobileOpen])
 
   async function signOut() {
     setSignOutError(null)
@@ -195,7 +193,9 @@ export function FilScreenShell({
       const modifier = event.metaKey || event.ctrlKey
       if (modifier && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        setSearchOpen((current) => !current)
+        setMobileOpen(false)
+        setSearchOpen(!searchOpen)
+        if (searchOpen) requestAnimationFrame(() => searchTriggerRef.current?.focus())
         return
       }
       if (event.key === '/' && !searchOpen) {
@@ -203,6 +203,7 @@ export function FilScreenShell({
         const tag = target?.tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return
         event.preventDefault()
+        setMobileOpen(false)
         setSearchOpen(true)
       }
     }
@@ -217,6 +218,53 @@ export function FilScreenShell({
   const isNew = activeKindTab === 'new' || (isHome && !isSeries && !isMovies && !isAnime)
   const memberProfileRoot = member ? `/profile/${encodeURIComponent(member.username)}` : null
 
+  function navigation(iconOnly: boolean) {
+    return (
+      <>
+        <nav aria-label="Main navigation" className="grid gap-1 lg:place-items-center lg:[&>a]:justify-center lg:[&>a]:px-3" data-scrollrow>
+          <SidebarLink active={pathname === '/'} delay={0} href="/" icon={<House aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Home" />
+          {MEMBER_ARCHIVES.map(({ section, label, icon: Icon }, index) => {
+            const href = memberProfileRoot ? `${memberProfileRoot}/${section}` : `/library?section=${section}`
+            return <SidebarLink active={pathname === href || pathname.startsWith(`${href}/`)} delay={(index + 1) * 50} href={href} icon={<Icon aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} key={section} label={label} />
+          })}
+        </nav>
+        <nav aria-label="Account" className="grid gap-1 mt-auto lg:place-items-center lg:[&>a]:justify-center lg:[&>a]:px-3 lg:[&>button]:justify-center lg:[&>button]:px-3" data-scrollrow>
+          <button
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-pressed={theme === 'dark'}
+            className={SIDEBAR_ROW_CLASS}
+            onClick={toggleTheme}
+            style={{ animationDelay: '200ms' }}
+            type="button"
+          >
+            <span aria-hidden="true" className={`${SIDEBAR_ICON_CLASS} group-hover:rotate-12`}>
+              <span className="grid place-items-center" key={theme}>
+                {theme === 'dark' ? <Sun aria-hidden="true" className="size-[18px]" /> : <Moon aria-hidden="true" className="size-[18px]" />}
+              </span>
+            </span>
+            <SidebarRowLabel iconOnly={iconOnly}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</SidebarRowLabel>
+          </button>
+          <SidebarLink delay={240} href="/settings" icon={<Settings aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Settings" />
+          {member?.role === 'admin' ? <SidebarLink delay={250} href="/admin" icon={<Shield aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Admin" /> : null}
+          {member ? (
+            <button
+              className={SIDEBAR_ROW_CLASS}
+              aria-label="Log out"
+              onClick={() => void signOut()}
+              style={{ animationDelay: '280ms' }}
+              type="button"
+            >
+              <span aria-hidden="true" className={SIDEBAR_ICON_CLASS}><LogOut aria-hidden="true" className="size-[18px]" /></span>
+              <SidebarRowLabel iconOnly={iconOnly}>Log out</SidebarRowLabel>
+            </button>
+          ) : (
+            <SidebarLink delay={280} href="/sign-in" icon={<LogOut aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Sign in" />
+          )}
+        </nav>
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-[var(--fs-shell)] text-[var(--fs-ink)]" data-filscreen-home data-theme={theme} style={{ colorScheme: theme }}>
       <WelcomeDialog pathname={pathname ?? '/'} />
@@ -228,89 +276,21 @@ export function FilScreenShell({
       <div aria-hidden="true" dangerouslySetInnerHTML={{ __html: CONTRACT_HTML }} />
       <style>{THEME_STYLE}</style>
       {pageHeading ? <h1 className="sr-only">{pageHeading}</h1> : null}
-      <div className={sidebarOpen ? 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]' : 'fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]'}>
-        <aside aria-label="Primary" id="filscreen-sidebar" className={sidebarOpen ? 'fs-sidebar-rail flex flex-col gap-6 border-b border-[var(--fs-line)] p-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3 lg:items-center' : 'fs-sidebar-rail hidden flex-col gap-6 border-[var(--fs-line)] py-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-full lg:overflow-y-auto lg:border-r lg:px-3 lg:items-center'}>
-          <div className="flex min-h-11 items-center justify-between gap-2 lg:flex-col lg:justify-center">
-            {sidebarOpen ? (
-              <Link aria-label="Consumit home" className="fs-fade fs-sidebar-wordmark inline-flex min-h-11 items-center gap-2.5 rounded text-sm font-bold tracking-[0.2em] outline-none transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none lg:hidden" href="/">
-                <Image alt="" className="size-7" height={28} src="/assets/consumit-mark.svg" width={28} />
-                CONSUMIT
-              </Link>
-            ) : null}
-            <Link aria-label="Consumit home" className="hidden size-11 shrink-0 place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] lg:grid" href="/">
-              <Image alt="" className="size-8" height={32} src="/assets/consumit-mark.svg" width={32} />
-            </Link>
-            {sidebarOpen ? (
-              <button
-                aria-controls="filscreen-sidebar"
-                aria-expanded={sidebarOpen}
-                aria-label="Hide sidebar"
-                className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
-                onClick={toggleSidebar}
-                type="button"
-              >
-                <X aria-hidden="true" className="size-[18px]" />
-              </button>
-            ) : null}
-          </div>
-          <nav aria-label="Main navigation" className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3" data-scrollrow key={sidebarOpen ? 'main-open' : 'main-collapsed'}>
-            <SidebarLink active={pathname === '/'} delay={0} href="/" icon={<House aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Home" />
-            {MEMBER_ARCHIVES.map(({ section, label, icon: Icon }, index) => {
-              const href = memberProfileRoot ? `${memberProfileRoot}/${section}` : `/library?section=${section}`
-              return <SidebarLink active={pathname === href || pathname.startsWith(`${href}/`)} delay={(index + 1) * 50} href={href} icon={<Icon aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} key={section} label={label} />
-            })}
-          </nav>
-          <nav aria-label="Account" className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:mt-auto lg:place-items-center lg:overflow-visible lg:pb-0 lg:[&>a]:justify-center lg:[&>a]:px-3 lg:[&>button]:justify-center lg:[&>button]:px-3" data-scrollrow key={sidebarOpen ? 'account-open' : 'account-collapsed'}>
-            <button
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              aria-pressed={theme === 'dark'}
-              className={SIDEBAR_ROW_CLASS}
-              onClick={toggleTheme}
-              style={{ animationDelay: '200ms' }}
-              type="button"
-            >
-              <span aria-hidden="true" className={`${SIDEBAR_ICON_CLASS} group-hover:rotate-12`}>
-                <span className="grid place-items-center" key={theme}>
-                  {theme === 'dark' ? <Sun aria-hidden="true" className="size-[18px]" /> : <Moon aria-hidden="true" className="size-[18px]" />}
-                </span>
-              </span>
-              <SidebarRowLabel iconOnly={!sidebarOpen}>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</SidebarRowLabel>
-            </button>
-            <SidebarLink delay={240} href="/settings" icon={<Settings aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Settings" />
-            {member?.role === 'admin' ? <SidebarLink delay={250} href="/admin" icon={<Shield aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Admin" /> : null}
-            {member ? (
-              <button
-                className={SIDEBAR_ROW_CLASS}
-                onClick={() => void signOut()}
-                style={{ animationDelay: '280ms' }}
-                type="button"
-              >
-                <span aria-hidden="true" className={SIDEBAR_ICON_CLASS}><LogOut aria-hidden="true" className="size-[18px]" /></span>
-                <SidebarRowLabel iconOnly={!sidebarOpen}>Log out</SidebarRowLabel>
-              </button>
-            ) : (
-              <SidebarLink delay={280} href="/sign-in" icon={<LogOut aria-hidden="true" className="size-[18px]" />} iconOnly={!sidebarOpen} label="Sign in" />
-            )}
-          </nav>
+      <div className="fs-sidebar-shell grid min-h-screen w-full grid-cols-1 lg:grid-cols-[76px_minmax(0,1fr)]">
+        <aside aria-label="Primary" className="fs-sidebar-rail hidden flex-col items-center gap-6 border-r border-[var(--fs-line)] px-3 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:overflow-y-auto">
+          <Link aria-label="Consumit home" className="grid size-11 shrink-0 place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/">
+            <Image alt="" className="size-8" height={32} src="/assets/consumit-mark.svg" width={32} />
+          </Link>
+          {navigation(true)}
         </aside>
 
         <div className="flex min-w-0 flex-col">
-          <div className="min-w-0 flex-1 p-5 sm:p-6 lg:p-8">
+          <div className="fs-content min-w-0 flex-1 p-5 sm:p-6 lg:p-8">
             {signOutError ? <p className="mb-5 text-sm text-[var(--fs-danger)]" role="alert">{signOutError}</p> : null}
-            <div className="mb-5 flex flex-wrap items-center gap-3">
-              {!sidebarOpen ? (
-                <button
-                  ref={showSidebarRef}
-                  aria-controls="filscreen-sidebar"
-                  aria-expanded="false"
-                  aria-label="Show sidebar"
-                  className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-all duration-200 ease-out hover:text-[var(--fs-accent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none lg:hidden"
-                  onClick={toggleSidebar}
-                  type="button"
-                >
-                  <Image alt="" className="size-[18px]" height={18} src="/assets/consumit-mark.svg" width={18} />
-                </button>
-              ) : null}
+            <header className="fs-utility mb-5 flex flex-wrap items-center gap-3">
+              <Link aria-label="Consumit home" className="fs-mobile-brand grid size-11 shrink-0 place-items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] lg:hidden" href="/">
+                <Image alt="" className="size-7" height={28} src="/assets/consumit-mark.svg" width={28} />
+              </Link>
               <nav aria-label="Catalog kinds" className="order-2 flex min-w-0 basis-full gap-2 overflow-x-auto border-b border-[var(--fs-line)] pb-2 sm:order-none sm:flex-1 sm:basis-auto sm:border-0 sm:pb-1" data-scrollrow>
                 <Link
                   {...(isNew ? { 'aria-current': 'page' } : {})}
@@ -380,7 +360,10 @@ export function FilScreenShell({
                   <Avatar className="size-11" imageAlt="Guest portrait" name="Guest" size="md" src={GUEST_AVATAR_SRC} treatment="noir" />
                 </Link>
               )}
-            </div>
+              <button ref={menuTriggerRef} aria-controls="filscreen-mobile-menu" aria-expanded={mobileOpen} aria-haspopup="dialog" aria-label="Open navigation" className="fs-menu-trigger grid size-11 shrink-0 cursor-pointer place-items-center rounded-control text-[var(--fs-secondary)] outline-none hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] lg:hidden" onClick={() => setMobileOpen(true)} type="button">
+                <Menu aria-hidden="true" className="size-5" />
+              </button>
+            </header>
 
             {children}
           </div>
@@ -388,8 +371,23 @@ export function FilScreenShell({
           <FilScreenFooter />
         </div>
       </div>
+      <dialog aria-labelledby="mobile-menu-heading" className="fs-mobile-dialog" id="filscreen-mobile-menu" onCancel={event => { event.preventDefault(); closeMenu() }} onClick={event => { if (event.target === event.currentTarget) closeMenu() }} onKeyDown={event => {
+        if (event.key !== 'Tab' || event.defaultPrevented) return
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)'))
+        const first = controls[0], last = controls.at(-1)
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }} ref={menuRef}>
+        <div className="fs-mobile-menu" onClick={event => { if ((event.target as Element).closest('a')) closeMenu() }}>
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--fs-line)] pb-5">
+            <span className="flex items-center gap-3 font-bold tracking-[0.12em]" id="mobile-menu-heading"><Image alt="" height={28} src="/assets/consumit-mark.svg" width={28} />CONSUMIT</span>
+            <button aria-label="Close navigation" className="grid size-11 cursor-pointer place-items-center rounded-control outline-none hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onClick={closeMenu} type="button"><X aria-hidden="true" className="size-5" /></button>
+          </div>
+          {mobileOpen ? navigation(false) : null}
+          {signOutError ? <p className="text-sm text-[var(--fs-danger)]" role="alert">{signOutError}</p> : null}
+        </div>
+      </dialog>
       {searchOpen ? <FilScreenSearchOverlay onClose={closeSearch} open /> : null}
-      {POPUNDER_EXCLUDED_PATHS.every(prefix => !pathname.startsWith(prefix)) ? <PopunderAd /> : null}
     </div>
   )
 }

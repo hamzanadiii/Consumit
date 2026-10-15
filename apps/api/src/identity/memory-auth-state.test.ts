@@ -1,11 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { CHALLENGE_COOLDOWN_MS, CHALLENGE_MAX_ATTEMPTS, CHALLENGE_TTL_MS, MAX_MEMBER_SESSIONS } from './auth-state.ts'
+import {
+  ACCOUNT_CONFIRM_MAX_ATTEMPTS,
+  ACCOUNT_CONFIRM_WINDOW_MS,
+  ACCOUNT_SEND_MAX,
+  ACCOUNT_SEND_WINDOW_MS,
+  CHALLENGE_COOLDOWN_MS,
+  CHALLENGE_DESTROYED_BACKOFF_MS,
+  CHALLENGE_MAX_ATTEMPTS,
+  CHALLENGE_TTL_MS,
+  MAX_MEMBER_SESSIONS,
+} from './auth-state.ts'
 import { createMemoryAuthState } from './memory-auth-state.ts'
 import { SESSION_TTL_MS } from './session.ts'
 
 describe('memory authentication state', () => {
-  it('atomically consumes a code once and exhausts invalid attempts', async () => {
+  it('atomically consumes a code once and locks after exhausting invalid attempts', async () => {
     const state = createMemoryAuthState()
     const input = { code: '123456', email: 'member@example.com', payload: { email: 'member@example.com', kind: 'registration' as const, passwordHash: 'hash', username: 'member' }, purpose: 'registration' as const }
     await state.beginChallenge(input)
@@ -19,7 +29,48 @@ describe('memory authentication state', () => {
     for (let attempt = 0; attempt < CHALLENGE_MAX_ATTEMPTS; attempt += 1) {
       await state.consumeChallenge({ code: '000000', email: 'attempts@example.com', purpose: 'registration' })
     }
-    expect(await state.consumeChallenge({ code: input.code, email: 'attempts@example.com', purpose: 'registration' })).toBeNull()
+    // The exhausted challenge is tombstoned: further guesses are refused even
+    // after the challenge record itself is gone.
+    expect(await state.consumeChallenge({ code: input.code, email: 'attempts@example.com', purpose: 'registration' })).toBe('locked')
+  })
+
+  it('keeps the per-account attempt budget across challenge deletion and re-issue', async () => {
+    let now = new Date('2026-09-07T00:00:00.000Z')
+    const state = createMemoryAuthState({ clock: () => now })
+    const challenge = { code: '123456', email: 'member@example.com', payload: { email: 'member@example.com', kind: 'registration' as const, passwordHash: 'hash', username: 'member' }, purpose: 'registration' as const }
+    await state.beginChallenge(challenge)
+    for (let attempt = 0; attempt < CHALLENGE_MAX_ATTEMPTS; attempt += 1) {
+      await state.consumeChallenge({ code: '000000', email: challenge.email, purpose: 'registration' })
+    }
+    // A fresh challenge after the tombstone backoff still cannot outlive the
+    // account-level window: five more misses exhaust the account budget.
+    now = new Date(now.getTime() + CHALLENGE_DESTROYED_BACKOFF_MS + 1)
+    expect(await state.beginChallenge({ ...challenge, code: '654321' })).toBe('stored')
+    // The miss that exhausts the account budget still answers null but locks
+    // the account; every later confirmation is refused until the window rolls.
+    for (let attempt = 0; attempt < ACCOUNT_CONFIRM_MAX_ATTEMPTS - CHALLENGE_MAX_ATTEMPTS; attempt += 1) {
+      expect(await state.consumeChallenge({ code: '000000', email: challenge.email, purpose: 'registration' })).toBeNull()
+    }
+    expect(await state.consumeChallenge({ code: '999999', email: challenge.email, purpose: 'registration' })).toBe('locked')
+    // Once the account window rolls over, confirming works again.
+    now = new Date(now.getTime() + ACCOUNT_CONFIRM_WINDOW_MS + 1)
+    expect(await state.beginChallenge({ ...challenge, code: '999999' })).toBe('stored')
+    expect(await state.consumeChallenge({ code: '999999', email: challenge.email, purpose: 'registration' })).toMatchObject({ kind: 'registration' })
+  })
+
+  it('caps outbound challenge sends per account regardless of challenge state', async () => {
+    let now = new Date('2026-09-07T00:00:00.000Z')
+    const state = createMemoryAuthState({ clock: () => now })
+    const challenge = { code: '123456', email: 'member@example.com', payload: { email: 'member@example.com', kind: 'registration' as const, passwordHash: 'hash', username: 'member' }, purpose: 'registration' as const }
+    for (let send = 0; send < ACCOUNT_SEND_MAX; send += 1) {
+      expect(await state.beginChallenge({ ...challenge, code: `111111${send}` })).toBe('stored')
+      now = new Date(now.getTime() + CHALLENGE_TTL_MS + 1)
+    }
+    // The send budget is independent of the (now expired) challenge, so the
+    // next request cannot uncap email delivery.
+    expect(await state.beginChallenge({ ...challenge, code: '222222' })).toBe('cooldown')
+    now = new Date(now.getTime() + ACCOUNT_SEND_WINDOW_MS + 1)
+    expect(await state.beginChallenge({ ...challenge, code: '222222' })).toBe('stored')
   })
 
   it('enforces challenge expiry, resend cooldown, and invalidation', async () => {

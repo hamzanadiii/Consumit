@@ -1,0 +1,22 @@
+{
+  "name": "consumit-media-relay-europe",
+  "main": "../../packages/media-relay/src/worker.ts",
+  "compatibility_date": "2026-09-28",
+  "workers_dev": true,
+  "placement": {
+    "region": "aws:eu-west-3"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "RELAY_ENABLED": "false",
+    "APP_ORIGIN": "https://consumit.online",
+    "RELAY_PROVIDERS": "{\"rigel\":[\"api.dlproxy.com\"],\"animekai\":[\"edge1-waw-sprintcdn.r66nv9ed.com\",\"edge2-waw-sprintcdn.r66nv9ed.com\"],\"rivemirage\":[\"cine4k.mpddash.workers.dev\",\"carwashonline.site\",\"nectronincllc.store\",\"buswashsolarpanel.click\"]}"
+  }
+}

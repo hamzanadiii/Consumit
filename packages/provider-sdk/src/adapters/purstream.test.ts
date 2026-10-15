@@ -26,10 +26,44 @@ describe('Purstream adapter', () => {
     const http = fixture()
     const result = await createPurstreamProvider(http, metadata, now).resolve(input, new AbortController().signal)
     expect(metadata).toHaveBeenCalledWith(input.ref, expect.any(AbortSignal))
-    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://free.finepulfe.xyz/movies/550-abc/hd/master.m3u8', type: 'hls', qualityHint: 'Auto', headers: {}, language: 'original' }] })
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://free.finepulfe.xyz/movies/550-abc/hd/master.m3u8', type: 'hls', qualityHint: 'Auto', hlsSubtitlePlaylistFormat: 'vtt', headers: {}, language: 'original' }] })
     expect(result.ok && result.sources).toHaveLength(1)
     expect(http.mock.calls[0]?.[0]).toContain('/search-bar/search/Fight%20Club')
     expect(http.mock.calls[1]?.[0]).toBe('https://api.purstream.ad/api/v1/stream/tt0137523')
+  })
+  it('does not mistake a sequel with overlapping words for the requested movie', async () => {
+    const http = fixture({ search: { data: { items: { movies: { items: [
+      { id: 'dune-part-two', type: 'movie', title: 'Dune: Part Two', release_date: '2024-02-27' },
+    ] } } } } })
+    const result = await createPurstreamProvider(
+      http,
+      async () => ({ title: 'Dune', year: 2021 }),
+      now,
+    ).resolve(input, new AbortController().signal)
+
+    expect(result).toMatchObject({ ok: false, code: 'empty' })
+    expect(http).toHaveBeenCalledTimes(1)
+  })
+  it('rejects an exact title from the wrong release year', async () => {
+    const http = fixture({ search: { data: { items: { movies: { items: [
+      { id: 'wrong-year', type: 'movie', title: 'Dune', release_date: '1984-12-14' },
+    ] } } } } })
+    const result = await createPurstreamProvider(http, async () => ({ title: 'Dune', year: 2021 }), now)
+      .resolve(input, new AbortController().signal)
+
+    expect(result).toMatchObject({ ok: false, code: 'empty' })
+    expect(http).toHaveBeenCalledTimes(1)
+  })
+  it('fails closed when exact title results remain ambiguous', async () => {
+    const http = fixture({ search: { data: { items: { movies: { items: [
+      { id: 'first', type: 'movie', title: 'Dune', release_date: '2021-10-22' },
+      { id: 'second', type: 'film', title: 'Dune', release_date: '2021-10-22' },
+    ] } } } } })
+    const result = await createPurstreamProvider(http, async () => ({ title: 'Dune', year: 2021 }), now)
+      .resolve(input, new AbortController().signal)
+
+    expect(result).toMatchObject({ ok: false, code: 'empty' })
+    expect(http).toHaveBeenCalledTimes(1)
   })
   it.each([{ type: 'show', id: 'tt0903747' }, { type: 'tv', id: 3852 }])('matches series rows labeled $type and calls the episode endpoint', async ({ type, id }) => {
     const http = fixture({ search: { data: { items: { movies: { items: [

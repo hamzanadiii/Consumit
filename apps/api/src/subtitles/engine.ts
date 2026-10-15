@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { allowedMediaUrl } from '@consumit/provider-sdk'
 import { assToVtt } from './ass.ts'
 import { langLabel } from './lang.ts'
 import { decodeSubtitleText, srtToVtt, unzipEntries } from './srt.ts'
@@ -128,6 +129,43 @@ function validVtt(text: string): boolean {
   return text.startsWith('WEBVTT') && text.includes('-->') && text.length > 20 && text.length <= MAX_VTT_BYTES
 }
 
+/** Provider-declared destination scope for file downloads. A null scope
+ *  keeps the historical rule: the URL's own hostname only. */
+export type FileScope = { hosts: readonly string[]; patterns: readonly RegExp[] }
+
+export function declaredScope(provider: Pick<SubtitleSearchProvider, 'fileHosts' | 'fileHostPatterns'>): FileScope | null {
+  const hosts = provider.fileHosts ?? []
+  const patterns = provider.fileHostPatterns ?? []
+  return hosts.length || patterns.length ? { hosts, patterns } : null
+}
+
+/** Framing/routing headers never ride a provider-chosen file fetch: a
+ *  hostile candidate must not override Host or smuggle hop-by-hop state.
+ *  Credentials (cookie/authorization) travel only inside the provider's
+ *  declared file scope — adapter cookies are issued by the adapter's own
+ *  infrastructure — or, for undeclared providers, when a Referer/Origin
+ *  binds them to the exact destination host. */
+const ROUTING_HEADER = /^(host|connection|keep-alive|proxy-[a-z0-9-]+|transfer-encoding|upgrade|te|trailer|expect|content-length)$/i
+
+export function safeFileHeaders(headers: Record<string, string>, url: URL, scope: FileScope | null): Record<string, string> {
+  const safe: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    if (ROUTING_HEADER.test(name)) continue
+    if (/^(cookie|authorization)$/i.test(name) && !scope) {
+      const binding = headers.Referer ?? headers.referer ?? headers.Origin ?? headers.origin
+      let host: string | null = null
+      try {
+        host = binding ? new URL(binding).hostname : null
+      } catch {
+        host = null
+      }
+      if (host !== url.hostname) continue
+    }
+    safe[name] = value
+  }
+  return safe
+}
+
 /** Normalize one candidate to WebVTT text plus its original source bytes.
  *  Direct upstream VTT passes through untouched; zips are extracted
  *  (largest .srt wins, .vtt entry reused); SRT text is converted; ASS/SSA
@@ -148,7 +186,7 @@ function originalExt(name: string, fallback: OriginalFile['ext']): OriginalFile[
   return fallback
 }
 
-async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile): Promise<NormalizedSubtitle | null> {
+async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile, scope: FileScope | null): Promise<NormalizedSubtitle | null> {
   // Upstream file URLs sometimes carry raw spaces (notably TVSubtitles);
   // encode them like browsers do instead of rejecting the candidate.
   const href = raw.url.replace(/ /g, '%20')
@@ -159,10 +197,13 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
     return null
   }
   if (url.protocol !== 'https:' || url.username || url.password) return null
+  if (scope && !allowedMediaUrl(url, scope.hosts, scope.patterns)) return null
   const fileUrl = url.href
-  const headers = raw.headers ?? {}
+  const headers = safeFileHeaders(raw.headers ?? {}, url, scope)
+  const hosts = scope?.hosts ?? [url.hostname]
+  const patterns = scope?.patterns ?? []
   if (isZip(raw)) {
-    const buf = await fetchFile(fileUrl, [url.hostname], headers, signal, MAX_FILE_BYTES)
+    const buf = await fetchFile(fileUrl, hosts, headers, signal, MAX_FILE_BYTES, patterns)
     let entries: { name: string; data: Buffer }[]
     try {
       entries = unzipEntries(buf)
@@ -191,14 +232,14 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
     return null
   }
   if (raw.format === 'ass' || (raw.format === 'other' && /\.ass|\.ssa$/i.test(fileUrl))) {
-    const buf = await fetchFile(fileUrl, [url.hostname], headers, signal, MAX_FILE_BYTES)
+    const buf = await fetchFile(fileUrl, hosts, headers, signal, MAX_FILE_BYTES, patterns)
     const source = isXz(buf) ? await unxz(buf) : buf
     if (!source) return null
     const vtt = assToVtt(decodeSubtitleText(source))
     if (!vtt || !validVtt(vtt)) return null
     return { vtt, original: { bytes: source, ext: originalExt(fileUrl, 'ass') } }
   }
-  const buf = await fetchFile(fileUrl, [url.hostname], headers, signal, MAX_FILE_BYTES)
+  const buf = await fetchFile(fileUrl, hosts, headers, signal, MAX_FILE_BYTES, patterns)
   const text = decodeSubtitleText(buf)
   if (raw.format === 'vtt' || /\.vtt(\?|#|$)/i.test(fileUrl) || text.startsWith('WEBVTT')) {
     const vtt = text.startsWith('WEBVTT') ? text : `WEBVTT\n\n${text}`
@@ -237,6 +278,11 @@ export async function resolveSubtitles(
       return false
     }
   })
+  // One declared scope per producing provider. A candidate attributed to a
+  // provider that did not produce it (mismatched raw.provider) is dropped:
+  // scope lookup must never be steerable by the candidate itself.
+  const scopes = new Map<string, FileScope | null>()
+  for (const provider of usable) scopes.set(provider.id, declaredScope(provider))
   const startedAt = Date.now()
   const remainingMs = () => OVERALL_BUDGET_MS - (Date.now() - startedAt)
   const settled = await Promise.allSettled(
@@ -306,7 +352,7 @@ export async function resolveSubtitles(
     return null
   }
   const labelFor = (entry: RawSubtitle) =>
-    `${langLabel(entry.lang.toLowerCase())}${entry.hi ? ' [HI]' : ''} (${entry.provider})`
+    `${langLabel(entry.lang.toLowerCase())}${entry.hi ? ' [HI]' : ''} (${entry.providerName ?? entry.provider})`
   const flagFields = (entry: RawSubtitle): Partial<Pick<ServedSubtitle, 'forced' | 'sdh' | 'signs' | 'songs' | 'machineTranslated'>> => {
     const flags = detectTrackFlags(`${entry.url} ${entry.label}`)
     return {
@@ -332,10 +378,13 @@ export async function resolveSubtitles(
     const fileTimeout = Math.max(500, Math.min(FILE_TIMEOUT_MS, remainingMs()))
     const settled = await Promise.allSettled(
       group.map(async (entry): Promise<{ kind: 'direct' | 'served'; track: ServedSubtitle } | null> => {
+        const scope = scopes.get(entry.provider)
+        if (scope === undefined) return null
         if (!forceFirstParty && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
           try {
             const url = new URL(entry.url)
             if (url.protocol !== 'https:' || url.username || url.password) return null
+            if (scope && !allowedMediaUrl(url, scope.hosts, scope.patterns)) return null
           } catch { return null }
           const lang = entry.lang.toLowerCase()
           return { kind: 'direct', track: {
@@ -374,7 +423,7 @@ export async function resolveSubtitles(
         // Each file fetch is independently bounded: one slow zip must not
         // hold the whole aggregation past the route deadline.
         const normalized = await Promise.race([
-          toVtt(entry, signal, fetchFile),
+          toVtt(entry, signal, fetchFile, scope),
           new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Subtitle file timed out.')), fileTimeout)),
         ])
         if (!normalized) return null

@@ -48,6 +48,13 @@ export function createAnimeToshoProvider(http: SubtitleHttp): SubtitleSearchProv
   return {
     id: 'animetosho',
     name: 'AnimeTosho',
+    // Attachment URLs come from the feed JSON but are AnimeTosho storage
+    // (storage.animetosho.net); an injected entry cannot aim the fetch.
+    fileHosts: [
+      'animetosho.net', '*.animetosho.net',
+      'animetosho.org', '*.animetosho.org',
+      'animetosho.xyz', '*.animetosho.xyz',
+    ],
     supports(query: SubtitleQuery) {
       // The precise path needs an AniList id (ani.zip -> AniDB episode id).
       // Title-only anime queries stay with TVSubtitles.

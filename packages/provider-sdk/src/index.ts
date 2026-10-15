@@ -20,6 +20,7 @@ export { createPoseidonProvider } from './adapters/poseidon.ts'
 export { createNetmirrorProvider } from './adapters/netmirror.ts'
 export { createVidstormProvider } from './adapters/vidstorm.ts'
 export { createVidlinkProvider } from './adapters/vidlink.ts'
+export { createMoviesapiProvider } from './adapters/moviesapi.ts'
 
 export { createCinehdProvider } from './adapters/cinehd.ts'
 export { createNxshaProvider, decodeNxshaPayload, encodeNxshaPayload } from './adapters/nxsha.ts'
@@ -35,6 +36,7 @@ export { createVidcoreProvider } from './adapters/vidcore.ts'
 export { createFilmuProvider, type FilmuExtractor, type FilmuOptions } from './adapters/filmu.ts'
 export { createVidzenProvider, type VidzenOptions } from './adapters/vidzen.ts'
 export { createLookmovieProvider, type LookmovieMetadata, type LookmovieMetadataResolver } from './adapters/lookmovie.ts'
+export { createLookmovieWorkerProvider, type LookmovieWorker } from './adapters/lookmovie-worker.ts'
 export { createRiveApolloProvider } from './adapters/rivedirect.ts'
 export { createCinejoyLisbonProvider } from './adapters/cinejoylisbon.ts'
 export { createStigstreamProvider, type StigstreamScope } from './adapters/stigstream.ts'
@@ -82,8 +84,9 @@ export const providerSourceSchema = z.object({
   headers: z.record(z.string(), z.string()).default({}),
   height: z.int().min(144).max(4320).optional(),
   qualityHint: z.string().min(1).max(24).optional(),
+  hlsSubtitlePlaylistFormat: z.literal('vtt').optional(),
   qualityGroup: z.string().min(1).max(64).regex(/^[a-z0-9-]+$/).optional(),
-  relayRecipe: z.enum(['storm-boron-v1', 'wecollege-city-v1']).optional(),
+  relayRecipe: z.enum(['storm-boron-v1', 'wecollege-city-v1', 'lookmovie-v1']).optional(),
   relayHosts: z.array(z.string().max(253).regex(/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/)).min(1).max(8).optional(),
   segmentTransform: z.literal('mpegts-image-prefix').optional(),
   subtitles: z.array(playbackTrackSchema).max(32).default([]),
@@ -117,7 +120,7 @@ export type ProviderRegistration = {
   role?: ProviderRole
   /** Explicit delivery tier. Existing providers default to browser-direct. */
   deliveryMode?: ProviderDeliveryMode
-  relayHostDiscovery?: 'storm-boron-v1' | 'wecollege-city-v1' | undefined
+  relayHostDiscovery?: 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1' | undefined
   approvedRegions: readonly string[]
   mediaHosts: readonly string[]
   upstreamGroup: string
@@ -140,6 +143,8 @@ export type ProviderRegistration = {
   mediaHostPatterns?: readonly RegExp[] | undefined
   /** Known-good synthetic fixtures for providers with selective catalogs. */
   probes?: Partial<Record<MediaKind, { ref: PlaybackRef; audioLanguage: string } | undefined>> | undefined
+  /** Validated, non-secret config used only when resolution is delegated to the Cloudflare Worker. */
+  workerConfig?: Readonly<Record<string, unknown>> | undefined
 }
 
 export function suppliesVideo(registration: ProviderRegistration): boolean {
@@ -150,9 +155,9 @@ export function sourceIdentity(providerId: string, ref: PlaybackRef, key: string
   return `${providerId}:${createHash('sha256').update(JSON.stringify([ref.kind, ref.id, ref.season, ref.episode, key])).digest('hex').slice(0, 32)}`
 }
 
-export function allowedMediaUrl(value: string, hosts: readonly string[], patterns: readonly RegExp[] = []) {
+export function allowedMediaUrl(value: string | URL, hosts: readonly string[], patterns: readonly RegExp[] = []) {
   try {
-    const url = new URL(value)
+    const url = typeof value === 'string' ? new URL(value) : value
     const hostname = url.hostname.toLowerCase()
     const listed = hosts.some((host) => host.startsWith('*.')
       ? host.length > 3 && hostname.endsWith(host.slice(1))
@@ -174,9 +179,9 @@ export function allowedMediaUrl(value: string, hosts: readonly string[], pattern
 }
 
 /** Recognizable media relays are ineligible even on a configured host. */
-export function isRelayMediaUrl(value: string): boolean {
+export function isRelayMediaUrl(value: string | URL): boolean {
   try {
-    const url = new URL(value)
+    const url = typeof value === 'string' ? new URL(value) : value
     return /(?:^|[./_-])(?:proxy|relay)(?:[./_?-]|$)/i.test(url.hostname + url.pathname)
       || ['url', 'target', 'destination'].some((key) => /^https?:/i.test(url.searchParams.get(key) ?? ''))
   } catch { return true }
@@ -206,7 +211,8 @@ export function validatedSources(result: unknown, registration: ProviderRegistra
   for (const source of parsed.data.sources) {
     if (seen.has(source.key) || Date.parse(source.expiresAt) <= now + 30_000) continue
     if ((source.type === 'iframe') !== (registration.deliveryMode === 'embed')) continue
-    if (source.type === 'iframe' && (Object.keys(source.headers).length || source.relayRecipe || source.segmentTransform || source.subtitles.length || source.skipSegments?.length)) continue
+    if (source.type === 'iframe' && (Object.keys(source.headers).length || source.relayRecipe || source.segmentTransform || source.hlsSubtitlePlaylistFormat || source.subtitles.length || source.skipSegments?.length)) continue
+    if (source.hlsSubtitlePlaylistFormat && source.type !== 'hls') continue
     // Sandbox policy describes a frame document, never media delivery.
     if (source.type !== 'iframe' && source.frameSandbox) continue
     if (isWrappedRelayUrl(source.url)) continue
@@ -244,5 +250,5 @@ export function createStaticProvider(id: string, entries: readonly { ref: Playba
   }
 }
 
-export { createFrameProvider } from './adapters/frames.ts'
+export { createFrameProvider, isFrameProviderId, MOVIE_FRAME_HOSTS, FRAME_IDS, type FrameId } from './adapters/frames.ts'
 export { createRigelProvider } from './adapters/rigel.ts'

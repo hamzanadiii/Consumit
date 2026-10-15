@@ -106,6 +106,12 @@ export async function browserCatalogBatches(refs: readonly CatalogRef[], signal?
   return titles
 }
 
+export type BrowseCatalogFeed = 'popular' | 'top-rated' | 'trending'
+
+export function catalogBrowseFeed(value: string | string[] | undefined): BrowseCatalogFeed {
+  return value === 'top-rated' || value === 'trending' ? value : 'popular'
+}
+
 export type BrowseCatalogQuery = {
   kind: CatalogKind
   feed: CatalogFeed

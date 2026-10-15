@@ -30,6 +30,12 @@ import type {
 } from '@consumit/contracts'
 
 export interface MemberData {
+  continueWatching?(memberId: string, cursor: string | undefined, limit: number): Promise<import('@consumit/contracts').ContinueWatchingPage>
+  hideContinueWatching?(memberId: string, ref: CatalogRef): Promise<void>
+  recommendationDismissals?(memberId: string): Promise<CatalogRef[]>
+  dismissRecommendation?(memberId: string, ref: CatalogRef, dismissed: boolean): Promise<void>
+  resetRecommendationDismissals?(memberId: string): Promise<void>
+  filterRecommendations?(memberId: string, refs: CatalogRef[]): Promise<CatalogRef[]>
   createDiaryEntry(memberId: string, input: CreateDiaryEntryRequest): Promise<DiaryEntry>
   createReview(memberId: string, input: CreateReviewRequest): Promise<MemberReview>
 

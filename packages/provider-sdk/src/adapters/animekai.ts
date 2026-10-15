@@ -212,6 +212,12 @@ export async function solvePow(nonce: string, difficulty: number, timeoutMs: num
   }
 }
 
+/** Pure calculation program for an isolated control-plane process. No provider I/O or credentials. */
+export function animeKaiPowProgram(nonce: string, difficulty: number, timeoutMs: number) {
+  return [toBytes, rotl, imul, mix, powHash, leadingZeroBits, solvePow].map(fn => fn.toString()).join('\n')
+    + `\nconst input=${JSON.stringify({ nonce, difficulty, timeoutMs })}; solvePow(input.nonce,input.difficulty,input.timeoutMs).then(solution=>process.stdout.write(JSON.stringify({solution})));`
+}
+
 function b64urlToBuffer(value: string): Buffer {
   let normalized = value.replace(/-/g, '+').replace(/_/g, '/')
   while (normalized.length % 4) normalized += '='
@@ -252,7 +258,7 @@ async function postJson(http: ProviderHttp, path: string, body: unknown, referer
   return JSON.parse(response.text)
 }
 
-export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTitleResolver, now = Date.now) {
+export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTitleResolver, now = Date.now, powSolver: typeof solvePow = solvePow) {
   return Object.assign(adapter('animekai', async (input, signal) => {
     const { ref } = input
     if (ref.kind !== 'anime' || !ref.episode) throw new ProviderFailure('empty')
@@ -341,7 +347,7 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
         }, referer, op.signal))
         const fingerprint = { token: attestation.token, viewer_id: attestation.viewer_id, device_id: attestation.device_id }
         const captcha = captchaSchema.parse(await postJson(http, `/api/videos/${pick.code}/embed/captcha`, { fingerprint }, referer, op.signal))
-        const solution = await solvePow(captcha.pow_nonce, captcha.pow_difficulty ?? 16, POW_TIMEOUT_MS, op.signal)
+        const solution = await powSolver(captcha.pow_nonce, captcha.pow_difficulty ?? 16, POW_TIMEOUT_MS, op.signal)
         if (solution == null) throw new ProviderFailure('unavailable')
         const verification = verifySchema.parse(await postJson(http, `/api/videos/${pick.code}/embed/captcha/verify`, {
           pow_token: captcha.pow_token,

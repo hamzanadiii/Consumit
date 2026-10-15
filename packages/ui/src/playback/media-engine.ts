@@ -1,6 +1,8 @@
 import { audioTrackLabel, canPlayHlsNatively, deviceAutoCapHeight, isSafeMediaUrl, type DirectMediaSource } from './media-source'
 import { RelayLeaseRouter, relayLeaseLoader } from './relay-lease'
 import { standardQualityHeight } from './quality-tier'
+import { vttPlaylistLoader } from './vtt-playlist-loader'
+import { createAudioSwitch } from './audio-switch'
 
 export type MediaOption = { value: string; label: string; language?: string | undefined; height?: number | undefined }
 
@@ -32,7 +34,7 @@ export type MediaEngine = {
   destroy(): void
   recover(): boolean
   quality(value: string): void
-  audio(value: string): void
+  audio(value: string): void | Promise<boolean>
   subtitle(value: string): void
 }
 export type EngineFailure = 'network' | 'media' | 'gone' | 'expired'
@@ -52,6 +54,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
   const { default: Hls } = source.type === 'hls' ? await import('hls.js').catch(() => ({ default: null })) : { default: null }
   signal?.throwIfAborted()
   if (source.type === 'native' || (source.type === 'hls' && (!Hls || !Hls.isSupported()) && canPlayHlsNatively(video))) {
+    const switching = createAudioSwitch(video)
     const audio = () => Array.from((video as HTMLVideoElement & { audioTracks?: ArrayLike<NativeAudio> }).audioTracks ?? [])
     const publish = () => events.tracks({
       qualities: auto,
@@ -64,7 +67,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     publish()
     return {
       quality() { /* Native adaptive quality is browser-owned. */ },
-      audio(value) { audio().forEach((track, index) => { track.enabled = String(index) === value }) },
+      audio(value) { const before = audio().map(track => track.enabled); return switching.select(() => audio().forEach((track, index) => { track.enabled = String(index) === value }), () => audio().forEach((track, index) => { track.enabled = before[index] ?? false })) },
       subtitle(value) { Array.from(video.textTracks).forEach((track) => { track.mode = value !== 'off' && (track.id || track.language) === value ? 'showing' : 'disabled' }) },
       recover() { return false },
       // Removing src already empties the element and aborts its fetch per
@@ -74,7 +77,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       // reaches loadedmetadata, leaving the clip paused at 0:00. The next
       // attach assigns src in the same task and starts the new load
       // directly. MSE engines below keep their explicit load for teardown.
-      destroy() { video.removeEventListener('loadedmetadata', publish); video.textTracks.removeEventListener?.('addtrack', publish); video.removeAttribute('src') },
+      destroy() { switching.dispose(); video.removeEventListener('loadedmetadata', publish); video.textTracks.removeEventListener?.('addtrack', publish); video.removeAttribute('src') },
     }
   }
   if (source.type === 'hls') {
@@ -86,9 +89,11 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     // AbortError rejections during recovery in the deployed browser. Retain a
     // minute of forward reserve and the existing adaptive/device quality limits.
     const lease = source.relayLease ? new RelayLeaseRouter(source.src, source.relayLease) : undefined
+    const loader = lease ? relayLeaseLoader(Hls.DefaultConfig.loader, lease) : source.hlsSubtitlePlaylistFormat === 'vtt' ? Hls.DefaultConfig.loader : undefined
     const hls = new Hls({ enableWorker: true, progressive: false, backBufferLength: 30, maxBufferLength: 60, capLevelToPlayerSize: true, renderTextTracksNatively: true,
-      ...(lease ? { loader: relayLeaseLoader(Hls.DefaultConfig.loader, lease) } : {}),
+      ...(loader ? { loader: source.hlsSubtitlePlaylistFormat === 'vtt' ? vttPlaylistLoader(loader) : loader } : {}),
     })
+    const switching = createAudioSwitch(video)
     let lastError: EngineFailure = 'network'
     let lastDeliveryFailure: EngineDeliveryFailure | undefined
     const measuredHeights = new Map<number, number>()
@@ -139,12 +144,13 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       })
     })
     hls.on(Hls.Events.ERROR, (_event, data) => {
+      const detail = String((data as unknown as { details?: unknown }).details ?? '')
+      if (switching.pending() && (/^audioTrack/i.test(detail) || data.frag?.type === 'audio')) { switching.fail(); return }
       if (!data.fatal) return
       // HTTP 410 Gone is definitive: the bytes are not coming back, so a
       // same-source retry or re-mint is pointless — the application should
       // switch sources instead of recovering in place.
       const status = (data as unknown as { response?: { code?: unknown } }).response?.code
-      const detail = String((data as unknown as { details?: unknown }).details ?? '')
       const networkError = data.type === Hls.ErrorTypes.NETWORK_ERROR
       const forbidden = status === 401 || status === 403
       const manifestFailure = /manifest/i.test(detail)
@@ -169,7 +175,19 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     hls.loadSource(source.src); hls.attachMedia(video)
     return {
       quality(value) { hls.currentLevel = value === 'auto' ? -1 : Number(value) },
-      audio(value) { hls.audioTrack = Number(value) },
+      audio(value) {
+        const previous = hls.audioTrack
+        if (previous === Number(value)) return Promise.resolve(true)
+        const select = (index: number) => {
+          if (video.paused) hls.audioTrack = index
+          else hls.nextAudioTrack = index
+        }
+        return switching.select(() => select(Number(value)), () => select(previous), ready => {
+          const changed = (_event: string, data: { id: number }) => { if (data.id === Number(value)) ready() }
+          hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, changed)
+          return () => hls.off(Hls.Events.AUDIO_TRACK_SWITCHED, changed)
+        })
+      },
       subtitle(value) {
         if (value === 'off') {
           hls.subtitleTrack = -1
@@ -187,12 +205,13 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         // when a seek is waiting for bytes. Retry the element's destination.
         if (lastError === 'media') hls.recoverMediaError(); else hls.startLoad(video.currentTime); return true
       },
-      destroy() { destroyed = true; if (frameRequest !== undefined) video.cancelVideoFrameCallback?.(frameRequest); video.removeEventListener('resize', onVideoResize); lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
+      destroy() { destroyed = true; switching.dispose(); if (frameRequest !== undefined) video.cancelVideoFrameCallback?.(frameRequest); video.removeEventListener('resize', onVideoResize); lease?.destroy(); hls.destroy(); video.removeAttribute('src'); video.load() },
     }
   }
   const dash = await import('dashjs')
   signal?.throwIfAborted()
   const player = dash.MediaPlayer().create()
+  const switching = createAudioSwitch(video)
   const publish = () => events.tracks({
     qualities: [...auto, ...orderQualityOptions(dedupeQualityHeights(player.getRepresentationsByType('video').map((track) => {
       const height = standardQualityHeight(typeof track.height === 'number' ? track.height : undefined, typeof track.width === 'number' ? track.width : undefined)
@@ -211,9 +230,18 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
   player.initialize(video, source.src, false)
   return {
     quality(value) { player.updateSettings({ streaming: { abr: { autoSwitchBitrate: { video: value === 'auto' } } } }); if (value !== 'auto') player.setRepresentationForTypeById('video', value) },
-    audio(value) { const track = player.getTracksFor('audio')[Number(value)]; if (track) player.setCurrentTrack(track) },
+    audio(value) {
+      const track = player.getTracksFor('audio')[Number(value)], previous = player.getCurrentTrackFor('audio')
+      if (!track) return Promise.resolve(false)
+      if (previous === track) return Promise.resolve(true)
+      return switching.select(() => player.setCurrentTrack(track), () => { if (previous) player.setCurrentTrack(previous) }, ready => {
+        const rendered = () => { if (player.getCurrentTrackFor('audio') === track) ready() }
+        player.on(dash.MediaPlayer.events.TRACK_CHANGE_RENDERED, rendered)
+        return () => player.off(dash.MediaPlayer.events.TRACK_CHANGE_RENDERED, rendered)
+      })
+    },
     subtitle(value) { player.setTextTrack(value === 'off' ? -1 : Number(value)) },
     recover() { return false },
-    destroy() { player.reset(); video.removeAttribute('src'); video.load() },
+    destroy() { switching.dispose(); player.reset(); video.removeAttribute('src'); video.load() },
   }
 }

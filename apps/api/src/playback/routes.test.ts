@@ -22,6 +22,69 @@ async function setup() {
   return app
 }
 describe('playback session API', () => {
+  it('honors a personal Embed-first order but rejects unsandboxed frames with ads off', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = ['primary', 'external'].map(id => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, key: 'frame', type: 'iframe', frameSandbox: 'none', subtitles: [] }] }]), deliveryMode: id === 'external' ? 'embed' : 'direct', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }))
+    const playback = createPlayback({ providers, store, region: 'US' }), signal = new AbortController().signal
+    const input = { ...body, preferences: { providerOrder: ['external', 'primary'], adsEnabled: true } }
+    expect(await playback.beginAttempt!('ads-on', input, signal)).toMatchObject({ status: 'ready', session: { source: { providerId: 'external', delivery: 'embed' } } })
+    const pending = await playback.beginAttempt!('ads-off', { ...input, preferences: { ...input.preferences, adsEnabled: false } }, signal)
+    expect(pending.status).toBe('pending')
+    expect(await playback.continueAttempt!('ads-off', pending.attemptId, signal)).toMatchObject({ status: 'ready', session: { source: { providerId: 'primary', delivery: 'direct' } } })
+    await store.close()
+  })
+  it('owns attempt continuations and exhausts a fixed personal order exactly once', async () => {
+    const app = await setup(), headers = { origin: 'http://localhost:3000' }
+    const first = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers, payload: { input: { ...body, preferences: { providerOrder: ['backup', 'disabled', 'primary'] } } } })
+    expect(first.statusCode).toBe(200)
+    const selected = first.json(), cookie = first.cookies.map(row => `${row.name}=${row.value}`).join('; ')
+    expect(selected).toMatchObject({ status: 'ready', tried: 1, total: 2, session: { source: { providerId: 'backup' } } })
+    const forbidden = await app.inject({ method: 'POST', url: `/v1/playback/attempts/${selected.attemptId}/continue`, headers })
+    expect(forbidden.statusCode).toBe(401)
+    const next = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers: { ...headers, cookie }, payload: { input: body, sessionId: selected.session.id, failure: { sourceId: selected.session.source.id, reason: 'media' } } })
+    expect(next.json()).toMatchObject({ status: 'ready', tried: 2, total: 2, session: { source: { providerId: 'primary' } } })
+    const exhausted = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers: { ...headers, cookie }, payload: { input: body, sessionId: selected.session.id, failure: { sourceId: next.json().session.source.id, reason: 'media' } } })
+    expect(exhausted.json()).toMatchObject({ status: 'exhausted', tried: 2, total: 2 })
+    expect((await app.inject({ method: 'DELETE', url: `/v1/playback/attempts/${selected.attemptId}`, headers: { ...headers, cookie } })).statusCode).toBe(204)
+    expect((await app.inject({ method: 'POST', url: `/v1/playback/attempts/${selected.attemptId}/continue`, headers: { ...headers, cookie } })).statusCode).toBe(404)
+  })
+  it('returns pending after an empty provider and visits the last provider on continuation', async () => {
+    const store = createMemoryPlaybackStore(), calls: string[] = []
+    const providers: ProviderRegistration[] = ['empty', 'last'].map(id => ({ adapter: { id, async resolve() { calls.push(id); return { ok: true, sources: id === 'last' ? [source] : [] } } }, enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }))
+    const playback = createPlayback({ providers, store, region: 'US' }), signal = new AbortController().signal
+    const first = await playback.beginAttempt!('owner', body, signal)
+    expect(first).toMatchObject({ status: 'pending', tried: 1, total: 2 })
+    const last = await playback.continueAttempt!('owner', first.attemptId, signal)
+    expect(last).toMatchObject({ status: 'ready', tried: 2 })
+    await playback.continueAttempt!('owner', first.attemptId, signal)
+    expect(calls).toEqual(['empty', 'last'])
+    await expect(playback.continueAttempt!('other', first.attemptId, signal)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await store.close()
+  })
+  it('starts a fresh recovery roster after an explicit server choice', async () => {
+    const store = createMemoryPlaybackStore()
+    const providers: ProviderRegistration[] = ['primary', 'backup'].map(id => ({ adapter: createStaticProvider(id, [{ ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }))
+    const playback = createPlayback({ providers, store, region: 'US' }), signal = new AbortController().signal
+    const first = await playback.beginAttempt!('owner', body, signal)
+    if (first.status !== 'ready') throw new Error('Expected ready fixture')
+    const manual = await playback.switchProvider('owner', first.session.id, 'backup', signal)
+    await expect(playback.continueAttempt!('owner', first.attemptId, signal)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    const recovered = await playback.beginAttempt!('owner', body, signal, manual.id, { sourceId: manual.source.id, reason: 'media' })
+    expect(recovered).toMatchObject({ status: 'ready', tried: 2, total: 2, session: { source: { providerId: 'primary' } } })
+    await store.close()
+  })
+  it('retains adapter-owned VTT subtitle playlist handling through resolve and renewal', async () => {
+    const store = createMemoryPlaybackStore()
+    const hls: ProviderSource = { ...source, type: 'hls', url: 'https://media.example/master.m3u8', hlsSubtitlePlaylistFormat: 'vtt' }
+    const providers: ProviderRegistration[] = [{ adapter: createStaticProvider('purstream', [{ ref, sources: [hls] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'purstream', concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }]
+    const playback = createPlayback({ providers, store, region: 'US' })
+    const signal = new AbortController().signal
+    const selected = await playback.resolve('viewer', body, signal)
+    expect(selected.source).toMatchObject({ type: 'hls', delivery: 'direct', src: hls.url, hlsSubtitlePlaylistFormat: 'vtt' })
+    const refreshed = await playback.recover('viewer', selected.id, { sourceId: selected.source.id, reason: 'expired' }, true, signal)
+    expect(refreshed.source.hlsSubtitlePlaylistFormat).toBe('vtt')
+    await store.close()
+  })
   it('validates and honors a startup server choice through the HTTP contract', async () => {
     const app = await setup()
     const headers = { origin: 'http://localhost:3000' }
@@ -133,6 +196,22 @@ describe('playback session API', () => {
     const fallback = await playback.recover('viewer', session.id, { sourceId: session.source.id, reason: 'network' }, false, new AbortController().signal)
     expect(fallback.source.providerId).toBe('third')
     expect(first).toHaveBeenCalledTimes(1)
+    await store.close()
+  })
+  it('automatically attempts CookieBakers while its provider circuit is degraded', async () => {
+    const store = createMemoryPlaybackStore()
+    const cookiebakers: ProviderRegistration = {
+      adapter: createStaticProvider('cookiebakers', [{ ref, sources: [source] }]),
+      enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'cookiebakers',
+      concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'],
+    }
+    const resolve = vi.spyOn(cookiebakers.adapter, 'resolve')
+    await store.set('provider-health:v1:US:movie:cookiebakers', JSON.stringify({ failures: 3, openUntil: Date.now() + 60_000, latency: 0, success: 0, outcomes: 3 }), 3600)
+    const playback = createPlayback({ providers: [cookiebakers], store, region: 'US' })
+
+    const session = await playback.resolve('viewer', body, new AbortController().signal)
+    expect(session.source.providerId).toBe('cookiebakers')
+    expect(resolve).toHaveBeenCalledOnce()
     await store.close()
   })
   it('can return to a recovered provider after the fallback window expires', async () => {

@@ -65,18 +65,38 @@ function decodeStreamFile(param: string): string {
   return Buffer.from(padded, 'base64').toString('utf8').trim()
 }
 
-/** Title similarity for search-result matching (0..1), from the PROVE base recipe. */
-function titleScore(a: string, b: string): number {
-  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
-  const x = norm(a)
-  const y = norm(b)
-  if (!x || !y) return 0
-  if (x === y) return 1
-  const xw = new Set(x.split(' '))
-  const yw = new Set(y.split(' '))
-  let inter = 0
-  for (const word of xw) if (yw.has(word)) inter++
-  return inter / Math.max(xw.size, yw.size)
+function normalizeTitle(value: string): string {
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ')
+}
+
+function titleIdentity(value: string) {
+  const text = normalizeTitle(value)
+  const season = text.match(/\b(?:season|s)\s*(\d+)\b|\b(\d+)(?:st|nd|rd|th)?\s+season\b/)
+  const part = text.match(/\b(?:part|cour)\s*(\d+)\b|\b(\d+)(?:st|nd|rd|th)?\s+(?:part|cour)\b/)
+  const withoutSeason = season ? text.replace(season[0], '').replace(/\s+/g, ' ').trim() : text
+  const base = normalizeTitle(value.split(/[:：]/)[0]!).replace(/\b(?:season|s)\s*\d+\b|\b\d+(?:st|nd|rd|th)?\s+season\b/g, '').replace(/\s+/g, ' ').trim()
+  return { text, withoutSeason, base, season: season ? Number(season[1] ?? season[2]) : null, part: part ? Number(part[1] ?? part[2]) : null }
+}
+
+/** Search is discovery, never proof that two franchise entries are the same
+ * work. Accept exact canonical aliases, explicit season shorthand, or an
+ * explicit first-season label for a bare title. No word-overlap fallback. */
+function titleScore(found: string, slug: string, wanted: ReturnType<typeof titleIdentity>[]): number {
+  const candidate = titleIdentity(found)
+  const slugSeason = titleIdentity(slug).season
+  if (!candidate.text || (slugSeason !== null && slugSeason !== (candidate.season ?? 1))) return 0
+  let score = 0
+  for (const identity of wanted) {
+    if (candidate.season !== null && identity.season !== null && candidate.season !== identity.season) continue
+    if (candidate.part !== null && candidate.part !== identity.part) continue
+    if (candidate.text === identity.text) score = Math.max(score, 1)
+    // The provider may omit an AniList arc subtitle while retaining the exact
+    // numbered season. Part 2 must never match Part 1 or an unspecified part.
+    else if (candidate.season !== null && candidate.season === identity.season && candidate.withoutSeason === identity.base) score = Math.max(score, 0.95)
+    else if (candidate.season === 1 && identity.season === null && candidate.withoutSeason === identity.text && candidate.part === null) score = Math.max(score, 0.95)
+    else if (candidate.season === null && identity.season === 1 && identity.withoutSeason === candidate.text && identity.part === null) score = Math.max(score, 0.95)
+  }
+  return score
 }
 
 function bounded(parent: AbortSignal, ms: number) {
@@ -121,7 +141,10 @@ export function createAnimeKitsuProvider(
     // (for example, "Jujutsu Kaisen Season 3") while AniList returns a long
     // descriptive title. Search the base aliases first, then compare matches
     // against every canonical title above.
-    const queryCandidates = [...searchTitles.map((candidate) =>
+    const identities = searchTitles.map(titleIdentity)
+      // A lossy bare franchise alias cannot erase a canonical later season.
+      .filter((identity, _, all) => !all.some((other) => other.season !== null && other.season > 1 && other.base === identity.text))
+    const queryCandidates = [...[title, ...searchTitles].map((candidate) =>
       candidate.split(/\s*[:：]\s*/)[0]!.replace(/\s+(?:season|s)\s*\d+(?:\s.*)?$/i, '').trim(),
     ), ...searchTitles].filter(Boolean)
     const searchQueries = [...new Map(queryCandidates.map((candidate) => [candidate.toLowerCase(), candidate])).values()]
@@ -134,7 +157,7 @@ export function createAnimeKitsuProvider(
     // Search -> best title match over the partial catalog.
     let slug: string
     {
-      let best: { slug: string; title: string } | null = null
+      const matches = new Map<string, number>()
       let bestScore = -1
       for (const query of searchQueries.slice(0, 3)) {
         const op = bounded(signal, SEARCH_MS)
@@ -143,19 +166,19 @@ export function createAnimeKitsuProvider(
           const data = searchSchema.parse(JSON.parse(response.text))
           for (const item of data.data) {
             if (!item) continue
-            const score = Math.max(...searchTitles.map((candidate) => titleScore(item.title, candidate)))
-            if (score > bestScore) {
-              bestScore = score
-              best = item
-            }
+            const score = titleScore(item.title, item.slug, identities)
+            if (score <= 0) continue
+            matches.set(item.slug, Math.max(score, matches.get(item.slug) ?? 0))
+            bestScore = Math.max(bestScore, score)
           }
           if (bestScore >= 0.9) break
         } finally {
           op.cleanup()
         }
       }
-      if (!best || bestScore < 0.4) throw new ProviderFailure('empty')
-      slug = best.slug
+      const best = [...matches].filter(([, score]) => score === bestScore)
+      if (best.length !== 1) throw new ProviderFailure('empty')
+      slug = best[0]![0]
     }
 
     // Anime page -> inline episode list -> canonical episode -> watch url.
@@ -169,7 +192,10 @@ export function createAnimeKitsuProvider(
         const href = String(target?.video_url || target?.video_url2 || '')
         if (!href) throw new ProviderFailure('empty')
         try {
-          watchUrl = new URL(href, siteOrigin).toString()
+          const target = new URL(href, siteOrigin)
+          if (target.origin !== siteOrigin || target.username || target.password || target.search || target.hash ||
+            target.pathname !== `/watch/${encodeURIComponent(slug)}/${ref.episode}`) throw new Error('Mismatched episode identity.')
+          watchUrl = target.toString()
         } catch {
           throw new ProviderFailure('empty')
         }

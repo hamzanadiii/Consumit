@@ -16,9 +16,12 @@ export type TitleRailProps = {
   description?: string | undefined
   viewAllHref?: string | undefined
   icon?: ReactNode | undefined
+  renderFooter?: ((item: CatalogTitleSummary) => ReactNode) | undefined
+  renderAction?: ((item: CatalogTitleSummary) => ReactNode) | undefined
+  hideHeading?: boolean | undefined
 }
 
-export function TitleRail({ id, title, heading, items, description, viewAllHref, icon }: TitleRailProps) {
+export function TitleRail({ id, title, heading, items, description, viewAllHref, icon, renderFooter, renderAction, hideHeading = false }: TitleRailProps) {
   const scrollRef = useRef<HTMLUListElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -52,16 +55,17 @@ export function TitleRail({ id, title, heading, items, description, viewAllHref,
   if (!items.length) return null
 
   return (
-    <section aria-labelledby={`${id}-heading`} className="group/rail relative mt-8">
-      <SectionHeading id={`${id}-heading`} title={heading ?? title} description={description} icon={icon} action={viewAllHref ? (
+    <section aria-labelledby={`${id}-heading`} className={`group/rail relative ${hideHeading ? 'mt-3' : 'mt-8'}`}>
+      {!hideHeading ? <SectionHeading id={`${id}-heading`} title={heading ?? title} description={description} icon={icon} action={viewAllHref ? (
           <Link
+            aria-label={`View all ${title.toLowerCase()}`}
             className="flex min-h-10 items-center gap-1 text-xs text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={viewAllHref}
           >
             View All
             <ArrowUpRight aria-hidden="true" className="size-3.5" />
           </Link>
-        ) : null} />
+        ) : null} /> : null}
 
       <div className="relative mt-4">
         {canScrollLeft ? (
@@ -83,7 +87,7 @@ export function TitleRail({ id, title, heading, items, description, viewAllHref,
           tabIndex={0}
         >
           {items.map((item) => (
-            <TitleCard className="w-40 shrink-0 snap-start sm:w-44 lg:w-48" key={`${item.kind}:${item.id}`} title={item} />
+            <TitleCard className="w-40 shrink-0 snap-start sm:w-44 lg:w-48" key={`${item.kind}:${item.id}`} title={item} action={renderAction?.(item)} footer={renderFooter?.(item)} />
           ))}
         </ul>
 

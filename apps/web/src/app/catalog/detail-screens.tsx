@@ -11,7 +11,6 @@ import { browserCatalogSeason } from '@/lib/catalog-browser'
 import { makerByline } from './catalog-ui'
 import { EpisodesSection } from './episodes-section'
 import { MemberActionPanel } from './member-action-panel'
-import { AdSlot } from '../shared/ad-slot'
 import { TitleReviews } from './title-reviews'
 import { TitlePlayAction } from './title-play-action'
 import { FilScreenShell, TitleRail } from '../shared'
@@ -196,7 +195,6 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
     <FilScreenShell activeKindTab="movies" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
-        <div className="mt-8 px-1 sm:px-3 lg:px-4"><AdSlot placement="detail" position="early" /></div>
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
           <Tabs
             activeValue="overview"
@@ -208,13 +206,12 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               { href: '#related', label: 'Related', value: 'related' },
             ]}
           />
-          <section className="grid gap-8 py-10 sm:py-12 lg:py-14 xl:grid-cols-[minmax(0,1fr)_300px]" id="overview" aria-labelledby="movie-about-heading">
+          <section className="py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="movie-about-heading">
             <div className="min-w-0 max-w-5xl">
               <SectionHeading id="movie-about-heading" title="About the film" />
               <p className="mt-5 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
               <DetailFacts detail={detail} />
             </div>
-            <div className="hidden xl:block"><AdSlot placement="detail" shape="rectangle" /></div>
           </section>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="movie-cast-heading">
             <SectionHeading id="movie-cast-heading" title="Cast & crew" />
@@ -230,7 +227,6 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               year={detail.year}
             />
           </section>
-          <div className="my-8 xl:hidden"><AdSlot placement="detail" /></div>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="movie-related-heading">
             <RelatedRail current={detail} items={detail.recommendations} />
           </section>
@@ -269,7 +265,6 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
     <FilScreenShell activeKindTab="series" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
-        <div className="mt-8 px-1 sm:px-3 lg:px-4"><AdSlot placement="detail" position="early" /></div>
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
           <Tabs
             activeValue="episodes"
@@ -294,13 +289,12 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               seasons={detail.seasons}
             />
           </section>
-          <section className="grid gap-8 border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14 xl:grid-cols-[minmax(0,1fr)_300px]" id="overview" aria-labelledby="series-about-heading">
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="series-about-heading">
             <div className="min-w-0">
               <SectionHeading id="series-about-heading" title={`About ${detail.title}`} />
               <p className="mt-5 max-w-[72ch] text-sm leading-7 text-[var(--fs-secondary)]">{detail.overview || 'No synopsis is currently available.'}</p>
               <DetailFacts detail={detail} />
             </div>
-            <div className="hidden xl:block"><AdSlot placement="detail" shape="rectangle" /></div>
           </section>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="series-cast-heading">
             <SectionHeading id="series-cast-heading" title="Cast & crew" />
@@ -316,7 +310,6 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               year={detail.year}
             />
           </section>
-          <div className="my-8 xl:hidden"><AdSlot placement="detail" /></div>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="series-related-heading">
             <RelatedRail current={detail} items={detail.recommendations} />
           </section>

@@ -39,9 +39,9 @@ async function chooseOption(user: ReturnType<typeof userEvent.setup>, triggerNam
 afterEach(() => { vi.resetAllMocks() })
 
 describe('anime browsing', () => {
-  it('places the shared catalog banner after the featured rail', () => {
+  it('keeps the catalog free of display banners', () => {
     const { container } = show()
-    expect(container.querySelector('[data-ad-slot="catalog"][data-ad-position="early"]')).toBeInTheDocument()
+    expect(container.querySelector('[data-ad-slot]')).not.toBeInTheDocument()
   })
   it('renders the default popular grid without fetching', () => {
     show()

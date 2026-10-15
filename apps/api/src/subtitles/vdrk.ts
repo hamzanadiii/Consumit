@@ -39,6 +39,8 @@ export function createVdrkProvider(http: SubtitleHttp): SubtitleSearchProvider {
   return {
     id: 'vdrk',
     name: 'VDRK',
+    // Files are served from cache.vdrk.site (see module comment).
+    fileHosts: ['vdrk.site', '*.vdrk.site'],
     supports(query: SubtitleQuery) {
       return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },

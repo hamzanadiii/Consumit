@@ -11,7 +11,8 @@ import { browserAnimeEpisodes } from '@/lib/anime-browser'
 import { useEpisodeArt, type EpisodeArt } from '../../anime/use-episode-art'
 import { EpisodeRail, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
-import { AdSlot } from '../../shared/ad-slot'
+import { WatchDetails, WatchSurface } from '../watch-surface'
+import styles from '../watch-surface.module.css'
 import type { WatchEpisode, WatchTitle } from '../watch-screen'
 
 function toWatchTitle(detail: AnimeTitleDetail): WatchTitle {
@@ -105,6 +106,7 @@ function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, 
   const streaming = useMemo(() => indexStreamingEpisodes(detail), [detail])
   const currentStream = streaming.get(episode)
   const currentArt = useEpisodeArt(detail.anilistId, episode, { upcoming: isUpcoming(episode) })
+  const watchEpisode = toWatchEpisode(detail, episode, currentStream, currentArt)
   const duration = formatDuration(detail.episodeDuration)
   const altTitle = detail.titles.english && detail.titles.english !== detail.titles.preferred ? detail.titles.english : detail.titles.romaji
 
@@ -131,16 +133,25 @@ function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, 
   )
 
   return (
-    <div className="min-h-screen bg-[var(--fs-page)]" data-consumit-anime-watch>
-      <div className="mx-auto w-full max-w-[100rem] px-3 pt-4 pb-10 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <AdSlot placement="watch" position="early" />
-        </div>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="flex min-w-0 flex-col gap-6">
+    <WatchSurface backHref={`/anime/${detail.anilistId}`}>
+        <div className={styles.columns} data-consumit-anime-watch>
+          <div className={styles.primary}>
             <WatchPlayback
+              audioControl={
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs font-bold text-copy">Audio</span>
+                  <SegmentedControl
+                    className="w-36"
+                    legend="Audio language"
+                    name="anime-audio"
+                    onValueChange={(value) => { const nextAudio = value === 'dub' ? 'dub' : 'sub'; void experience.patch({ animeAudio: nextAudio }).catch(() => {}); router.push(audioHref(nextAudio)) }}
+                    options={[{ label: 'SUB', value: 'sub' }, { label: 'DUB', value: 'dub' }]}
+                    value={audio}
+                  />
+                </div>
+              }
               audioLanguage={audio === 'dub' ? 'en' : 'ja'}
-              episode={toWatchEpisode(detail, episode, currentStream, currentArt)}
+              episode={watchEpisode}
               key={`${detail.anilistId}:${episode}:${audio}`}
               layout="embedded"
               nextHref={audioNavigation(nextHref)}
@@ -149,36 +160,16 @@ function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, 
               {...(pinnedProvider ? { pinnedProvider } : {})}
             />
 
-            <section aria-labelledby="anime-watch-title-heading" className="rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h1 id="anime-watch-title-heading" className="font-display text-2xl leading-tight font-normal tracking-[-0.02em] text-[var(--fs-ink)] sm:text-3xl">
-                    <span className="text-[var(--fs-accent)]">{episode}.</span> {detail.titles.preferred}
-                  </h1>
-                  <p className="mt-1.5 text-xs tracking-wide text-[var(--fs-muted)] uppercase">
-                    {[altTitle, total ? `${total} EPS` : null, duration, currentArt?.airDate ? formatAirDate(currentArt.airDate) : null, detail.seasonYear].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  <SegmentedControl
-                    legend="Audio language"
-                    name="anime-audio"
-                    onValueChange={(value) => { const nextAudio = value === 'dub' ? 'dub' : 'sub'; void experience.patch({ animeAudio: nextAudio }).catch(() => {}); router.push(audioHref(nextAudio)) }}
-                    options={[{ label: 'SUB', value: 'sub' }, { label: 'DUB', value: 'dub' }]}
-                    value={audio}
-                  />
-                </div>
-              </div>
-              {experience.error ? <p role="alert" className="mt-4 text-sm text-[var(--fs-secondary)]">{experience.error} <Button variant="ghost" onClick={() => void experience.retry().catch(() => {})}>Retry saving preferences</Button></p> : null}
-              {currentArt?.synopsis || detail.description ? (
-                <p className="mt-4 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)] line-clamp-3">
-                  {currentArt?.synopsis ?? detail.description}
-                </p>
-              ) : null}
-            </section>
+            <WatchDetails
+              episode={watchEpisode.title === `Episode ${episode}` ? watchEpisode.title : `Episode ${episode} · ${watchEpisode.title}`}
+              meta={[detail.seasonYear, duration, total ? `${total} episodes` : null, altTitle, currentArt?.airDate ? formatAirDate(currentArt.airDate) : null].filter(Boolean).join(' · ')}
+              overview={currentArt?.synopsis ?? detail.description}
+              title={detail.titles.preferred}
+            />
+            {experience.error ? <p role="alert" className={styles.notice}>{experience.error} <Button variant="ghost" onClick={() => void experience.retry().catch(() => {})}>Retry saving preferences</Button></p> : null}
           </div>
 
-          <div className="flex min-w-0 flex-col">
+          <div className={styles.aside}>
             <EpisodeRail
               countLabel={`Episode ${episode} of ${total}`}
               currentLabel="Now playing"
@@ -189,7 +180,7 @@ function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, 
               pageSize={8}
             />
             {detail.nextAiringEpisode ? (
-              <p className="mt-3 flex items-center gap-2 rounded-xl bg-[var(--fs-rail)] px-3 py-2.5 text-xs tabular-nums text-[var(--fs-secondary)]" role="status">
+              <p className={styles.airing} role="status">
                 <Bell aria-hidden="true" className="size-4 shrink-0 text-[var(--fs-accent)]" />
                 <span className="min-w-0 truncate">
                   Episode {detail.nextAiringEpisode.episode} {formatCountdown(detail.nextAiringEpisode.airingAt)} · {formatAirDate(detail.nextAiringEpisode.airingAt)}
@@ -198,7 +189,6 @@ function AnimeWatchReady({ detail, episode, nextHref, prevHref, pinnedProvider, 
             ) : null}
           </div>
         </div>
-      </div>
-    </div>
+    </WatchSurface>
   )
 }

@@ -25,6 +25,8 @@ export type DirectMediaSource = {
   relayLease?: (() => { src: string } | undefined) | undefined
   /** Optional caller hint, e.g. "4K", shown in the top meta line. */
   qualityHint?: string | undefined
+  /** Adapter-declared full VTT documents in HLS subtitle playlist slots. */
+  hlsSubtitlePlaylistFormat?: 'vtt' | undefined
   /** Opening/ending ranges in seconds for the skip control. */
   skipSegments?: readonly SkipSegment[] | undefined
 }

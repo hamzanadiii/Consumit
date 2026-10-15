@@ -61,6 +61,8 @@ export function Button({
       aria-busy={loading || undefined}
       className={cn(buttonVariants({ size, variant }), className)}
       disabled={disabled || loading}
+      data-consumit-button
+      data-size={size ?? 'md'}
       type={type}
       {...props}
     >

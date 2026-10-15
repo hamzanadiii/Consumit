@@ -140,7 +140,7 @@ export function WatchCard({
             className="absolute inset-0 z-[1] outline-none"
             href={titleDestination}
           >
-            <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 text-left opacity-0 outline-none transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+            <span className="consumit-poster-label pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 text-left opacity-0 outline-none transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
               <span className="block truncate text-sm font-bold text-white">{title}</span>
               <span className="mt-1 flex items-center gap-1.5 text-xs tabular-nums text-white/80">
                 {meta ? <span className="truncate">{meta}</span> : null}
@@ -155,7 +155,7 @@ export function WatchCard({
             </span>
           </LinkComponent>
         ) : (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+          <div className="consumit-poster-label pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pt-8 pb-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
             <span className="block truncate text-sm font-bold text-white">{title}</span>
             <span className="mt-1 flex items-center gap-1.5 text-xs tabular-nums text-white/80">
               {meta ? <span className="truncate">{meta}</span> : null}

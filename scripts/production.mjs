@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import path from 'node:path'
 import { parseEnv } from 'node:util'
 import { spawnSync } from 'node:child_process'
-import { productionEnvironmentIssues, productionProcessEnvironment } from './production-config.mjs'
+import { productionEnvironmentIssues, productionProcessEnvironment, serializeProductionEnvironment } from './production-config.mjs'
 
 const root = process.cwd()
 const file = path.resolve(root, '.env.production')
@@ -32,9 +32,8 @@ if (command === 'prepare') {
     prepared[key] = `postgresql://${role}:${password}@postgres:5432/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt`
   }
   if (!existing.RESTIC_REPOSITORY?.startsWith('s3:')) prepared.RESTIC_REPOSITORY = template.RESTIC_REPOSITORY
-  // Newline-free JSON quoting is accepted by Node parseEnv and Compose.
   for (const key of ['RESEND_API_KEY', 'STORAGE_BOX_SSH_DIR', 'CONSUMIT_POSTGRES_PASSWORD', 'CLOUDFLARE_TUNNEL_TOKEN']) delete prepared[key]
-  writeFileSync(file, Object.entries(prepared).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n') + '\n', { mode: 0o600 })
+  writeFileSync(file, serializeProductionEnvironment(prepared), { mode: 0o600 })
   const alerts = path.join(secrets, 'alertmanager.yml')
   // The host directory remains private, while Alertmanager's unprivileged
   // container user must be able to read the individual read-only bind mount.
@@ -82,7 +81,7 @@ if (command === 'prepare') {
       if (revision.status !== 0) throw new Error('Build requires the reviewed Git release checkout.')
       env.CONSUMIT_RELEASE = `${revision.stdout.trim()}-${new Date().toISOString().replace(/[-:.]/g, '')}`
       configured.CONSUMIT_RELEASE = env.CONSUMIT_RELEASE
-      writeFileSync(file, Object.entries(configured).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join('\n') + '\n', { mode: 0o600 })
+      writeFileSync(file, serializeProductionEnvironment(configured), { mode: 0o600 })
       console.log(`Building release ${env.CONSUMIT_RELEASE}; previous image tags are retained.`)
     }
     const compose = ['compose', '-p', 'consumit-production', '--env-file', file, '-f', 'compose.yaml', '-f', 'compose.playback.yaml', '-f', 'compose.production.yaml']

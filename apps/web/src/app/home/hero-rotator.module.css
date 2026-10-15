@@ -1,4 +1,25 @@
-/* Desktop refinement of the shipped FilScreen hero. Mobile keeps its existing rules. */
+/* On a phone the featured title shares the first screen with discovery. */
+@media (max-width: 639px) {
+  .copy {
+    min-height: clamp(360px, 54svh, 480px);
+    max-width: none;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 32px 20px 24px;
+    overflow-wrap: anywhere;
+  }
+  .art { object-position: 65% center; }
+  .shade { background: linear-gradient(0deg, rgb(0 0 0 / 92%) 0%, rgb(0 0 0 / 70%) 45%, rgb(0 0 0 / 12%) 100%); }
+  .copy h2 > span { font-size: clamp(30px, 8vw, 40px); line-height: 1.06; }
+  .tagline { font-size: 22px; line-height: 1.25; }
+  .overview { line-height: 1.65; }
+  .actions { gap: 10px; margin-top: 4px; }
+  .actions a { min-height: 44px; justify-content: center; flex: 1; padding-inline: 12px; }
+  .selectors { position: static; transform: none; flex-direction: row; justify-content: center; gap: 0; margin-top: 4px; }
+  .selector { width: 44px; height: 44px; }
+  .selector > span { height: 4px; width: 24px; }
+}
+
 @media (min-width: 1024px) {
   .frame {
     background: #121216;

@@ -315,8 +315,8 @@ export function SignUpScreen({ titles = [], nextPath = '/' }: { titles?: readonl
         <>
         <SignupStepHeader current={3} />
         <form className="space-y-5" key="signup-verify" method="post" onSubmit={verify}>
-          <p className="text-sm leading-6 text-copy">Enter the six-digit code sent to <strong className="text-ink">{email}</strong>. Creating the account finishes only after this step.</p>
-          <AuthField autoComplete="one-time-code" id="sign-up-code" inputMode="numeric" label="Verification code" maxLength={6} name="code" pattern="[0-9]{6}" required />
+          <p className="text-sm leading-6 text-copy">Enter the eight-digit code sent to <strong className="text-ink">{email}</strong>. Creating the account finishes only after this step.</p>
+          <AuthField autoComplete="one-time-code" id="sign-up-code" inputMode="numeric" label="Verification code" maxLength={8} name="code" pattern="[0-9]{8}" required />
           <FormMessage error={error} message={message} />
           <Button className="w-full" disabled={resending} loading={busy} size="lg" type="submit" variant="accent">Verify and continue</Button>
           <Button className="w-full" disabled={busy} loading={resending} onClick={() => void resendCode()} type="button" variant="secondary">Send another code</Button>
@@ -349,7 +349,7 @@ export function VerifyEmailScreen() {
       setBusy(false)
     }
   }
-  return <AuthFrame description="Finish creating your account without putting private codes in a URL." title="Verify your email."><form className="space-y-5" method="post" onSubmit={submit}><AuthField autoComplete="email" id="verify-email" label="Email" name="email" required type="email" /><AuthField autoComplete="one-time-code" id="verify-code" inputMode="numeric" label="Verification code" maxLength={6} name="code" pattern="[0-9]{6}" required /><FormMessage error={error} /><Button className="w-full" loading={busy} type="submit" variant="accent">Verify email</Button></form></AuthFrame>
+  return <AuthFrame description="Finish creating your account without putting private codes in a URL." title="Verify your email."><form className="space-y-5" method="post" onSubmit={submit}><AuthField autoComplete="email" id="verify-email" label="Email" name="email" required type="email" /><AuthField autoComplete="one-time-code" id="verify-code" inputMode="numeric" label="Verification code" maxLength={8} name="code" pattern="[0-9]{8}" required /><FormMessage error={error} /><Button className="w-full" loading={busy} type="submit" variant="accent">Verify email</Button></form></AuthFrame>
 }
 
 export function ForgotPasswordScreen() {
@@ -380,5 +380,5 @@ export function ResetPasswordScreen() {
       router.push('/sign-in')
     } catch (caught) { setError(errorMessage(caught)); setBusy(false) }
   }
-  return <AuthFrame description="Use the code from your email and choose a new password." title="Choose a new password."><form className="space-y-5" method="post" onSubmit={submit}><AuthField autoComplete="email" id="reset-email" label="Email" name="email" required type="email" /><AuthField autoComplete="one-time-code" id="reset-code" inputMode="numeric" label="Reset code" maxLength={6} name="code" pattern="[0-9]{6}" required /><AuthField autoComplete="new-password" id="reset-password" label="New password" minLength={12} name="newPassword" required type="password" /><FormMessage error={error} /><Button className="w-full" loading={busy} type="submit" variant="accent">Reset password</Button></form></AuthFrame>
+  return <AuthFrame description="Use the code from your email and choose a new password." title="Choose a new password."><form className="space-y-5" method="post" onSubmit={submit}><AuthField autoComplete="email" id="reset-email" label="Email" name="email" required type="email" /><AuthField autoComplete="one-time-code" id="reset-code" inputMode="numeric" label="Reset code" maxLength={8} name="code" pattern="[0-9]{8}" required /><AuthField autoComplete="new-password" id="reset-password" label="New password" minLength={12} name="newPassword" required type="password" /><FormMessage error={error} /><Button className="w-full" loading={busy} type="submit" variant="accent">Reset password</Button></form></AuthFrame>
 }

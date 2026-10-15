@@ -99,7 +99,10 @@ function tokenize(text: string): HlsLine[] {
  * to `ProviderFailure('malformed')` to keep their contract codes.
  */
 export function assertHlsManifest(text: string): 'master' | 'media' {
-  const lines = tokenize(text)
+  return classify(tokenize(text))
+}
+
+function classify(lines: HlsLine[]): 'master' | 'media' {
   const tags: string[] = []
   for (const line of lines) if (line.kind === 'tag') tags.push(line.raw)
   if (tags.some((raw) => /^#EXT-X-STREAM-INF:/.test(raw))) return 'master'
@@ -145,7 +148,16 @@ export function parseHlsReferences(text: string, baseUrl: string): string[] {
 
 /** Keep media-segment provenance for bounded seek checks. */
 export function parseHlsReferenceEntries(text: string, baseUrl: string): Array<{ url: string; media: boolean }> {
+  return referenceEntries(tokenize(text), baseUrl)
+}
+
+/** Classify and validate every URI-bearing construct once for lookup probes. */
+export function inspectHlsManifest(text: string, baseUrl: string) {
   const lines = tokenize(text)
+  return { kind: classify(lines), references: referenceEntries(lines, baseUrl) }
+}
+
+function referenceEntries(lines: HlsLine[], baseUrl: string): Array<{ url: string; media: boolean }> {
   const mediaPlaylist = lines.some((line) => line.kind === 'tag' && /^\s*#EXTINF:/.test(line.raw))
   const references: Array<{ url: string; media: boolean }> = []
   for (const line of lines) {

@@ -1,0 +1,185 @@
+# Apply after production/playback/release overlays. Activate only after acceptance gates.
+x-rebuild-logging: &rebuild-logging
+  driver: json-file
+  options: {max-size: '10m', max-file: '3'}
+services:
+  trace-volume-init:
+    image: alpine:3.22
+    command: [sh, -c, 'chmod 0700 /traces && chown 10001:10001 /traces']
+    volumes: [consumit-traces:/traces]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    network_mode: none
+    mem_limit: 16m
+    cpus: 0.05
+  otel-collector:
+    logging: *rebuild-logging
+    volumes:
+      - ./infra/observability/otel-collector.rebuild.yaml:/etc/otel/config.yaml:ro
+      - consumit-traces:/var/lib/consumit/traces
+    mem_limit: 256m
+    cpus: 0.25
+    depends_on: {trace-volume-init: {condition: service_completed_successfully}}
+  api:
+    image: consumit-api:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    logging: *rebuild-logging
+    environment:
+      APPLICATION_MODE: product
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?Set a dedicated internal application secret}
+      INTERNAL_PLAYBACK_ORIGIN: http://playback:3002
+      BACKGROUND_JOBS_ENABLED: "true"
+      OTEL_SERVICE_NAME: consumit-api
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "0.05"
+    mem_limit: 512m
+    cpus: 1
+    stop_grace_period: 30s
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 5s, timeout: 8s, retries: 12, start_period: 10s}
+  playback:
+    logging: *rebuild-logging
+    image: consumit-playback:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    build: {context: ., target: playback}
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:-https://consumit.online}
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      SUBDL_API_KEY: ${SUBDL_API_KEY:-}
+      JIMAKU_API_KEY: ${JIMAKU_API_KEY:-}
+      OPENSUBTITLES_API_KEY: ${OPENSUBTITLES_API_KEY:-}
+      OPENSUBTITLES_USER: ${OPENSUBTITLES_USER:-}
+      OPENSUBTITLES_PASS: ${OPENSUBTITLES_PASS:-}
+      PLAYBACK_ENABLED: "true"
+      PLAYBACK_VALKEY_URL: valkey://playback-valkey:6379/0
+      PLAYBACK_MEDIA_CONFIG: /run/consumit/providers.json
+      PLAYBACK_INSTANCES: "1"
+      PLAYBACK_RELAY_ENABLED: ${PLAYBACK_RELAY_ENABLED:-false}
+      PLAYBACK_RELAY_ORIGIN: ${PLAYBACK_RELAY_ORIGIN:-}
+      PLAYBACK_RELAY_SECRET: ${PLAYBACK_RELAY_SECRET:-}
+      PLAYBACK_RELAY_PROVIDERS: ${PLAYBACK_RELAY_PROVIDERS:-}
+      PLAYBACK_RELAY_PROVIDER_ORIGINS: ${PLAYBACK_RELAY_PROVIDER_ORIGINS:-}
+      PLAYBACK_RELAY_CONTROL_PROVIDERS: ${PLAYBACK_RELAY_CONTROL_PROVIDERS:-}
+      PLAYBACK_RELAY_DISCOVERY_PROVIDERS: ${PLAYBACK_RELAY_DISCOVERY_PROVIDERS:-}
+      PLAYBACK_NODE_ENABLED: ${PLAYBACK_NODE_ENABLED:-false}
+      PLAYBACK_NODE_ORIGIN: ${PLAYBACK_NODE_ORIGIN:-}
+      PLAYBACK_NODE_SECRET: ${PLAYBACK_NODE_SECRET:-}
+      PLAYBACK_NODE_PROVIDERS: ${PLAYBACK_NODE_PROVIDERS:-}
+      PLAYBACK_RESOLVER_ENABLED: ${PLAYBACK_RESOLVER_ENABLED:-false}
+      PLAYBACK_RESOLVER_ORIGIN: ${PLAYBACK_RESOLVER_ORIGIN:-}
+      PLAYBACK_RESOLVER_SECRET: ${PLAYBACK_RESOLVER_SECRET:-}
+      PLAYBACK_RESOLVER_API_PROVIDERS: ${PLAYBACK_RESOLVER_API_PROVIDERS:-}
+      PLAYBACK_RESOLVER_PROVIDER_ORIGINS: ${PLAYBACK_RESOLVER_PROVIDER_ORIGINS:-}
+      PLAYBACK_RESOLVER_COMPUTE_ENABLED: ${PLAYBACK_RESOLVER_COMPUTE_ENABLED:-false}
+      PLAYBACK_RESOLVER_COMPUTE_SECRET: ${PLAYBACK_RESOLVER_COMPUTE_SECRET:-}
+      PORT: 3002
+      APPLICATION_MODE: playback
+      INTERNAL_API_ORIGIN: http://api:3001
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?Set a dedicated internal application secret}
+      VALKEY_URL: valkey://valkey:6379/0
+      SUBTITLES_DIR: /var/lib/consumit/subtitles
+      SUBTITLE_FILE_BACKEND: disk
+      PLAYBACK_PROBE_INTERVAL_MINUTES: ${PLAYBACK_PROBE_INTERVAL_MINUTES:-30}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: consumit-playback
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "0.05"
+    volumes:
+      - consumit-subtitles:/var/lib/consumit/subtitles
+      - type: bind
+        source: ${CONSUMIT_PROVIDER_CONFIG:-./infra/playback/providers.local.json}
+        target: /run/consumit/providers.json
+        read_only: true
+        bind: {create_host_path: false}
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 64
+    stop_grace_period: 80s
+    restart: unless-stopped
+    depends_on: {api: {condition: service_healthy}, playback-valkey: {condition: service_healthy}}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3002/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"], interval: 10s, timeout: 8s, retries: 10}
+  queue-valkey:
+    image: valkey/valkey:9.1.1-alpine
+    command: [valkey-server, --appendonly, "yes", --appendfsync, everysec, --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes: [consumit-queue:/data]
+    mem_limit: 256m
+    cpus: 0.25
+    restart: unless-stopped
+    healthcheck: {test: [CMD, valkey-cli, ping], interval: 5s, timeout: 3s, retries: 10}
+  worker:
+    logging: *rebuild-logging
+    image: consumit-worker:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    build: {context: ., target: worker}
+    environment:
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:?Set a dedicated internal application secret}
+      INTERNAL_API_ORIGIN: http://api:3001
+      INTERNAL_PLAYBACK_ORIGIN: http://playback:3002
+      QUEUE_VALKEY_URL: redis://queue-valkey:6379/0
+      VALKEY_URL: valkey://valkey:6379/0
+      PLAYBACK_VALKEY_URL: valkey://playback-valkey:6379/0
+      DATABASE_URL: ${DATABASE_URL:-missing-database}
+      DATABASE_SSL_MODE: require
+      DATABASE_SSL_CA_FILE: /run/secrets/db-ca.crt
+      WORKER_CONCURRENCY: "1"
+      PLAYBACK_PROBE_INTERVAL_MINUTES: ${PLAYBACK_PROBE_INTERVAL_MINUTES:-30}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: consumit-worker
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: "0.05"
+    secrets: [db-ca.crt]
+    mem_limit: 256m
+    cpus: 0.5
+    read_only: true
+    cap_drop: [ALL]
+    stop_grace_period: 180s
+    restart: unless-stopped
+    depends_on: {api: {condition: service_healthy}, playback: {condition: service_healthy}, queue-valkey: {condition: service_healthy}}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3003/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"], interval: 10s, timeout: 5s, retries: 10}
+  release-worker:
+    logging: *rebuild-logging
+    image: consumit-worker-browser:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    build: {context: ., target: worker-browser}
+    environment:
+      QUEUE_VALKEY_URL: redis://queue-valkey:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: consumit-worker-browser
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: '0.05'
+    stop_grace_period: 120s
+    depends_on: {queue-valkey: {condition: service_healthy}}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3004/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"], interval: 10s, timeout: 5s, retries: 10}
+  api-legacy:
+    image: consumit-api:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    logging: *rebuild-logging
+    profiles: [rebuild-canary]
+    extends: {file: compose.production.yaml, service: api}
+    build: {context: ., target: api}
+    volumes:
+      - consumit-subtitles:/var/lib/consumit/subtitles
+      - type: bind
+        source: ${CONSUMIT_PROVIDER_CONFIG:-./infra/playback/providers.local.json}
+        target: /run/consumit/providers.json
+        read_only: true
+        bind: {create_host_path: false}
+    environment:
+      APPLICATION_MODE: combined
+      BACKGROUND_JOBS_ENABLED: "true"
+      OTEL_SERVICE_NAME: consumit-api-legacy
+      RELEASE_TRACKING_ENABLED: ${RELEASE_TRACKING_ENABLED:-false}
+      RELEASE_WORKER_SECRET: ${RELEASE_WORKER_SECRET:?Set a dedicated release worker secret}
+    depends_on: {postgres: {condition: service_healthy}, valkey: {condition: service_healthy}, playback-valkey: {condition: service_healthy}, otel-collector: {condition: service_started}}
+    mem_limit: 512m
+    cpus: 1
+    restart: unless-stopped
+    stop_grace_period: 80s
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"], interval: 10s, timeout: 5s, retries: 10}
+  gateway:
+    image: consumit-gateway-rebuild:${CONSUMIT_REBUILD_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    build: {context: ., target: gateway-rebuild}
+    environment:
+      CONSUMIT_PLAYBACK_CANARY_PERCENT: ${CONSUMIT_PLAYBACK_CANARY_PERCENT:-100}
+      CONSUMIT_PLAYBACK_PRIMARY_UPSTREAM: ${CONSUMIT_PLAYBACK_PRIMARY_UPSTREAM:-playback:3002}
+volumes:
+  consumit-queue:
+  consumit-traces:

@@ -9,6 +9,38 @@ const input = { ref: { kind: 'movie' as const, id: 1 }, capabilities: { hls: tru
 function provider(id: string): ProviderRegistration { return { adapter: createStaticProvider(id, [{ ref: input.ref, sources: [source] }]), enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,   mediaKinds: ['movie', 'series'] } }
 afterEach(() => vi.useRealTimers())
 describe('bounded playback resolution', () => {
+  it('retries an explicitly selected provider during cooldown while automatic resolution keeps the circuit', async () => {
+    const registration = provider('recovered')
+    const resolve = vi.spyOn(registration.adapter, 'resolve')
+    const store = createMemoryPlaybackStore()
+    const now = Date.now()
+    await store.set('provider-health:v1:US:movie:recovered', JSON.stringify({ failures: 3, openUntil: now + 60000, latency: 0, success: 0, outcomes: 3 }), 3600)
+    const resolver = createResolver([registration], { region: 'US', store })
+    expect(await resolver.resolve(input, new AbortController().signal, [], undefined, true)).toBeNull()
+    expect(resolve).not.toHaveBeenCalled()
+    expect(await resolver.resolve(input, new AbortController().signal, [], 'recovered', true)).toMatchObject({ registration: { adapter: { id: 'recovered' } } })
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
+  it('keeps CookieBakers in automatic attempts during cooldown without changing other providers', async () => {
+    const registration = provider('cookiebakers')
+    const resolve = vi.spyOn(registration.adapter, 'resolve')
+    const store = createMemoryPlaybackStore()
+    const now = Date.now()
+    await store.set('provider-health:v1:US:movie:cookiebakers', JSON.stringify({ failures: 3, openUntil: now + 60000, latency: 0, success: 0, outcomes: 3 }), 3600)
+    const resolver = createResolver([registration], { region: 'US', store, alwaysAttemptProviderIds: ['cookiebakers'] })
+
+    expect((await resolver.resolve(input, new AbortController().signal))?.registration.adapter.id).toBe('cookiebakers')
+    expect(resolve).toHaveBeenCalledOnce()
+  })
+  it('keeps request limits when a member explicitly retries a cooling provider', async () => {
+    const registration = { ...provider('limited'), requestsPerMinute: 1 }
+    const resolve = vi.spyOn(registration.adapter, 'resolve')
+    const resolver = createResolver([registration], { region: 'US' })
+    expect(await resolver.resolve(input, new AbortController().signal, [], 'limited', true)).not.toBeNull()
+    for (let i = 0; i < 3; i++) resolver.recordFailure('limited', 'movie')
+    expect(await resolver.resolve({ ...input, ref: { kind: 'movie', id: 2 } }, new AbortController().signal, [], 'limited', true)).toBeNull()
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
   it('offers only validated qualities from the selected source group, including shared-cache reads', async () => {
     const registration = provider('city')
     registration.adapter = createStaticProvider('city', [{ ref: input.ref, sources: [

@@ -9,7 +9,7 @@ afterAll(() => db.close())
 
 describe('title progress versus exact Watch progress', () => {
   it.each(['series', 'anime'] as const)('reads the newest %s episode only within this member and title', async (kind) => {
-    const read = vi.spyOn(db.prisma.playbackProgress, 'findFirst').mockResolvedValue({ id: 'progress', memberId: 'owner', catalogKind: kind === 'anime' ? 'ANIME' : 'SERIES', tmdbId: 21, season: 2, episode: 3, completed: false, positionSeconds: 450, durationSeconds: 1400, createdAt: new Date('2026-10-02T00:00:00Z'), updatedAt: new Date('2026-10-03T00:00:00Z') })
+    const read = vi.spyOn(db.prisma.playbackProgress, 'findFirst').mockResolvedValue({ id: 'progress', memberId: 'owner', catalogKind: kind === 'anime' ? 'ANIME' : 'SERIES', tmdbId: 21, season: 2, episode: 3, completed: false, hiddenFromContinueAt: null, positionSeconds: 450, durationSeconds: 1400, createdAt: new Date('2026-10-02T00:00:00Z'), updatedAt: new Date('2026-10-03T00:00:00Z') })
     try {
       expect(await memberData.progress('owner', { kind, id: 21 })).toMatchObject({ kind, id: 21, episode: 3, season: 2, positionSeconds: 450 })
       expect(read).toHaveBeenCalledWith({ where: { memberId: 'owner', catalogKind: kind === 'anime' ? 'ANIME' : 'SERIES', tmdbId: 21, episode: { gt: 0 } }, orderBy: [{ updatedAt: 'desc' }, { season: 'desc' }, { episode: 'desc' }] })

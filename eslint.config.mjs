@@ -23,7 +23,7 @@ export default defineConfig([
     extends: [nextVitals, nextTypeScript],
   },
   {
-    files: ['apps/api/**/*.ts', 'apps/release-worker/**/*.ts', 'packages/**/*.{ts,tsx}'],
+    files: ['apps/api/**/*.ts', 'apps/playback/**/*.ts', 'apps/worker/**/*.ts', 'apps/release-worker/**/*.ts', 'packages/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {

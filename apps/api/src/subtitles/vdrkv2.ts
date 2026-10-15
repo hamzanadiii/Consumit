@@ -13,6 +13,8 @@ export function createVdrkV2Provider(http: SubtitleHttp): SubtitleSearchProvider
   return {
     id: 'vdrkv2',
     name: 'VDRK v2',
+    // Same infrastructure as v1: files ride cache.vdrk.site.
+    fileHosts: ['vdrk.site', '*.vdrk.site'],
     supports(query: SubtitleQuery) {
       return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },

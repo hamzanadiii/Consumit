@@ -1,0 +1,40 @@
+# Separate DNS-only HTTPS media route; never served by the site Tunnel.
+name: consumit-media
+services:
+  media-egress:
+    image: consumit-api:${CONSUMIT_RELEASE:?Use a built production API release}
+    command: [node, media-egress.js]
+    env_file: .env.media-egress
+    environment:
+      NODE_ENV: production
+      MEDIA_BUDGET_FILE: /var/lib/consumit/media/budget.json
+      MEDIA_MAX_ACTIVE: "16"
+      MEDIA_BYTES_PER_SECOND: "1500000"
+      MEDIA_DAILY_BYTES: "8000000000"
+    volumes:
+      - ./infra/secrets/media-budget:/var/lib/consumit/media
+    read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 128
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: 2m, max-file: "3"}}
+  media-https:
+    image: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    ports: ["0.0.0.0:80:80", "0.0.0.0:443:443"]
+    volumes:
+      - ./infra/playback/media.Caddyfile:/etc/caddy/Caddyfile:ro
+      - media-certificates:/data
+      - media-config:/config
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 128
+    restart: unless-stopped
+    depends_on: [media-egress]
+    logging: {driver: json-file, options: {max-size: 2m, max-file: "3"}}
+volumes:
+  media-certificates:
+  media-config:

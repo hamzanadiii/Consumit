@@ -1,5 +1,43 @@
 import type { NextConfig } from 'next'
 
+// Content-Security-Policy for the HTML surface.
+// - script-src-attr 'none' blocks injected event-handler XSS (onclick= etc.).
+// - script-src-elem keeps 'unsafe-inline' only because Next's inline hydration
+//   bootstrap requires it; the host allowlist blocks unexpected external
+//   scripts (a future injected <script src=attacker> is refused).
+// - Ad creatives run in sandboxed iframes (opaque origin) restricted to the
+//   ad partner host; GA and the Cast sender are the other external scripts.
+// - media-src allows https: because playback sources are validated
+//   host-allowlisted provider URLs fetched directly by the browser.
+// - Development additionally needs 'unsafe-eval' and websocket origins for
+//   Next's HMR runtime; production never includes them.
+const isDev = process.env.NODE_ENV !== 'production'
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src-attr 'none'",
+  [
+    "script-src-elem 'self' 'unsafe-inline'",
+    ...(isDev ? ["'unsafe-eval'"] : []),
+    'https://www.googletagmanager.com https://www.gstatic.com https://www.highrevenueformat.com',
+  ].join(' '),
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://image.tmdb.org https://www.themoviedb.org https://s4.anilist.co https://api.dicebear.com https://www.highrevenueformat.com",
+  "font-src 'self'",
+  [
+    "connect-src 'self'",
+    ...(isDev ? ['ws: wss:'] : []),
+    'https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://www.gstatic.com https://www.google.com',
+  ].join(' '),
+  "media-src 'self' blob: https:",
+  "frame-src 'self' https://www.gstatic.com",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self'",
+].join('; ')
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   ...(process.env.CONSUMIT_NEXT_DIST_DIR ? { distDir: process.env.CONSUMIT_NEXT_DIST_DIR } : {}),
@@ -10,10 +48,15 @@ const nextConfig: NextConfig = {
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-      // Public title ISR relies on Next's inline bootstrap. Restrict the
-      // document/navigation surfaces without forcing nonce-bound SSR.
-      { key: 'Content-Security-Policy', value: "base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'" },
-    ] }]
+      // Ignored by browsers on http://localhost, so local dev is unaffected.
+      { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+      // Public title ISR relies on Next's inline bootstrap, so script-src-elem
+      // keeps 'unsafe-inline' (see CONTENT_SECURITY_POLICY note above).
+      { key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY },
+    ] }, {
+      source: '/watch/:path*',
+      headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+    }]
   },
   images: {
     remotePatterns: [

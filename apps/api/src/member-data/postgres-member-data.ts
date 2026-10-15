@@ -33,6 +33,7 @@ import { avatarStyleSchema, MAX_MEMBER_FAVORITES, memberRatingCursorSchema } fro
 
 import { PrismaClient } from '../../generated/prisma/client.js'
 import { requireActiveTrackingMember, syncReleaseTracking } from '../releases/tracking.ts'
+import { ApiError } from '../http/errors.ts'
 import type { MemberData } from './member-data.ts'
 
 /** Stored CatalogKind rows. ANIME keeps AniList ids in their own namespace:
@@ -173,7 +174,7 @@ function profileView(profile: { avatarStyle: string; avatarUrl: string | null; b
 
 
 
-export function createPostgresMemberData(prisma: PrismaClient): MemberData {
+export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = false): MemberData {
   async function activeMemberId(username: string): Promise<string | null> {
     const current = await prisma.profile.findUnique({ select: { memberId: true }, where: { username } })
     const alias = current ? null : await prisma.usernameAlias.findUnique({ select: { memberId: true }, where: { username } })
@@ -523,7 +524,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         await requireActiveTrackingMember(tx, memberId)
         await tx.favorite.deleteMany({ where: { memberId } })
         if (favorites.length) await tx.favorite.createMany({ data: favorites.map((favorite, index) => ({ catalogKind: storedKind(favorite.kind), memberId, origin: 'NATIVE', position: index + 1, tmdbId: favorite.id })) })
-        await syncReleaseTracking(tx, memberId)
+        await syncReleaseTracking(tx, memberId, undefined, outboxEnabled)
       })
     },
     
@@ -646,7 +647,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         } else {
           await tx.savedTitle.deleteMany({ where: key })
         }
-        await syncReleaseTracking(tx, memberId)
+        await syncReleaseTracking(tx, memberId, undefined, outboxEnabled)
       })
     },
     async setWatched(memberId, title, watched): Promise<void> {
@@ -767,6 +768,52 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
         tags: row.tags,
       }
     },
+    async continueWatching(memberId, cursor, limit) {
+      const after: { at: string; id: string } = cursor ? JSON.parse(cursor) : { at: '9999-01-01T00:00:00.000Z', id: 'zzzz' }
+      const rows = await prisma.$queryRaw<(Parameters<typeof progressView>[0] & { id: string; hiddenFromContinueAt: Date | null })[]>`
+        WITH latest AS (
+          SELECT DISTINCT ON ("catalogKind", "tmdbId") * FROM "PlaybackProgress"
+          WHERE "memberId" = ${memberId}
+          ORDER BY "catalogKind", "tmdbId", "updatedAt" DESC, "id" DESC
+        ) SELECT * FROM latest WHERE ("updatedAt", "id") < (${new Date(after.at)}, ${after.id})
+        ORDER BY "updatedAt" DESC, "id" DESC LIMIT ${limit + 1}`
+      return { items: rows.slice(0, limit).map(row => ({ ...progressView(row), hiddenAt: row.hiddenFromContinueAt?.toISOString() ?? null })), nextCursor: rows.length > limit ? JSON.stringify({ at: rows[limit - 1]!.updatedAt.toISOString(), id: rows[limit - 1]!.id }) : null }
+    },
+    async hideContinueWatching(memberId, ref) {
+      const key = progressKey(memberId, ref)
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`
+        await requireActiveTrackingMember(tx, memberId)
+        await tx.$executeRaw`UPDATE "PlaybackProgress" SET "hiddenFromContinueAt" = NOW() WHERE "memberId" = ${memberId} AND "catalogKind" = ${key.catalogKind}::"CatalogKind" AND "tmdbId" = ${ref.id}`
+      })
+    },
+    async recommendationDismissals(memberId) {
+      return (await prisma.recommendationDismissal.findMany({ where: { memberId }, orderBy: { createdAt: 'desc' }, take: 2000 })).map(row => ({ kind: kind(row.catalogKind), id: row.tmdbId }))
+    },
+    async filterRecommendations(memberId, refs) {
+      if (!refs.length) return []
+      const OR = refs.map(ref => ({ catalogKind: progressKey(memberId, ref).catalogKind, tmdbId: ref.id }))
+      const [history, watched, dismissed] = await Promise.all([
+        prisma.watchHistoryEntry.findMany({ where: { memberId, OR }, distinct: ['catalogKind', 'tmdbId'], select: { catalogKind: true, tmdbId: true } }),
+        prisma.watchedTitle.findMany({ where: { memberId, OR }, select: { catalogKind: true, tmdbId: true } }),
+        prisma.recommendationDismissal.findMany({ where: { memberId, OR }, select: { catalogKind: true, tmdbId: true } }),
+      ])
+      const excluded = new Set([...history, ...watched, ...dismissed].map(row => `${kind(row.catalogKind)}:${row.tmdbId}`))
+      return refs.filter(ref => !excluded.has(`${ref.kind}:${ref.id}`))
+    },
+    async dismissRecommendation(memberId, ref, dismissed) {
+      const key = progressKey(memberId, ref), where = { memberId, catalogKind: key.catalogKind, tmdbId: ref.id }
+      await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`
+        await requireActiveTrackingMember(tx, memberId)
+        if (dismissed) {
+          if (await tx.recommendationDismissal.count({ where: { memberId } }) >= 2000 && !await tx.recommendationDismissal.findUnique({ where: { memberId_catalogKind_tmdbId: where } })) throw new ApiError('CONFLICT', 'Reset some recommendations before hiding more titles.')
+          await tx.recommendationDismissal.upsert({ where: { memberId_catalogKind_tmdbId: where }, create: where, update: {} })
+        }
+        else await tx.recommendationDismissal.deleteMany({ where })
+      })
+    },
+    async resetRecommendationDismissals(memberId) { await prisma.$transaction(async tx => { await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${memberId}))`; await requireActiveTrackingMember(tx, memberId); await tx.recommendationDismissal.deleteMany({ where: { memberId } }) }) },
     async progress(memberId: string, ref: ProgressRef): Promise<PlaybackProgress | null> {
       // A title-only read resumes its latest episode; exact Watch reads retain
       // their composite key and never borrow a neighboring episode's position.
@@ -807,7 +854,7 @@ export function createPostgresMemberData(prisma: PrismaClient): MemberData {
       }
       const upsert = {
         create: { ...key, completed, durationSeconds: input.durationSeconds ?? null, positionSeconds },
-        update: { completed, ...(input.durationSeconds !== undefined ? { durationSeconds: input.durationSeconds } : {}), positionSeconds },
+        update: { hiddenFromContinueAt: null, completed, ...(input.durationSeconds !== undefined ? { durationSeconds: input.durationSeconds } : {}), positionSeconds },
         where: { memberId_catalogKind_tmdbId_season_episode: key },
       } as const
       if (input.completed && input.completionId) {

@@ -11,7 +11,6 @@ import { browserAnimeEpisodes } from '@/lib/anime-browser'
 
 import { TitleCard } from '../../shared/title-card'
 import { EpisodeCard } from '../../shared/episode-card'
-import { AdSlot } from '../../shared/ad-slot'
 
 import { MemberActionPanel } from '../../catalog/member-action-panel'
 import { TitleReviews } from '../../catalog/title-reviews'
@@ -445,7 +444,6 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
     <FilScreenShell activeKindTab="anime" pageHeading={undefined}>
       <main className="mx-auto w-full max-w-[90rem]" data-consumit-anime-detail data-anilist-id={detail.anilistId}>
         <AnimeHero detail={detail} />
-        <div className="mt-8 px-1 sm:px-3 lg:px-4"><AdSlot placement="detail" position="early" /></div>
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
           <Tabs
             activeValue="episodes"
@@ -463,8 +461,7 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
               return <TitleCard className="min-w-0" footer={<p className="text-xs leading-5 text-[var(--fs-muted)]">{relation} <span className="text-[var(--fs-faint)]">· {format}</span></p>} key={anime.anilistId} meta={[anime.seasonYear, format].filter(Boolean).join(' · ')} rating={null} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, posterUrl: anime.coverImage.url, year: anime.seasonYear }} />
             })}</ul>
           </section> : relations === null ? <p className="border-t border-[var(--fs-line)] py-6 text-sm text-[var(--fs-muted)]" role="status">Related anime could not load. Refresh to try again.</p> : null}
-          <div className="my-8 xl:hidden"><AdSlot placement="detail" /></div>
-          <section className="grid gap-8 border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14 xl:grid-cols-[minmax(0,1fr)_300px]" id="overview" aria-labelledby="anime-about-heading">
+          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="anime-about-heading">
             <div className="max-w-5xl">
               <SectionHeading id="anime-about-heading" title={`About ${detail.titles.preferred}`} />
               <p className="mt-5 max-w-[70ch] text-sm leading-7 text-[var(--fs-secondary)]">
@@ -472,7 +469,6 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
               </p>
               <AnimeDetailFacts detail={detail} />
             </div>
-            <div className="hidden xl:block"><AdSlot placement="detail" shape="rectangle" /></div>
           </section>
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="anime-cast-heading">
             <SectionHeading id="anime-cast-heading" title="Characters & voice actors" />

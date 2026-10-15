@@ -4,9 +4,9 @@ import { accessDeadline, adapter, ProviderFailure, userAgent, type ProviderHttp 
 
 const BOOT = 'https://embed.vidrift.net/api/boot'
 const MB = 'https://mb.vidrift.net'
-// The mb.vidrift gate rejects Origin-less server-side fetches but accepts any
-// non-empty Origin; the browser always sends its own real Origin on direct
-// fetches, so the adapter declares the provider's own player origin.
+// Record the provider player Origin for verification and approved relay
+// grants. Production-origin browser reads have returned 403; a source hint
+// cannot change the browser's own Origin on Direct requests.
 const ORIGIN = 'https://embed.vidrift.net'
 
 const MAX_SOURCES = 12
@@ -69,9 +69,10 @@ function laneLanguage(name: string): string {
 }
 
 /** Port of the supplied Vidrift recipe: the open boot API returns Orion HLS
- *  lanes plus an optional Evion lane. Orion masters are Origin-gated
- *  server-side yet CORS-open to any browser Origin, and the Evion lane is
- *  bare-open, so the whole chain plays browser-direct. Orion lanes are
+ *  lanes plus an optional Evion lane. Orion masters require the provider
+ *  player Origin on the measured gated route; Direct cannot supply that
+ *  hint, and relay acceptance still requires the complete media graph.
+ *  The optional Evion lane requires its own delivery check. Orion lanes are
  *  HEVC-only; the player fails over where the codec is unsupported. Chunk
  *  URLs rotate per boot, so resolution always happens at request time. */
 export function createVidriftProvider(http: ProviderHttp, now = Date.now) {

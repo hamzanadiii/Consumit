@@ -1,8 +1,9 @@
 import type { ProviderHttp } from '@consumit/provider-sdk'
 import { fetchMedia, type MediaTransport } from './transport.ts'
 
-/** Resolution documents use the same destination protections as media, with a hard body cap. */
-export function createProviderHttp(hosts: readonly string[], transport: MediaTransport = fetchMedia, relayDiscovery = false): ProviderHttp {
+/** Resolution documents use the same destination protections as media, with a hard body cap.
+ *  `patterns` are the row's configured flux-host regexes; discovery scopes stay exact-host only. */
+export function createProviderHttp(hosts: readonly string[], transport: MediaTransport = fetchMedia, relayDiscovery = false, patterns: readonly RegExp[] = []): ProviderHttp {
   const http: ProviderHttp = async (url, headers, signal, init) => {
     const requestSize = typeof init?.body === 'string' ? Buffer.byteLength(init.body) : init?.body?.byteLength ?? 0
     if (requestSize > 65_536) throw new Error('Provider request exceeds its limit.')
@@ -10,7 +11,7 @@ export function createProviderHttp(hosts: readonly string[], transport: MediaTra
     if (prefixLimit !== undefined && (!Number.isInteger(prefixLimit) || prefixLimit < 1 || prefixLimit > 65_536)) {
       throw new Error('Provider response prefix limit is invalid.')
     }
-    const response = await transport(url, hosts, headers, signal, init?.method === 'POST' ? { method: 'POST', body: init.body ?? '' } : undefined)
+    const response = await transport(url, hosts, headers, signal, init?.method === 'POST' ? { method: 'POST', body: init.body ?? '' } : undefined, patterns)
     const abort = () => response.body.destroy(new Error('Provider request cancelled.'))
     signal.addEventListener('abort', abort, { once: true })
     try {

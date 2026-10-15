@@ -1,0 +1,33 @@
+{
+  "name": "@consumit/playback",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "bun build src/index.ts --target=node --outdir=dist",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@consumit/contracts": "workspace:*",
+    "@consumit/server": "workspace:*",
+    "@consumit/provider-sdk": "workspace:*",
+    "@consumit/media-relay": "workspace:*",
+    "fastify": "^5.12.5",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "9.9.2",
+    "fastify-type-provider-zod": "7.0.0",
+    "@aws-sdk/client-s3": "^3.1148.0",
+    "iovalkey": "^0.4.0",
+    "zod": "^4.5.4",
+    "@consumit/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "vitest": "^4.1.11"
+  }
+}

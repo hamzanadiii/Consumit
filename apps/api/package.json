@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "build": "bun build ./src/index.ts ./src/ses-feedback-worker.ts ./src/aws-credit-monitor.ts ./src/s3-retention-drill.ts ./src/bootstrap-admin.ts ./src/aws-identity-check.ts --outdir ./dist --target bun && bun build ../../scripts/smoke-production.mjs --outfile ./dist/smoke-production.js --target bun",
+    "dev": "tsx watch src/index.ts",
+    "build": "bun build ./src/index.ts ./src/media-egress.ts ./src/ses-feedback-worker.ts ./src/aws-credit-monitor.ts ./src/s3-retention-drill.ts ./src/bootstrap-admin.ts ./src/sync-provider-settings.ts ./src/aws-identity-check.ts --outdir ./dist --target node && bun build ../../scripts/smoke-production.mjs --outfile ./dist/smoke-production.js --target node",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
-    "start": "bun src/index.ts",
+    "start": "node dist/index.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "pretest": "DATABASE_DEPLOYMENT=managed DATABASE_URL=postgresql://generate:generate@127.0.0.1:5432/generate prisma generate",
@@ -43,11 +43,17 @@
     "hash-wasm": "^4.12.0",
     "iovalkey": "^0.4.0",
     "pg": "^8.23.0",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "@fastify/swagger": "9.9.2",
+    "fastify-type-provider-zod": "7.0.0",
+    "@consumit/server": "workspace:*",
+    "@consumit/db": "workspace:*",
+    "@consumit/observability": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.23.1",
     "dotenv": "^17.4.2",
-    "prisma": "^7.10.0"
+    "prisma": "^7.10.0",
+    "tsx": "4.23.15"
   }
 }

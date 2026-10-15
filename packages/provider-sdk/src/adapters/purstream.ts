@@ -68,8 +68,8 @@ function isDirectCandidate(rawUrl: string): boolean {
   return true
 }
 
-/** Port of the supplied Purstream recipe: title search with normalized
- *  match plus type/year preference, then per-title stream endpoints. Only
+/** Port of the supplied Purstream recipe: exact normalized title, type and
+ *  compatible year matching, then per-title stream endpoints. Only
  *  direct browser-playable HTTPS media survives selection; the free
  *  media host is CORS-open so the player hits the CDN directly. Title
  *  identity comes from the server-owned metadata resolver, never from
@@ -119,6 +119,7 @@ export function createPurstreamProvider(http: ProviderHttp, metadata: PurstreamM
         expiresAt,
         language: 'original',
         qualityHint: 'Auto',
+        hlsSubtitlePlaylistFormat: 'vtt',
         subtitles: [],
       })
       if (sources.length >= MAX_SOURCES) break
@@ -145,29 +146,32 @@ async function searchTitle(http: ProviderHttp, title: string, kind: 'movie' | 's
   if (!parsed.success) return null
   const wanted = norm(title)
   const wantYear = String(year).slice(0, 4)
-  let best: { id: string; title: string } | null = null
-  let bestScore = 0
+  const matches: Array<{ id: string; title: string; yearScore: number }> = []
   for (const item of parsed.data.data.items.movies?.items ?? []) {
     if (item.id === undefined || item.id === null) continue
     const type = String(item.type ?? '').toLowerCase()
     if (!(kind === 'series' ? SERIES_TYPES : MOVIE_TYPES).has(type)) continue
     const candidate = norm(item.title ?? '')
     if (!candidate || !wanted) continue
-    let score = 0
-    if (candidate === wanted) score = 6
-    else if (candidate.includes(wanted) || wanted.includes(candidate)) score = 4
-    else {
-      const words = new Set(candidate.split(' '))
-      const overlap = wanted.split(' ').filter((word) => words.has(word)).length
-      if (overlap && overlap >= Math.max(1, Math.ceil(wanted.split(' ').length * 0.6))) score = 2
-    }
-    if (!score) continue
+    // Substring/word-overlap matches can select a sequel, remake or another
+    // franchise entry (e.g. "Dune" -> "Dune: Part Two"). A provider source
+    // has no trustworthy content label after lookup, so only exact catalog
+    // identity is safe to issue.
+    if (candidate !== wanted) continue
     const released = String(item.release_date ?? item.first_air_date ?? '')
-    if (wantYear && released.startsWith(wantYear)) score += 3
-    if (score > bestScore) {
-      bestScore = score
-      best = { id: String(item.id), title: String(item.title ?? '') }
-    }
+    const candidateYear = released.slice(0, 4)
+    if (wantYear && candidateYear && candidateYear !== wantYear) continue
+    matches.push({
+      id: String(item.id),
+      title: String(item.title ?? ''),
+      yearScore: candidateYear === wantYear ? 1 : 0,
+    })
   }
-  return best
+  if (!matches.length) return null
+  const bestYearScore = Math.max(...matches.map((match) => match.yearScore))
+  const best = matches.filter((match) => match.yearScore === bestYearScore)
+  // Duplicate exact entries are ambiguous unless the year has narrowed them
+  // to one provider record. Never let API ordering decide the title.
+  if (new Set(best.map((match) => match.id)).size !== 1) return null
+  return best[0] ?? null
 }

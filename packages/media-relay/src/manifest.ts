@@ -9,7 +9,7 @@ export async function rewriteRelayManifest(text:string,base:string,grant:RelayGr
   if(line.startsWith('#EXT-X-STREAM-INF:'))nextPlaylist=true
   return line.replace(/\bURI="([^"]*)"/g,(_match,uri:string)=>{references.push({uri,playlist:/^#EXT-X-(?:MEDIA|I-FRAME-STREAM-INF|RENDITION-REPORT):/.test(line)});return `URI="__CONSUMIT_${references.length-1}__"`})
  }).join('\n')
- if(references.length>2000||/__CONSUMIT_/.test(text))throw new Error('Invalid manifest.')
+ if(references.length>(grant.provider==='rigel'?6000:2000)||/__CONSUMIT_/.test(text))throw new Error('Invalid manifest.')
  const urls=references.map(ref=>new URL(ref.uri,base).href)
  if(urls.some(url=>!relayDestination(url,hosts)))throw new Error('Blocked manifest destination.')
  const tokens=await Promise.all(urls.map((url,index)=>codec.seal({...grant,url,kind:references[index]!.playlist?'hls':'auto',depth:grant.depth+1,...(grant.recipe&&!references[index]!.playlist?{hosts:[new URL(url).hostname]}:{})},now)))

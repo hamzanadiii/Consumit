@@ -58,6 +58,9 @@ export function createNatsukiProvider(http: SubtitleHttp, sign: GateSign = signS
   return {
     id: 'natsuki',
     name: 'Natsuki',
+    // File URLs are pinned to natsuki.hls.lol by the adapter; signed headers
+    // must never travel anywhere else.
+    fileHosts: ['natsuki.hls.lol'],
     supports(query: SubtitleQuery) {
       return (query.type === 'movie' || query.type === 'tv' || query.type === 'anime') && !!query.tmdbId
     },

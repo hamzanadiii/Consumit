@@ -9,7 +9,6 @@ import { useMemo, useRef, useState } from 'react'
 import { useAnimeFeed, type AnimeFeedQuery } from './use-anime-feed'
 import { BrowseHero } from '../shared/browse-hero'
 import { TitleCard } from '../shared/title-card'
-import { AdSlot } from '../shared/ad-slot'
 
 function animeHref(anime: AnimeTitleSummary) {
   return `/anime/${anime.anilistId}`
@@ -137,7 +136,6 @@ export function AnimeBrowseContent({ trending, initial, currentYear }: { trendin
       <div className="mt-7 sm:mt-8">
         <AnimeFeaturedRail items={trending.items} />
       </div>
-      {trending.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdSlot placement="catalog" position="early" /></div> : null}
       <div
         aria-label="Filter anime"
         className="mb-7 flex flex-wrap items-center gap-2 border-y border-[var(--fs-line)] py-3"

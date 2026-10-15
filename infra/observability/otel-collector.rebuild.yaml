@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      http: {endpoint: '0.0.0.0:4318'}
+processors:
+  memory_limiter: {check_interval: 5s, limit_mib: 128}
+  batch: {timeout: 5s, send_batch_size: 512, send_batch_max_size: 512}
+exporters:
+  prometheus:
+    endpoint: '0.0.0.0:8889'
+    namespace: consumit
+    resource_to_telemetry_conversion: {enabled: true}
+  file/traces:
+    path: /var/lib/consumit/traces/traces.json
+    rotation: {max_megabytes: 10, max_days: 1, max_backups: 3}
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [file/traces]

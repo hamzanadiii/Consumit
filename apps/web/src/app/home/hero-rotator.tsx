@@ -251,7 +251,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
           )
         })}
       </div>
-      <div aria-label="Choose a featured title" className="absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col gap-1" role="group">
+      <div aria-label="Choose a featured title" className={`absolute top-1/2 right-4 z-10 flex -translate-y-1/2 flex-col gap-1 ${styles.selectors}`} role="group">
         {slides.map((item, position) => {
           const active = position === activeIndex
           return (

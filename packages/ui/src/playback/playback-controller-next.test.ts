@@ -26,9 +26,31 @@ describe('next playback controller', () => {
     video.currentTime = 42
     video.dispatchEvent(new Event('seeking'))
     video.dispatchEvent(new Event('waiting'))
-    await vi.advanceTimersByTimeAsync(8000)
+    await vi.advanceTimersByTimeAsync(30_000)
     expect(fatal).toHaveBeenCalledExactlyOnceWith('network', 'timeout')
     expect(video.currentTime).toBe(42)
+    controller.destroy()
+  })
+  it('lets a slow seek finish inside the seek budget without failing', async () => {
+    vi.useFakeTimers()
+    const video = videoElement(), fatal = vi.fn()
+    Object.defineProperty(video, 'paused', { configurable: true, value: false })
+    Object.defineProperty(video, 'seeking', { configurable: true, value: true })
+    const controller = createPlaybackControllerNext(video, { change: vi.fn(), fatal }, async () => engine())
+    await controller.load(source)
+    video.dispatchEvent(new Event('playing'))
+    video.currentTime = 42
+    video.dispatchEvent(new Event('seeking'))
+    video.dispatchEvent(new Event('waiting'))
+    await vi.advanceTimersByTimeAsync(12_000)
+    expect(fatal).not.toHaveBeenCalled()
+    Object.defineProperty(video, 'seeking', { configurable: true, value: false })
+    video.dispatchEvent(new Event('seeked'))
+    video.currentTime = 43
+    video.dispatchEvent(new Event('timeupdate'))
+    video.dispatchEvent(new Event('playing'))
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(fatal).not.toHaveBeenCalled()
     controller.destroy()
   })
   it('preserves the selected playback rate across a source replacement', async () => {

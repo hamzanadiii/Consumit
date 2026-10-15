@@ -20,13 +20,14 @@ export function normalizeSupportEmail(value: string | undefined): string | null 
   return candidate
 }
 
-export function buildIssueMailto(recipient: string, input: { category: IssueCategory; description: string; replyEmail: string; title: string }): string {
+export function buildIssueMailto(recipient: string, input: { category: IssueCategory; description: string; replyEmail: string; title: string; diagnostics?: string | undefined }): string {
   const subject = `[Consumit] ${categoryLabels[input.category]}: ${input.title.trim().slice(0, 120)}`
   const body = [
     `Category: ${categoryLabels[input.category]}`,
     `Reply email: ${input.replyEmail.trim() || 'Not provided'}`,
     '',
     input.description.trim(),
+    ...(input.diagnostics ? ['', input.diagnostics] : []),
   ].join('\n')
   return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

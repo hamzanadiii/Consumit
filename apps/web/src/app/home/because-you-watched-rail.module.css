@@ -1,0 +1,7 @@
+/* Poster lettering is not a title label. Keep this discovery row readable
+   on phones while retaining the shared card treatment elsewhere. */
+@media (max-width: 639px) {
+  .recommendations :global(.consumit-poster-label) > span:first-child {
+    display: block;
+  }
+}

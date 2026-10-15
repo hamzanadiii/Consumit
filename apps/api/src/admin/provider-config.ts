@@ -7,17 +7,7 @@ import { providerDeliveryModeSchema, type ProviderRole, type ProviderDeliveryMod
 export type ProviderKind = 'movie' | 'series' | 'anime'
 export const providerKinds: readonly ProviderKind[] = ['movie', 'series', 'anime']
 
-export type ProviderOverridePatch = {
-  removed?: boolean
-  enabled?: boolean
-  role?: ProviderRole
-  deliveryMode?: ProviderDeliveryMode
-  priority?: number
-  order?: Partial<Record<ProviderKind, number>>
-  regions?: string[]
-  requestsPerMinute?: number
-  concurrency?: number
-}
+export type ProviderOverridePatch = import('zod').infer<typeof import('@consumit/contracts/internal').providerOverrideSchema>
 export type ProviderOverrides = Record<string, ProviderOverridePatch>
 export type ProviderChangeRecord = { providerId: string; actorId: string; before: ProviderOverridePatch | null; after: ProviderOverridePatch | null; createdAt: string }
 export interface ProviderConfigStore {
@@ -196,7 +186,7 @@ export function applyOverridesInPlace(providers: readonly ProviderRegistration[]
     }
     p.enabled = !patch.removed && (patch.enabled ?? base.enabled)
     p.role = patch.role ?? base.role
-    const frame = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'].includes(p.adapter.id)
+    const frame = base.deliveryMode === 'embed'
     p.deliveryMode = frame ? 'embed' : patch.deliveryMode === 'embed' ? base.deliveryMode : patch.deliveryMode ?? base.deliveryMode
     p.priority = patch.priority ?? base.priority
     if (patch.regions !== undefined) p.approvedRegions = patch.regions.filter((region) => base.regions.includes(region))

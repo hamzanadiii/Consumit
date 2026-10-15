@@ -1,4 +1,36 @@
 groups:
+  - name: consumit-services
+    rules:
+      - alert: ConsumitOutboxDelayed
+        expr: max(consumit_jobs_outbox_oldest_age_seconds) > 300
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Committed background work is delayed; inspect queue and worker readiness."}
+      - alert: ConsumitOutboxExhausted
+        expr: max(consumit_jobs_outbox_failed) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Background work exhausted retries; inspect safe identifiers before explicit replay."}
+      - alert: ConsumitQueueUnavailable
+        expr: min(consumit_jobs_queue_ready) == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Durable queue is unavailable; PostgreSQL retains pending work."}
+      - alert: ConsumitDatabaseConnectionPressure
+        expr: max(consumit_database_pool_waiting) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "An application pool has sustained connection waiters."}
+      - alert: ConsumitServiceSaturation
+        expr: max(consumit_runtime_event_loop_lag_milliseconds) > 100
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "An application event loop is saturated; inspect process CPU and memory."}
+      - alert: ConsumitBrowserErrors
+        expr: sum(increase(consumit_browser_errors_total[15m])) >= 20
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Browser error counts increased; inspect bounded page and error categories."}
   - name: consumit-releases
     rules:
       - alert: ConsumitReleaseQueueDelayed

@@ -5,6 +5,8 @@ import { Counter, Trend } from 'k6/metrics'
 // Run only against the controlled fixture server, never a public provider.
 const resolveTime = new Trend('playback_resolve_ms', true)
 const limited = new Counter('playback_rate_limited')
+const successful = new Counter('playback_successful_requests')
+const failed = new Counter('playback_failed_requests')
 http.setResponseCallback(http.expectedStatuses(200, 429))
 export const options = { vus: 10, duration: '20s', thresholds: {
   checks: ['rate>0.99'], playback_resolve_ms: ['p(95)<8500'],
@@ -17,10 +19,12 @@ export default function () {
   }), { headers: { origin: 'http://127.0.0.1:27911', 'content-type': 'application/json' }, timeout: '10s', tags: { operation: 'resolve' } })
   check(response, { 'bounded success or admission control': (r) => r.status === 200 || r.status === 429 })
   if (response.status === 200) {
+    successful.add(1)
     resolveTime.add(response.timings.duration)
     const session = response.json()
     check(session, { 'direct HTTPS source': (s) => !s.source.headers && s.source.src.startsWith('https://') && !s.source.src.includes('/v1/playback/') })
   } else if (response.status === 429) limited.add(1)
+  else failed.add(1)
   // The real per-IP admission limit stays enabled; 429 is measured explicitly.
   sleep(response.status === 429 ? 2 : 1)
 }

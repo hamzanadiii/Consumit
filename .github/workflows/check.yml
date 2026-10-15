@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.21.0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
@@ -51,6 +51,12 @@ jobs:
       - run: bun --filter @consumit/api db:migrate:deploy
       - run: bun run check
       - run: bun --filter @consumit/api test:integration
+      - name: Start dedicated durable queue fixture
+        run: docker run -d --name consumit-queue-test -p 127.0.0.1:16385:6379 valkey/valkey:9.1.1-alpine valkey-server --appendonly yes --appendfsync everysec --maxmemory-policy noeviction
+      - run: bun --filter @consumit/worker test:integration
+        env:
+          QUEUE_VALKEY_URL: redis://127.0.0.1:16385/0
       - run: bun run infra:validate
       - run: bunx playwright install --with-deps chrome
       - run: bun run test:playback -- --project=chrome
+      - run: node node_modules/@playwright/test/cli.js test --config tests/rebuild/playwright.config.ts

@@ -9,7 +9,28 @@ import type { PlaybackStore } from '../playback/state.ts'
 import type { PlaybackRelay } from '../playback/relay.ts'
 import { isProviderRemoved } from '../admin/provider-config.ts'
 
+
+export async function resolveReleaseProbeSource(provider: ProviderRegistration, ref: import('@consumit/contracts').PlaybackRef, audioLanguage: string, deps: { region: string; origin: string; store: PlaybackStore; relay?: PlaybackRelay | undefined; relayOrigin?: string | undefined }): Promise<ReleaseProbeSource | null> {
+      const input = { ref, audioLanguage, capabilities: { native: true, hls: true, dash: true, nativeHls: false } }
+      if (!supportsRequestedAudio(provider, input)) return null
+      const revision = providerRevision(provider)
+      const { sources } = await inspectProviderSources(provider, { ref, region: deps.region, audioLanguage }, AbortSignal.timeout(15_000), deps.store)
+      const source = sources.find(source => source.type !== 'iframe' && matchesRequestedAudio(source, input)
+        && (provider.deliveryMode !== 'relay' || deps.relay?.permits({ source, registration: provider })))
+      if (!source || source.type === 'iframe' || !provider.enabled || revision !== providerRevision(provider)) return null
+      const expiresAt = new Date(Math.min(Date.parse(source.expiresAt), Date.now() + 90_000)).toISOString()
+      const src = provider.deliveryMode === 'relay'
+        ? await deps.relay?.issue({ source, registration: provider, subtitles: [], delivery: 'direct' }, Date.parse(expiresAt), deps.origin)
+        : source.url
+      if (!src) return null
+      const preview = { src, type: source.type, expiresAt, providerId: provider.adapter.id, revision, region: deps.region, audioLanguage,
+        mediaHosts: [...provider.mediaHosts, ...(provider.deliveryMode === 'relay' && deps.relayOrigin ? [new URL(deps.relayOrigin).hostname] : [])], mediaHostPatterns: (provider.mediaHostPatterns ?? []).map(pattern => pattern.source) }
+
+  return preview
+}
+
 export function createReleaseService(repository: ReleaseRepository, deps: {
+  resolvePreview?: ((providerId: string, ref: import('@consumit/contracts').PlaybackRef, audioLanguage: string) => Promise<ReleaseProbeSource | null>) | undefined;
   providers: readonly ProviderRegistration[]; orders: Record<'movie' | 'series' | 'anime', string[]>;
   region: string; origin: string; store: PlaybackStore; relay?: PlaybackRelay | undefined; relayOrigin?: string | undefined;
 }) {
@@ -35,20 +56,8 @@ export function createReleaseService(repository: ReleaseRepository, deps: {
       if (next.ref.kind !== kind) return null
       const provider = eligible.find(row => row.adapter.id === next.providerId)!
       const ref = next.ref.kind === 'anime' ? { kind: 'anime' as const, id: next.ref.id, episode: next.ref.episode } : next.ref
-      const input = { ref, audioLanguage, capabilities: { native: true, hls: true, dash: true, nativeHls: false } }
-      if (!supportsRequestedAudio(provider, input)) return null
-      const revision = providerRevision(provider)
-      const { sources } = await inspectProviderSources(provider, { ref, region: deps.region, audioLanguage }, AbortSignal.timeout(15_000), deps.store)
-      const source = sources.find(source => source.type !== 'iframe' && matchesRequestedAudio(source, input)
-        && (provider.deliveryMode !== 'relay' || deps.relay?.permits({ source, registration: provider })))
-      if (!source || source.type === 'iframe' || !provider.enabled || revision !== providerRevision(provider)) return null
-      const expiresAt = new Date(Math.min(Date.parse(source.expiresAt), Date.now() + 90_000)).toISOString()
-      const src = provider.deliveryMode === 'relay'
-        ? await deps.relay?.issue({ source, registration: provider, subtitles: [], delivery: 'direct' }, Date.parse(expiresAt), deps.origin)
-        : source.url
-      if (!src) return null
-      const preview = { src, type: source.type, expiresAt, providerId: provider.adapter.id, revision, region: deps.region, audioLanguage,
-        mediaHosts: [...provider.mediaHosts, ...(provider.deliveryMode === 'relay' && deps.relayOrigin ? [new URL(deps.relayOrigin).hostname] : [])], mediaHostPatterns: (provider.mediaHostPatterns ?? []).map(pattern => pattern.source) }
+      const preview = deps.resolvePreview ? await deps.resolvePreview(provider.adapter.id, ref, audioLanguage) : await resolveReleaseProbeSource(provider, ref, audioLanguage, deps)
+      if (!preview || !provider.enabled || preview.providerId !== provider.adapter.id || preview.revision !== providerRevision(provider)) return null
       await repository.setSource(id, token, preview)
       return preview
     },

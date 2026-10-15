@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { InternalClient } from '@consumit/server'
+import { adminDiagnosticPathSchema, diagnosticResponseSchema, diagnosticOperationSchema, type DiagnosticOperation } from '@consumit/contracts/internal'
 import { randomUUID } from 'node:crypto'
 import { playbackRefSchema, providerRoleSchema, providerDeliveryModeSchema, type PlaybackRef } from '@consumit/contracts'
 
@@ -30,9 +32,54 @@ function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, f
   return body as T
 }
 
+/** Translate an admin diagnostic route into the typed operation playback runs.
+ *  Returns null when the path/body pair does not describe a known operation. */
+function diagnosticOperationFor(url: string, rawBody: unknown): DiagnosticOperation | null {
+  const body = (rawBody ?? {}) as Record<string, unknown>
+  if (url === '/v1/admin/subtitles') return { operation: 'subtitles.list' }
+  if (url === '/v1/admin/subtitles/test') {
+    const parsed = playbackRefSchema.safeParse(body)
+    return parsed.success ? { operation: 'subtitles.test', ref: parsed.data } : null
+  }
+  if (url === '/v1/admin/providers/health') return { operation: 'providers.health' }
+  if (url === '/v1/admin/providers/test') {
+    const ref = playbackRefSchema.safeParse(body.ref)
+    if (typeof body.providerId !== 'string' || !ref.success) return null
+    const audioLanguage = typeof body.audioLanguage === 'string' ? body.audioLanguage : undefined
+    return { operation: 'providers.test', providerId: body.providerId, ref: ref.data, ...(audioLanguage ? { audioLanguage } : {}) }
+  }
+  if (url === '/v1/admin/providers/inspect') {
+    const ref = playbackRefSchema.safeParse(body.ref)
+    if (typeof body.providerId !== 'string' || !ref.success) return null
+    const parsed = diagnosticOperationSchema.safeParse({
+      operation: 'providers.inspect', providerId: body.providerId, ref: ref.data,
+      ...(typeof body.audioLanguage === 'string' ? { audioLanguage: body.audioLanguage } : {}),
+      ...(body.scope === 'scout' ? { scope: body.scope } : {}),
+    })
+    return parsed.success ? parsed.data : null
+  }
+  const retest = url.match(/^\/v1\/admin\/providers\/([a-z0-9-]{1,64})\/retest$/)
+  if (retest) {
+    const kind = body.kind
+    const parsed = diagnosticOperationSchema.safeParse({
+      operation: 'providers.retest', providerId: retest[1],
+      ...(typeof body.region === 'string' ? { region: body.region } : {}),
+      ...(kind === 'movie' || kind === 'series' || kind === 'anime' ? { kind } : {}),
+    })
+    return parsed.success ? parsed.data : null
+  }
+  const reset = url.match(/^\/v1\/admin\/providers\/([a-z0-9-]{1,64})\/circuit\/reset$/)
+  if (reset) {
+    const kind = body.kind
+    const parsed = diagnosticOperationSchema.safeParse({ operation: 'providers.circuit-reset', providerId: reset[1], kind })
+    return parsed.success ? parsed.data : null
+  }
+  return null
+}
+
 export function registerAdminRoutes(
   app: FastifyInstance,
-  deps: { env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; scoutCatalog?: (() => readonly ProviderRegistration[]) | undefined; scoutRecipes?: readonly { id: string }[] | undefined; providerOrders?: Record<ProviderKind, string[]> | undefined; playbackStore?: PlaybackStore | undefined; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => Promise<ProbeStatus> | ProbeStatus) | undefined },
+  deps: { diagnostics?: InternalClient; env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; scoutCatalog?: (() => readonly ProviderRegistration[]) | undefined; scoutRecipes?: readonly { id: string }[] | undefined; providerOrders?: Record<ProviderKind, string[]> | undefined; playbackStore?: PlaybackStore | undefined; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => Promise<ProbeStatus> | ProbeStatus) | undefined },
 ) {
   const { env, identity, repository, providers = [], providerOrders, playbackStore, playback, subtitles, providerConfig, probeStatus } = deps
   const cookieName = sessionCookieName(env)
@@ -66,6 +113,22 @@ export function registerAdminRoutes(
     return member
   }
 
+  // When a remote playback service owns the live runtime, forward the admin
+  // diagnostic operations to it as a typed operation. Admin auth and CSRF stay
+  // here; playback only ever sees a validated operation, never a session or a
+  // re-injectable path. Combined mode still resolves these routes locally.
+  if (deps.diagnostics) app.addHook('preHandler', async (request, reply) => {
+    if (!adminDiagnosticPathSchema.safeParse(request.url).success) return
+    if (request.method !== 'GET' && request.method !== 'POST') return
+    await requireAdmin(request)
+    if (request.method !== 'GET') guardMutation(request)
+    const operation = diagnosticOperationFor(request.url, request.body)
+    if (!operation) throw new ApiError('BAD_REQUEST', 'Use a supported diagnostic operation.')
+    try {
+      const result = diagnosticResponseSchema.parse(await deps.diagnostics!('/v1/internal/playback/diagnostics', operation, { timeoutMs: 20000 }))
+      return reply.header('cache-control', 'private, no-store').code(result.statusCode).send(result.body)
+    } catch { throw new ApiError('PLAYBACK_UNAVAILABLE', 'Playback diagnostics are temporarily unavailable.', { retryable: true }) }
+  })
   registerProviderInspection(app, { authorize: requireAdmin, guard: guardMutation, providers,
     catalog: deps.scoutCatalog, recipes: deps.scoutRecipes, store: playbackStore ?? createMemoryPlaybackStore(), region: env.tmdbRegion, origin: env.appOrigin,
     relay: env.playback?.relay ? createPlaybackRelay(env.playback.relay) : undefined })
@@ -333,7 +396,7 @@ export function registerAdminRoutes(
         if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose Direct, Proxy or Embed video delivery.')
         // Classification never grants hosts or activates the Worker. An
         // unapproved proxy row is excluded from playback by the relay gate.
-        const frame = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe'].includes(provider.adapter.id)
+        const frame = provider.deliveryMode === 'embed'
         if (frame !== (parsed.data === 'embed')) throw new ApiError('BAD_REQUEST', 'Embed delivery belongs to frame providers; media providers use Direct or Proxy.')
         patch.deliveryMode = parsed.data
       }

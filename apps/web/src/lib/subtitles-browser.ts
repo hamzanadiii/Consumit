@@ -1,24 +1,58 @@
-import { subtitleDiscoveryEventSchema, subtitleDiscoveryPageSchema, subtitlePreferenceResponseSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
+import { subtitleDiscoveryEventSchema, subtitleDiscoveryResponseSchema, subtitleDiscoveryPageSchema, subtitlePreferenceResponseSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
 export type { SubtitleCandidate, SubtitleProviderStatus, SubtitleDiscoveryEvent } from '@consumit/contracts'
 import type { SubtitleDiscoveryEvent } from '@consumit/contracts'
+import { fetchVttCues, type SubtitleCue } from '@consumit/ui'
 
-export type AggregatedSubtitle = { id: string; label: string; language: string; url: string }
+export type AggregatedSubtitle = { id: string; label: string; language: string; url: string; cues?: readonly SubtitleCue[] | undefined }
+
+function sameOriginFile(track: AggregatedSubtitle): AggregatedSubtitle {
+  const url = new URL(track.url)
+  if (typeof window !== 'undefined' && /^\/v1\/subtitles\/file\/[0-9a-f]{16}$/.test(url.pathname) && !url.search && !url.hash) {
+    return { ...track, url: new URL(url.pathname, window.location.origin).href }
+  }
+  return track
+}
 
 export async function discoverSubtitles(
   ref: { kind: 'movie' | 'series' | 'anime'; id: number; season?: number; episode?: number },
   signal: AbortSignal,
   onEvent: (event: SubtitleDiscoveryEvent) => void,
 ) {
+  let cursor: string | undefined
+  for (let batch = 0; batch < 128; batch++) {
+    try { cursor = await streamSubtitles(ref, signal, onEvent, false, cursor) }
+    catch (error) {
+      if (signal.aborted || error instanceof DiscoveryRateLimit) throw error
+      cursor = await streamSubtitles(ref, signal, onEvent, true, cursor)
+    }
+    if (!cursor) return
+  }
+  throw new Error('Subtitle discovery stopped before finishing. Try again.')
+}
+
+class DiscoveryRateLimit extends Error {}
+
+async function streamSubtitles(
+  ref: { kind: 'movie' | 'series' | 'anime'; id: number; season?: number; episode?: number },
+  signal: AbortSignal,
+  onEvent: (event: SubtitleDiscoveryEvent) => void,
+  json = false,
+  cursor?: string,
+) {
   const params = new URLSearchParams({ kind: ref.kind, id: String(ref.id) })
   if (ref.season) params.set('season', String(ref.season))
   if (ref.episode) params.set('episode', String(ref.episode))
+  if (json) params.set('format', 'json')
+  if (cursor) params.set('cursor', cursor)
   const response = await fetch(`/v1/subtitles/discover?${params}`, { credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) })
+  if (response.status === 429) throw new DiscoveryRateLimit('Subtitle search is busy. Try again shortly.')
   if (!response.ok || !response.body) throw new Error('Subtitle discovery is unavailable.')
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let pending = ''
   let searchId: string | undefined
   let completed = false
+  let nextCursor: string | undefined
   const emit = (line: string) => {
     if (!line.trim()) return
     let body: unknown
@@ -28,7 +62,8 @@ export async function discoverSubtitles(
     if (completed || (searchId && event.data.searchId !== searchId)) throw new Error('Subtitle discovery returned an invalid response. Try again.')
     searchId = event.data.searchId
     completed = event.data.type === 'complete'
-    onEvent(event.data)
+    nextCursor = event.data.nextCursor
+    onEvent(event.data.type === 'complete' && nextCursor ? { ...event.data, type: 'snapshot' } : event.data)
   }
   let bytes = 0
   try { for (;;) {
@@ -37,17 +72,24 @@ export async function discoverSubtitles(
     if (bytes > 262_144) throw new Error('Subtitle discovery returned too much data. Try again.')
     pending += decoder.decode(value, { stream: !done })
     let lineEnd: number
-    while ((lineEnd = pending.indexOf('\n')) !== -1) {
+    while (!json && (lineEnd = pending.indexOf('\n')) !== -1) {
       const line = pending.slice(0, lineEnd)
       pending = pending.slice(lineEnd + 1)
       emit(line)
     }
     if (done) {
-      emit(pending)
+      if (json) {
+        let body: unknown
+        try { body = JSON.parse(pending) } catch { throw new Error('Subtitle discovery stopped before finishing. Try again.') }
+        const parsed = subtitleDiscoveryResponseSchema.safeParse(body)
+        if (!parsed.success) throw new Error('Subtitle discovery returned an invalid response. Try again.')
+        for (const event of parsed.data.events) emit(JSON.stringify(event))
+      } else emit(pending)
       if (!completed) throw new Error('Subtitle discovery stopped before finishing. Try again.')
       break
     }
   } } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+  return nextCursor
 }
 
 export async function pageSubtitles(searchId: string, language: string, cursor: number, langs: readonly string[], signal: AbortSignal) {
@@ -77,7 +119,9 @@ export async function prepareSubtitle(searchId: string, candidateId: string, sig
   if (!response.ok) throw new Error('This subtitle could not be prepared. Choose another track.')
   const parsed = subtitleTrackSchema.safeParse(await response.json().catch(() => null))
   if (!parsed.success) throw new Error('This subtitle could not be prepared. Choose another track.')
-  return parsed.data
+  const track = sameOriginFile(parsed.data)
+  const cues = await fetchVttCues(track.url, AbortSignal.any([signal, AbortSignal.timeout(8000)]))
+  return { ...track, cues }
 }
 
 export type SubtitlePreference = { trackId: string | null; offsetMs: number }

@@ -89,8 +89,9 @@ export async function fetchSubtitleBytes(
   headers: Record<string, string>,
   signal: AbortSignal,
   maxBytes = 5_242_880,
+  patterns: readonly RegExp[] = [],
 ): Promise<Buffer> {
-  const response = await fetchMedia(url, hosts, headers, signal)
+  const response = await fetchMedia(url, hosts, headers, signal, undefined, patterns)
   if (response.status < 200 || response.status >= 300) {
     response.body.destroy()
     throw new Error(`Subtitle file HTTP ${response.status}.`)

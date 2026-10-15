@@ -7,6 +7,9 @@ import type { PlaybackStore } from './state.ts'
 import { matchesRequestedAudio, supportsRequestedAudio } from './audio-policy.ts'
 import { acquireProviderBudget } from './provider-budget.ts'
 
+const permitsSource = (source: ProviderSource, input: ResolvePlaybackRequest) => matchesRequestedAudio(source, input)
+  && !(input.preferences?.adsEnabled === false && source.type === 'iframe' && source.frameSandbox === 'none')
+
 export type ResolvedSource = { source: ProviderSource; qualitySources?: ProviderSource[]; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
 
 /** Adapter-declared siblings remain scoped to one mirror and audio track. */
@@ -69,7 +72,7 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; healthScope?: 'relay' | 'embed'; providerFilter?: (registration: ProviderRegistration) => boolean; sourceFilter?: (source: ProviderSource, registration: ProviderRegistration) => boolean; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; healthScope?: 'relay' | 'embed'; providerFilter?: (registration: ProviderRegistration) => boolean; sourceFilter?: (source: ProviderSource, registration: ProviderRegistration) => boolean; /** Providers that remain in automatic order during cooldown; normal admission limits still apply. */ alwaysAttemptProviderIds?: readonly string[]; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
   const now = options.now ?? Date.now
   // One resolve is a sequential waterfall with a shared deadline. Each
   // adapter gets its configured attempt limit; the usual limit is three
@@ -110,12 +113,12 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     void options.store.set(healthKey(id, kind), JSON.stringify(row), 24 * 3600).catch(() => undefined)
   }
 
-  async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal): Promise<ResolvedSource | null> {
+  async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal, retryCooldown = false): Promise<ResolvedSource | null> {
     if (options.providerFilter && !options.providerFilter(registration)) return null
     const current = state(registration.adapter.id, input.ref.kind)
     if (current.window + 60000 <= now()) { current.window = now(); current.requests = 0 }
     const ceiling = current.failures >= 3 ? 1 : registration.concurrency
-    if (current.openUntil > now() || current.active >= ceiling || current.requests >= registration.requestsPerMinute) return null
+    if (!retryCooldown && current.openUntil > now() || current.active >= ceiling || current.requests >= registration.requestsPerMinute) return null
     const releaseBudget = await acquireProviderBudget(registration, options.region, options.store)
     if (!releaseBudget) return null
     current.active++; current.requests++
@@ -131,7 +134,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         }
         const validated = validatedSources(result, registration, now())
         const tracks = collectSubtitleCandidates(validated, registration)
-        const matching = validated.filter((source) => (source.type === 'iframe' || input.capabilities[source.type]) && matchesRequestedAudio(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration)))
+        const matching = validated.filter((source) => (source.type === 'iframe' || input.capabilities[source.type]) && permitsSource(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration)))
         // Hostile-output validation already ran in validatedSources (schema,
         // expiry, allowlisted https media, no credentials/transforms).
         // Configured providers resolve directly with no approval step.
@@ -179,7 +182,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     })
   }
 
-  async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string) {
+  async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string, retryCooldown = false) {
     await Promise.all(providers.map((provider) => hydrate(provider.adapter.id, input.ref.kind)))
     // Kind routing is load-bearing: without it a movie provider answers an
     // anime ref by numeric-id coincidence (AniList 793 played as TMDB 793).
@@ -215,7 +218,11 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         const budget = candidate.attemptMs ?? 3000
         const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, budget) })
         try {
-          const value = await Promise.race([attempt(candidate, input, attemptSignal), timeout])
+          // An explicit fresh choice retries a recovered provider even while
+          // automatic traffic is cooling. Admission limits still apply.
+          const bypassCooldown = (retryCooldown && candidate.adapter.id === preferred)
+            || options.alwaysAttemptProviderIds?.includes(candidate.adapter.id) === true
+          const value = await Promise.race([attempt(candidate, input, attemptSignal, bypassCooldown), timeout])
           if (value) return { ...value, subtitles: dedupeSubtitleTracks(value.subtitles) }
         } finally { clearTimeout(timer); signal.removeEventListener('abort', onAbort); perAttempt.abort() }
       }
@@ -264,16 +271,16 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
                 })
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
-                  if (source && (source.type === 'iframe' || input.capabilities[source.type]) && matchesRequestedAudio(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration))) {
+                  if (source && (source.type === 'iframe' || input.capabilities[source.type]) && permitsSource(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration))) {
                     const siblings = Array.isArray(cached.qualitySources) ? validatedSources({ ok: true, sources: cached.qualitySources.slice(0, 32) }, registration, now())
-                      .filter(candidate => (candidate.type === 'iframe' || input.capabilities[candidate.type]) && matchesRequestedAudio(candidate, input) && (!options.sourceFilter || options.sourceFilter(candidate, registration))) : []
+                      .filter(candidate => (candidate.type === 'iframe' || input.capabilities[candidate.type]) && permitsSource(candidate, input) && (!options.sourceFilter || options.sourceFilter(candidate, registration))) : []
                     return { source, qualitySources: qualitySiblings(source, siblings), registration, subtitles: [], delivery: 'direct' as const }
                   }
                 }
               }
             } catch { /* Disposable access cache failure must not prevent fresh resolution. */ }
           }
-          return run(input, excluded, signal, preferred)
+          return run(input, excluded, signal, preferred, fresh && Boolean(preferred))
         }
         const promise = discover().then((value) => {
           if (!controller.signal.aborted) {

@@ -94,7 +94,7 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: { env: ApiEnv
 
   app.post('/v1/auth/verify-email', codeConfirmLimit, async (request, reply) => {
     guardMutation(request)
-    const body = parse(verifyEmailRequestSchema, request.body, 'Use a valid email address and six-digit code.')
+    const body = parse(verifyEmailRequestSchema, request.body, 'Use a valid email address and eight-digit code.')
     const result = await identity.verifyEmail(body)
     setSessionCookie(reply, result.sessionToken)
     return reply.send(sessionMemberResponseSchema.parse({ member: result.member }))
@@ -134,7 +134,7 @@ export function registerIdentityRoutes(app: FastifyInstance, deps: { env: ApiEnv
 
   app.post('/v1/auth/recovery/confirm', codeConfirmLimit, async (request, reply) => {
     guardMutation(request)
-    const body = parse(recoveryConfirmRequestSchema, request.body, 'Use a valid email, six-digit code, and new password.')
+    const body = parse(recoveryConfirmRequestSchema, request.body, 'Use a valid email, eight-digit code, and new password.')
     await identity.recoverPassword(body)
     return reply.code(204).send()
   })

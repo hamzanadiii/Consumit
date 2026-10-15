@@ -1,0 +1,37 @@
+{
+  admin off
+  servers {
+    protocols h1 h2
+    timeouts {
+      read_header 5s
+      idle 30s
+      write 70s
+    }
+    max_header_size 8KB
+  }
+  # ACME error messages can include challenge paths; omit debug/access logs.
+  log default {
+    output discard
+  }
+}
+media.consumit.online {
+  @media {
+    path /media/*
+    method GET HEAD OPTIONS
+  }
+  handle @media {
+    request_body {
+      max_size 1KB
+    }
+    reverse_proxy media-egress:8788 {
+      header_up Host media.consumit.online
+      transport http {
+        dial_timeout 3s
+        response_header_timeout 12s
+      }
+    }
+  }
+  handle {
+    respond "Media unavailable." 404
+  }
+}

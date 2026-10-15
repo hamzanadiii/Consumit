@@ -4,13 +4,12 @@ import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary
 import { ArtworkFrame, Button, Select } from '@consumit/ui'
 import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
-import type { BrowseCatalogQuery } from '@/lib/catalog-browser'
+import { catalogBrowseFeed, type BrowseCatalogFeed, type BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { BrowseHero } from '../shared/browse-hero'
 import { TitleCard } from '../shared/title-card'
-import { AdSlot } from '../shared/ad-slot'
 import { useCatalogFeed } from './use-catalog-feed'
 
 function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: CatalogKind }) {
@@ -40,8 +39,8 @@ function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: Cat
                   <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
                   <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent opacity-60" />
                   <div className="absolute inset-x-0 bottom-0 p-4 pt-8">
-                    <p className="truncate font-display text-lg leading-tight text-white transition-colors duration-150 group-hover:text-[var(--fs-accent)] sm:text-xl">{title.title}</p>
-                    <p className="mt-1.5 flex items-center gap-2 text-xs tabular-nums text-white/80 sm:text-sm">
+                    <p className="line-clamp-2 font-display text-lg leading-tight text-white transition-colors duration-150 group-hover:text-[var(--fs-accent)] sm:text-xl">{title.title}</p>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-white/80 sm:text-sm">
                       {title.year ? <span>{title.year}</span> : null}
                       {title.year && (rating || title.genreNames[0]) ? <span aria-hidden="true">·</span> : null}
                       {rating ? (
@@ -70,18 +69,13 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
   return (
     <section aria-labelledby="browse-results-heading">
       <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-[var(--fs-line)] pb-4">
-        <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="browse-results-heading">{query.feed === 'top-rated' ? 'Top rated' : 'Popular now'}</h2>
+        <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="browse-results-heading">{query.feed === 'top-rated' ? 'Top rated' : query.feed === 'trending' ? 'Trending now' : 'Popular now'}</h2>
         <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
-        {page?.items.map((title, index) => (
-          <Fragment key={`${title.kind}:${title.id}`}>
-            <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" title={title} />
-            {index === 5 ? <li className="col-span-full hidden py-3 sm:block lg:hidden"><AdSlot placement="catalog" /></li> : null}
-            {index === 7 ? <li className="col-span-full py-3 sm:hidden lg:block xl:hidden"><AdSlot placement="catalog" /></li> : null}
-            {index === 11 ? <li className="col-span-full hidden py-3 xl:block"><AdSlot placement="catalog" /></li> : null}
-          </Fragment>
+        {page?.items.map((title) => (
+            <TitleCard className="min-w-0 [content-visibility:auto] [contain-intrinsic-size:auto_300px]" key={`${title.kind}:${title.id}`} title={title} />
         ))}
         {loading ? Array.from({ length: 6 }, (_, index) => <li aria-hidden="true" className="aspect-[2/3] animate-pulse rounded-[16px] border border-[var(--fs-line)] bg-[var(--fs-field)] motion-reduce:animate-none" key={`loading-${index}`} />) : null}
       </ul>
@@ -109,10 +103,10 @@ function BrowseSelect({ label, onChange, options, value }: { label: string; onCh
   )
 }
 
-export function CatalogBrowseContent({ current, currentYear, kind, popular }: { current: CatalogPage; currentYear: number; kind: CatalogKind; popular: CatalogPage }) {
+export function CatalogBrowseContent({ current, currentYear, initialFeed = 'popular', kind, popular }: { current: CatalogPage; currentYear: number; initialFeed?: BrowseCatalogFeed | undefined; kind: CatalogKind; popular: CatalogPage }) {
   const [genre, setGenre] = useState('')
   const [year, setYear] = useState('')
-  const [feed, setFeed] = useState<'popular' | 'top-rated'>('popular')
+  const [feed, setFeed] = useState<BrowseCatalogFeed>(initialFeed)
   const genres = [...new Set([...popular.items, ...current.items].flatMap((title) => title.genreNames))].sort()
   const query = useMemo(() => ({ kind, feed, genre: genre || undefined, year: year ? Number(year) : undefined }), [kind, feed, genre, year])
   const isDefault = !genre && !year && feed === 'popular'
@@ -143,10 +137,9 @@ export function CatalogBrowseContent({ current, currentYear, kind, popular }: { 
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {!isDefault ? <Button onClick={reset} size="sm" variant="ghost">Reset</Button> : null}
-          <BrowseSelect label="Sort by" onChange={(value) => setFeed(value === 'top-rated' ? 'top-rated' : 'popular')} options={[{ label: 'Popular', value: 'popular' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
+          <BrowseSelect label="Sort by" onChange={(value) => setFeed(catalogBrowseFeed(value))} options={[{ label: 'Popular', value: 'popular' }, { label: 'Trending', value: 'trending' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
         </div>
       </div>
-      {current.items.length > 0 ? <div className="mb-8 sm:mb-10"><AdSlot placement="catalog" position="early" /></div> : null}
       <CatalogFeed initialPage={isDefault ? popular : undefined} key={`${kind}:${feed}:${genre}:${year}`} query={query} reset={reset} />
     </main>
   )

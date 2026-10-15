@@ -9,7 +9,7 @@ export type RelayGrant = {
   headerHost: string
   kind: 'hls' | 'native' | 'auto'
   depth: number
-  recipe?: 'storm-boron-v1' | 'wecollege-city-v1'
+  recipe?: 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1'
   hosts?: string[]
 }
 const encoder = new TextEncoder()
@@ -39,7 +39,7 @@ function validGrant(value: unknown, now: number, allowExpired = false): value is
   if (!value || typeof value !== 'object') return false
   const grant = value as Partial<RelayGrant>
   if (grant.recipe !== undefined || grant.hosts !== undefined) {
-    if (!['storm-boron-v1', 'wecollege-city-v1'].includes(grant.recipe ?? '') || !Array.isArray(grant.hosts)
+    if (!['storm-boron-v1', 'wecollege-city-v1', 'lookmovie-v1'].includes(grant.recipe ?? '') || !Array.isArray(grant.hosts)
       || !grant.hosts.length || grant.hosts.length > 8 || grant.hosts.some(host => !exactMediaHost(host))
       || !relayDestination(grant.url ?? '', grant.hosts)) return false
   }

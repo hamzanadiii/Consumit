@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
+  it('allows only the reviewed Miami lookup route with an enabled Cloudflare resolver', () => {
+    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48) }
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' }).playback?.resolver?.apiProviders).toEqual(['wecollege-miami'])
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '[]' }).playback?.resolver?.apiProviders).toBeUndefined()
+    for (const routes of ['invalid', '{}', '["lookmovie"]', '["wecollege-miami","wecollege-miami"]', '["aphrodite"]']) {
+      expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: routes })).toThrow('reviewed Miami route')
+    }
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ENABLED: 'false', PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' })).toThrow('require the Cloudflare resolver')
+  })
+  it('allows an independently enabled LookMovie media node and rejects arbitrary node providers', () => {
+    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_NODE_ENABLED: 'true', PLAYBACK_NODE_ORIGIN: 'https://media.example', PLAYBACK_NODE_SECRET: 'n'.repeat(48), PLAYBACK_NODE_PROVIDERS: '{"lookmovie-relay":["srv310.seclar.cyou"]}' }
+    expect(loadEnv(config).playback?.relay?.node?.origin).toBe('https://media.example')
+    expect(() => loadEnv({ ...config, PLAYBACK_NODE_PROVIDERS: '{"arbitrary":["media.example"]}' })).toThrow('approved media node')
+    expect(() => loadEnv({ ...config, PLAYBACK_NODE_ORIGIN: 'http://media.example' })).toThrow('approved media node')
+  })
   it.each(['https://member:password@example.com', 'https://example.com/path', 'https://example.com?query=1', 'https://example.com#fragment', 'ftp://example.com'])('rejects an unsafe application origin: %s', (APP_ORIGIN) => {
     expect(() => loadEnv({ NODE_ENV: 'test', APP_ORIGIN })).toThrow(/origin/i)
   })
@@ -18,6 +33,14 @@ describe('API environment', () => {
     expect(() => loadEnv({ ...config, PLAYBACK_RELAY_PROVIDERS: '{"owned":["*.workers.dev"]}' })).toThrow('exact approved')
     expect(() => loadEnv({ ...config, PLAYBACK_RELAY_ORIGIN: 'http://edge.example' })).toThrow('HTTPS origin')
     expect(() => loadEnv({ ...config, PLAYBACK_RELAY_ORIGIN: 'https://edge.example/media' })).toThrow('HTTPS origin')
+  })
+  it('keeps the Cloudflare provider resolver disabled until its origin and API secret are configured', () => {
+    expect(loadEnv({ NODE_ENV: 'test' }).playback?.resolver).toBeUndefined()
+    expect(() => loadEnv({ PLAYBACK_RESOLVER_ENABLED: 'true' })).toThrow('Provider resolver requires')
+    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48) }
+    expect(loadEnv(config).playback?.resolver).toEqual({ origin: 'https://resolver.example', secret: 'r'.repeat(48) })
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ORIGIN: 'http://resolver.example' })).toThrow('exact HTTPS origin')
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example/path' })).toThrow('exact HTTPS origin')
   })
   it('keeps playback state separate and requires a media config', () => {
     expect(loadEnv({ NODE_ENV: 'test' }).playback?.enabled).toBe(false)
@@ -89,5 +112,44 @@ describe('API environment', () => {
     expect(() => loadEnv({ ...source, DATABASE_URL: source.DATABASE_URL.replace('verify-full', 'disable') })).toThrow(/certificate-verified/)
     expect(() => loadEnv({ ...source, DATABASE_URL: source.DATABASE_URL.replace('a'.repeat(64), 'consumit-local') })).toThrow(/certificate-verified/)
     expect(() => loadEnv({ ...source, SES_REGION: 'us-east-1' })).toThrow(/SES_REGION/)
+  })
+})
+describe('provider-specific Cloudflare resolver origins', () => {
+  const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48) }
+  it('accepts a bounded map of exact HTTPS Worker origins', () => {
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_PROVIDER_ORIGINS: '{"animekitsu":"https://regional.example"}' }).playback?.resolver?.providerOrigins).toEqual({ animekitsu: 'https://regional.example' })
+  })
+  it.each(['[]', '{"animekitsu":"http://regional.example"}', '{"animekitsu":"https://regional.example/path"}', '{"animekitsu":"https://user:password@regional.example"}', '{"Bad ID":"https://regional.example"}'])('rejects invalid routing: %s', raw => {
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_PROVIDER_ORIGINS: raw })).toThrow('Provider resolver routes')
+  })
+  it('rejects routes when the resolver is disabled', () => {
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ENABLED: 'false', PLAYBACK_RESOLVER_PROVIDER_ORIGINS: '{"animekitsu":"https://regional.example"}' })).toThrow('require the Cloudflare resolver')
+  })
+  it('enables isolated computation only with the resolver and a separate secret', () => {
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_COMPUTE_ENABLED: 'true' })).toThrow('separate secret')
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_COMPUTE_ENABLED: 'true', PLAYBACK_RESOLVER_COMPUTE_SECRET: 'r'.repeat(48) })).toThrow('separate secret')
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_COMPUTE_ENABLED: 'true', PLAYBACK_RESOLVER_COMPUTE_SECRET: 'c'.repeat(48) }).playback?.resolver?.computeSecret).toBe('c'.repeat(48))
+    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ENABLED: 'false', PLAYBACK_RESOLVER_COMPUTE_ENABLED: 'true', PLAYBACK_RESOLVER_COMPUTE_SECRET: 'c'.repeat(48) })).toThrow('enabled resolver')
+  })
+})
+
+describe('regional relay control policy', () => {
+  const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RELAY_ENABLED: 'true', PLAYBACK_RELAY_ORIGIN: 'https://edge.example', PLAYBACK_RELAY_SECRET: 's'.repeat(48), PLAYBACK_RELAY_PROVIDERS: '{"rigel":["api.dlproxy.com"]}' }
+  it('requires exact origins, approved provider scopes, and the reviewed Rigel control route', () => {
+    expect(loadEnv({ ...config, PLAYBACK_RELAY_PROVIDER_ORIGINS: '{"rigel":"https://regional.example"}', PLAYBACK_RELAY_CONTROL_PROVIDERS: '["rigel"]' }).playback?.relay).toMatchObject({ providerOrigins: { rigel: 'https://regional.example' }, controlProviders: ['rigel'] })
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_PROVIDER_ORIGINS: '{"unknown":"https://regional.example"}' })).toThrow('approved media policy')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_PROVIDER_ORIGINS: '{"rigel":"http://regional.example"}' })).toThrow('exact HTTPS')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_CONTROL_PROVIDERS: '["lookmovie"]' })).toThrow('reviewed Rigel')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_CONTROL_PROVIDERS: '["rigel","rigel"]' })).toThrow('reviewed Rigel')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_PROVIDERS: '{}', PLAYBACK_RELAY_CONTROL_PROVIDERS: '["rigel"]' })).toThrow('approved media policy')
+    expect(() => loadEnv({ ...config, PLAYBACK_RELAY_ENABLED: 'false', PLAYBACK_RELAY_CONTROL_PROVIDERS: '["rigel"]' })).toThrow('enabled Cloudflare relay')
+  })
+})
+
+describe('split production playback state', () => {
+  it('requires shared session state and independent authentication limits', () => {
+    const source = { NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', APPLICATION_MODE: 'playback', INTERNAL_API_ORIGIN: 'http://api:3001', INTERNAL_SERVICE_SECRET: 's'.repeat(64), PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json' }
+    expect(() => loadEnv(source)).toThrow('Split playback requires')
+    expect(() => loadEnv({ ...source, PLAYBACK_VALKEY_URL: 'valkey://playback-valkey:6379/0', VALKEY_URL: 'valkey://valkey:6379/0' })).not.toThrow()
   })
 })

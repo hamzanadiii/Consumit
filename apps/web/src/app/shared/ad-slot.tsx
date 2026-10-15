@@ -13,8 +13,14 @@ const BANNER: AdUnit = { height: 60, key: '1f517aa3358dbd1ef55d8b2e47d06e4c', wi
 const MOBILE_BANNER: AdUnit = { height: 50, key: 'ebb0ce11e95706ef527d3edb3c4df1ce', width: 320 }
 const RECTANGLE: AdUnit = { height: 250, key: '0fd3e3c04a4b0bd4b92631a5b071eaf8', width: 300 }
 
-const FILL_CHECK_MS = 500
+const FILL_SETTLE_MS = 2_000
 const FILL_TIMEOUT_MS = 10_000
+
+/** The ad iframe is sandboxed without allow-same-origin, so its document gets
+ *  an opaque origin: the creative can never read or write Consumit DOM,
+ *  storage, or credentialed same-origin requests. Popups and forms stay
+ *  enabled for click-throughs. */
+const AD_FRAME_SANDBOX = 'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms'
 
 /** Largest configured unit that fits the slot's actual width. Never loads a
  *  unit and hides it: slots that cannot fit stay empty. */
@@ -38,25 +44,16 @@ function slotIsLaidOut(element: HTMLElement): boolean {
   return element.offsetParent !== null
 }
 
-function slotIsFilled(frame: HTMLIFrameElement | null): boolean {
-  try {
-    const body = frame?.contentDocument?.body
-    return (body?.querySelector(':scope > *:not(script)') ?? null) !== null
-  } catch {
-    return false
-  }
-}
-
 export function AdSlot({ placement, position = 'middle', shape = 'banner' }: {
   placement: 'home' | 'catalog' | 'detail' | 'profile' | 'watch'
   position?: 'early' | 'middle' | 'late'
   shape?: 'banner' | 'rectangle'
 }) {
   const rootRef = useRef<HTMLElement | null>(null)
-  const frameRef = useRef<HTMLIFrameElement | null>(null)
   const unitRef = useRef<AdUnit | null>(null)
   const [unit, setUnit] = useState<AdUnit | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [filled, setFilled] = useState(false)
 
   const evaluate = useCallback(() => {
@@ -68,6 +65,7 @@ export function AdSlot({ placement, position = 'middle', shape = 'banner' }: {
     setUnit(next)
     if (next) {
       setCollapsed(false)
+      setLoaded(false)
       setFilled(false)
     }
   }, [shape])
@@ -88,24 +86,18 @@ export function AdSlot({ placement, position = 'middle', shape = 'banner' }: {
     return () => window.removeEventListener('resize', onResize)
   }, [evaluate])
 
+  // The sandboxed frame is cross-origin, so fill cannot be detected by reading
+  // its document. Collapse only when the frame never finishes loading; once
+  // loaded, wait a short settle window for the creative to paint, then show.
   useEffect(() => {
     if (!unit) return
-    const check = window.setInterval(() => {
-      if (slotIsFilled(frameRef.current)) {
-        setFilled(true)
-        window.clearInterval(check)
-        window.clearTimeout(giveUp)
-      }
-    }, FILL_CHECK_MS)
-    const giveUp = window.setTimeout(() => {
-      window.clearInterval(check)
-      if (!slotIsFilled(frameRef.current)) setCollapsed(true)
-    }, FILL_TIMEOUT_MS)
-    return () => {
-      window.clearInterval(check)
-      window.clearTimeout(giveUp)
+    if (!loaded) {
+      const giveUp = window.setTimeout(() => setCollapsed(true), FILL_TIMEOUT_MS)
+      return () => window.clearTimeout(giveUp)
     }
-  }, [unit])
+    const settle = window.setTimeout(() => setFilled(true), FILL_SETTLE_MS)
+    return () => window.clearTimeout(settle)
+  }, [unit, loaded])
 
   if (collapsed) return null
   return (
@@ -114,7 +106,15 @@ export function AdSlot({ placement, position = 'middle', shape = 'banner' }: {
         <>
           <p className={styles.label}>Advertisement</p>
           <div className={styles.stage} style={{ height: unit.height, visibility: filled ? 'visible' : 'hidden', width: unit.width }}>
-            <iframe height={unit.height} loading="lazy" ref={frameRef} srcDoc={slotDocument(unit)} title="Advertisement" width={unit.width} />
+            <iframe
+              height={unit.height}
+              loading="lazy"
+              onLoad={() => setLoaded(true)}
+              sandbox={AD_FRAME_SANDBOX}
+              srcDoc={slotDocument(unit)}
+              title="Advertisement"
+              width={unit.width}
+            />
           </div>
         </>
       ) : null}

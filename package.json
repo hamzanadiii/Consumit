@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "dev": "bun run --parallel dev:api dev:web",
-    "dev:api": "bun --env-file=apps/api/.env --watch apps/api/src/index.ts",
+    "dev:api": "bun --filter @consumit/api dev",
     "dev:web": "bun --filter @consumit/web dev",
     "dev:infra": "docker compose -f compose.yaml -f compose.dev.yaml -f compose.playback.yaml --profile playback up postgres valkey playback-valkey",
     "docker:build": "docker compose build",
@@ -48,11 +48,16 @@
     "aws:credit-check": "node scripts/production.mjs credit-check",
     "aws:identity-check": "node scripts/production.mjs aws-identity-check",
     "test:recovery": "node scripts/drill-postgres.mjs",
-    "check": "bun run lint && bun run typecheck && bun run test && bun run build"
+    "check": "bun run lint && bun run typecheck && bun run test && bun run build",
+    "dev:playback": "bun --filter @consumit/playback dev",
+    "dev:worker": "bun --filter @consumit/worker dev",
+    "test:rebuild": "node node_modules/@playwright/test/cli.js test --config tests/rebuild/playwright.config.ts",
+    "rebuild:check": "node scripts/rebuild-release.mjs check",
+    "rebuild:build": "node scripts/rebuild-release.mjs build"
   },
   "engines": {
     "bun": ">=1.4.0",
-    "node": ">=24.0.0 <27"
+    "node": ">=24.21.0 <25"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
