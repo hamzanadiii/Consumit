@@ -54,6 +54,3 @@ export function TitleCard({
     </li>
   )
 }
-
-// Alias for backwards-compatibility with Home imports
-export const RailCard = TitleCard
