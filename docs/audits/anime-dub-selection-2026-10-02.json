@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-02",
+  "scope": "Strict anime SUB/DUB selection",
+  "checks": {
+    "apiPlaybackTests": 54,
+    "adapterTests": 119,
+    "sdkTypecheck": "passed",
+    "focusedApiPlaybackTypecheck": "passed",
+    "changedFileLint": "passed"
+  },
+  "browserChecks": [
+    {
+      "id": 16498,
+      "at": "2026-10-02T15:55:56.511Z",
+      "selectedDub": true,
+      "decoded": true,
+      "roster": {
+        "status": 200,
+        "providers": [
+          "kyren",
+          "animekai"
+        ]
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "requestedAudio": "ja",
+          "status": 200,
+          "provider": "animeparadise"
+        },
+        {
+          "action": "resolve",
+          "requestedAudio": "en",
+          "status": 200,
+          "provider": "kyren"
+        }
+      ],
+      "pageErrors": [],
+      "media": {
+        "width": 1920,
+        "position": 1.031961
+      },
+      "alerts": [
+        "1. Attack on Titan"
+      ]
+    },
+    {
+      "id": 7785,
+      "at": "2026-10-02T15:48:09.741Z",
+      "selectedDub": true,
+      "decoded": false,
+      "roster": {
+        "status": 200,
+        "providers": [
+          "kyren",
+          "animekai"
+        ]
+      },
+      "actions": [
+        {
+          "action": "resolve",
+          "requestedAudio": "en",
+          "status": 503
+        },
+        {
+          "action": "resolve",
+          "requestedAudio": "ja",
+          "status": 200,
+          "provider": "kyren"
+        }
+      ],
+      "pageErrors": [],
+      "media": {
+        "width": 0,
+        "position": 0
+      },
+      "alerts": [
+        "We couldn’t load an English dub for this episode. Try again or choose SUB.Try againReturn to title",
+        "1. The Tatami Galaxy"
+      ]
+    }
+  ],
+  "limits": [
+    "Browser checks verify variant routing and video startup, not independent listening or full-episode coverage.",
+    "Provider availability is episode-specific."
+  ]
+}

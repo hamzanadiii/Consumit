@@ -1,48 +1,34 @@
-import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
 
-import { CastCard, EpisodeRow, MemberPulse, SeasonSelector, TitleMasthead } from './title'
+import { CastCard, SeasonSelector } from './title'
 
 describe('title and series components', () => {
-  it('renders a cinematic title masthead and social proof', () => {
+  it('selects seasons through the shared themed listbox', async () => {
+    const user = userEvent.setup()
+    const onValueChange = vi.fn()
     render(
-      <TitleMasthead
-        metadata="2026 · Drama"
-        socialProof={<p>8 friends watched</p>}
-        synopsis="A city erased every street."
-        tasteScore={92}
-        title="The Last City After Rain"
+      <SeasonSelector
+        onValueChange={onValueChange}
+        options={[
+          { label: 'Season 1', value: '1' },
+          { label: 'Season 2', value: '2' },
+        ]}
+        value="1"
       />,
     )
 
-    expect(screen.getByRole('heading', { name: 'The Last City After Rain' })).toBeInTheDocument()
-    expect(screen.getByText('92%')).toBeInTheDocument()
-    expect(screen.getByText('8 friends watched')).toBeInTheDocument()
-  })
-
-  it('exposes member rating as one readable label', () => {
-    render(<MemberPulse count="12,846 ratings" value={4.3} />)
-
-    expect(screen.getByLabelText('Member rating 4.3 out of 5 from 12,846 ratings')).toBeInTheDocument()
-  })
-
-  it('keeps season selection native', () => {
-    const onValueChange = vi.fn()
-    render(<SeasonSelector onValueChange={onValueChange} options={[{ label: 'Season 1', value: '1' }, { label: 'Season 2', value: '2' }]} />)
-
-    fireEvent.change(screen.getByRole('combobox', { name: 'Season' }), { target: { value: '2' } })
+    await user.click(screen.getByRole('button', { name: 'Season Season 1' }))
+    expect(screen.getByRole('listbox', { name: 'Season' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: 'Season 2' }))
     expect(onValueChange).toHaveBeenCalledWith('2')
   })
 
-  it('renders cast and episode anatomy', () => {
-    render(
-      <>
-        <CastCard character="Mara" name="Sara El Amrani" />
-        <EpisodeRow episode="Episode 4" meta="52 min" progress={31} title="Glass Teeth" />
-      </>,
-    )
+  it('renders cast anatomy', () => {
+    render(<CastCard character="Mara" name="Sara El Amrani" />)
 
     expect(screen.getByText('Sara El Amrani')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar', { name: 'Glass Teeth watched' })).toHaveAttribute('aria-valuenow', '31')
+    expect(screen.getByText('Mara')).toBeInTheDocument()
   })
 })

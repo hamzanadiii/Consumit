@@ -119,68 +119,13 @@ export function ProgressRail({
   )
 }
 
-export type TasteMatchProps = Omit<ComponentProps<'div'>, 'children'> & {
-  detail?: string
-  label?: string
-  reason?: string
-  score: number
-}
-
-export function TasteMatch({
-  className,
-  detail,
-  label = 'Taste match',
-  reason,
-  score,
-  ...props
-}: TasteMatchProps) {
-  const safeScore = Math.min(Math.max(Math.round(score), 0), 100)
-
-  return (
-    <div
-      aria-label={`${safeScore}% ${label.toLowerCase()}`}
-      className={cn('flex items-stretch gap-4', className)}
-      data-consumit-taste-match
-      role="group"
-      {...props}
-    >
-      <span className="relative w-1 shrink-0 overflow-hidden bg-surface-raised">
-        <span
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 bg-orange"
-          style={{ height: `${safeScore}%` }}
-        />
-      </span>
-      <span className="min-w-0 py-0.5">
-        <span className="flex flex-wrap items-baseline gap-x-2">
-          <strong className="font-display text-3xl font-normal text-ink">
-            {safeScore}%
-          </strong>
-          <span className="text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-orange">
-            {label}
-          </span>
-        </span>
-        {reason ? (
-          <span className="mt-1 block text-xs leading-5 text-copy">{reason}</span>
-        ) : null}
-        {detail ? (
-          <span className="mt-1 block text-[0.6875rem] leading-4 text-muted">
-            {detail}
-          </span>
-        ) : null}
-      </span>
-    </div>
-  )
-}
-
 export type RatingDisplayProps = Omit<ComponentProps<'span'>, 'children'> & {
   max?: number
   showValue?: boolean
   value: number
 }
 
-export function RatingDisplay({
-  className,
+export function RatingDisplay({  className,
   max = 5,
   showValue = false,
   value,

@@ -1,12 +1,72 @@
 # Architecture foundation
 
+Consumit has one frontend in `apps/web`, using `packages/ui` and the existing first-party API, contracts, and configured playback seams. The `web` Docker target serves this frontend in local and production deployments.
+
+Playback resolution runs through Cloudflare Resolver Workers: the API selects one provider attempt and sends its current validated configuration and canonical metadata to its configured Worker origin. AnimeKitsu, Evion, Rigel and AnimeKai use the reviewed Europe placement route; other attempts retain the default Resolver. Placement is a hint, not a fixed egress address. The reviewed `wecollege-miami` Relay route is the only explicitly configured API lookup exception; its video still uses Cloudflare. AnimeKai delegates only its pure proof calculation to a separately authenticated, bounded API process pool; all provider HTTP requests and video stay on Cloudflare. Rigel's control playlists are fetched by its Cloudflare Media Relay and compiled in the API; the API does not fetch Rigel's upstream. The API continues to own provider order, health, sessions, Admin settings and source validation. Direct media flows from viewer to provider. Cloudflare Media Relay Workers handle only configured fallback rows; the OVH media-node route remains disabled. Blocked or capacity-limited attempts fall through to the next provider, then Embed or unavailable. Each route requires its own end-to-end acceptance. See [ADR 0009](./adr/0009-cloudflare-provider-resolution.md) and the [Cloudflare routing runbook](./runbooks/cloudflare-provider-resolution.md).
+
+AnimeKitsu matches exact canonical aliases and compatible explicit season labels, rather than franchise word overlap. A bare title cannot select a later season, movie or different part; ambiguous matches and episode links pointing to another catalog slug or episode return empty. Missing upstream catalog entries remain unavailable. The Jujutsu Kaisen correction rejects season 3 for the season-1 AniList title while retaining the correct season-3 source. See the [provider repair audit](./audits/provider-repairs-2026-10-12.md).
+
+ReAnime Frame and MegaPlay Frame also use the reviewed Europe Resolver because their default-Worker lookups fail before returning a frame. They retain exact AniList/episode and language mapping, their existing sandbox declarations, external controls and progress semantics. Mirage (`rivemirage`) is a movie-only Cloudflare Relay row: its Cine4k manifest rejects the production browser Origin while the tested server fetch without that header succeeds. Its approved Europe Media scope consists of four exact hosts; no generic proxy or OVH media route is introduced. Actual frame clicks and Mirage playback/seek/caption evidence are recorded in the same repair audit.
+
+Purstream matches only an exact normalized canonical title and compatible release year before requesting a stream; sequel/substring matches, conflicting years and ambiguous duplicate catalog rows fail closed. It declares `hlsSubtitlePlaylistFormat: vtt` behind its adapter seam because its HLS subtitle rendition URLs return full VTT documents. The SDK and session contract carry this only for HLS. The owned MSE engine wraps only subtitle-playlist responses as one bounded VOD subtitle segment, using the original HTTPS address and maximum cue end; ordinary HLS playlists and all media/subtitle bytes remain direct. This corrects the raw-VTT parse failure without a media relay. Native HLS remains browser-owned and has not been verified for this provider recipe.
+
+RiveStream/Citadel requests use the canonical TMDB ID and exact series season/episode tuple. When its response includes explicit `tmdbId` or `tmdb_id` identity metadata, the adapter rejects a conflicting result or source row. The current public endpoint returns source URLs without title or ID metadata, so a mis-keyed upstream media URL cannot be identified from the adapter response alone; retain that limitation in any title-level acceptance claim.
+
+[ADR 0006](./adr/0006-provider-embed-fallback.md) activates configured provider frames as the final Watch tier after Direct and Relay. SDK and browser contracts distinguish `iframe`/`embed` from media formats and reject delivery mismatches. An independent resolver, cache and circuit scope handles Embed; owned sessions and manual switching retain canonical title/episode identity. No frame enters the native media engine or Worker grant path. Watch and Admin share the bounded ProviderFrame surface: a frame keeps the standard sandbox (popup and top navigation withheld) unless its validated source declares that the provider's published player refuses any sandboxed frame, in which case only that source renders as a plain iframe. Document loading never becomes playback, progress, completion, viewing telemetry or cast evidence. Dual-audio frames expose requested-language guidance inside the external player boundary. Movie/series frames are TMDB keyed and anime frame lookup requires exact AniList identity. Vixsrc Frame constructs only published canonical paths on its exact configured origin without a server probe, because measured OVH lookup fails while the browser player plays; this is a candidate frame, not a successful playback-health check.
+
+The Watch-page relay HLS engine accepts an internal stable lease getter, separate from the public playback contract. Background same-source renewal updates that getter while retaining the existing engine, controls and buffered movie. The XHR byte loader translates original fragment addresses through the newest bounded, verified VOD playlist graph. Complete non-URI timeline/rendition metadata and cached AES-128 key bytes must agree; incompatible recordings use ordinary recovery. Control reads omit credentials and retain finite size/time/document/reference limits. Capability expiry, provider adapters, progress ownership and the direct-first waterfall remain intact. Native/cast/live delivery retains its prior renewal behavior. [ADR 0005](./adr/0005-direct-first-worker-relay.md) and the [boundary audit](./audits/proxy-gapless-2026-10-03.md) record scope and verification.
+
+Source freshness and relay capability lifetime differ when an adapter cannot determine upstream expiry. Internal `expiryEstimated` metadata preserves the five-minute SDK validation/cache deadline while allowing member relay capabilities up to the existing thirty-minute maximum. Known expiries and unmarked sources remain authoritative; direct playback keeps its prior deadline. The browser sees the capability's actual expiry. This prevents an estimated freshness timer from producing five-minute Worker segment denials. Old grants remain immutable and normal renewal/recovery still applies under ADR 0005.
+
+Storm Boron and WeCollege Miami/Boise have explicit, adapter-owned rotating-host Worker recipes under ADR 0005. Only matching API registration, issuer and Worker opt-ins can lease a verified per-session scope of up to eight exact public hosts. The API validates a finite playlist graph through DNS-pinned public transport; the edge independently checks public DNS for nonstatic destinations. This replaces per-title host additions for those recipes. Other Worker providers keep their configured static allowlists; ADR 0008 separately approves the LookMovie node-only recipe. Opted-in Worker HLS playlists are compiled by the signed first-party control route; segments, maps and keys remain Worker traffic. This avoids bulk playlist signing in the Free Worker while adding measured API control-document work. See [the cross-title audit](./audits/relay-cross-title-2026-10-03.md).
+
+Fixed HLS renditions can share an adapter-declared quality group. The resolver publishes only validated, capability-eligible siblings with matching group, format and audio; cached siblings are revalidated against current configuration. Playback exposes height choices rather than sibling URLs. Watch selects a height by re-resolving the same provider in the same session, retaining position and play intent. Failed manual quality changes retain the current stream. Independent fixed playlists are manual choices, not an adaptive master. WeCollege groups renditions by city; LookMovie groups the current movie's resolutions under its one provider row; Citadel groups its 720p and 480p renditions under its one provider row. LookMovie remains movie-only and browser-direct, with configured CDN rules limited to numbered `srv` hosts on its reviewed domains, including `excentionses.cyou` after the 2026-10-04 live check, `cromning.site` after the 2026-10-05 sweep, and `tormisted.cyou` after the 2026-10-05 live view check. The `.cyou` flux rotates domains within days (`tormisted` → `ancender` → `choosed` across 2026-10-05/06, all serving CORS-open manifests), so the numbered-`srv` shape rule `^srv[0-9]+\.[a-z-]+\.cyou$` now covers the family instead of enumerating each rotation; bare domains, subdomain prefixes and suffix escapes still fail closed. Stable `.site` domains stay enumerated. Its catalog search falls back through progressively shorter title prefixes (at most four reads) when full-title search misses, per the PROVE recipe. VidZen resolves movie and series sources only after reading the per-title `apiToken` its player page mints (the 2026-10-08 check turned the keyless source API into 401 TOKEN_MISSING) and carries a `vidzen.fun` Referer hint because `/api/stream/` answers a missing referrer with 401 and any foreign referrer or origin with 403. It stays browser-direct with `vidzen.fun` and `free.finepulfe.xyz` media hosts: only the manifests sit behind that gate while every playlist re-rolls the segment hosts it names, so no exact-host relay lease can cover the graph; loopback dev origins pass the gate and the production origin is refused upstream. Rigel skips slow `/v1/vs/` nested masters per the 2026-10-05 operator request and verifies `/v1/play/` chains in parallel with short per-leg timeouts.
+
+HLS assets can use workerd's native identity/fixed-length piping to avoid per-chunk JavaScript overhead, with a 60-second total asset-transfer deadline and request cancellation. Known lengths are enforced; completion metadata identifies unmeasured native bytes explicitly. Whole native-video sources retain idle-bounded streaming. Verified TS assets restore their checked prefix once, then stream natively. The prior Consumit proxy was also a Cloudflare Worker, so local-versus-edge probes alone do not justify a migration. See [the previous-proxy streaming audit](./audits/previous-proxy-streaming-2026-10-03.md) for the corrected movie 550 repro and remaining limits.
+
+The reviewed WeCollege Worker recipe forwards fixed public movy.sx Referer only from moon.zenoak.top to independently approved ultramoss.top/emberwave.top/rapidmesa.top for the two city relay rows. Origin and arbitrary cross-host hints remain stripped. The movie 550 recheck still exposes Free CPU/runtime limits; prior short samples do not establish reliable delivery.
+
+The movie/TV relay integration uses compact opaque grants to reduce Free Worker CPU during long-playlist rewriting, with compatibility for unexpired object-format grants. Reviewed Storm/Zeta/Vidnest/VaPlayer hosts can supply TS segments with misleading HTML content types only after transport sync verification. TV-only Storm/WeCollege media hosts are explicit in the API and edge policies. Installed-provider Scout previews use saved registrations. See [the relay integration audit](./audits/prove-relay-providers-2026-10-03.md) for the sampled paths and remaining edge failures.
+
+## Incremental process migration (2026-10-13)
+
+[ADR 0010](./adr/0010-node-processes-and-durable-jobs.md) changes ownership after the verified Node checkpoint: `apps/api` owns durable member records and provider configuration; `apps/playback` owns session/source coordination, subtitles, provider health and computation; `apps/worker` owns scheduling and outbox delivery. Existing provider libraries stay shared during extraction. Internal authenticated metadata/configuration/diagnostic commands replace direct process dependencies. The public `/v1` shapes, cookies and playback Valkey namespaces stay compatible. Gateway private-route blocking retains only the authenticated computation exception.
+
+The product API keeps progress/history/viewing/subtitle preferences and private responses. Playback HTTP admission uses its own namespace so provider overload cannot consume the guest product budget. A dedicated persistent queue Valkey is independent of authentication and disposable playback state. PostgreSQL outbox rows reconcile queue loss; release eligibility/leases/uniqueness stay authoritative. The optional S3 subtitle implementation precedes multiple-host deployment. See [the rollout runbook](./runbooks/rebuild-migration.md) for scheduling ownership, rollback, storage and measured capacity gates. The product API and general worker are live as of 2026-10-14; playback uses a 1% canary with the compatible combined process. Dated delivery evidence records active versions and remaining full-promotion checks.
+
+## Reliable playback and private discovery (2026-10-15, workspace)
+
+Additional frame recipes (2026-10-15, deployed registrations): VidAPI, VidFast, VidCore.io, VidRift, MoviesAPI, VidLink and VidNest have separately named Embed registrations beside existing Direct adapters. Canonical recipe IDs and exact player hosts are fixed at configuration admission. Frame/media classification follows immutable base delivery capability through Admin override application; the browser displays Embed for every configured frame rather than a five-ID hardcoded subset. Movie/series paths retain exact TMDB episode identity, standard sandboxing and no progress/event trust. The shared registry is compiled into both Resolver Workers, so new IDs require compatible Worker and API/playback rollout before active roster installation. [The activation runbook](./runbooks/provider-frame-extras.md) records disabled example recipes and live acceptance requirements. The five additional registrations are enabled within the existing US configuration; prior Admin restrictions remain authoritative. The deployed refinement record separates successful canonical candidate checks from unverified decoded playback.
+
+The current extension retains the process boundary above. Playback owns authenticated-cookie source attempts, subtitle discovery/preparation and separate-audio capabilities; the product API owns durable preferences, progress, history and private dismissals. Media bytes use the approved Direct/Relay paths and never the product API. These changes are local; production retains its existing 1% playback canary until release acceptance.
+
+An owned source-attempt resource returns pending, ready or exhausted. Its expiring Valkey record freezes the permitted provider roster, records each visit and supports bounded continuation and cancellation. Recovery mutations and continuations share a step lock; session recovery retains its separate lock. Explicit server selection ends the old attempt cycle. Every new selection rechecks current provider enablement, kind, region, role, requested audio, validated output and independent relay approval. A ready replay rechecks expiry and source authority. A member's exact per-kind order overrides delivery tiers; unranked providers retain the default Direct → Relay → Embed/Admin order. Preferences cannot enable providers, expand relay hosts or authorize spending. Ads Off rejects unsandboxed external frames. Legacy endpoints remain compatible for refresh/manual selection and older clients.
+
+Subtitle discovery stores remaining provider identifiers in a bounded, expiring snapshot. Opaque continuations are bound to the canonical query and replay their completed batch without repeating searches. Batches retain found tracks, inspect later eligible providers and requeue interrupted searches; browser cancellation/stale generations do not replace a newer selection. Preparation revalidates authority and normalizes supported files, including bounded unencrypted VOD WebVTT timelines. Invalid files expose retry/another-track feedback without stopping video. Regional language, provider/release identity, uploads, appearance and sync remain independent of the current video source.
+
+Audio language selection is a transaction. Stream switches require engine confirmation and decoded media-clock evidence before committing language preference; failure restores the prior track. Separate recordings use pending and active channels, keep the previous output audible through preparation/startup, try other compatible recordings of the requested language and commit only after playback starts. Browser capabilities resume from the selection gesture, with an explicit Enable audio recovery action. Duration safeguards and manual sync remain. Configured Relay audio rows can issue bounded audio-only capabilities through independently approved hosts; Direct rows do not become Relay after failure. Fixed-quality switches retain canonical audio intent and captions; published choices represent actual renditions.
+
+The additive `20261015120000_playback_discovery_preferences` migration adds a private Continue dismissal timestamp and recommendation dismissals. Owner-scoped Continue reads page the latest destination per `(kind, catalog id)` and merge with only that member's device namespace by freshness. Hide changes no progress timestamp/history; a later watch clears dismissal. Guests read only guest storage. Completed episodes advance only to confirmed available canonical metadata. Recommendation seeds come from private actual history and owned device completions, use the incumbent catalog adapters and filter watched/dismissed references through an authenticated bounded API. Anime retains AniList identity, separate from numerically equal TMDB ids. Export and account deletion include dismissal state.
+
+Ad status uses device storage immediately, account preferences for synchronization and storage events for other tabs. Bootstrap fails closed until the saved choice resolves. Off remains effective on sync failure and offers Retry. If the advertising script has already installed handlers, browsing reloads after persisting Off; active Watch is not reloaded. Optional issue diagnostics are a strict, redacted schema with canonical title/episode, safe provider id, coarse browser, delivery and failure category; no source URL, credential or cookie enters the report.
+
+See [the release acceptance record](./audits/reliable-playback-2026-10-15.md) for controlled evidence and remaining device/provider gates.
+
 ## Status
 
-This document organizes the target direction from the founding architecture brief. The web, API, and shared-UI workspace shells now exist; the product, data, playback, and operations systems described here do not. Resolve the relevant items in [OPEN-QUESTIONS.md](./OPEN-QUESTIONS.md) before implementing those areas.
+This document organizes the target direction from the founding architecture brief. The web, API, shared UI, contracts, canonical catalog, identity, member read models, and direct-first playback foundation exist. Profiles and lists default to private. Opt-in public profiles expose a separate visitor projection, member search and authenticated follow writes; personal archives remain owner-only. Existing Follow records and indexes are reused.
 
 ## System shape
 
-Consumit resolves playback, manages sessions, ranks providers, and stores member data. It avoids proxying media bytes unless there is a deliberate, authorized reason to do so.
+Consumit resolves playback, manages sessions, orders providers, and stores member data. The playback boundary sends selected resolution attempts through Cloudflare, with only the reviewed Miami Relay lookup exception. Default delivery remains Direct → Cloudflare Relay → configured Embed; the 2026-10-15 personal-order amendment in ADR 0005 permits exact member ordering across those tiers. The product API never relays video bytes. [ADR 0009](./adr/0009-cloudflare-provider-resolution.md) supersedes OVH lookup and media-relay routing in ADR 0008 while retaining independently authorized delivery paths.
+
+Public third-party player embeds are deferred. The web `/embed` routes and API `/v1/embed` routes are not mounted; the active playback surface is the member Watch flow.
+
+Public movie, series, and anime title pages are isolated from member identity and use five-minute on-demand ISR over catalog-only data. The root layout does not read cookies; its client session provider restores `/v1/me` after hydration, and member controls/reviews continue to call authenticated, no-store endpoints. On title pages, the stable signed-out prompts render during session bootstrap; they expose no member data or write controls and are replaced by the member shelf after identity resolves. Watch, library, settings, profile, and other personalized routes keep their request-bound server session reads.
+
+The replacement media-element controller is selected per web deployment with `NEXT_PUBLIC_PLAYBACK_CORE=next` (default `legacy`), used by Watch. The player owns HLS/DASH/native engines and controls; the browser coordinator owns refresh, fallback, and manual source switching; the API owns provider eligibility and validated source selection. See [ADR 0001](./adr/0001-canary-player-core.md). Canary routing happens at the edge so one deployment consistently serves one core. Progress and member history stay keyed to the title or episode, never the source.
+
+Fullscreen belongs to the player surface. Container fullscreen is preferred; Apple's video-only fullscreen receives the selected external caption file through a default showing native TextTrack. The caption bridge translates cached parsed cues by the existing sync offset and reapplies them after load or track reconciliation. Both controllers retain native showing mode without changing subtitle choice or preferences. In-band tracks retain engine timing. Exit restores the inline renderer; native denial reports retry without viewport expansion. Browsers with neither API retain the viewport fallback and page-state restoration. Source selection, media attachment, history and progress ownership are unchanged.
 
 ```text
 Cloudflare edge
@@ -15,10 +75,11 @@ Cloudflare edge
       -> Product modules
       -> Social modules
       -> Playback modules
-          -> Resolver
           -> Provider scheduler
-          -> Provider adapters
-          -> Validation
+          -> Cloudflare Resolver Worker
+              -> Compiled provider adapters
+          -> API source validation
+          -> Cloudflare Media Relay (explicit fallback rows)
       -> Postgres / Valkey / queues
       -> Telemetry and workers
 ```
@@ -33,11 +94,12 @@ The selected foundation is:
 - Next.js 16 web application with React 19 and Tailwind CSS 4
 - Bun/Fastify 5 API
 - Shared React UI package with Lucide icons and typed variants
+- Shared Zod application contracts consumed by Fastify and Next.js
 
 The longer-term direction remains:
 
-- Postgres, initially a managed option such as Neon
-- Valkey for shared cache, coordination, rate limits, sessions, and initial queues
+- PostgreSQL 17 for durable members, credentials, profiles, aliases, library records, lists, and import staging
+- Valkey 9 for opaque sessions, temporary authentication challenges, username reservations, and rate-limit state
 - Cloudflare for DNS, WAF, CDN, and edge rate limiting
 - A simple Docker-based deployment on infrastructure such as Hetzner
 - OpenTelemetry, Prometheus, Grafana, Loki, and Sentry for initial observability
@@ -94,16 +156,84 @@ Product and social modules consume stable title and playback results; they do no
 
 Prefer deep modules with small interfaces that hide scheduling, validation, expiry, and recovery. Create a seam when implementations genuinely vary, not only because they might vary someday.
 
+## Canonical catalog
+
+TMDB is the canonical metadata source and identifier namespace for movies, series, seasons, episodes, cast, posters, and backdrops. AniList is the canonical metadata source for anime titles, providing search, details, recommendations, relations, characters, staff, airing schedules, and franchise graphs. Catalog requests use English metadata (`en-US`), the US market, and always exclude adult results.
+
+Next.js page code talks only to the versioned Consumit catalog API. TMDB credentials remain in the Fastify process and never enter Next.js or browser bundles. The catalog module exposes a small injectable interface with fake and TMDB implementations; the TMDB adapter owns authentication, upstream schemas, normalization, image configuration, retry policy, timeouts, and caching.
+
+Catalog metadata and playback availability are independent. A real TMDB title can exist without a configured playback source. In that state, the dedicated first-party player screen identifies the title, loads no demo or embed, disables media controls, and offers return and report actions.
+
+Catalog cache reads use an in-process layer backed by Postgres so validated results survive API restarts and are shared across API instances. Search is fresh for 5 minutes and stale for 1 hour; discovery is fresh for 15 minutes and stale for 24 hours; title details and stable configuration are refreshed every 6–24 hours and retain their last known good value until an upstream refresh succeeds. Anime airing data is fresh for 5 minutes and stale for 1 hour. Finite stale entries are pruned from Postgres; retained title details are not expired.
+
+The web server revalidates public TMDB and AniList metadata GET responses through Next's Data Cache every 300 seconds, including metadata used by request-bound Home and Watch renders. These requests carry only `Accept`, never a member cookie or authorization header; member and playback endpoints remain uncached. This avoids repeated API work without sharing member HTML. Metadata reads have a bounded 12-second web deadline so the API's 10-second AniList request can finish. Public title-page ISR and private request-bound HTML retain their separate policies.
+
+Public GETs under `/v1/titles/` and `/v1/anime/` share a separate 600/minute metadata budget, keyed by an authenticated member ID or the normalized client IP (IPv6 /64). An arbitrary, expired, or wrong-environment cookie cannot create a new budget. Authentication reads are shared only within one request and are rechecked on every subsequent request. SSR requests arrive from the web server's shared IP, so metadata fan-out must not consume the general 100/minute member-request bucket. Credential routes retain tighter IP budgets. Production budgets use shared authentication Valkey state, survive API restarts, and fail closed during store outages. Cached catalog results and the adapter's upstream limiter still control upstream work; this read budget is not an upstream quota. Actual API rate-limit responses remain 429 with `RATE_LIMITED` and `Retry-After`.
+
+Subtitle discovery documents use bounded shared contracts. The browser handles fragmented NDJSON and requires a completion event with consistent search identity; malformed, oversized, interrupted, or timed-out streams release their reader. A non-canceled stream failure makes one fallback request to the same GET discovery route with `format=json`, validating the same event contract; HTTP 429 does not retry automatically. Closing discovery cancels provider work. Search providers again explicitly starts a fresh discovery, and generation checks discard stale language-page and track-search responses. Compressed outbound control responses couple decoder and upstream teardown through a stream pipeline. Member subtitle preferences and API errors use private, no-store responses. Web document headers constrain base URLs, objects, framing, and form targets without forcing nonce-bound rendering on public title ISR; this is a scoped CSP, not a complete script policy.
+
+Advertising is browser-only; the API never loads ad scripts. No active surface mounts advertising today (2026-10-15): `shared/PopunderAd` and `shared/AdSupportCard` were deleted from source, and `shared/AdSlot` remains in source without a single route import, so Home, the Movies/Series/Anime catalogs, all title details, Watch and the owner's Profile overview load no third-party ad script and reserve no ad space. `shared/AdStatus` in Settings → Browsing & advertising still persists the member's advertising choice per device and per account; `useAdStatus` fails closed when account preferences cannot load, applies Off across tabs through same-document and storage events, and carries `adsEnabled` on playback preference requests. The scoped CSP supplies no script allowlist, so any ad script that returns would execute with full page privileges; that remains an accepted monetization trade-off disclosed in the Privacy Policy rather than a guarantee against hostile script behavior. Blocking third-party scripts hides both ad formats without breaking browsing or playback.
+
+API readiness checks configured catalog/identity capabilities plus the local Postgres and shared request-limit store when mounted. Dependency probes run in parallel with a two-second bound, share one pending result, and cache it for one second. A local dependency failure returns 503 with safe status names; liveness stays independent. Readiness does not prove third-party catalog, email, or playback provider availability.
+
+Production and development gateways share the API's 1 MiB request-body ceiling through one Nginx policy include. Oversized requests stop before upstream work and return private, no-store JSON with a matching generated request reference. Infrastructure validation checks both configurations inside the built gateway image. Application Docker builds share their manifest-copy stage and install dependencies for their own workspace; the full `source` stage remains for development.
+
+## Anime domain
+
+Anime is a first-class bounded domain that plugs into the same playback, library, social, and recommendation systems as movies and series.
+
+The title-kind namespace follows the identifier namespaces: the `CatalogKind` enum (`movie`, `series`, `anime`) is the single kind used by member data — saves, favorites, progress, ratings, reviews, and diary — where `movie`/`series` ids are TMDB ids and `anime` ids are AniList ids, so identical numeric ids in different kinds never collide. The versioned catalog API reflects the split inside its TMDB routes: `GET /v1/titles/batch` serves `anime:` references through the AniList adapter and merges them with TMDB results (upstream AniList output is schema-proven at the seam; an adapter outage surfaces as retryable `CATALOG_UNAVAILABLE`; TMDB metadata carries the response meta when any TMDB reference is present, otherwise the response reports `source: 'anilist'`), and `GET /v1/titles/search?kind=anime` is served the same way instead of being rejected. Title routes stay kind-scoped: `/anime/{id}` and `/anime/{id}/reviews`.
+
+### AniList adapter
+
+The AniList adapter (`apps/api/src/catalog/anilist/`) provides a clean `AnimeCatalog` interface over AniList's GraphQL API. It handles rate limiting (90 req/min), persistent stale-while-revalidate caching of validated catalog results, query normalization, and hostile-output validation. Title details and franchise relations keep their last known good value across outages; search, discovery, and airing data use shorter freshness windows. Adult titles are excluded upstream (`isAdult: false` on search, trending, and seasonal feeds) and filtered again at the adapter seam across lists, relations, recommendations, and batch; a direct adult detail request resolves as not found. AniList tells Consumit what an anime is; Consumit owns identity, episode mapping, playback, progress, provider reliability, subtitles, and taste.
+
+### Episode identity engine
+
+Anime hero-logo enrichment remains separate from episode mapping. Exact TMDB title/year matches are preferred. Missing series logos may resolve an exact parent name after removing season/arc suffixes, requiring one unambiguous TMDB series, Animation metadata, Japanese origin, and a debut no later than the selected title. Same-name adaptations additionally require an airing season within one year of the selected arc, and unresolved ties remain misses. A bounded, cycle-checked walk of at most four canonical AniList prequels can supply earlier artwork. Movies do not inherit a series logo. Parent-artwork matches have a separate cache key and never broaden episode-art identity matching. Franchise queries select complete summary fields on both root and related nodes; manga source nodes are excluded rather than routed as anime.
+
+The episode identity engine (`apps/api/src/anime/episodes/`) maps canonical anime episodes (as defined by AniList) to provider-specific episode numbers. This handles discrepancies in season numbering, split cours, absolute numbering, specials, OVA numbering, and dub numbering. Each mapping carries a confidence score and verification timestamp.
+
+Episode-card metadata first uses the existing ani.zip transport with an exact AniList ID and canonical episode key. Validated English/romanized titles, summaries, air dates, and HTTPS TVDB/TMDB stills are cached as one bounded title record with single-flight reads and persisted stale fallback. Different anime IDs, mismatched episode numbers, specials, unsafe artwork URLs, and malformed dates are rejected. Strict TMDB title/year and MAL-keyed Kitsu reads fill missing fields or recover from an unavailable mapping; a failed fallback cannot discard known metadata. This enrichment changes neither playback mapping nor member progress identity.
+
+### Franchise graph
+
+The franchise graph (`apps/api/src/anime/franchise/`) builds directed graphs from AniList relation edges (PREQUEL, SEQUEL, SIDE_STORY, SPIN_OFF, ADAPTATION, SOURCE). It supports watch order recommendations, related-title discovery, and franchise browsing.
+
+### Provider episode mapping
+
+Provider-specific episode mappings are stored per anime title per provider per audio language. Once a mapping is verified, it is not re-discovered on every watch. This reduces upstream load and improves reliability.
+
+### Anime providers
+
+The active anime provider roster is Kyren, AnimeParadise, AnimeKai, AnimeKitsu, and Recloud. Recloud accepts canonical AniList IDs and exact episode numbers directly; the other adapters use canonical identity with a server-owned title resolver. AnimeKai uses the native mfw09 attestation implementation; upstream programs never execute server-side. AnimeKitsu offers direct native media without captions. The anime Watch route shares the first-party player and retains canonical episode identity and SUB/DUB preference.
+
+Recloud's adapter ports the PROVE `providers/anime/recloud.ts` control flow: requested SUB/DUB embed lane, same-origin `/stream/getSources`, then signed HLS on `cdn.4animo.xyz`. It never evaluates page scripts, follows an unapproved media host, or crosses from a missing DUB lane to SUB. Playlist references and a bounded segment prefix are checked without provider playback headers before selection. Captions and intro/outro ranges join the existing player contract. The local row is enabled; the committed example remains disabled for explicit operator activation. Availability varies by episode and upstream health; failed requests retain ordinary direct fallback and canonical member progress.
+
+### SUB/DUB as variants
+
+SUB (original audio with subtitles) and DUB (translated audio) are playback variants of one canonical anime, never separate catalog entries. The resolver selects the best variant based on member audio preferences.
+
+## Identity and import boundaries
+
+The browser authenticates through one same-origin opaque `HttpOnly` session cookie. Only its SHA-256 token hash is stored in Valkey; no authentication token is written to browser storage. PostgreSQL owns durable members, Argon2id credentials, profiles, permanent username aliases, library data, and import records. A verified email is required before the durable account and first session are issued.
+
+Visibility contracts accept `public | private`. The one-time public-member-discovery migration resets legacy profile/list public flags to private before public reads are enabled; subsequent explicit publishing is persisted. `GET /v1/profiles/:username` uses optional authentication and distinct owner and visitor response variants. Private archives still require the authenticated owner.
+
+Owner profile responses retain optional `social` follower/following counts for compatibility with deployed web builds from before the personal-profile consolidation. The API derives those counts from stored relations in the existing profile query; the current frontend does not consume them. This response compatibility does not restore social routes or visitor access. Rebuild the web image after shared contract changes: restarting an existing production container retains its compiled validators.
+
+The former history-import integration is removed: no upload route, parser, importer, or worker exists. Member records keep their `origin`/`sourceKey` provenance columns, so rows written by earlier imports stay readable and editable, and member-data detach rules still clear stale import links when a record is edited.
+
 ## Canonical provider contract
 
 Every provider adapter exposes the same conceptual input and result.
 
 ### Input
 
-- Title kind: movie or series episode; anime classification remains an open catalog decision.
-- Stable catalog identifiers when available, such as TMDB, IMDb, or AniList.
+- Title kind: movie, series episode, or anime episode.
+- Stable catalog identifier (TMDB for movies/series, AniList for anime).
 - Title and release year as fallback identification.
-- Season and episode for episodic playback.
+- Season and episode for series; canonical episode number for anime.
 - Context required for region, language, and safe provider selection.
 
 ### Result
@@ -116,6 +246,12 @@ Every provider adapter exposes the same conceptual input and result.
 
 A source describes its direct delivery type, URL, quality, and language. External output is untrusted and schema-validated at the adapter seam.
 
+### Alias rows
+
+CineJoy Lisbon (`cinejoylisbon`) is excluded from the active local and example rosters at the member's request. Its available adapter resolves only the Lisbon and Scout direct chips. The v2 control handshake uses native P-256 ECDH, HKDF-SHA256, and authenticated AES-GCM behind the provider adapter; it never downloads or runs upstream WASM. The DNS-pinned transport preserves binary control envelopes with a 64 KiB request cap and 1 MiB response cap. Before returning a source, the adapter checks the approved root, nested playlist references, and a bounded segment prefix without provider playback headers. Failed or foreign-host chains yield no source. Apogee's scoped adapter resolves exact movies and series episodes; it stays out of the combined Rivestream roster so its configured role controls eligibility. One Both row permits main video and optional separate audio. Added-audio discovery follows at most three master playlist levels, validates every reference before following one variant, and preserves adapter header hints plus the configured application origin for server-side manifest checks. Using the browser origin obtains the same multi-audio representation; the API never forwards a caller-controlled origin to a provider. Declared eligibility does not guarantee a usable track for a title. Movie and series audio retain separately approved CDN hosts. Its availability and seeking remain inconsistent across titles, so browser recovery and fallback still apply. Neither integration relays media or changes member progress ownership.
+
+One adapter may serve several menu rows: a config entry id must equal its adapter or extend it with a `-suffix` (`wecollege-phoenix` scopes that city, `cinehd-hindi` filters that audio). Aliases carry independent regions, health, and fallback groups; the suffix selects the scope. Source languages use codes (`en`, `hi`) so resolve-time audio matching prefers the requested language, and the watch flow forwards the member's stored audio preference (explicit per-title choices win).
+
 ## Resolve lifecycle
 
 ```text
@@ -125,7 +261,7 @@ Authenticate and rate-limit
   -> Check shared cache
   -> Return a known valid source when available
   -> Select provider candidates
-  -> Run hedged provider attempts
+  -> Run the bounded eligible-provider waterfall
   -> Validate results
   -> Rank valid candidates
   -> Cache discovery separately from expiring access
@@ -133,11 +269,13 @@ Authenticate and rate-limit
   -> Return the selected source and fallback capability
 ```
 
-### Hedged execution
+### Bounded resolution
 
-Do not race every provider on every miss. Start the best candidate, then begin backups only if the request remains unresolved. The founding example uses roughly 0 ms, 120 ms, 300 ms, and 700 ms start offsets; production values come from telemetry.
+The media transport coalesces concurrent DNS lookups, caches only validated public addresses for 60 seconds with a 128-host cap, and pins the selected address to each socket. Aborted callers stop waiting immediately; the OS lookup may finish independently. DNS waiting is bounded at three seconds and the provider attempt deadline still caps total work.
 
-Each adapter has a hard timeout, concurrency ceiling, requests-per-second limit, burst limit, and bounded queue. A slow or overloaded provider cannot hold the whole request open.
+The resolver tries eligible providers in configured order and stops at the first validated source. Each attempt is bounded by its provider-specific budget (3 seconds by default, up to 15 seconds when explicitly configured); the total resolution deadline defaults to 20 seconds. Per-provider concurrency and request limits still cap overlapping work across different members.
+
+Do not contact every provider on every click. A bounded hedge is a future option only if production-like measurements show the waterfall misses the startup budget and the additional upstream requests fit provider and cost limits. A slow or overloaded provider cannot hold the whole request open.
 
 ### Dynamic ranking
 
@@ -164,7 +302,7 @@ Each provider moves through:
 CLOSED -> OPEN -> HALF_OPEN -> CLOSED
 ```
 
-Repeated failures open the circuit and stop normal traffic. After a cooling period—60 seconds in the founding example—a small number of probes determines whether normal traffic resumes.
+Repeated failures open the circuit and stop normal traffic. After a cooling period—60 seconds for transient stalls, five minutes for definitive ones (gone-class sources, blocked direct paths)—a small number of probes determines whether normal traffic resumes. CookieBakers is explicitly kept in its configured Direct attempt order during cooldown because its upstream is intermittent; its attempt is still bounded by concurrency, request-rate, and resolver deadlines.
 
 ## Caching and hot paths
 
@@ -174,16 +312,16 @@ The cache path is browser/edge, process memory, shared Valkey, then resolver.
 |---|---|---|
 | Browser/edge | Publicly safe responses and static assets | Policy depends on privacy and expiry |
 | Process memory | Extremely hot resolution data | 10–60 seconds |
-| Valkey | Main shared resolver cache | 5–30 minutes when the source permits |
+| Valkey-cache (later) | Optional shared resolver cache | 5–30 minutes when measured need and source policy permit |
 | Negative cache | Known provider/title misses | 30 seconds–5 minutes |
 
 Provider discovery and temporary playback access are separate cache records. Expiring access uses its provider expiry minus a 30–120 second safety margin.
 
-Use single-flight/request coalescing so one resolver refresh serves concurrent misses for the same title. Serve slightly stale safe results within a stale-while-revalidate window while a worker refreshes them. Warm popular titles and episodes in the background.
+Use single-flight/request coalescing so one resolver refresh serves concurrent misses for the same title. Serve slightly stale safe results within a stale-while-revalidate window while a worker refreshes them. Warm only a bounded hot-title set (views, title opens, watch intent, playback demand) in the background — never every detail view, and never through unbounded provider fan-out.
 
 ## Background work
 
-Keep non-user-blocking work out of HTTP requests. An initial Valkey-backed queue can run:
+Keep non-user-blocking work out of HTTP requests. The active product runs no background worker; a later shared queue may run:
 
 - Resolver refresh jobs
 - Metadata synchronization
@@ -209,28 +347,64 @@ Progress is stored by member and title/episode, never by provider URL.
 
 When the active source fails, the playback flow excludes that source/provider, resolves a validated fallback, reloads it, seeks to the retained position when the delivery mode permits, and resumes with calm product language such as “Switching source…”.
 
-The Consumit Player owns the playback controls and native media surface. A playback controller will load authorized HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Iframe and embed adapters are excluded from the product direction.
+The Consumit Player owns the playback controls and native media surface. A playback controller loads configured HLS, DASH, or direct media sources through adapters while keeping source resolution, failover, and progress outside the visual component. Provider iframe adapters are excluded. Public third-party player embeds are deferred; the web `/embed` routes and API `/v1/embed` routes are not mounted. First-party member playback continues through Watch.
+
+Optional volume boost belongs to the player media-element lifetime. It lazily creates one Web Audio media-element source and GainNode after an explicit adjustment, resumes the context before rerouting audio, and retains the graph across source renewals. Gain ranges from unity (Off) to 3× independently of native volume and mute. The graph closes when the element detaches; effect cleanup with a retained element does not reconnect it. Missing browser support, failed activation, or cross-origin media without CORS leave normal playback intact. No new provider request, media relay, or persistent member setting is introduced. The [Web Audio specification](https://www.w3.org/TR/webaudio/#MediaElementAudioSourceNode) defines native media behavior and CORS requirements for this graph.
+
+HLS uses the stable XHR loader, a 60-second forward-buffer target, the existing byte cap, and adaptive/device quality limits. Progressive FetchLoader decoding was rolled back after cancellation during recovery leaked unhandled AbortError rejections in the deployed browser. Playback does not wait for the reserve to fill. Both player cores watch playing seeks for an eight-second lack of advancement. HLS retries from the element's current seek destination, and Watch records seeking immediately rather than waiting for a decoded frame's time update. A delivery timeout then advances to another direct provider without spending time renewing the struggling CDN's lease. Paused seeks do not trigger automatic recovery; resumed playback cancels the watchdog.
+
+Watch posters use the existing first-party Next image optimizer and cache. The video retains anonymous CORS for direct media and captions; an artwork CDN without media-style CORS headers no longer blocks the poster.
+
+Manual provider selection restarts the fallback order without treating earlier providers as failed. This private session state survives same-provider refresh and is consumed after a successful fallback. The failed selection's upstream group is still excluded, and the existing recovery budgets and cooling windows apply. Automatic ordered resolution continues to exclude earlier misses.
+
+After bounded engine recovery, unusable manifests and browser CORS failures advance through the remaining direct providers before entering the approved Worker relay tier. A newly signed upstream URL is not proof that the same provider's media endpoint works: same-provider renewal must not keep restarting a blocked-manifest loop. Healthy expiry renewal and ordinary segment/network recovery retain their existing renewal path. Anime uses this same recovery policy without changing its canonical episode identity.
+
+Anime audio selection is a constraint on provider resolution rather than a ranking preference. Adapters may declare known audio languages behind the provider seam; unknown declarations still require a matching returned source language. AnimeParadise and AnimeKitsu's current extraction paths declare original audio only (`ja` for the SUB request) and return empty for DUB without upstream work. Kyren and AnimeKai support SUB and English DUB, subject to episode availability. AnimeKai never substitutes the other variant when the requested server is missing. Kyren rejects explicit upstream audio labels that disagree with the requested variant. The resolver and shared access-cache reads require English-labelled anime sources for DUB; original audio is eligible only for SUB. Diagnostic lists use the same adapter capabilities. Refresh, fallback, and manual switches retain the session's requested language and canonical episode identity; unavailable dubs fail honestly. Movie and series audio remain preferences under their existing policy.
+
+Renewal metadata, captions, and signed URLs can change while the attached stream remains healthy. Watch retains the attached local source independently of the session's latest lease: a renewed URL from the same provider, media type, and delivery path waits for recovery instead of clearing buffered frames. If the attached stream fails, Watch uses that latest unexpired URL once at the retained position and play state, then resumes normal recovery if it also fails. A failure during an in-flight renewal attaches its result immediately. Provider, media-type, and delivery-path changes, explicit switches, and cast renewals still attach the replacement immediately. The player also avoids rebuilding its engine for unchanged URLs and types.
+
+Delivery starts with validated browser-direct HTTPS media. Admin saves an exact provider attempt order per title kind; disabled, deleted and incompatible providers are skipped. Cooling providers are also skipped except CookieBakers, which remains in its configured Direct attempt order during cooldown because its upstream is intermittent; every attempt still obeys normal concurrency, request-rate and deadline bounds. After the bounded direct waterfall is exhausted, an optional Worker carries approved HLS/native traffic in a separate relay waterfall. Relay failures advance through relay candidates without returning automatically to direct. Each delivery tier has independent health/exclusions and a twenty-second discovery deadline. The rolling ten-minute switch budget covers the eligible direct plus relay pool, capped at 128; direct-only configurations retain the three-switch limit. Refresh retains the active delivery path. The API issues encrypted URL-bound capabilities and the edge independently checks exact approved provider hosts, every redirect and every playlist reference. Reusable relay configuration is disabled by default; the local Worker uses Free with sixteen explicitly authorized relay rows (the twelve PROVE rows plus StigStream, Viduki, Netoda, and Fabric) and separately reviewed exact media policies (see the trial runbook). Base registrations default deliveryMode to direct, including Vixsrc; only explicit relay rows enter the relay resolver. Direct failures never change a provider's declared tier. Free account-wide daily request and per-invocation CPU limits still apply. DASH and separate audio remain direct, and provider-supplied relay wrappers, credentials, unsupported byte transforms and off-allowlist hosts remain rejected. A fixed BingeBang YMovies manifest decoder is confined to os.bingebangstream.online; native media remains untouched. Zoko has a fixed noncredential header recipe for hls1.drama1.cfd after independent destination approval. Progress, captions and play intent survive delivery changes. See ADR 0005 and its seven-day trial runbook.
+
+Provider operations use a durable Postgres override row per configured adapter, a single revision row polled by each API replica, and an actor/time/before/after audit record in the same transaction as each edit. A database lock serializes the one-time import from the legacy override file. Every configured adapter is registered, including disabled rows, so Admin can enable or disable it without a restart. Deleting a provider writes an audited tombstone: new resolves, order lists, health probes, and tests exclude it; the configured adapter and member progress remain. Restoration keeps the provider disabled until an admin enables it. Region overrides must stay within the base configuration. The admin-only provider endpoint returns live configured, enabled, and deleted counts. Timestamped synthetic probe results and bounded retest claims live in shared playback Valkey; they establish resolution health only. A cycle probes up to four configured regions per provider and title kind; unprobed regions remain unknown. Viewer playback events and provider selection counters export through OpenTelemetry to the opt-in collector and Prometheus, where the admin-only operations endpoints read fixed, bounded aggregates by region. The resolver circuit is shared across regions for each provider and title kind. No media URLs or member tokens enter these metrics. Prometheus rule state appears in admin; an alert receiver remains a deployment requirement for external notifications.
+
+The single exception is first-party caption files: the subtitles module (`apps/api/src/subtitles/`) is a standalone subsystem independent of the selected video source. Its discovery stream emits a cached language snapshot, then independent status and count updates from the configured subtitle fleet and eligible streaming-adapter inspections; a paged language endpoint returns opaque candidate IDs. Raw provider URLs stay in the API store. Preparing a selected candidate validates, downloads, converts, and serves first-party WebVTT from `GET /v1/subtitles/file/:key` (per-member sync shifts via `?offsetMs=`, originals via `GET /v1/subtitles/original/:key`). Cached catalog entries are checked against file storage before display. Converted files live on VPS disk under content-keyed paths when `SUBTITLES_DIR` is set (Valkey/memory otherwise, 7-day TTL); durable track metadata lives in Postgres (`SubtitleTrack`), keyed by title/episode. Preferred languages rank tracks without suppressing other available languages. The Watch subtitle menu groups languages with counts and pages, and local SRT/VTT uploads live only in the current browser viewing session. Admin subtitle diagnostics expose configuration requirements and bounded provider outcomes without URLs or member data. Per-member sync corrections persist in Postgres (`UserSubtitlePreference`).
+
+Subtitle discovery also includes `createStreamingSubtitleProviders` from `apps/api/src/subtitles/streaming.ts`, wired into the playback runtime's existing subtitle fleet. It inspects enabled, region-approved configured adapters whose delivery mode is not Embed for the exact canonical movie, series season/episode or anime episode. Adapter-specific numbering stays in the adapter. This is subtitle-only fan-out, separate from video startup's configured provider waterfall: it does not select a video source, change provider ordering or write provider health or watch progress. Shared provider admission remains authoritative, with at most six streaming inspections active. Per-registration results cache for up to 60 seconds when populated or 10 seconds when empty, further bounded by signed-source expiry and a five-second safety margin; at most 64 cached queries are retained per registration.
+
+Streaming candidates include declared subtitle files and bounded HLS master `SUBTITLES` inspection: at most two representations, two master levels and a 1.5-second inspection signal, without video-byte downloads. Every returned source and followed reference uses the configured host validation seam, with cookie/authorization headers stripped across host changes. Candidate authority binds the relevant provider configuration, enabled state and region; discovery listings and preparation reject changed, disabled or expired candidates. Stream-derived rows are excluded from durable subtitle-catalog reuse because the stored rows do not retain that authority. BCP47 regional language variants and a readable provider name survive the public discovery projection. Optional title/identity enrichment has an independent 2.5-second bound; missing or failed enrichment narrows eligible title-keyed providers without preventing ID-keyed discovery.
+
+`apps/api/src/subtitles/hls.ts` exports finite, unencrypted VOD WebVTT subtitle playlists through the existing first-party normalization/file store. Export is bounded to 512 segments, four concurrent file fetches, 5 MiB total input, 512 KiB output, a 24-hour timeline and 50,000 cues. Encryption, initialization maps, discontinuities, byte ranges, unsafe destinations and unsupported unmapped relative segment timing fail closed. Supported timestamp maps retain a consistent VOD clock, including MPEG clock wrap. Ordinary file captions keep the existing normalization path. The browser receives first-party files, validates usable cues and retains the existing clock-driven overlay/native caption fallback; a load failure is visible with retry or another-track recovery. Video source, progress and member preference ownership remain unchanged.
+
+Subtitle discovery merges provider candidates with saved files using the engine's shared file key. A subtitle adapter may supply a stable file identity for rotating download signatures; the fetch still uses its validated signed URL, and provider-specific normalization stays in that adapter. RiveSubs strips only recognized CloudFront authorization fields, retains content selectors, and deduplicates matching files across its sub-providers. Selection reuses the already-attached track ID for a prepared file. Distinct files and releases remain separate choices, and old discovery snapshots are replaced without removing durable subtitle files.
+
+Subtitle adapters recognize exact native language names before falling back to shared-script heuristics, preventing Ukrainian, Bulgarian and Serbian from being classified as Russian. CastleSubs recognizes both language names and codes in subtitle filenames before trusting conflicting provider fields; opaque filenames never override metadata. The player derives visible native names from canonical language codes and isolates text direction rather than displaying provider translations as language names. Original labels and release details remain available without changing track identity or caption files.
 
 ## Data ownership
+
+Admin inspection (`apps/api/src/admin/inspection.ts`) authorizes administrators and guards origin before accepting a strict provider ID, scope, exact title and audio code. Its lazy scout catalog instantiates finite reviewed recipes through `configuredProviders`, with the existing DNS-pinned transport and media validation; it does not enter the live roster. Inspection is limited to six requests per minute, a shared per-provider 20-second cooldown, an exclusive upstream-group claim and a 15-second deadline. Configured-region and video-role gates apply. Disconnects abort adapter work. Only validated upstream media, delivered according to the saved policy, can enter a private, no-store preview; exported reports project metadata explicitly and omit signed sources, source keys and raw errors. Browser checks remain local to Admin and never call progress/history or viewer-telemetry endpoints. Adapter tests leave probe and circuit state untouched. Health and metrics requests coalesce one fixed Prometheus query batch and cache success or unavailability for 15 seconds. Reviewed recipe downloads remain disabled; installing a candidate still requires an operator's base-config review.
+
+Admin's `deliveryMode` override uses the existing Direct/relay contract. The UI labels relay as Proxy. File and Postgres stores preserve valid values, revision propagation and actor/before/after audit; obsolete proxy-required values remain discarded. All delivery resolver instances retain the shared provider registrations and apply dynamic per-tier eligibility before attempts, after resolution and when reading shared caches. Their cache identity includes delivery mode. A mode change therefore cannot reuse a winner from the other tier or require an API restart. Saving a session rechecks the current assignment, and same-provider manual switching compares delivery as well as provider identity. Proxy approval remains an independent Worker configuration boundary. Configured Admin previews issue short private Worker grants for Proxy rows, including isolated tests of disabled rows; missing approval returns `proxy_unavailable` without substituting a direct preview. Scout uses the saved registration for installed rows and the reviewed recipe for uninstalled candidates. Relay previews in either scope require independent Worker approval.
 
 ### Postgres
 
 - Members, credentials, and profiles
-- Follows/circle relationships
-- Ratings, reviews, favorites, lists, and list collaboration
+- Historical follows/circle relationships and saved public-list references, without active social routes
+- Private ratings, reviews, favorites, and owned lists; legacy public flags normalize to private at response boundaries without changing stored historical rows
+- Member-authored Diary entries, with season and episode stored as zero-valued sentinels for title-level logs and exact identity for episodic logs
 - Watch history and progress
+- `GET /v1/progress/:kind/:id` without episode coordinates returns the member's newest episode record for a series or anime; coordinates retain an exact Watch lookup. Reads remain authenticated and private with no shared caching. Title actions merge validated member-scoped device progress with account progress by update time; playback sources never participate in the identity or destination.
+- Private completion events use a per-attempt UUID unique to member and exact title/episode. The progress write and completion insert share a transaction; the event retains no provider or media URL. History reads are member-scoped and paged, exports include it, and account tombstoning deletes it with progress.
 - Stable catalog references
 - Playback-session history when durable retention is needed
 - Provider configuration and aggregates
 
-### Valkey
+### Valkey authentication state
 
-- Resolution and negative caches
-- Distributed locks and single-flight coordination
-- Short-lived playback sessions
-- Rate limits
-- Provider health and hot scores
-- Queues
+A dedicated Valkey instance or namespace owns opaque sessions, verification and recovery
+challenges, pending Username reservations, and authentication rate-limit state. It runs with
+`noeviction`, AOF every second, and no catalog-cache mixing. Total loss safely logs members out
+and invalidates pending codes without removing durable member data. Shared catalog/resolver cache
+remains a later, separate reliability class introduced only on measured need.
 
 ### Analytics store, later
 
@@ -238,7 +412,17 @@ High-volume raw playback telemetry belongs in an analytics-oriented store such a
 
 Use strong consistency for identity, access, privacy, and security-sensitive changes. Provider rankings, analytics, counters, and trending data may be eventually consistent.
 
+Follow rows support public profiles and following; historical SavedMemberList rows remain stored without active Circle, review-like, shared-list discovery or saved-public-list routes. Personal activity is a bounded owner-only read model over diary and review records. Retiring social surfaces does not delete those records.
+
+Profile archives are bounded reads over WatchedTitle, DiaryEntry, Review, TitleLike, MemberList, and tag-array records. `/v1/profiles/:username/archives/:collection` returns typed cursor pages for Activity, Films, Diary, Reviews, Lists, and Likes; Tags is a bounded aggregate over diary/review tag arrays. Every response is `private, no-store`, requires authentication, and is readable only by the owner, including records with legacy public visibility. The public relationship collections remain separate `/v1/profiles/:username/collections/:collection` reads for Followers and Following; the web Network tab composes them behind one profile destination without a new API surface, and the retired Circle-style Network feed stays retired. SavedTitle has no profile-archive collection; owner-only Library endpoints read Watchlist records. Individual title ratings are read through authenticated `GET /v1/me/ratings`, filtered by rating value and paginated with owner-bound cursors; personal profile responses expose aggregate bins.
+
+Diary owner screens enrich each bounded archive page through authenticated, no-store `/v1/me/ratings/lookup`, using at most 50 title references. Visitor routes and pagination skip this read entirely. The enrichment shows current title scores; DiaryEntry remains the date/episode/rewatch/tag record and stores no historical rating snapshot. A failed lookup is distinct from an unrated title and disables rating choices; Reset returns to the unfiltered logs.
+
+Native lists use MemberList and ordered ListItem tables. Creation is idempotent on a member-scoped request key; title order, notes, description, and name update in one database transaction. Lists default to private and persist explicit Public/Private choices after the one-time legacy normalization migration. Public list reads require both list and owner-profile visibility; owner mutations require authentication. List responses are private/no-store. SavedMemberList retains historical references with cascading account/list cleanup; its former public discovery and save routes are unmounted.
+
 ## Telemetry and reliability targets
+
+Optional Google Analytics 4 is browser-only and compiled with `NEXT_PUBLIC_GA_MEASUREMENT_ID`. `NEXT_PUBLIC_GA_PROMPT=off` hides the consent prompt and treats an unset device choice as accepted; any other value keeps the prompt. The public-route allowlist and parameter projection live in `apps/web/src/lib/google-analytics.ts`; `shared/google-analytics` owns basic consent, host-only cookies, cross-tab preference changes and manual page views. Unless the prompt is hidden, no tag loads before opt-in. Private/unknown surfaces disable a previously loaded tag. Title IDs, raw URLs, queries, fragments, member identity, private activity and playback sources are excluded from manual payloads. Google Signals and advertising personalization are disabled. Enhanced measurement must remain off in the GA4 web stream to prevent automatic events bypassing that projection. Existing operational telemetry stays independent. See [the setup and rollback runbook](./runbooks/google-analytics.md).
 
 Playback emits structured lifecycle events such as:
 
@@ -254,7 +438,7 @@ Playback emits structured lifecycle events such as:
 - `SOURCE_SWITCHED`
 - `PLAYBACK_ENDED`
 
-Collect only the member data required for product and operations. Carry one trace identifier from web to API, resolver, adapter, validator, and telemetry.
+Collect only the member data required for product and operations. Browser Web Vitals use a separate anonymous, bounded intake: fixed route groups and CLS/FCP/INP/LCP/TTFB values only, with no raw URL, referrer, member identifier, or database persistence. Browser requests omit credentials; OpenTelemetry exports aggregated histograms when the opt-in collector is configured. Carry one trace identifier from web to API, resolver, adapter, validator, and playback telemetry.
 
 Primary measures are playback success, time to first frame, provider resolution latency, cache-hit ratio, rebuffer ratio, fallback rate, and fatal playback rate. Inspect p50, p95, and p99, not only averages.
 
@@ -276,7 +460,11 @@ These are target SLOs, not launch claims. Establish baselines before treating th
 Candidate public routes from the founding brief:
 
 ```text
-GET  /v1/titles/:id
+GET  /v1/titles/discover
+GET  /v1/titles/search
+GET  /v1/titles/batch
+GET  /v1/titles/:kind/:id
+GET  /v1/titles/series/:id/seasons/:season
 POST /v1/playback/resolve
 POST /v1/playback/:session/fallback
 POST /v1/playback/:session/events
@@ -299,13 +487,47 @@ This is an interface inventory, not route-level implementation approval. Contrac
 - Protect URL-fetching paths from SSRF. Block loopback, private networks, metadata endpoints, internal DNS, and non-HTTP protocols; prefer explicit domain allowlists.
 - Keep secrets in environment-backed secret storage initially and rotate them. Move to a dedicated secret manager as operations mature.
 - Keep public, internal, and admin interfaces separate.
-- Direct playback sources must be authorized; system quality does not remove copyright, contract, or regional obligations.
+- Direct playback sources come from the configured provider set; system quality does not remove copyright, contract, or regional obligations.
+- Provider configuration defaults to an exact allowlist. The base configuration defines adapters, region and title-kind scope, and permitted media hosts. Only the explicit ADR 0005 adapter recipes may validate and lease bounded exact public destinations for one session. Admin's durable enabled setting controls whether a configured adapter can resolve playback; the resolver also enforces region, kind, and source validation. Never allow a wildcard rooted at a shared-hosting tenant domain such as `*.workers.dev`; list the specific tenant host instead.
 
 ## Deployment progression
 
 ### Stage 1: simple production
 
-Cloudflare fronts a small deployment running the web app, API, resolver workers, and telemetry worker; managed Postgres and Valkey provide shared state; Docker provides repeatable operation. Named vendors are candidates, not mandatory commitments.
+The approved first release uses the OVH Canada VPS for the original Next.js frontend,
+API, PostgreSQL 17, separate authentication/playback Valkey instances and monitoring.
+Cloudflare Free fronts the private gateway through Tunnel. Production uses a fresh,
+independent Compose project; developer volumes and data are preserved. AWS Canada
+Central supplies SES transactional email and encrypted S3 backups. See
+[ADR 0007](./adr/0007-ovh-aws-production.md) and the
+[deployment runbook](./runbooks/ovh-aws-production.md).
+
+Production database connections verify the private CA and the `postgres` server
+hostname. Plaintext host connections are rejected. Application, migration and
+read-only logical backup roles have separate passwords; the application cannot
+change schema or migration history. The API owns TLS configuration and removes
+URL SSL parameters before pg can override it. Production preflight accepts this
+explicit self-hosted configuration and rejects development credentials and weak
+URI TLS. Migration and backup clients also require `verify-full` and the mounted
+CA. A dedicated PostgreSQL 17/Restic image runs daily logical backups under its
+timer; pgBackRest archives WAL synchronously and creates daily encrypted full
+backups. S3 versioning and fourteen-day Governance retention protect overwritten
+and deleted versions. Only backup tools expire current repositories; bucket
+lifecycle expires noncurrent versions and expired delete markers. Restoration
+uses isolated databases with archiving disabled.
+
+SES implements the existing authentication notifier without changing responses
+or ten-minute code expiry. Sends have a five-second deadline and one SDK attempt,
+including ambiguous network failures. Separate private credentials feed SES,
+S3, an SNS-to-SQS feedback consumer and an hourly credit monitor. Recipient and
+code values never appear in failure logs or metric dimensions. Bounce and
+complaint suppression is enabled at the AWS account level. Safe feedback metrics
+reach the existing OTel collector. Alertmanager sends failure and recovery
+notifications to Telegram; a separate Cloudflare cron Worker checks HTTPS and
+uncached API readiness for complete VPS outages. The Free edge has one rate
+rule for `/v1/auth/`: ten requests per IP/colo in ten seconds, blocked for ten
+seconds. Application Valkey limits remain authoritative. A separate Free WAF
+launch gate blocks registration except configured tester IPs until verification.
 
 ### Stage 2: measured horizontal growth
 
@@ -323,16 +545,96 @@ Important state never lives only in an API process. Scale API servers, resolver 
 
 ## Verification and operations
 
-Every provider adapter needs contract tests and fixtures for movies, episodes, special-character titles, missing titles, timeouts, and malformed output. Synthetic checks regularly exercise authorized known titles before members discover an outage.
+Every provider adapter needs contract tests and fixtures for movies, episodes, special-character titles, missing titles, timeouts, and malformed output. Synthetic checks regularly exercise configured known titles before members discover an outage.
 
 Load tests cover cache hits and misses, provider outage, cache outage, database latency, worker crashes, slow DNS, and hot-title stampedes. Canary changes through small traffic percentages and roll back on degraded playback measures.
 
 The intended delivery pipeline is lint, typecheck, unit tests, provider contract tests, integration tests, build, staging, smoke test, and production canary. Feature flags isolate risky provider, resolver, scoring, and failover changes.
 
+## Backend standards
+
+These standards generalize the catalog module's established shape (`apps/api/src/catalog/`: injectable interface, route registrar, typed errors, fake/real adapters, interface-level tests) and fold in the lessons of the previous Consumit backend. Every new module — identity, library, social, playback — repeats this pattern instead of inventing its own.
+
+### Kept from the previous backend
+
+- Small injectable module interfaces with deterministic fakes beside the real adapters.
+- JSON error envelope `{ error: { code, message, retryable } }`, typed domain errors carrying status codes, plain-language 400s.
+- Zod validation at the route boundary; shared schemas live in `@consumit/contracts`.
+- Per-route rate limits layered under edge and per-provider limits.
+- Stale-while-revalidate plus single-flight coalescing, bounded in-process caches, and a timeout on every external call. One provider failure never crashes a request.
+- Resolver discipline for playback: tiered candidates, bounded sequential waterfall, dedupe, observed-quality ranking, health quarantine (Stage 6).
+- Subtitle enrichment is implemented: the subtitles module aggregates YIFY, TVSubtitles, CastleSubs, NxshaSubs, SubSource, VDRK, VDRK v2, RiveSubs, Natsuki, SubDL, Jimaku, OpenSubtitles, and AnimeTosho behind its adapter seam (keyed providers skip without credentials), converts archives (including XZ-compressed singles) to cached first-party VTT with originals kept, and merges direct upstream WebVTT untouched. Canonical anime episodes resolve to TMDB identity through the keyless ani.zip bridge, so the TMDB-keyed providers answer anime queries alongside the AniList-keyed AnimeTosho and Jimaku. A 9s overall budget returns partial rank-ordered results instead of failing cold searches; converted files are cache-checked before any refetch. Durable metadata (`SubtitleTrack`) and per-member sync corrections (`UserSubtitlePreference`) live in Postgres; files live on VPS disk when configured. Playback sessions additionally carry each streaming adapter's own direct WebVTT tracks.
+- Non-blocking work in queues with separate worker entry points; request-serving processes stay stateless.
+
+### Deliberately different this time
+
+1. **Cookie sessions, never localStorage JWT.** Sessions are opaque identifiers in `HttpOnly`, `Secure`, `SameSite=Lax` cookies backed by Valkey, with rotation on privilege change and origin checks on cookie-authenticated mutations. Browser storage never holds authentication authority.
+2. **Validated direct-first media.** Provider output is hostile until validated and must remain inside the configured media-host allowlist or an explicitly enabled, bounded ADR 0005 session host scope. Browser delivery starts direct; Consumit's optional approved Worker fallback is issued after validation. Credential-bearing and provider-supplied relay-wrapped sources remain unavailable.
+3. **No rooms, DMs, watch parties, donations, checkout, or ad-serving module in the active release scope.** Do not scaffold these without a new product decision. The watch-and-journal loop comes first, and playback remains member-controlled.
+4. **Fastify module registrars.** Each module exposes `register<Module>Routes(app, deps)`; routes validate and translate, business rules live behind the module interface.
+5. **Prisma + Postgres recommended** for the first persistence slice (team familiarity, disciplined migrations). Schema and migration changes still require explicit approval.
+6. **Localized failure.** No global API-down panic: auth/catalog/playback failures stay in their surface with retry or fallback, as the web shell already expects.
+7. **OpenTelemetry over bespoke metrics.** Trace identifiers already travel web to adapter; add OTEL spans for resolve, adapter, and validation work plus `/health` dependency checks before building custom metric singletons.
+
+### Module layout
+
+```text
+apps/api/src/<module>/
+  <module>.ts        # injectable interface — the only thing callers program to
+  routes.ts          # register<Module>Routes(app, deps): validation, status codes, headers
+  errors.ts          # typed domain error + codes (codes also declared in contracts)
+  fake-<module>.ts   # deterministic fake for tests and web fixtures
+  <adapter>.ts       # real implementation (postgres, upstream, provider SDK)
+  *.test.ts          # interface-level tests, network-independent
+```
+
+Adapters own secrets, upstream schemas, retry policy, timeouts, and caching. Page and worker code never imports an adapter directly. Provider adapters additionally live behind the `packages/provider-sdk/` seam with contract tests and fixtures.
+
+### Request lifecycle
+
+Authenticate → rate-limit → validate (Zod, 400 with plain language) → authorize (ownership enforced inside the query, never via client-supplied member ids) → coalesced cached-or-fresh read or bounded write → envelope response → telemetry event with the trace id. GETs set `cache-control` plus a stale marker following the catalog precedent.
+
+### Configuration
+
+The first frontend's production entry point is `scripts/production.mjs`.
+It prepares a private `.env.production`, discards inherited development
+integration settings, and combines base, playback and production Compose
+overlays in that order. API/web environment files are replaced rather than
+merged with developer files. Both public origins are `https://consumit.online`.
+Production startup rejects example authentication peppers. Preflight blocks
+missing integrations and database URLs that would weaken verified backup TLS;
+real HTTPS, email, notification and offsite restoration remain launch gates.
+
+Environment is Zod-validated at boot and fails fast in production when `DATABASE_URL`,
+`VALKEY_URL`, `APP_ORIGIN`, `AUTH_CODE_PEPPER`, `AUTH_EMAIL_FROM`, the selected email
+adapter settings (SES in the approved release; Resend remains a development option), or required
+catalog settings are missing. `.env.example` stays current. Browser API traffic is same-origin;
+CORS is disabled and mutations require the exact configured Origin plus valid Fetch Metadata when
+present. Secrets never enter logs, responses, or client bundles. General bodies stay tightly
+bounded.
+
+### Sensitive endpoints
+
+Login, register, verify, and reset routes get the strictest rate limits and identical responses for existing and non-existing accounts (no enumeration). Pending email codes live in Valkey with short expiry and bounded attempts. Passwords retain their Argon2id parameters and encoded format through hash-wasm on Node.
+
+### Background work
+
+The production SES feedback worker polls private SQS and exports safe aggregate
+outcomes; an hourly operator job checks AWS account credits and gross budgets.
+The former import worker remains removed. ADR 0010 introduces BullMQ for committed release tracking, provider configuration intent and bounded recurring maintenance.
+
+### Still enabled
+
+The provider SDK, injectable playback backend, dedicated playback Valkey, and headless media controller are implemented. Provider adapters use an injected, bounded DNS-pinned HTTP client only for resolution; member media bytes never cross the API. Deployment activates the providers listed in `PLAYBACK_MEDIA_CONFIG` with hostile-output validation at the adapter seam.
+
 ## Architectural invariants
 
+Provider roles are validated configuration and audited Postgres overrides: `video` (the compatibility default), `audio`, or `both`. The resolver excludes audio-only registrations, including cached winners and explicit switches; role changes invalidate access-cache configuration keys. Video order, probes, health, and diagnostic tests use the same eligibility boundary. This adds no media relay or alternate player. Under [ADR 0004](./adr/0004-opt-in-separate-audio.md), an enabled Audio source or Both registration approved for the member's region opts into optional added-audio discovery for every title it serves, independent of any adapter-declared label; discovery stays bounded by per-provider budgets and hostile-output validation, and a role never claims recording compatibility.
+
+Playback preferences are semantic resolution height (nullable for Auto) and canonical audio language, never engine track indices. Watch and public embeds send the latest intent on refresh, fallback, and manual switches; the API retains it in the source-independent session input. Both player cores reselect each source's own quality and audio identifiers. Missing quality retains the preference while choosing a known lower rendition and reporting the selection; unknown resolution stays explicitly unknown. Exact availability is title-specific. Added audio requires an explicit track selection, owned session/source checks and prepared allowlisted VOD media. Audio-only decoding is guarded in the browser; substantial duration mismatches and delivery failures restore primary sound. Smaller duration differences expose a bounded sync adjustment. Clock alignment is measured independently of dialogue/cut identity, which remains unverified. Provider-wide audio verification and health remain unverified/untested in Admin.
+
 1. Provider-specific behavior remains inside its adapter.
-2. Consumit does not proxy media by default.
+2. The API does not relay video bytes; it may compile signed control playlists for explicitly approved ADR 0005 recipes. The browser starts direct and may use an approved Worker fallback.
 3. Cache entries respect source expiry.
 4. Concurrent misses are coalesced.
 5. Every external request is bounded.
@@ -343,3 +645,51 @@ The intended delivery pipeline is lint, typecheck, unit tests, provider contract
 10. Non-blocking work moves to queues.
 11. Provider failure is a designed operating state.
 12. Operational complexity follows measured demand.
+
+AniList catalog cover selections request `extraLarge` and `large`; mapping selects the largest valid HTTP(S) cover with a safe large fallback. Catalog cache generation `anilist:v2` refreshes old mapped covers without deleting data. Landscape banners remain the upstream AniList banner; unrelated or uncertain TMDb artwork is never substituted.
+
+Exact skip metadata (2026-10-09): `apps/api/src/playback/skip-times.ts` exposes a timing-only adapter seam through `/v1/playback/skip-times`. Fixed public TheIntroDB reads use exact TMDB movie or season/episode identity and decoded runtime; AniSkip reads resolve canonical AniList identity to MAL and accept opening/recap records only within five seconds of the decoded episode runtime. Mixed opening records are excluded. Neither adapter supplies media or member data. Fetches reject redirects, use a three-second total deadline, cap response bodies at 64 KiB, schema-check identity and finite ranges, interpret TheIntroDB’s documented beginning marker as zero, and reject omitted timing fields, reversed ranges, ranges outside runtime, intervals longer than ten minutes and conflicting overlaps. Coalesced reads are capped at 32; a bounded 500-entry process cache holds successful results for six hours and misses for one minute. Test applications return empty timing fixtures by default. The browser request is optional, cancelable and source/runtime scoped; validated provider ranges take precedence. These reads do not affect playback sources, progress, history or provider selection. Public API contracts: [TheIntroDB](https://theintrodb.github.io/theintrodb-npm/functions.html), [AniSkip client](https://github.com/aniskip/aniskip-extension/blob/main/src/api/aniskip-http-client/aniskip-http-client.ts).
+
+## Episode releases and private notifications
+
+The implemented `apps/api/src/releases` module separates dated airings from playback evidence. `ReleaseTracking` is the member's current union of saved series/anime and Favorites; collection writes synchronize it under the same member lock and transaction. Removing a title from both ends tracking, and re-adding starts a new period. Shared contracts in `packages/contracts/src/releases.ts` retain exact TMDB series season/episode or AniList canonical episode identity. Catalog adapters own recent-episode lookup and hostile-output validation; a failed refresh preserves stored releases and marks the member shelf partial.
+
+Postgres owns tracked titles, refresh leases, exact episode releases, check leases/evidence, reminder preferences and historical notifications. The Home read returns at most twelve releases from the preceding seven days and excludes exact completed progress or Watch History records. Shelf evidence remains current for six hours only while the provider's enabled/removed state, video role, configured revision, region and relay eligibility still agree. Inbox records retain their creation-time check evidence; reading, watching, opting out or removing tracking does not erase existing reminders. Insertion is unique per member/episode, serialized with collection writes, preference changes and account tombstoning, and rechecks active membership, tracking, opt-in time and completion. Releases predating tracking or opt-in cannot create reminders. Preferences and reminders are included in private account export and cleared during tombstoning.
+
+Member routes are authenticated and private/no-store: `GET /v1/me/releases`, `GET /v1/me/notifications`, `PATCH /v1/me/notifications/:id`, `POST /v1/me/notifications/read-all`, and `GET/PATCH /v1/me/notification-preferences`. Mutations enforce the existing Origin policy. Notification cursors are member-scoped and ordered by creation time plus ID. Browser resources validate shared schemas, bound reads to eight seconds, cancel stale requests and discard another member's results.
+
+When `RELEASE_TRACKING_ENABLED=true`, the API scheduler claims up to twenty-five due titles each minute and schedules their next refresh thirty minutes later. `apps/release-worker` is a separate Chromium process, using service-authenticated claim/source/result routes and the lease-authorized first-party `/_internal/release-check` page. The dedicated secret stays in the worker's API calls; the browser receives only a short-lived job lease and validated source. Each job permits at most two provider attempts, with one active check globally, thirty jobs per hour and a ninety-second lease. Failed/crashed checks lose freshness and wait an hour; success schedules the next check in six hours.
+
+Checks use configured video providers through the existing inspection/adapter seam, ordered Direct before eligible Relay; provider frames are excluded. Anime checks request original Japanese audio. Evidence requires decoded video, at least five seconds of advancing playback, a seek and at least two seconds of resumed playback. The worker uses Watch's shared media engine in an isolated context without member credentials or progress/history writes. Successful evidence is accepted only while the job and provider configuration remain current; it is a sample in this browser, region and audio environment, not a permanent availability guarantee.
+
+`compose.releases.yaml` adds the opt-in `releases` profile and a non-root, read-only Chromium container with resource limits, user-namespace sandbox, scoped seccomp, no-new-privileges and only `SYS_CHROOT` added. Its local proxy pins outbound connections to validated public DNS answers and permits only the configured first-party origin and the current validated source's approved HTTPS media hosts. Service workers and downloads are blocked, popups are closed, and nonproxied WebRTC UDP is disabled. Safe aggregate OpenTelemetry counters cover catalog refreshes, check outcomes and inserted reminders; queue-age histograms expose delayed work without member or source URLs.
+
+Activation requires applying `20261009010000_release_notifications`, `20261009011000_release_evidence` and `20261009012000_release_catalog_current` against a backed-up database, deploying compatible API/web and the sandboxed worker, and verifying the controlled end-to-end path before enabling tracking. The additive migrations start existing collection tracking at migration time and leave reminders off. Successful catalog refreshes retire missing/corrected releases from the shelf and queue while retaining notification history and evidence for releases still present. The overlay defaults tracking to false. See the [release runbook](./runbooks/episode-releases.md) for activation and recovery; actual rollout evidence belongs in DELIVERY.
+
+## Public member discovery
+
+`member-data/public-members.ts` owns explicit visitor projections, public collections, search and follows. Public profile responses select only published identity fields, favorites, rating bins, rating/review/public-list counts and active-public relationship counts. Ratings/reviews omit tags and import metadata. Visitor list responses omit origin/source keys. Private owner archives and watch progress retain their existing seams.
+
+`GET /v1/members/search` and `/v1/profiles/:username/collections/:collection` use opaque scoped keyset cursors, default 20 and maximum 50. Search requires 3–100 characters, escapes ILIKE wildcards, ranks exact username first, and uses PostgreSQL pg_trgm GIN indexes on public usernames/display names. It never calls TMDB or AniList. Relationship pages filter active public members for visitors; owner pages may include only an opaque id plus a neutral private placeholder.
+
+`PUT|DELETE /v1/me/follows/:memberId` require authentication and existing mutation-origin protection. Unique (followerId, followingId) and relationship indexes bound reads and make writes idempotent. Concurrent creation uses INSERT ON CONFLICT via createMany(skipDuplicates). New targets must be active/public; repeated writes to retained relationships remain idempotent. Profile privacy changes do not delete follows. All profile, list, relationship and search responses use private, no-store and the existing error and general rate-limit budget.
+
+Release migration, API and frontend together; the migration role must be allowed to create pg_trgm. See [the public-profile runbook](./runbooks/public-profiles.md) for backups, smoke checks, rollback and monitoring. No new paid service is introduced.
+
+## Viewing Preferences and Welcome Guide
+
+`packages/contracts/src/experience.ts` owns semantic viewing intent: movie/series audio language, anime SUB/DUB, subtitle enablement and up to three distinct ordered language codes, nullable resolution height and next-episode autoplay. It also owns guide version/status and community-card dismissal. Complete reads apply defaults; PATCH schemas remove field defaults and reject empty or unknown updates so a partial guide or player change cannot reset unrelated playback choices. `playbackConfigured` is response state derived by the repository when a playback field is changed, never a caller-writable flag. A saved dismissal record can therefore coexist with unconfigured playback. Guide version is currently 1; dismissal/completion is independent of Favorites persistence.
+
+`apps/api/src/experience` exposes the injectable `ExperienceRepository` through authenticated `GET/PATCH /v1/me/experience-preferences`, with shared response validation, private/no-store and existing mutation-Origin protection. `ExperiencePreference` stores one validated JSON preference document per member. Missing rows return defaults with `saved: false`; existing guide-only rows return `saved: true` without claiming playback setup. Partial writes take the existing member advisory transaction lock, verify active membership and merge under the lock before upsert. The lock also serializes with account tombstoning. Private account export includes preferences, and tombstoning deletes the row. The additive `20261009180000_experience_preferences` migration creates the table and cascading member key without backfilling guide consent or Favorites.
+
+`SessionProvider` composes `ExperienceProvider`. Guests use `consumit.experience.guest.v1`; members use separate member-ID device namespaces and pending-patch storage. Legacy player choices migrate only into the guest namespace. Account reads have a two-second bound and writes an eight-second bound. Account changes abort prior work; owner/revision guards prevent stale responses or events from replacing the current account. Member writes are serialized and retain failed pending fields for retry. Guest storage denial falls back to memory for the visit with explicit persistence copy. Multiple nested providers share owner-scoped change events; only a hydrated preference event replaces another provider's bootstrap. This preserves account playback choices when a guide dismissal arrives during hydration.
+
+Member preferences take precedence over guest device choices. An account without configured playback may explicitly copy guest choices into the editor and save them; neither sign-in nor a guide-only write imports them automatically. The browser bridge writes semantic defaults to the existing player device keys; account records never store engine-specific rendition or audio-track IDs. Watch waits for its owner-scoped preferences before resolving and snapshots them for the mounted exact title/episode. Player changes patch the same semantic intent; preference-sync errors have retry without stopping playback. Anime's explicit route audio choice takes precedence over the stored SUB/DUB preference. Provider validation, direct/relay/embed delivery, media controls, progress and history remain on their existing seams.
+
+Enabled subtitle intent starts bounded discovery on the first direct-session readiness, independently of Play or panel opening. Its title-scoped request is aborted on teardown and does not restart for direct source or lease replacements. Automatic preparation tries saved languages before an already available lower-priority fallback. Both playback controllers reconcile late external tracks against the semantic priority order, preserve the selected release within that language, and respect manual Off. Discovery and fallback do not write account preferences; provider frames retain their separate language-control limitation.
+
+Streaming track publications reconcile the latest manual subtitle intent instead of restoring the selection captured at source-load start. Consumit samples parsed external-file cues against the playback clock at every sync offset, including zero; native cues remain a fallback while remote files load or when fetching fails. Uploads seed that bounded cue cache from the already validated local file, retain the current upload during remote-cache eviction, and release its blob URL/cache entry on replacement or teardown. Generation checks discard stale file reads. No uploaded file is sent to a provider or persisted as member history.
+
+The optional prompt is compiled into the web build with `NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED`, default false in the environment example, Docker build and Compose wiring. It appears only after preference readiness on Home/catalog/title/Search browsing paths with pending current-version guide state. Direct Watch and the internal release-check route are excluded. Guide URLs preserve only normalized internal destinations via `internalNextPath`; unsafe destinations fall back to Home. The three guide steps remain directly reachable, with noindex and reduced themed headers.
+
+Community destinations are first-party configuration, validated as credential-free HTTPS URLs: `NEXT_PUBLIC_CONSUMIT_DISCORD_URL` defaults to `https://discord.gg/p7XVyk6vs` and `NEXT_PUBLIC_CONSUMIT_REDDIT_URL` to `https://www.reddit.com/r/Consumit/`. Invalid configured destinations are omitted. Links use new tabs with `noopener noreferrer`; joining creates no Consumit authentication, follow or playback authority. The release introduces no new provider integration or background worker. See [the scoped rollout runbook](./runbooks/experience-preferences.md); production build success alone does not establish database compatibility or activation.

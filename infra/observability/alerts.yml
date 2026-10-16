@@ -1,0 +1,63 @@
+groups:
+  - name: consumit-services
+    rules:
+      - alert: ConsumitOutboxDelayed
+        expr: max(consumit_jobs_outbox_oldest_age_seconds) > 300
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Committed background work is delayed; inspect queue and worker readiness."}
+      - alert: ConsumitOutboxExhausted
+        expr: max(consumit_jobs_outbox_failed) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Background work exhausted retries; inspect safe identifiers before explicit replay."}
+      - alert: ConsumitQueueUnavailable
+        expr: min(consumit_jobs_queue_ready) == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Durable queue is unavailable; PostgreSQL retains pending work."}
+      - alert: ConsumitDatabaseConnectionPressure
+        expr: max(consumit_database_pool_waiting) > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "An application pool has sustained connection waiters."}
+      - alert: ConsumitServiceSaturation
+        expr: max(consumit_runtime_event_loop_lag_milliseconds) > 100
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "An application event loop is saturated; inspect process CPU and memory."}
+      - alert: ConsumitBrowserErrors
+        expr: sum(increase(consumit_browser_errors_total[15m])) >= 20
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Browser error counts increased; inspect bounded page and error categories."}
+  - name: consumit-releases
+    rules:
+      - alert: ConsumitReleaseQueueDelayed
+        expr: sum(rate(consumit_releases_queue_age_seconds_sum[15m])) / clamp_min(sum(rate(consumit_releases_queue_age_seconds_count[15m])), 0.001) > 3600
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Episode release work is over an hour behind; inspect safe queue counts and worker readiness."}
+      - alert: ConsumitReleaseCatalogFailures
+        expr: sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) >= 10 and sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) / clamp_min(sum(increase(consumit_releases_catalog_refreshes_total[30m])), 1) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Recent episode catalog refreshes are failing; last known metadata is retained."}
+      - alert: ConsumitReleaseVerificationFailures
+        expr: sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) >= 10 and sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) / clamp_min(sum(increase(consumit_releases_verification_results_total[1h])), 1) > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Automatic episode checks are mostly failing; inspect sandbox and provider configuration separately from live resolver health."}
+  - name: consumit-playback
+    rules:
+      - alert: ProviderPlaybackFailure
+        expr: |
+          sum by (provider, kind, region) (increase(consumit_playback_events_total{event="error"}[15m])) >= 10
+          and on (provider, kind, region)
+          sum by (provider, kind, region) (increase(consumit_playback_events_total{event="error"}[15m]))
+          / clamp_min(sum by (provider, kind, region) (increase(consumit_playback_events_total{event=~"started|error"}[15m])), 1) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Playback failures exceed 50% for a provider, title kind, and region.

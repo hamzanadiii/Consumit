@@ -1,0 +1,1194 @@
+{
+  "source": "provider_example",
+  "method": "Static source and supplied historical audit; no live probes",
+  "providers": [
+    {
+      "id": "archive",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "archive.org"
+      ],
+      "sources": [
+        {
+          "path": "providers/archive/archive.ts",
+          "sha256": "30e353d5c5bcb094c3023e6820889ded525cb927945d3b72efd57c40c68d62cd"
+        }
+      ]
+    },
+    {
+      "id": "cinehd",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS",
+      "language": "Server labels; verify language",
+      "notes": "HTML/CSRF playlist handshake; dynamic play origin.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 29,
+        "ok": 2,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "cinehd.vc",
+        "slast430did.com"
+      ],
+      "sources": [
+        {
+          "path": "providers/cinehd/cinehd.ts",
+          "sha256": "e336869f6a5484a6df1d32a5c526027480084e3dba9c8b9833aa7a3db891c858"
+        }
+      ]
+    },
+    {
+      "id": "cuevana",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie only; episode method rejects",
+      "formats": "MP4",
+      "language": "LAT/Spanish",
+      "notes": "Title search and Streamtape helper; metadata module.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../src/core/metadata",
+        "../hosts/streamtape",
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "cuevan.net",
+        "streamtape.com"
+      ],
+      "sources": [
+        {
+          "path": "providers/cuevana/cuevana.ts",
+          "sha256": "8fac68541e7418ab5aaa9c02216eb608a7596a174c978b4bcb822b6cbee82137"
+        }
+      ]
+    },
+    {
+      "id": "insertunit",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "incomplete",
+      "support": "Movie + episode claimed; unsafe fallback",
+      "formats": "HLS",
+      "language": "English/Russian/multi",
+      "notes": "Evaluates untrusted makePlayer JavaScript; wrong-episode fallback; discards subtitles; embedded TMDB credential must be replaced.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "api.insertunit.ws",
+        "api.themoviedb.org"
+      ],
+      "sources": [
+        {
+          "path": "providers/insertunit/insertunit.ts",
+          "sha256": "c0f931f8dd14f29df78cbb57bb65120f38139527a771ae70c5c549140829e8b9"
+        }
+      ]
+    },
+    {
+      "id": "mapple",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "mapple.rip"
+      ],
+      "sources": [
+        {
+          "path": "providers/mapple/mapple.ts",
+          "sha256": "f23b20600a9f1ba0ac7ba1cb50b8ac2d1e741b02d47c0e2707fc192c8fd787bd"
+        }
+      ]
+    },
+    {
+      "id": "modiplay",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "HTML parsing and second player fetch; SRT/VTT subtitles.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "rozgarlelo.modiplay.xyz"
+      ],
+      "sources": [
+        {
+          "path": "providers/modiplay/modiplay.ts",
+          "sha256": "2cb8b56c0629fb3aab9f933917bdba7eedd6b823f4f430d4f985455eafbc8500"
+        }
+      ]
+    },
+    {
+      "id": "netmirror",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "videodownloader.site and net27.cc; metadata lookup; multiple platform APIs.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../src/core/metadata",
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "net27.cc",
+        "videodownloader.site"
+      ],
+      "sources": [
+        {
+          "path": "providers/netmirror/netmirror.ts",
+          "sha256": "d5d15c1602c09cfaf22d82ba13e2bc1ef4e1e35aa3d8b7341f9381d8f707171a"
+        }
+      ]
+    },
+    {
+      "id": "nflix",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Server labels",
+      "notes": "nflixmovies.app aggregator; source-specific Referer; 30s request exceeds budget.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 30,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "nflixmovies.app"
+      ],
+      "sources": [
+        {
+          "path": "providers/nflix/nflix.ts",
+          "sha256": "57e726e116c14c7989a437b4fbb904f3dfb7fa212f48795b8f39c2500ea8cac6"
+        }
+      ]
+    },
+    {
+      "id": "nhdapi",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Server labels",
+      "notes": "nhdapi.com aggregator; dynamic delivery headers; 30s request exceeds budget.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 50,
+        "ok": 6,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "nhdapi.com"
+      ],
+      "sources": [
+        {
+          "path": "providers/nhdapi/nhdapi.ts",
+          "sha256": "c53b7a932ef1131d3a43bef3db045b06b2fea56a21d892061b9279e325a210a1"
+        }
+      ]
+    },
+    {
+      "id": "nxsha",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Server labels",
+      "notes": "Encrypted multi-server API; local 20s abort; ASS requires unsupported conversion.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 155,
+        "ok": 50,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "nxsha.space"
+      ],
+      "sources": [
+        {
+          "path": "providers/nxsha/nxsha.ts",
+          "sha256": "c2b842f441411fab56fbeb0dae50ab9dd9578cd8212188247a7b850c2b2dff2b"
+        }
+      ]
+    },
+    {
+      "id": "onetouchtv",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "api3.devcorp.me helper; metadata and crypto.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../src/core/metadata",
+        "@omss/framework",
+        "node:buffer",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "api3.devcorp.me",
+        "onetouchtv.xyz"
+      ],
+      "sources": [
+        {
+          "path": "providers/onetouchtv/onetouchtv.ts",
+          "sha256": "fdef4736a0b48c9e2281c1ffc4ea66243f70134b3b8e4ecc5938ee596ca562df"
+        }
+      ]
+    },
+    {
+      "id": "perses",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Upstream labels",
+      "notes": "streamguide.cfd aggregator; shares upstream with VidCore.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "streamguide.cfd",
+        "vidcore.org"
+      ],
+      "sources": [
+        {
+          "path": "providers/perses/perses.ts",
+          "sha256": "f4f4b21c91d71da5aaff2cf4b964cc237867407da967782be1cc58d82fc01493"
+        }
+      ]
+    },
+    {
+      "id": "rivestream",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "English/French/Hindi/multi",
+      "notes": "scrapper.rivestream.app; multiple upstreams; nextgencloudfabric overlap with VaPlayer.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "nextgencloudfabric.com",
+        "rivestream.ru",
+        "scrapper.rivestream.app"
+      ],
+      "sources": [
+        {
+          "path": "providers/rivestream/rivestream.ts",
+          "sha256": "3ef414fac03326c0bef59671a0f681f72fbae258d3d25187c6c32219c1736d9a"
+        }
+      ]
+    },
+    {
+      "id": "screenscape",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "screenscape.me"
+      ],
+      "sources": [
+        {
+          "path": "providers/screenscape/screenscape.ts",
+          "sha256": "18331375d1dcbbe6cb8159415af10ee349ac2d199926845dc97e961225bb0b57"
+        }
+      ]
+    },
+    {
+      "id": "stellar",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "direct (CORS-open)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "maybeoneday.ch APIs, atlantic.st delivery headers, sub.vdrk.site subtitles.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "atlantic.st",
+        "cdn.maybeoneday.ch",
+        "natsuki.maybeoneday.ch",
+        "stellar.maybeoneday.ch",
+        "sub.vdrk.site"
+      ],
+      "sources": [
+        {
+          "path": "providers/stellar/stellar.ts",
+          "sha256": "44cafb898add9df41702ea3587cc8f4c673b2e2729c7dbf3ee5c7a8010e15454"
+        }
+      ]
+    },
+    {
+      "id": "stigstream",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "api.stigstream.ru",
+        "stigstream.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/stigstream/stigstream.ts",
+          "sha256": "d8b968d0d3c7024feae00d292290d59c1bfd55d3e79b31ccf7bd9ff9747501b6"
+        }
+      ]
+    },
+    {
+      "id": "vaplayer",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "streamdata.vaplayer.ru, nextgencloudfabric.com; metadata dependency.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../src/core/metadata",
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "nextgencloudfabric.com",
+        "streamdata.vaplayer.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vaplayer/vaplayer.ts",
+          "sha256": "6f793c1a37df6a5bc8b45e27634917453b2f0d4a714d69b9811d72683c2cde95"
+        }
+      ]
+    },
+    {
+      "id": "vidapi",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../utils/ua.js",
+        "./vidapi.types.js",
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [
+        "./vidapi.types.js"
+      ],
+      "observedHosts": [
+        "nextgencloudfabric.com",
+        "streamdata.vaplayer.ru",
+        "vaplayer.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidapi/vidapi.ts",
+          "sha256": "b1d0b9b311fc3b17a5ebb726ee5234d3be6843a17faccefa51aef928d5b7551a"
+        },
+        {
+          "path": "providers/vidapi/vidapi.types.ts",
+          "sha256": "b2aab04f2830c778780b026546484d82926718123db7da3d19c20eb747c0c5fc"
+        }
+      ]
+    },
+    {
+      "id": "vidcore",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Upstream labels",
+      "notes": "Multi-aggregator fanout; embedded key; Perses/streamguide overlap.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "hahaevilcraft.site",
+        "movie.streamrip.fun",
+        "streamguide.cfd",
+        "vidcore.org",
+        "vidrack.created.app"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidcore/vidcore.ts",
+          "sha256": "04a72904f907f07d1d8e2bd63b8a677cd1316265a29c5f55a798e307d58fc268"
+        }
+      ]
+    },
+    {
+      "id": "vidcoreio",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "HTML/crypto POST handshake; not registered by the supplied service. Distinct from vidcore.org.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "./crypto",
+        "@omss/framework",
+        "node:buffer",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "vidcore.io"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidcoreio/crypto.ts",
+          "sha256": "dbcd0ca9f8a8208e87e6034037bce51b4c28922fb910610c836b0ba276e6f981"
+        },
+        {
+          "path": "providers/vidcoreio/vidcoreio.ts",
+          "sha256": "86c149cb30e16b7577df8cfd01f07792c9eebb738116af257998fea2b40d302e"
+        }
+      ]
+    },
+    {
+      "id": "videasy",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "Keep API implementation separate from broken legacy class; enc-dec.app and speedracelight helpers.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../../../core/delivery/BaseProvider",
+        "../../../../core/types/context",
+        "../../../../core/types/provider",
+        "../../../../core/types/stream",
+        "../../../../core/types/subtitle",
+        "../../../../core/utils/ProviderDiagnostics",
+        "../../src/core/metadata",
+        "./cipher",
+        "./decryptor",
+        "./types",
+        "@omss/framework",
+        "node:buffer"
+      ],
+      "missingRelativeImports": [
+        "../../../../core/delivery/BaseProvider",
+        "../../../../core/types/context",
+        "../../../../core/types/provider",
+        "../../../../core/types/stream",
+        "../../../../core/types/subtitle",
+        "../../../../core/utils/ProviderDiagnostics"
+      ],
+      "observedHosts": [
+        "api.speedracelight.com",
+        "api.themoviedb.org",
+        "api.videasy.to",
+        "enc-dec.app",
+        "player.videasy.net"
+      ],
+      "sources": [
+        {
+          "path": "providers/videasy/VideasyProvider.ts",
+          "sha256": "3d1e36bb3accbfa8c72da465a4e89449b9f69eef42b2f2756bbd7ea37a95d439"
+        },
+        {
+          "path": "providers/videasy/cipher.ts",
+          "sha256": "78f56c450918eab8efe4ee009f3c8961a4fc030f07066048a3b89cc34129df36"
+        },
+        {
+          "path": "providers/videasy/decryptor.ts",
+          "sha256": "334013726ae092dd9d03f17fdc6619f41af79ca9cdb4ce2fbad93c1f10844705"
+        },
+        {
+          "path": "providers/videasy/types.ts",
+          "sha256": "185e1c193f7823f2c83f50a5d4a9087e318cfa6b34d2e6ed62053cdba5b7c3a1"
+        },
+        {
+          "path": "providers/videasy/videasy.api.ts",
+          "sha256": "29dae2f2efc29f69eb1abea660b070234dce6d918e0545cbb432a04f205dc8ca"
+        }
+      ]
+    },
+    {
+      "id": "vidfast",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "incomplete",
+      "support": "Movie + episode claimed",
+      "formats": "HLS + iframe fallback",
+      "language": "Unspecified",
+      "notes": "Regex HLS extraction; always appends iframe. Embed output excluded; no direct success evidence.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "vidfast.vc"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidfast/vidfast.ts",
+          "sha256": "eb49ee3f72494d28b85e2fe0f7a2448be69a3731a05eeda476bd428c05f5363d"
+        }
+      ]
+    },
+    {
+      "id": "vidlink",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "enc-dec.app token helper and full-handshake retry; SRT/VTT.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "enc-dec.app",
+        "vidlink.pro"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidlink/vidlink.ts",
+          "sha256": "e0856c6cac06fe1f1aa581e0a82db6f48754ea0519b79a70181d140c0e3f2b96"
+        }
+      ]
+    },
+    {
+      "id": "vidlove",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "tungtungtungtungsahur.app helper; player.vidlove.cc delivery Referer.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "api.tungtungtungtungsahur.app",
+        "api.vidlove.cc",
+        "player.vidlove.cc"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidlove/vidlove.ts",
+          "sha256": "3e61edaadea564bea99eaa24829124f1b0db25756828f2cd7524cd5b39808d36"
+        }
+      ]
+    },
+    {
+      "id": "vidnest",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "new.vidnest.fun",
+        "sub.vdrk.site",
+        "vidnest.fun"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidnest/vidnest.ts",
+          "sha256": "df963b93675e3ed6c52ec545aa28cd43e42f8a1d11d415b67c25eb98b402270b"
+        }
+      ]
+    },
+    {
+      "id": "vidrock",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS",
+      "language": "Upstream language field",
+      "notes": "Node crypto and encrypted API; duplicate wrapper in vidsrc directory.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework",
+        "crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "vidrock.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidrock/VidRockProvider.ts",
+          "sha256": "31b1ef73cfacc54cc4ad136096a9397e4a17bc5b4b44646707989ef3b75eae92"
+        },
+        {
+          "path": "providers/vidrock/encrypt.ts",
+          "sha256": "a769454f76f41df8918d8cf548688cb9ca964fcb4746992aff00e6ca8a4cf468"
+        },
+        {
+          "path": "providers/vidrock/types.ts",
+          "sha256": "5ee590ae55d39122a80d5464d812524f3e456e3a1d77e8838e52b8df5bdc3419"
+        }
+      ]
+    },
+    {
+      "id": "vidsrc",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "incomplete",
+      "support": "Movie + episode wrappers",
+      "formats": "Delegated",
+      "language": "English request",
+      "notes": "Legacy wrappers delegate to Videasy/VidRock with broken relative paths; not an independent fallback.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../../../../core/types/context",
+        "../../../subtitles/SubtitleNormalizer",
+        "../../base/CinemaProvider",
+        "../../base/ProviderResult",
+        "../../videasy/VideasyProvider",
+        "../../vidrock/VidRockProvider"
+      ],
+      "missingRelativeImports": [
+        "../../../../../core/types/context",
+        "../../../subtitles/SubtitleNormalizer",
+        "../../base/CinemaProvider",
+        "../../base/ProviderResult",
+        "../../videasy/VideasyProvider",
+        "../../vidrock/VidRockProvider"
+      ],
+      "observedHosts": [],
+      "sources": [
+        {
+          "path": "providers/vidsrc/VidRockProvider.ts",
+          "sha256": "52bd077edeb6aa6a140a60c53994c7c465a888ff8a198c265d40667d4c710418"
+        },
+        {
+          "path": "providers/vidsrc/VidSrcProvider.ts",
+          "sha256": "dc5f8fa30f39326c3f778e7039751cd50bdc30acffef889690c924cc56a78ca9"
+        }
+      ]
+    },
+    {
+      "id": "vidsrcomss",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS",
+      "language": "English claimed",
+      "notes": "vsembed.ru/cloudnestra HTML chain; not registered by the supplied service.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "cloudnestra.com",
+        "vsembed.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidsrcomss/vidsrc.ts",
+          "sha256": "a9e2993347ac9bf5bed286953905cb264813ba70ae0aa38c4af6f2c4acf76bbb"
+        }
+      ]
+    },
+    {
+      "id": "vidstorm",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Quality mislabeled as language",
+      "notes": "Node crypto, sub.vdrk.site; probes first bytes using delivery headers.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 36,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "sub.vdrk.site",
+        "vidstorm.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidstorm/vidstorm.ts",
+          "sha256": "9726df84701c874288d016274d39f2b264f16c99e53df718d6d7a403b88e93dd"
+        }
+      ]
+    },
+    {
+      "id": "vidvault",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "25s API request; SRT/VTT output.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "vidvault.ru"
+      ],
+      "sources": [
+        {
+          "path": "providers/vidvault/vidvault.ts",
+          "sha256": "033cab8f9d32c2179db418cfb49d81a275bcd8e3ea84065be7e5fa6afa900249"
+        }
+      ]
+    },
+    {
+      "id": "vixsrc",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "ported; activation gated; see docs/PROVIDERS.md",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS",
+      "language": "Manifest audio languages",
+      "notes": "API -> HTML token -> master playlist. Explicit expiry; consolidate root and nested legacy wrappers.",
+      "expiry": "Explicit token expiry, not normalized by legacy contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../../../../core/types/context",
+        "../../../subtitles/SubtitleNormalizer",
+        "../../VixSrcProvider",
+        "../../base/CinemaProvider",
+        "../../base/ProviderResult",
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [
+        "../../../../../core/types/context",
+        "../../../subtitles/SubtitleNormalizer",
+        "../../VixSrcProvider",
+        "../../base/CinemaProvider",
+        "../../base/ProviderResult"
+      ],
+      "observedHosts": [
+        "vixsrc.to"
+      ],
+      "sources": [
+        {
+          "path": "providers/vixsrc/VixSrcProvider.ts",
+          "sha256": "b187a8e51c3fd25420c31379656f9a0020df5c1c4e8e86e391683d20154db2a6"
+        },
+        {
+          "path": "providers/vixsrc/vixsrc.ts",
+          "sha256": "76862c7cfa03c5580807dbc26b131522704c74cbe97fdbde91c7dd11294937b2"
+        }
+      ]
+    },
+    {
+      "id": "wecollege",
+      "registeredInExample": false,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Unreviewed",
+      "formats": "Unknown",
+      "language": "Unknown",
+      "notes": "New provider requires manual review.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 0,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "@omss/framework"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "api.wecollege.net"
+      ],
+      "sources": [
+        {
+          "path": "providers/wecollege/wecollege.ts",
+          "sha256": "8fdd7e597b561d2f619050cd86e7f79d8053170426cf69bdc493dc2559706109"
+        }
+      ]
+    },
+    {
+      "id": "zxcstreams",
+      "registeredInExample": true,
+      "status": "disabled",
+      "consumitAdapter": "not ported",
+      "delivery": "relay-required (declared; unverified)",
+      "support": "Movie + episode",
+      "formats": "HLS/MP4",
+      "language": "Original claimed",
+      "notes": "Metadata, crypto and rotating zxc hosts; no end-to-end cancellation.",
+      "expiry": "No validated playback expiry contract",
+      "cancellation": "No caller cancellation propagated end-to-end",
+      "historical": {
+        "titleRows": 100,
+        "checked": 0,
+        "ok": 0,
+        "date": null
+      },
+      "imports": [
+        "../../src/core/metadata",
+        "@omss/framework",
+        "node:crypto"
+      ],
+      "missingRelativeImports": [],
+      "observedHosts": [
+        "r1.zxcstream.xyz",
+        "zxcprime.xyz",
+        "zxcstream.xyz"
+      ],
+      "sources": [
+        {
+          "path": "providers/zxcstreams/zxcstreams.ts",
+          "sha256": "f6b761a5380b73e6837436c205e7036f572db086a5ce85f8c9643c1227d07ca5"
+        }
+      ]
+    }
+  ]
+}

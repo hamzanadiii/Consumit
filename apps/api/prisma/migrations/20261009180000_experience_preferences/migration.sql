@@ -1,0 +1,5 @@
+CREATE TABLE "ExperiencePreference" (
+  "memberId" TEXT PRIMARY KEY REFERENCES "Member"("id") ON DELETE CASCADE,
+  "preferences" JSONB NOT NULL,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

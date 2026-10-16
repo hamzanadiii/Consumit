@@ -1,0 +1,6 @@
+account_id = "replace-me"
+zone_id    = "replace-me"
+hostname   = "consumit.online"
+public_registration_enabled = false
+launch_tester_ips            = []
+# Supply cloudflare_api_token through TF_VAR_cloudflare_api_token.

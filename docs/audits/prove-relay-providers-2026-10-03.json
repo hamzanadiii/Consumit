@@ -1,0 +1,275 @@
+{
+  "date": "2026-10-03",
+  "workerPlan": "Free",
+  "workerVersion": "cab1343c-70ec-436f-9007-19878214131b",
+  "adminSave": {
+    "adminOrderLabels": true,
+    "stagedChanges": true,
+    "enableSave": true,
+    "modeSaveBothDirections": true,
+    "persistedAfterReload": true,
+    "playbackDelivery": "relay",
+    "pageErrors": []
+  },
+  "inspectionBrowser": [
+    {
+      "id": "rivezephyr",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "decode": {
+        "width": 853,
+        "height": 480,
+        "frames": 53
+      },
+      "seek": true,
+      "workerRequests": 12,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "stormboron",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "decode": {
+        "width": 640,
+        "height": 360,
+        "frames": 53
+      },
+      "seek": true,
+      "workerRequests": 9,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "wecollege-miami",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "decode": {
+        "width": 3840,
+        "height": 2160,
+        "frames": 52
+      },
+      "seek": true,
+      "workerRequests": 6,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "rivenebula",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "failure": "manifestLoadError",
+      "error": "Error",
+      "workerRequests": 2,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "bingebangymovies",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "failure": "manifestLoadError",
+      "error": "Error",
+      "workerRequests": 1,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "zeta",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "failure": "manifestLoadError",
+      "error": "Error",
+      "workerRequests": 1,
+      "rawMediaRequests": 0
+    },
+    {
+      "id": "wecollege-boise",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "status": 200,
+      "resolved": true,
+      "code": "resolved",
+      "delivery": "relay",
+      "decode": {
+        "width": 3840,
+        "height": 2160,
+        "frames": 52
+      },
+      "seek": true,
+      "workerRequests": 7,
+      "rawMediaRequests": 0
+    }
+  ],
+  "deliveryComparison": [
+    {
+      "id": "stormboron",
+      "mode": "local",
+      "root": 200,
+      "variant": 200,
+      "segment": 200,
+      "bytes": 11733,
+      "report": {
+        "provider": "stormboron",
+        "kind": "media",
+        "status": 200,
+        "bytes": 11733,
+        "durationMs": 25
+      }
+    },
+    {
+      "id": "stormboron",
+      "mode": "edge",
+      "root": 200,
+      "variant": 200,
+      "segment": 200,
+      "bytes": 20498
+    },
+    {
+      "id": "zeta",
+      "mode": "local",
+      "root": 200,
+      "variant": 200,
+      "segment": 200,
+      "bytes": 15254,
+      "report": {
+        "provider": "zeta",
+        "kind": "media",
+        "status": 200,
+        "bytes": 15254,
+        "durationMs": 22
+      }
+    },
+    {
+      "id": "zeta",
+      "mode": "edge",
+      "root": 403,
+      "failure": "root"
+    },
+    {
+      "id": "rivenebula",
+      "mode": "local",
+      "root": 200,
+      "variant": 200,
+      "segment": 206,
+      "bytes": 1024,
+      "report": {
+        "provider": "rivenebula",
+        "kind": "media",
+        "status": 206,
+        "bytes": 1024,
+        "durationMs": 22
+      }
+    },
+    {
+      "id": "rivenebula",
+      "mode": "edge",
+      "root": 502,
+      "failure": "root"
+    },
+    {
+      "id": "rivezephyr",
+      "mode": "local",
+      "root": 200,
+      "variant": 200,
+      "segment": 206,
+      "bytes": 1024,
+      "report": {
+        "provider": "rivezephyr",
+        "kind": "media",
+        "status": 206,
+        "bytes": 1024,
+        "durationMs": 259
+      }
+    },
+    {
+      "id": "rivezephyr",
+      "mode": "edge",
+      "root": 200,
+      "variant": 200,
+      "segment": 206,
+      "bytes": 1024
+    },
+    {
+      "id": "bingebangymovies",
+      "mode": "local",
+      "root": 200,
+      "variant": 200,
+      "segment": 206,
+      "bytes": 1024,
+      "report": {
+        "provider": "bingebangymovies",
+        "kind": "media",
+        "status": 206,
+        "bytes": 1024,
+        "durationMs": 95
+      }
+    },
+    {
+      "id": "bingebangymovies",
+      "mode": "edge",
+      "root": 403,
+      "failure": "root"
+    },
+    {
+      "id": "wecollege-miami",
+      "mode": "local",
+      "root": 200,
+      "segment": 206,
+      "bytes": 1024,
+      "report": {
+        "provider": "wecollege-miami",
+        "kind": "media",
+        "status": 206,
+        "bytes": 1024,
+        "durationMs": 108
+      }
+    },
+    {
+      "id": "wecollege-miami",
+      "mode": "edge",
+      "root": 200,
+      "segment": 206,
+      "bytes": 1024
+    }
+  ]
+}

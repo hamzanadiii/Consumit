@@ -1,0 +1,26 @@
+# Episode releases and in-app reminders
+
+Release tracking is opt-in infrastructure. Member reminders remain off until each member enables the Settings switch. Home and inbox reads never resolve providers. Use the existing production database, certificate, backup and secret procedures; the examples below target the local Compose deployment.
+
+## Rollout
+
+1. Take a named, restorable database snapshot. Keep it outside the checkout with restricted permissions. Apply all three additive migrations before compatible API/web code: `20261009010000_release_notifications`, `20261009011000_release_evidence`, and `20261009012000_release_catalog_current`. Run the existing migration service with its dedicated database credentials. Existing Watchlist/Favorites tracking starts at migration time; enabling reminders does not backfill old releases.
+2. Store a separate random service secret (at least 32 characters) as `RELEASE_WORKER_SECRET`, shared only by API and worker. Start with `RELEASE_TRACKING_ENABLED=false`. Never put this secret in a browser variable, source file or diagnostic log. Add `compose.releases.yaml` after the existing playback/deployment overlays; use the `releases` profile for the worker. Its Chromium dependency and installed browser are both Playwright 1.63.0.
+3. Build and deploy compatible API/web and the release worker. Preserve the existing provider roster, order, region, relay approvals and member database. Run the usual readiness/private-route smoke and confirm the protected probe denies requests without a live job lease.
+4. Run `bun run test:releases` against the disposable fixture services. For the actual container, keep the shipped non-root user, sandbox, seccomp, read-only filesystem, one CPU, 1 GiB memory, bounded processes/shared memory and proxy. Confirm decoded frames, five seconds advancing, a real seek and two seconds resumed; confirm broken segments, frozen frames and failed seeking fail. The fixture contains locally generated media and test identities only.
+5. Set `RELEASE_TRACKING_ENABLED=true` only after the controlled end-to-end check. Recreate API and worker with the same secret. Check aggregate queue counts/outcomes. Do not seed preferences or create historical alerts to test the live member database.
+
+For local Compose, include `compose.yaml`, the active playback overlay, and `compose.releases.yaml`. Add the production overlay and private environment through the existing production tooling when deploying to the VPS. The release overlay's HTTP connection override uses the internal gateway while preserving the public origin. HTTPS deployments use the configured public HTTPS origin normally; DNS/certificate verification stays enabled.
+
+Chromium needs the reviewed seccomp profile in `infra/releases/seccomp.json` and `SYS_CHROOT` for its namespace sandbox. Do not add `SYS_ADMIN`, privileged mode or `--no-sandbox`. The configuration follows [Playwright's container guidance](https://playwright.dev/docs/docker); the profile comes from the matching upstream release. Provider frames stay unconfirmed until a playback-event protocol is reviewed.
+
+## Verify and monitor
+
+- Workspace lint/type checking, API/web builds and the release-worker build must pass. `bun run test` runs normal suites; `bun run test:releases` exercises real browsers. API integration checks require a disposable database ending in `_test`; apply migrations first, and use the existing integration environment/configuration. They truncate fixture tables and must never target a member database.
+- API logs emit anonymous catalog outcomes, due-title/check counts and queue age. Worker logs emit pass/fail categories only. OpenTelemetry exports `releases.catalog.refreshes`, `releases.verification.results`, `releases.notifications.inserted`, and `releases.queue.age` (seconds). Production Prometheus rules cover delayed work, catalog failures and sustained verification failures. Inspect notification insertion counts without member/episode labels.
+- Catalog leases survive API restarts; due work is claimed in bounded batches and refreshed every 30 minutes. Browser leases last 90 seconds, with one active job and at most 30 starts per hour across workers. Two provider attempts advance a stored position. Failure retries hourly while a release is within seven days; successful evidence expires after six hours. Corrected/withdrawn catalog releases leave the shelf and queue while historical inbox records remain.
+- Treat synthetic verification separately from live resolver health. A passing check describes one provider, configuration revision, region and audio variant; later delivery can fail. Date-only TMDB releases keep their calendar precision. Anime airing instants display in the browser timezone.
+
+## Stop and recover
+
+Set `RELEASE_TRACKING_ENABLED=false` and recreate API/worker to stop future refreshes and notifications. Retain the additive tables, member preference and historical inbox. Reads continue from persisted data and checked status expires naturally. On configuration changes, evidence ceases to qualify immediately; no manual history deletion is required. Re-enable only after fixing readiness, catalog or sandbox failures and repeating the controlled check. Never retry by widening media-host rules or weakening the sandbox.

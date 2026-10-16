@@ -1,0 +1,654 @@
+// Tables arrive with their slice, starting with the identity migration
+// (Touch 2.3). No model lands here without a reviewed migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  payload     Json
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  availableAt DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil  DateTime? @db.Timestamptz(3)
+  leaseToken  String?
+  processedAt DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
+  attempts    Int       @default(0)
+  lastFailure String?
+  @@index([availableAt, createdAt])
+}
+
+model ReleaseTracking {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId Int
+  trackedSince DateTime @default(now())
+  @@id([memberId, catalogKind, tmdbId])
+  @@index([catalogKind, tmdbId])
+}
+
+model NotificationPreference {
+  memberId String @id
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  enabledAt DateTime?
+}
+
+model ReleaseTitle {
+  catalogKind CatalogKind
+  tmdbId Int
+  refreshAfter DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  failed Boolean @default(false)
+  @@id([catalogKind, tmdbId])
+  @@index([refreshAfter])
+}
+
+model ReleaseEpisode {
+  id String @id @default(uuid())
+  catalogKind CatalogKind
+  tmdbId Int
+  season Int
+  episode Int
+  title String
+  episodeTitle String?
+  imageUrl String?
+  releasedAt DateTime
+  datePrecision String
+  catalogCurrent Boolean @default(true)
+  verifyAfter DateTime @default(now())
+  providerCursor Int @default(0)
+  checkedAt DateTime?
+  providerId String?
+  revision String?
+  region String?
+  audioLanguage String?
+  notifications ReleaseNotification[]
+  checks ReleaseCheck[]
+  @@unique([catalogKind, tmdbId, season, episode])
+  @@index([verifyAfter])
+  @@index([catalogKind, tmdbId, releasedAt])
+}
+
+model ReleaseCheck {
+  id String @id @default(uuid())
+  episodeId String
+  episode ReleaseEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  leaseToken String
+  startedAt DateTime @default(now())
+  leaseUntil DateTime
+  finishedAt DateTime?
+  attempts Int @default(0)
+  providerId String?
+  revision String?
+  region String?
+  audioLanguage String?
+  passed Boolean @default(false)
+  failure String?
+  evidence Json?
+  @@index([startedAt])
+  @@index([leaseUntil, finishedAt])
+}
+
+model ReleaseNotification {
+  id String @id @default(uuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  episodeId String
+  episode ReleaseEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  checkedAt DateTime
+  readAt DateTime?
+  @@unique([memberId, episodeId])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)])
+}
+
+// Identity slice (Phase 3). Emails are stored normalized (lowercase, trimmed)
+// by the module; the unique constraint enforces one account per address.
+model Member {
+  id              String       @id @default(cuid())
+  email           String       @unique
+  emailVerifiedAt DateTime?
+  authVersion     Int          @default(1)
+  role            MemberRole   @default(MEMBER)
+  status          MemberStatus @default(ACTIVE)
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  credential      Credential?
+  profile         Profile?
+  usernameAliases UsernameAlias[]
+  watchedTitles   WatchedTitle[]
+  diaryEntries    DiaryEntry[]
+  ratings         Rating[]
+  likes           TitleLike[]
+  reviews         Review[]
+  reviewLikes     ReviewLike[]
+  followers       Follow[]         @relation("Following")
+  following       Follow[]         @relation("Follower")
+  savedTitles     SavedTitle[]
+  favorites       Favorite[]
+  progress        PlaybackProgress[]
+  recommendationDismissals RecommendationDismissal[]
+  watchHistory    WatchHistoryEntry[]
+  lists           MemberList[]
+  savedLists      SavedMemberList[]
+  importBatches   ImportBatch[]
+  subtitlePreferences UserSubtitlePreference[]
+  releaseTracking ReleaseTracking[]
+  notificationPreference NotificationPreference?
+  experiencePreference ExperiencePreference?
+  notifications ReleaseNotification[]
+}
+
+enum MemberStatus {
+  ACTIVE
+  DELETED
+}
+
+model ExperiencePreference {
+  memberId String @id
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  preferences Json
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+enum MemberRole {
+  MEMBER
+  ADMIN
+}
+
+model Credential {
+  memberId     String   @id
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}
+
+model Profile {
+  memberId          String    @id
+  member            Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  username          String    @unique
+  displayName       String?
+  bio               String?
+  location          String?
+  usernameChangedAt DateTime?
+  avatarStyle       String    @default("dusk")
+  avatarUrl         String?
+  bannerUrl         String?
+  displayNameOrigin DataOrigin @default(NATIVE)
+  bioOrigin         DataOrigin @default(NATIVE)
+  locationOrigin    DataOrigin @default(NATIVE)
+  // Private by default; member search and Circle reads require a public profile.
+  visibility  String  @default("private")
+}
+
+model UsernameAlias {
+  username  String   @id
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@index([memberId])
+}
+
+enum CatalogKind {
+  MOVIE
+  SERIES
+  ANIME
+}
+
+enum DataOrigin {
+  NATIVE
+  LETTERBOXD
+}
+
+enum ImportBatchStatus {
+  UPLOADED
+  PROCESSING
+  NEEDS_REVIEW
+  READY
+  CONFIRMED
+  FAILED
+}
+
+enum ImportMatchStatus {
+  EXACT
+  CONFIDENT
+  NEEDS_REVIEW
+  UNMATCHED
+  SKIPPED
+}
+
+enum ImportRowKind {
+  PROFILE
+  WATCHED
+  DIARY
+  RATING
+  REVIEW
+  WATCHLIST
+  FAVORITE
+  LIST_ITEM
+}
+
+model WatchedTitle {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model DiaryEntry {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  season        Int         @default(0)
+  episode       Int         @default(0)
+  watchedOn     DateTime    @db.Date
+  rewatch       Boolean     @default(false)
+  tags          String[]    @default([])
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  idempotencyKey String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, origin, sourceKey])
+  @@unique([memberId, origin, idempotencyKey])
+  @@index([memberId, watchedOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)], map: "Diary_member_date_created_desc_idx")
+  @@index([memberId, createdAt])
+}
+
+model Rating {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  value         Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model TitleLike {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  body          String
+  reviewedOn    DateTime?   @db.Date
+  tags          String[]    @default([])
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  likes         ReviewLike[]
+
+  @@unique([memberId, origin, sourceKey])
+  @@index([memberId, reviewedOn])
+  @@index([memberId, createdAt])
+}
+
+model ReviewLike {
+  id        String   @id @default(cuid())
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, memberId])
+  @@index([reviewId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    Member   @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   Member   @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model SavedTitle {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId])
+  @@unique([memberId, origin, sourceKey])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)], map: "SavedTitle_member_created_desc_idx")
+}
+
+// Resume position by member and title/episode. Never keyed by provider or
+// source: switching sources must preserve progress. Season and episode are
+// zero for movies so the uniqueness constraint stays NULL-safe.
+model PlaybackProgress {
+  id              String      @id @default(cuid())
+  memberId        String
+  member          Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind     CatalogKind @default(MOVIE)
+  tmdbId          Int
+  season          Int         @default(0)
+  episode         Int         @default(0)
+  positionSeconds Int         @default(0)
+  durationSeconds Int?
+  completed       Boolean     @default(false)
+  hiddenFromContinueAt DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([memberId, catalogKind, tmdbId, season, episode])
+  @@index([memberId, updatedAt(sort: Desc)])
+  @@index([memberId, catalogKind, tmdbId, updatedAt(sort: Desc)])
+}
+
+model RecommendationDismissal {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId Int
+  createdAt DateTime @default(now())
+  @@id([memberId, catalogKind, tmdbId])
+}
+
+// Private factual completions. An attempt id makes retries idempotent while a
+// new attempt can record a rewatch. No provider or media source is retained.
+model WatchHistoryEntry {
+  id          String      @id @default(cuid())
+  memberId    String
+  member      Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId      Int
+  season      Int         @default(0)
+  episode     Int         @default(0)
+  completionId String     @db.Uuid
+  completedAt DateTime    @default(now())
+
+  @@unique([memberId, catalogKind, tmdbId, season, episode, completionId])
+  @@index([memberId, completedAt(sort: Desc), id(sort: Desc)])
+}
+
+model Favorite {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  position      Int
+  catalogKind   CatalogKind @default(MOVIE)
+  tmdbId        Int
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([memberId, position])
+  @@unique([memberId, catalogKind, tmdbId])
+}
+
+model MemberList {
+  id            String      @id @default(cuid())
+  memberId      String
+  member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String      @unique
+  description   String?
+  visibility    String      @default("private")
+  origin        DataOrigin  @default(NATIVE)
+  sourceKey     String?
+  idempotencyKey String?
+  importBatchId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  items         ListItem[]
+  savedBy       SavedMemberList[]
+
+  @@unique([memberId, origin, sourceKey])
+  @@unique([memberId, idempotencyKey])
+  @@index([memberId, updatedAt(sort: Desc), id(sort: Desc)], map: "MemberList_member_updated_desc_idx")
+}
+
+model SavedMemberList {
+  id        String     @id @default(cuid())
+  memberId  String
+  member    Member     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  listId    String
+  list      MemberList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([memberId, listId])
+  @@index([memberId, createdAt(sort: Desc), id(sort: Desc)], map: "SavedList_member_created_desc_idx")
+  @@index([listId])
+}
+
+model ListItem {
+  id          String      @id @default(cuid())
+  listId      String
+  list        MemberList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  position    Int
+  catalogKind CatalogKind @default(MOVIE)
+  tmdbId      Int
+  note        String?
+  origin      DataOrigin  @default(NATIVE)
+  sourceKey   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([listId, position])
+  @@unique([listId, origin, sourceKey])
+}
+
+model ImportBatch {
+  id             String            @id @default(cuid())
+  memberId       String
+  member         Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status         ImportBatchStatus @default(UPLOADED)
+  archiveSha256  String
+  sourceFilename String
+  profileDraft   Json?
+  totalCount     Int               @default(0)
+  exactCount     Int               @default(0)
+  confidentCount Int               @default(0)
+  reviewCount    Int               @default(0)
+  unmatchedCount Int               @default(0)
+  skippedCount   Int               @default(0)
+  failedReason   String?
+  workerId       String?
+  claimedAt      DateTime?
+  attempts       Int               @default(0)
+  confirmedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  records        ImportStagedRecord[]
+
+  @@index([memberId, createdAt])
+  @@index([status, claimedAt])
+}
+
+model ImportStagedRecord {
+  id              String            @id @default(cuid())
+  importBatchId   String
+  importBatch     ImportBatch       @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+  rowKind         ImportRowKind
+  sourceKey       String
+  sourceFile      String
+  rowNumber       Int
+  payload         Json
+  title           String?
+  normalizedTitle String?
+  year            Int?
+  tmdbId          Int?
+  imdbId          String?
+  matchStatus     ImportMatchStatus @default(UNMATCHED)
+  selectedTmdbId  Int?
+  candidates      Json?
+  matchedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([importBatchId, rowKind, sourceKey])
+  @@index([importBatchId, matchStatus])
+}
+
+model AllowedDomain {
+  domain    String   @id
+  createdAt DateTime @default(now())
+}
+
+// Shared cache of validated provider metadata. Finite stale entries are
+// periodically pruned; a null staleUntil preserves last-known-good details.
+model CatalogCacheEntry {
+  key        String   @id @db.VarChar(64)
+  payload    Json
+  fetchedAt  DateTime
+  freshUntil DateTime
+  staleUntil DateTime?
+
+  @@index([staleUntil])
+}
+
+enum SubtitleKind {
+  MOVIE
+  SERIES
+  ANIME
+}
+
+enum SubtitleFormat {
+  VTT
+  SRT
+  ASS
+  SSA
+}
+
+// Durable subtitle metadata catalog. Files live on VPS disk (or the
+// Valkey/memory file backend); this table is the content-keyed index that
+// survives cache loss and powers future scoring. IDs default to zero (not
+// null) so the uniqueness constraint stays NULL-safe — same pattern as
+// PlaybackProgress. One row per content/language/provider/file; identical
+// bytes across providers share a checksum for later dedupe.
+model SubtitleTrack {
+  id          String         @id @default(cuid())
+  kind        SubtitleKind
+  tmdbId      Int            @default(0)
+  anilistId   Int            @default(0)
+  season      Int            @default(0)
+  episode     Int            @default(0)
+  language    String
+  label       String
+  format      SubtitleFormat @default(VTT)
+  provider    String
+  storageKey  String
+  originalExt String?
+  checksum    String
+  cueCount    Int?
+  durationMs  Int?
+  hi          Boolean        @default(false)
+  rating      Float?
+  releaseTag  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([kind, tmdbId, anilistId, season, episode, language, provider, storageKey])
+  @@index([kind, tmdbId, anilistId, season, episode, language])
+  @@index([checksum])
+}
+
+// Per-member subtitle sync correction. One row per member/title-episode:
+// offsetMs shifts every cue server-side (?offsetMs=), trackId remembers the
+// chosen track. Crowdsourced correction (median offsets per content) reads
+// this table later; it never writes back into shared files.
+model UserSubtitlePreference {
+  id        String       @id @default(cuid())
+  memberId  String
+  member    Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  kind      SubtitleKind
+  tmdbId    Int          @default(0)
+  anilistId Int          @default(0)
+  season    Int          @default(0)
+  episode   Int          @default(0)
+  trackId   String?
+  offsetMs  Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([memberId, kind, tmdbId, anilistId, season, episode])
+  @@index([memberId])
+  @@index([kind, tmdbId, anilistId, season, episode])
+}
+
+model ProviderOverride {
+  id         String   @id
+  configJson String
+  revision   Int      @default(1)
+  updatedAt  DateTime @updatedAt
+}
+
+model ProviderConfigRevision {
+  id        Int      @id
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model ProviderChange {
+  id         String   @id @default(cuid())
+  providerId String
+  actorId    String
+  beforeJson String
+  afterJson  String
+  createdAt  DateTime @default(now())
+
+  @@index([providerId, createdAt(sort: Desc)])
+}

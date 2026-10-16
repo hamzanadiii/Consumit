@@ -1,0 +1,19 @@
+[
+  {
+    "provider": "wecollege-boise",
+    "ref": {
+      "kind": "movie",
+      "id": 1101383
+    },
+    "passed": true,
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 2592,
+      "height": 1080,
+      "position": 94.022417,
+      "frames": 271
+    },
+    "failedMediaStatuses": []
+  }
+]

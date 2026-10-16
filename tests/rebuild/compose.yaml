@@ -1,0 +1,20 @@
+name: consumit-rebuild-test
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment: {POSTGRES_USER: consumit, POSTGRES_PASSWORD: rebuild-test-only, POSTGRES_DB: consumit_rebuild_test}
+    ports: ['127.0.0.1:15435:5432']
+    healthcheck: {test: [CMD, pg_isready, -U, consumit, -d, consumit_rebuild_test], interval: 3s, timeout: 3s, retries: 20}
+  auth:
+    image: valkey/valkey:9.1.1-alpine
+    ports: ['127.0.0.1:16383:6379']
+  playback:
+    image: valkey/valkey:9.1.1-alpine
+    ports: ['127.0.0.1:16384:6379']
+  queue:
+    image: valkey/valkey:9.1.1-alpine
+    command: [valkey-server, --appendonly, 'yes', --appendfsync, everysec, --maxmemory-policy, noeviction]
+    ports: ['127.0.0.1:16385:6379']
+    volumes: [rebuild-fixture-queue:/data]
+volumes:
+  rebuild-fixture-queue:

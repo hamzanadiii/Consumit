@@ -1,0 +1,127 @@
+'use client'
+
+import type { AnimeTitleSummary, CatalogTitleSummary } from '@consumit/contracts'
+import { Clock, Flame } from 'lucide-react'
+import type { ReactNode } from 'react'
+
+import type { HeroDetail } from '../catalog/catalog-ui'
+import { AnimeTitleRail } from './anime-title-rail'
+import { ContinueRail } from './continue-rail'
+import { NewEpisodesRail } from './new-episodes-rail'
+import { BecauseYouWatchedRail } from './because-you-watched-rail'
+import { CommunityCards } from '../experience/community-cards'
+import { FilScreenHeroRotator } from './hero-rotator'
+import { FilScreenShell } from './filscreen-shell'
+import { TitleRail } from '../shared/title-rail'
+
+export type FilScreenHomeProps = {
+  awardWinningShows?: readonly CatalogTitleSummary[] | undefined
+  hero: HeroDetail
+  mindfuckMovies?: readonly CatalogTitleSummary[] | undefined
+  popular?: readonly CatalogTitleSummary[] | undefined
+  serviceRail?: ReactNode | undefined
+  spotlight?: readonly HeroDetail[] | undefined
+  topRatedMovies?: readonly CatalogTitleSummary[] | undefined
+  topRatedSeries?: readonly CatalogTitleSummary[] | undefined
+  trending?: readonly CatalogTitleSummary[] | undefined
+  trendingAnime?: readonly AnimeTitleSummary[] | undefined
+  trendingMovies?: readonly CatalogTitleSummary[] | undefined
+  trendingSeries?: readonly CatalogTitleSummary[] | undefined
+}
+
+export function FilScreenHome({
+  awardWinningShows = [],
+  hero,
+  mindfuckMovies = [],
+  serviceRail,
+  spotlight,
+  topRatedMovies = [],
+  topRatedSeries = [],
+  trendingAnime = [],
+  trendingMovies = [],
+  trendingSeries = [],
+}: FilScreenHomeProps) {
+  return (
+    <FilScreenShell activeKindTab="new" pageHeading="Consumit home">
+      <FilScreenHeroRotator hero={hero} spotlight={spotlight} />
+
+      <ContinueRail />
+
+      <NewEpisodesRail />
+      <BecauseYouWatchedRail />
+      <CommunityCards dismissible />
+
+      {trendingMovies && trendingMovies.length > 0 ? (
+        <TitleRail
+          icon={<Flame aria-hidden="true" className="size-4 text-[var(--fs-flame)]" />}
+          id="filscreen-trending-movies"
+          items={trendingMovies}
+          title="Trending Movies"
+          viewAllHref="/movies?feed=trending"
+        />
+      ) : null}
+
+      {trendingSeries && trendingSeries.length > 0 ? (
+        <TitleRail
+          icon={<Flame aria-hidden="true" className="size-4 text-[var(--fs-flame)]" />}
+          id="filscreen-trending-series"
+          items={trendingSeries}
+          title="Trending Series"
+          viewAllHref="/series?feed=trending"
+        />
+      ) : null}
+
+      {trendingAnime && trendingAnime.length > 0 ? (
+        <AnimeTitleRail
+          icon={<Flame aria-hidden="true" className="size-4 text-[var(--fs-flame)]" />}
+          id="filscreen-trending-anime"
+          items={trendingAnime}
+          title="Trending Anime"
+          viewAllHref="/anime"
+        />
+      ) : null}
+
+      {topRatedMovies && topRatedMovies.length > 0 ? (
+        <TitleRail
+          id="filscreen-top-rated-movies"
+          items={topRatedMovies}
+          title="Top Rated Movies"
+          viewAllHref="/movies?feed=top-rated"
+        />
+      ) : null}
+
+      {topRatedSeries && topRatedSeries.length > 0 ? (
+        <TitleRail
+          id="filscreen-top-rated-series"
+          items={topRatedSeries}
+          title="Top Rated Series"
+          viewAllHref="/series?feed=top-rated"
+        />
+      ) : null}
+
+
+      {awardWinningShows && awardWinningShows.length > 0 ? (
+        <TitleRail
+          id="filscreen-award-winning"
+          items={awardWinningShows}
+          title="Award Winning Shows"
+        />
+      ) : null}
+
+      {mindfuckMovies && mindfuckMovies.length > 0 ? (
+        <TitleRail
+          id="filscreen-mindfuck-movies"
+          items={mindfuckMovies}
+          title="Mindf*ck Movies"
+        />
+      ) : null}
+
+      {serviceRail}
+
+      <p className="mt-6 flex items-center gap-2 text-xs text-[var(--fs-muted)]">
+        <Clock aria-hidden="true" className="size-3.5" />
+        Progress stays with you when sources change.
+      </p>
+    </FilScreenShell>
+  )
+}

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ImportOption, MemberSuggestion, OnboardingHeader, SelectableTitle } from './onboarding'
+import { OnboardingHeader, SelectableTitle } from './onboarding'
 
 describe('onboarding components', () => {
   it('announces onboarding progress', () => {
@@ -10,41 +10,19 @@ describe('onboarding components', () => {
     expect(screen.getByRole('progressbar', { name: 'Onboarding step 2 of 3' })).toHaveAttribute('aria-valuenow', '66.66666666666666')
     expect(screen.getByRole('link', { name: 'Consumit home' })).toBeInTheDocument()
     expect(container.querySelector('img')).toHaveAttribute('src', '/assets/consumit-mark.svg')
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
     expect(screen.getByText('Skip for now').closest('a')).not.toHaveClass('hidden')
   })
 
-  it('renders import benefits and selection state', () => {
+  it('renders selection state', () => {
     const onChange = vi.fn()
-    render(
-      <>
-        <ImportOption benefits={['Ratings and favorites']} description="Upload your export" selected title="Import from Letterboxd" />
-        <SelectableTitle checked meta="2021 · Movie" onChange={onChange} title="The Silent Year" />
-      </>,
+    const { container } = render(
+      <SelectableTitle checked meta="2021 · Movie" onChange={onChange} title="The Silent Year" />,
     )
 
-    expect(screen.getByText('Ratings and favorites')).toBeInTheDocument()
     expect(screen.getByText('Selected')).toHaveClass('sr-only')
+    expect(container.querySelector('[data-consumit-selectable-artwork]')).toHaveClass('border-orange')
     fireEvent.click(screen.getByRole('checkbox', { name: /The Silent Year/ }))
     expect(onChange).toHaveBeenCalled()
-  })
-
-  it('renders member overlap without relying on color', () => {
-    render(
-      <>
-        <MemberSuggestion
-          following
-          handle="@yasmineframes"
-          name="Yasmine El Idrissi"
-          overlap={93}
-        />
-        <MemberSuggestion handle="@slowcuts" name="Omar Benjelloun" overlap={87} />
-      </>,
-    )
-
-    expect(screen.getByText('93% overlap')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Follow' })).toHaveClass('bg-ink')
-    expect(screen.getByRole('button', { name: 'Following' })).toHaveClass(
-      'border-control-outline',
-    )
   })
 })

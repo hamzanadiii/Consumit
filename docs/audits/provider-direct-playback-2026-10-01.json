@@ -1,0 +1,5020 @@
+{
+  "method": "Browser-direct first-frame diagnostic; no media credentials or URLs stored",
+  "retained": [
+    {
+      "id": "vixsrc-it",
+      "enabled": false,
+      "mediaKinds": [
+        "movie",
+        "series"
+      ]
+    },
+    {
+      "id": "vixsrc",
+      "enabled": true,
+      "mediaKinds": [
+        "movie",
+        "series"
+      ]
+    },
+    {
+      "id": "aphrodite",
+      "enabled": true,
+      "mediaKinds": [
+        "movie",
+        "series"
+      ]
+    },
+    {
+      "id": "kyren",
+      "enabled": true,
+      "mediaKinds": [
+        "anime"
+      ]
+    },
+    {
+      "id": "lookmovie",
+      "enabled": true,
+      "mediaKinds": [
+        "movie"
+      ]
+    },
+    {
+      "id": "castletv",
+      "enabled": true,
+      "mediaKinds": [
+        "movie",
+        "series"
+      ]
+    },
+    {
+      "id": "animeparadise",
+      "enabled": true,
+      "mediaKinds": [
+        "anime"
+      ]
+    },
+    {
+      "id": "animekai",
+      "enabled": true,
+      "mediaKinds": [
+        "anime"
+      ]
+    },
+    {
+      "id": "animekitsu",
+      "enabled": true,
+      "mediaKinds": [
+        "anime"
+      ]
+    }
+  ],
+  "passes": [
+    {
+      "at": "2026-10-01T20:20:18.631Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "vixsrc-it",
+          "runtimeId": "vixsrc-it",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 1042,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 473,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vixsrc",
+          "runtimeId": "vixsrc",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 978,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 482,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nhdapi",
+          "runtimeId": "nhdapi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1509,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1509,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "mapple",
+          "runtimeId": "mapple",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 189,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 118,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "vaplayer",
+          "runtimeId": "vaplayer",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 3,
+              "resolveMs": 738,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 643,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wecollege-phoenix",
+          "runtimeId": "wecollege-phoenix",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 175,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 219,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-miami",
+          "runtimeId": "wecollege-miami",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 255,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 161,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-seattle",
+          "runtimeId": "wecollege-seattle",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 176,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 98,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-portland",
+          "runtimeId": "wecollege-portland",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 88,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 93,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-paris",
+          "runtimeId": "wecollege-paris",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 100,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 151,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-boise",
+          "runtimeId": "wecollege-boise",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 118,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 110,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-atlanta",
+          "runtimeId": "wecollege-atlanta",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 109,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 111,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege",
+          "runtimeId": "wecollege",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 3209,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 108,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-austin",
+          "runtimeId": "wecollege-austin",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 101,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 101,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-berlin",
+          "runtimeId": "wecollege-berlin",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 98,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 90,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-tampa",
+          "runtimeId": "wecollege-tampa",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 93,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 169,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "perses",
+          "runtimeId": "perses",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1519,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "rivestream-citadel",
+          "runtimeId": "rivestream-citadel",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1266,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1336,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "riveapex",
+          "runtimeId": "riveapex",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 499,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "rivevanguard",
+          "runtimeId": "rivevanguard",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 115,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 105,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "riveaura",
+          "runtimeId": "riveaura",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 213,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 224,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "rivestream",
+          "runtimeId": "rivestream",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 3340,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 3178,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "riveapogee",
+          "runtimeId": "riveapogee",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 359,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "riverigel",
+          "runtimeId": "riverigel",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 244,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "relay-source"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 233,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "relay-source"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "riveapollo",
+          "runtimeId": "riveapollo",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 69,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 129,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "rivecitadel",
+          "runtimeId": "rivecitadel",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 470,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 772,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "catflix",
+          "runtimeId": "catflix",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 180,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 81,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "poseidon",
+          "runtimeId": "poseidon",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 2004,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 2301,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "aphrodite",
+          "runtimeId": "aphrodite",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 2466,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 2415,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vidapi",
+          "runtimeId": "vidapi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 3,
+              "resolveMs": 272,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 185,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "stellar",
+          "runtimeId": "stellar",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 9241,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 5208,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "videasy",
+          "runtimeId": "videasy",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 2112,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1675,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidlux",
+          "runtimeId": "vidlux",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3404,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 2781,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidrock-nova",
+          "runtimeId": "vidrock-nova",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 179,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 78,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidsrc",
+          "runtimeId": "vidsrc",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 958,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 685,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "modiplay",
+          "runtimeId": "modiplay",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1506,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1513,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "cinehd-hindi",
+          "runtimeId": "cinehd-hindi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1660,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 513,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "cinehd-english",
+          "runtimeId": "cinehd-english",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 217,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 449,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "anixo",
+          "runtimeId": "anixo",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 1841,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kyren",
+          "runtimeId": "kyren",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 1612,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "anime123",
+          "runtimeId": "anime123",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 21,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1518,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "zoko",
+          "runtimeId": "zoko",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 21,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 210,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "nineanime",
+          "runtimeId": "9anime",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 345,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "anibd",
+          "runtimeId": "anibd",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 21,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 618,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "nagare",
+          "runtimeId": "nagare",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 21,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidcore",
+          "runtimeId": "vidcore",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3022,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1662,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "vidcore-movy",
+          "runtimeId": "vidcore-movy",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 626,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 698,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "vidsrcbuzz",
+          "runtimeId": "vidsrcbuzz",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 15006,
+              "direct": false,
+              "code": "timeout"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 10722,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "filmuainary",
+          "runtimeId": "filmuainary",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3018,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1688,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "filmu",
+          "runtimeId": "filmu",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3023,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 5016,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidzen",
+          "runtimeId": "vidzen",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1512,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1511,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "stignebula",
+          "runtimeId": "stignebula",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 772,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 311,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "lookmovie",
+          "runtimeId": "lookmovie",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3546,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "castletv",
+          "runtimeId": "castletv",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 4696,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1584,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "stigorion",
+          "runtimeId": "stigorion",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 294,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 486,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vidlink",
+          "runtimeId": "vidlink",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 229,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 149,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidstorm",
+          "runtimeId": "vidstorm",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 997,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 120,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "nxsha",
+          "runtimeId": "nxsha",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 699,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 1522,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "first-frame-timeout"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "animeparadise",
+          "runtimeId": "animeparadise",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 21
+              },
+              "resolved": 1,
+              "resolveMs": 2877,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "animekai",
+          "runtimeId": "animekai",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1510,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 172463,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1618,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "vidnest",
+          "runtimeId": "vidnest",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 5,
+              "resolveMs": 3608,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "first-frame-timeout"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 4,
+              "resolveMs": 4115,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-10-01T20:24:32.999Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "vixsrc-it",
+          "runtimeId": "vixsrc-it",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 1073,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 475,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vixsrc",
+          "runtimeId": "vixsrc",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 940,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 441,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nhdapi",
+          "runtimeId": "nhdapi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1507,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1505,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "vaplayer",
+          "runtimeId": "vaplayer",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1742,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1651,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege",
+          "runtimeId": "wecollege",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 306,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 220,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-phoenix",
+          "runtimeId": "wecollege-phoenix",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 131,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 131,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-miami",
+          "runtimeId": "wecollege-miami",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 113,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 114,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-seattle",
+          "runtimeId": "wecollege-seattle",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 107,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 113,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-portland",
+          "runtimeId": "wecollege-portland",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 110,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 111,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-paris",
+          "runtimeId": "wecollege-paris",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 124,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 116,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-boise",
+          "runtimeId": "wecollege-boise",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 114,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 110,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-atlanta",
+          "runtimeId": "wecollege-atlanta",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 118,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 112,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-austin",
+          "runtimeId": "wecollege-austin",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 108,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 110,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-tampa",
+          "runtimeId": "wecollege-tampa",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 112,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 113,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "mapple",
+          "runtimeId": "mapple",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1507,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1511,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "perses",
+          "runtimeId": "perses",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 92,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 36,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "wecollege-berlin",
+          "runtimeId": "wecollege-berlin",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 116,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1513,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "rivestream",
+          "runtimeId": "rivestream",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1511,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1504,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "rivestream-citadel",
+          "runtimeId": "rivestream-citadel",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1505,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1513,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "riveapex",
+          "runtimeId": "riveapex",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1512,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "rivevanguard",
+          "runtimeId": "rivevanguard",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1506,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "riveaura",
+          "runtimeId": "riveaura",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1520,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "riveapogee",
+          "runtimeId": "riveapogee",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1505,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "rivecitadel",
+          "runtimeId": "rivecitadel",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1482,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1502,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "riverigel",
+          "runtimeId": "riverigel",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 39,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1503,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "catflix",
+          "runtimeId": "catflix",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 162,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 83,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "riveapollo",
+          "runtimeId": "riveapollo",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1516,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "poseidon",
+          "runtimeId": "poseidon",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1754,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 693,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "aphrodite",
+          "runtimeId": "aphrodite",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 2132,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 864,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "stellar",
+          "runtimeId": "stellar",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 7669,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 8021,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "vidapi",
+          "runtimeId": "vidapi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 244,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 156,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "videasy",
+          "runtimeId": "videasy",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3357,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 3045,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidlux",
+          "runtimeId": "vidlux",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3287,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 338,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidrock-nova",
+          "runtimeId": "vidrock-nova",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1515,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1500,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidsrc",
+          "runtimeId": "vidsrc",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 915,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 675,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "vidsrcbuzz",
+          "runtimeId": "vidsrcbuzz",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1508,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1501,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "cinehd-hindi",
+          "runtimeId": "cinehd-hindi",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 597,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 585,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "cinehd-english",
+          "runtimeId": "cinehd-english",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 235,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 488,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "modiplay",
+          "runtimeId": "modiplay",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1509,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1515,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "kyren",
+          "runtimeId": "kyren",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 629,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "anime123",
+          "runtimeId": "anime123",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 315,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "zoko",
+          "runtimeId": "zoko",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 177,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "nineanime",
+          "runtimeId": "nineanime",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1644,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "anibd",
+          "runtimeId": "anibd",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 159,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "anixo",
+          "runtimeId": "anixo",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 3710,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nagare",
+          "runtimeId": "nagare",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 4514,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidcore-movy",
+          "runtimeId": "vidcore-movy",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3014,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 677,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "filmu",
+          "runtimeId": "filmu",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 5021,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 5021,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "filmuainary",
+          "runtimeId": "filmuainary",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1744,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 480,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidcore",
+          "runtimeId": "vidcore",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3024,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 3016,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "native",
+                  "ok": false,
+                  "code": "first-frame-timeout"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vidzen",
+          "runtimeId": "vidzen",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1505,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1515,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "lookmovie",
+          "runtimeId": "lookmovie",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1574,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "stignebula",
+          "runtimeId": "stignebula",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1522,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1510,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "stigorion",
+          "runtimeId": "stigorion",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1514,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1502,
+              "direct": false,
+              "attempts": [],
+              "code": "malformed"
+            }
+          ]
+        },
+        {
+          "id": "castletv",
+          "runtimeId": "castletv",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1516,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1516,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidlink",
+          "runtimeId": "vidlink",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 254,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 149,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "vidstorm",
+          "runtimeId": "vidstorm",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 113,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 110,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "nxsha",
+          "runtimeId": "nxsha",
+          "enabled": false,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 1517,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1501,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animeparadise",
+          "runtimeId": "animeparadise",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1515,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekai",
+          "runtimeId": "animekai",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1502,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1511,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "vidnest",
+          "runtimeId": "vidnest",
+          "enabled": true,
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 3,
+              "resolveMs": 3427,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "first-frame-timeout"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 3,
+              "resolveMs": 4790,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                },
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-10-01T20:28:03.479Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "vixsrc",
+          "runtimeId": "vixsrc",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 680,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 486,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vixsrc-it",
+          "runtimeId": "vixsrc-it",
+          "enabled": false,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 746,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 457,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wecollege",
+          "runtimeId": "wecollege",
+          "enabled": false,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1662,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1553,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "riveapogee",
+          "runtimeId": "riveapogee",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 583,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kyren",
+          "runtimeId": "kyren",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 4638,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "aphrodite",
+          "runtimeId": "aphrodite",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 7501,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 7740,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "animeparadise",
+          "runtimeId": "animeparadise",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 21
+              },
+              "resolved": 0,
+              "resolveMs": 1502,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekai",
+          "runtimeId": "animekai",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1518,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 172463,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 1546,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "stigorion",
+          "runtimeId": "stigorion",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 1,
+              "resolveMs": 678,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "first-frame-timeout"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 247,
+              "direct": false,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": false,
+                  "code": "hls-networkError"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-10-01T20:30:20.251Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "lookmovie",
+          "runtimeId": "lookmovie",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 1851,
+              "direct": false,
+              "attempts": [],
+              "code": "no-validated-sources"
+            }
+          ]
+        },
+        {
+          "id": "kyren",
+          "runtimeId": "kyren",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 3258,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "castletv",
+          "runtimeId": "castletv",
+          "enabled": false,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 0,
+              "resolveMs": 3078,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 2887,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animeparadise",
+          "runtimeId": "animeparadise",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 21
+              },
+              "resolved": 1,
+              "resolveMs": 2541,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 172463,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 3051,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "animekai",
+          "runtimeId": "animekai",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 21,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 3274,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-10-01T20:33:40.848Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "lookmovie",
+          "runtimeId": "lookmovie",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 3,
+              "resolveMs": 1210,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "castletv",
+          "runtimeId": "castletv",
+          "enabled": false,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 550
+              },
+              "resolved": 10,
+              "resolveMs": 2954,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1399,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 1067,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "id": 172463,
+                "kind": "anime",
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 3676,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "native",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-10-01T20:35:16.686Z",
+      "browser": "Chrome",
+      "origin": "http://localhost:8080",
+      "providers": [
+        {
+          "id": "vixsrc-it",
+          "runtimeId": "vixsrc-it",
+          "enabled": false,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 804,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 498,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "vixsrc",
+          "runtimeId": "vixsrc",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 1,
+              "resolveMs": 651,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 408,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kyren",
+          "runtimeId": "kyren",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 998,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "lookmovie",
+          "runtimeId": "lookmovie",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3017,
+              "direct": false,
+              "attempts": [],
+              "code": "unavailable"
+            }
+          ]
+        },
+        {
+          "id": "castletv",
+          "runtimeId": "castletv",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 3008,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 2349,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "aphrodite",
+          "runtimeId": "aphrodite",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "movie",
+              "ref": {
+                "kind": "movie",
+                "id": 272
+              },
+              "resolved": 0,
+              "resolveMs": 6878,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            },
+            {
+              "kind": "series",
+              "ref": {
+                "kind": "series",
+                "id": 1396,
+                "season": 1,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 4240,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "animeparadise",
+          "runtimeId": "animeparadise",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 960,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "animekitsu",
+          "runtimeId": "animekitsu",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 0,
+              "resolveMs": 2063,
+              "direct": false,
+              "attempts": [],
+              "code": "empty"
+            }
+          ]
+        },
+        {
+          "id": "animekai",
+          "runtimeId": "animekai",
+          "enabled": true,
+          "delivery": "direct",
+          "checks": [
+            {
+              "kind": "anime",
+              "ref": {
+                "kind": "anime",
+                "id": 7785,
+                "episode": 1
+              },
+              "resolved": 1,
+              "resolveMs": 1726,
+              "direct": true,
+              "attempts": [
+                {
+                  "type": "hls",
+                  "ok": true,
+                  "code": "first-frame"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

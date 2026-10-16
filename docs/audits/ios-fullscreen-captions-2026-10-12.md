@@ -1,0 +1,19 @@
+# iOS fullscreen captions — 2026-10-12
+
+The member reported subtitles disappearing when entering fullscreen on iOS. A deterministic regression uploads an SRT, renders its caption, then exercises the player's existing Apple fallback. That fallback invoked `video.webkitEnterFullscreen()`, moving only the video into the fullscreen surface; Consumit's sibling caption overlay remained outside it. The test failed because the fullscreen surface could not contain the visible caption. Subtitle selection and parsed cue state remained intact.
+
+The player now prefers the complete container's Fullscreen API and uses a viewport-filling player when the API is unsupported or rejects the request. It retains the same inline video, selected subtitle, parsed cues, timing offset, appearance and controls. Fullscreen presentation and safe-area spacing apply to the fallback. Surrounding content becomes inert and scrolling is locked; Exit fullscreen, Escape and unmount restore previous styles, scroll, focus and inert state. No engine, provider, source-selection, subtitle-preference or progress contract changes are involved. WebKit's [inline-video policy](https://webkit.org/blog/6784/new-video-policies-for-ios/) permits retaining video within the page presentation through `playsinline`.
+
+This fallback fills the browser viewport. Safari's browser chrome may remain visible, and the phone's rotation determines portrait or landscape. It deliberately avoids Apple's video-only fullscreen for the Consumit fullscreen action.
+
+Verification:
+
+- The original red regression passes. Added cases cover rejected requests, Exit fullscreen, Escape, unmount cleanup, focus restoration and successful container fullscreen.
+- All 239 shared UI checks pass, with UI lint and type checking. Web type checking and Watch lint pass; the deployed optimized web build passes.
+- Four deterministic mobile Chromium/WebKit scenarios pass for native and HLS media. Both unsupported and rejected container requests retain provider captions and SRT/VTT uploads during real media-clock advancement, seeks, replacement, portrait/landscape resize, Off and return to inline playback. The fallback bounds match the viewport. Two bounded inspection rounds retain the current player design; captures are under `.impeccable/review/ios-fullscreen/`.
+- The design detector reports the existing volume-slider width transition and existing typography/color advisories; the new fullscreen styles add no animated dimensions or font/color changes. The source diff passes whitespace checks.
+- A live Chromium mobile check against `https://consumit.online` plays the configured Miami source, retains an uploaded VTT through fullscreen playback, rotation, seeking and exit, and decodes 1280 × 720 with 145 frames. Internal and external HTTPS smoke checks pass. Existing uploaded-file, appearance-preview, Analytics and settings code remains in the active bundle.
+
+WebKit tests use mobile emulation on Windows and explicitly simulate the unavailable/denied container API. The live test uses Chromium with that same capability restriction. These checks establish the deployed fallback's playback and caption behavior; a physical iPhone and its Safari chrome/pinch gestures were not exercised.
+
+Only the web was deployed as `consumit-web:ios-fullscreen-20261012T205857785Z`, installing two reviewed player source files against verified production preimages. The previous image is `consumit-web:network-20261012T203718898Z`. Exact source/configuration backups and release evidence are stored at `/opt/consumit/infra/secrets/ios-fullscreen-release-backups/ios-fullscreen-20261012T205857785Z`. `CONSUMIT_WEB_RELEASE` is the only changed setting; the provider roster, all other private settings, and API/gateway/SES images are preserved. No Worker rollout, migration or data-service restart occurred.

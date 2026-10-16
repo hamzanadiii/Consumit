@@ -1,0 +1,6 @@
+{
+  "name": "@consumit/provider-sdk", "private": true, "version": "0.0.0", "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@consumit/contracts": "workspace:*", "zod": "^4.5.4" }
+}

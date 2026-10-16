@@ -1,0 +1,13 @@
+[
+  {
+    "attempt": 0,
+    "titleId": 550,
+    "provider": "rivezephyr",
+    "responses": [],
+    "failures": [],
+    "samples": [],
+    "httpStatus": 200,
+    "resolved": false,
+    "code": "empty"
+  }
+]

@@ -1,0 +1,23 @@
+.slot {
+  width: 100%;
+  min-width: 0;
+}
+
+.label {
+  margin-bottom: 8px;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.stage {
+  margin-inline: auto;
+  overflow: hidden;
+}
+
+.stage iframe {
+  display: block;
+  border: 0;
+  background: transparent;
+}

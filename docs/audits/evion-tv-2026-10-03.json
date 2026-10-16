@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-03",
+  "provider": "evion",
+  "mediaKinds": [
+    "series"
+  ],
+  "cdn": "img.animecurx.tech",
+  "resolutionMs": {
+    "108978": 1587,
+    "1399": 1600
+  },
+  "browserOrigin": "http://localhost:8080",
+  "browser": [
+    {
+      "id": 1399,
+      "time": 61.018569,
+      "width": 1920,
+      "height": 1080,
+      "duration": 3543.68,
+      "decoded": 131,
+      "errors": [],
+      "failed": []
+    },
+    {
+      "id": 108978,
+      "time": 61.009343,
+      "width": 1920,
+      "height": 1080,
+      "duration": 3345.8150560000036,
+      "decoded": 220,
+      "errors": [],
+      "failed": []
+    }
+  ],
+  "limitation": "Two sampled episodes; no universal availability or comparative speed claim."
+}

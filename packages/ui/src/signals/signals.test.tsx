@@ -1,29 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import {
-  Badge,
-  ProgressRail,
-  RatingDisplay,
-  StatusDot,
-  TasteMatch,
-} from './signals'
+import { Badge, ProgressRail, RatingDisplay, StatusDot } from './signals'
 
 describe('signal components', () => {
-  it('exposes progress and taste values to assistive technology', () => {
-    render(
-      <>
-        <ProgressRail label="Episode progress" value={42} />
-        <TasteMatch reason="You both love slow mysteries." score={92.4} />
-      </>,
-    )
+  it('exposes progress values to assistive technology', () => {
+    render(<ProgressRail label="Episode progress" value={42} />)
 
     expect(
       screen.getByRole('progressbar', { name: 'Episode progress' }),
     ).toHaveAttribute('aria-valuenow', '42')
-    expect(
-      screen.getByRole('group', { name: '92% taste match' }),
-    ).toHaveTextContent('You both love slow mysteries.')
   })
 
   it('announces fractional ratings without relying on star color', () => {

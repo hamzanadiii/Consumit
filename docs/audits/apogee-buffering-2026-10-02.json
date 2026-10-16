@@ -1,0 +1,388 @@
+{
+  "date": "2026-10-02",
+  "origin": "http://localhost:8080",
+  "baselineSwapped": {
+    "ref": {
+      "kind": "movie",
+      "id": 1007757
+    },
+    "firstFrameMs": 1630.5,
+    "played": 14.963897,
+    "stalledMs": 11551,
+    "seekOk": false,
+    "seekMs": 12009,
+    "host": "img.rousav.tech"
+  },
+  "progressiveFixture": [
+    {
+      "mode": "baseline",
+      "start": 1790916033524,
+      "at": 1790916036501,
+      "firstFrameMs": 2977,
+      "width": 640,
+      "responseFinished": 1790916036313,
+      "decodedBeforeResponseFinished": false
+    },
+    {
+      "mode": "progressive",
+      "start": 1790916037244,
+      "at": 1790916037776,
+      "firstFrameMs": 532,
+      "width": 640,
+      "responseFinished": 0,
+      "decodedBeforeResponseFinished": true
+    }
+  ],
+  "updatedSwapped": {
+    "at": "2026-10-02T04:41:03.616Z",
+    "checks": [
+      {
+        "ref": {
+          "kind": "movie",
+          "id": 1007757
+        },
+        "ok": true,
+        "firstFrameMs": 538.6999999992549,
+        "played": 19.380094,
+        "buffer": 56.91157200000001,
+        "waits": 2,
+        "stalledMs": 824,
+        "seekOk": true,
+        "seekMs": 2561,
+        "failures": [],
+        "details": [
+          {
+            "height": 1080,
+            "bitrate": 1000000,
+            "live": false,
+            "totalduration": 6105.416674000013,
+            "targetduration": 10,
+            "fragments": 1350
+          }
+        ],
+        "qualities": [
+          {
+            "value": "auto",
+            "label": "Auto"
+          },
+          {
+            "value": "0",
+            "label": "1080p"
+          }
+        ],
+        "providerIds": [
+          "riveapogee",
+          "vixsrc",
+          "lookmovie"
+        ],
+        "host": "img.rousav.tech",
+        "requests": [
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 239,
+            "bytes": 1417
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 39,
+            "bytes": 5639
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 38,
+            "bytes": 1752
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 94,
+            "bytes": 170465
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 98,
+            "bytes": 76352
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 52,
+            "bytes": 190974
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 67,
+            "bytes": 72924
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 62,
+            "bytes": 88762
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 96,
+            "bytes": 1040450
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 78,
+            "bytes": 1639239
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 40,
+            "bytes": 88550
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 180,
+            "bytes": 88382
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 263,
+            "bytes": 4269720
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 407,
+            "bytes": 221839
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 412,
+            "bytes": 89004
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 67,
+            "bytes": 88007
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 88,
+            "bytes": 1178549
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 36,
+            "bytes": 88764
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 51,
+            "bytes": 88946
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 118,
+            "bytes": 1960147
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 59,
+            "bytes": 88428
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 67,
+            "bytes": 762372
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 41,
+            "bytes": 88748
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 76,
+            "bytes": 996146
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 1188,
+            "bytes": 88939
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 626,
+            "bytes": 88190
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 5736,
+            "bytes": 1427711
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 1361,
+            "bytes": 89142
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 795,
+            "bytes": 88758
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 7108,
+            "bytes": 1359777
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 782,
+            "bytes": 88738
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 4996,
+            "bytes": 939616
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 0,
+            "ms": 482
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 0,
+            "ms": 484
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 293,
+            "bytes": 88451
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 142,
+            "bytes": 87801
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 659,
+            "bytes": 2413956
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 115,
+            "bytes": 595053
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 99,
+            "bytes": 88564
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 159,
+            "bytes": 924804
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 82,
+            "bytes": 87794
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 200,
+            "ms": 92,
+            "bytes": 422119
+          },
+          {
+            "host": "img.rousav.tech",
+            "status": 0,
+            "ms": 1531
+          }
+        ]
+      }
+    ]
+  },
+  "runningWeb": {
+    "at": "2026-10-02T04:48:11.951Z",
+    "origin": "http://localhost:8080",
+    "ref": {
+      "kind": "movie",
+      "id": 1007757
+    },
+    "before": {
+      "position": 11.027048,
+      "width": 1920,
+      "buffer": 45.014618
+    },
+    "seek": {
+      "previousSuccessfulCheck": true
+    },
+    "forcedStalledSeek": {
+      "fallbackStatus": 200,
+      "fallbackMs": 11619,
+      "nextProvider": "vixsrc",
+      "resumed": false,
+      "resumedMs": 29654,
+      "restored": {
+        "position": 0,
+        "seeking": false,
+        "width": 0,
+        "paused": false
+      }
+    },
+    "actions": [
+      {
+        "action": "resolve",
+        "status": 200,
+        "provider": "riveapogee"
+      },
+      {
+        "action": "fallback",
+        "status": 200,
+        "provider": "vixsrc"
+      },
+      {
+        "action": "fallback",
+        "status": 503
+      }
+    ],
+    "pageErrors": 0
+  },
+  "repeatNormalSeek": {
+    "resumedWithin18Seconds": false
+  }
+}

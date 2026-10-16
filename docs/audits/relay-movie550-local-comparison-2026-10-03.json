@@ -1,0 +1,128 @@
+[
+  {
+    "id": "rivenebula",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 23
+    },
+    "mediaBytes": 118297057,
+    "requests": 23,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 1920,
+      "height": 1080,
+      "frames": 129,
+      "time": 5.023356
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 2069ms\nSeek: Confirmed\nStalls observed: 1"
+  },
+  {
+    "id": "bingebangymovies",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 16
+    },
+    "mediaBytes": 121569672,
+    "requests": 16,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 853,
+      "height": 480,
+      "frames": 125,
+      "time": 5.024998
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 1961ms\nSeek: Confirmed\nStalls observed: 1"
+  },
+  {
+    "id": "zeta",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 44
+    },
+    "mediaBytes": 40065568,
+    "requests": 44,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 1920,
+      "height": 800,
+      "frames": 125,
+      "time": 5.024778
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 1653ms\nSeek: Confirmed\nStalls observed: 1"
+  },
+  {
+    "id": "wecollege-miami",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 16
+    },
+    "mediaBytes": 164309293,
+    "requests": 16,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 3840,
+      "height": 2160,
+      "frames": 124,
+      "time": 5.007523
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 1740ms\nSeek: Confirmed\nStalls observed: 1"
+  },
+  {
+    "id": "wecollege-boise",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 13
+    },
+    "mediaBytes": 127738474,
+    "requests": 13,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 3840,
+      "height": 2160,
+      "frames": 128,
+      "time": 5.166234
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 1258ms\nSeek: Confirmed\nStalls observed: 1"
+  },
+  {
+    "id": "rivezephyr",
+    "mode": "local-execution-of-identical-relay",
+    "titleId": 550,
+    "pass": true,
+    "statuses": {
+      "200": 13
+    },
+    "mediaBytes": 85810211,
+    "requests": 13,
+    "resolved": true,
+    "resolveCode": "resolved",
+    "decoded": {
+      "width": 1280,
+      "height": 720,
+      "frames": 125,
+      "time": 5.034636
+    },
+    "seek": true,
+    "evidence": "Decode: First frame confirmed\nStartup: 1092ms\nSeek: Confirmed\nStalls observed: 1"
+  }
+]

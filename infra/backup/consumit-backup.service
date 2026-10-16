@@ -1,0 +1,9 @@
+[Unit]
+Description=Consumit encrypted PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/consumit
+ExecStart=/usr/bin/node /opt/consumit/scripts/production.mjs backup

@@ -1,0 +1,37 @@
+{
+  "title": "Choose Consumit's member-space layout",
+  "question": "These three options keep the existing dark, orange-accented Consumit style and redesign how Profile, Library, Circle, Favorites, and Lists fit together. Which composition makes a member's taste and records easiest to understand? The focused Watch screen will use the same identity with its own player layout.",
+  "options": [
+    {
+      "id": "member-workspace",
+      "label": "Member Workspace",
+      "kicker": "THE ROLL",
+      "lineage": "A clear member workspace with one profile header and purposeful destinations.",
+      "thesis": "Keep identity in view while each destination gets the layout that fits its job.",
+      "viewport": "A compact profile masthead spans the content column; a single row of labeled member tabs leads into an activity feed, with Favorites and Lists in a slim right rail. Library and Circle retain the same header and navigation while replacing the body with their own work surfaces.",
+      "risk": "A shared member header can consume too much space on small screens unless it collapses early.",
+      "comp": "http://127.0.0.1:53128/member-workspace.png"
+    },
+    {
+      "id": "activity-first",
+      "label": "Activity First",
+      "lineage": "A personal viewing journal that places recent activity ahead of profile decoration.",
+      "thesis": "Let the member's real viewing life tell the profile story.",
+      "viewport": "A compact identity strip and member tabs sit above a full-width, date-grouped activity stream; Favorites and Lists appear as short, ordered shelves after the first journal entries. Circle activity uses the same readable event rows with author and visibility context.",
+      "risk": "A member with little history may see a mostly empty opening unless the next action is designed carefully.",
+      "comp": "http://127.0.0.1:53128/activity-first.png"
+    },
+    {
+      "id": "journal-index",
+      "label": "Journal Index",
+      "lineage": "A well-organized film journal with compact rows, dates, and member-made collections.",
+      "thesis": "Make large personal libraries quick to scan, filter, and continue using.",
+      "viewport": "A narrow member identity column and labeled destination rail stay fixed beside a flexible content index. Diary entries, saved titles, and lists use compact rows with small artwork and clear state labels; Favorites remain an ordered six-title strip.",
+      "risk": "A dense index can feel administrative if artwork and activity lose their personality.",
+      "comp": "http://127.0.0.1:53128/journal-index.png"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "comp", "toggle": true},
+  "steer": true
+}

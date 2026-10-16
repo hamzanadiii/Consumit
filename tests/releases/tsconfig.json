@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["*.ts", "../../apps/web/src/app/%5Finternal/release-check/probe.tsx"],
+  "compilerOptions": { "allowImportingTsExtensions": true, "jsx": "react-jsx", "lib": ["ES2024", "DOM", "DOM.Iterable"], "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "types": ["bun", "node"] }
+}

@@ -2,13 +2,18 @@
 .env
 .env.*
 !.env.example
+!.env.docker.example
+!.env.production.example
 
 # Dependencies and generated output
 node_modules/
-.next/
+apps/api/generated/
+.next*/
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Tool caches
@@ -22,6 +27,8 @@ coverage/
 *.log
 tmp/
 temp/
+tmp-*
+**/tmp-*
 
 # Editors and operating systems
 .idea/
@@ -32,3 +39,23 @@ temp/
 Thumbs.db
 
 /design/
+/local/
+/provider_example/
+/infra/playback/providers.local.json
+/infra/playback/providers.local.overrides.json
+worker/.wrangler/
+infra/cloudflare/.wrangler/
+infra/cloudflare/*.local.jsonc
+infra/cloudflare/*.secret.local
+scripts/*.local.mjs
+worker/.dev.vars
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+infra/secrets/
+
+# Local provider investigation probes and captured scratch output.
+/scripts/debug-*
+/master.txt

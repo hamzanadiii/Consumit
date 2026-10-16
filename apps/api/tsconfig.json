@@ -8,5 +8,5 @@
     "noEmit": true,
     "types": ["bun", "node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["prisma.config.ts", "scripts/**/*.ts", "src/**/*.ts", "vitest.config.ts", "vitest.integration.config.ts"]
 }

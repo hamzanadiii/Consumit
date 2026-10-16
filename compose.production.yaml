@@ -1,0 +1,217 @@
+# Production has an independent Compose project; local data stays untouched.
+name: consumit-production
+services:
+  postgres:
+    image: consumit-postgres:${CONSUMIT_RELEASE:-local}
+    build: {context: ., dockerfile: infra/postgres/Dockerfile}
+    environment: !override
+      POSTGRES_DB: consumit
+      POSTGRES_USER: consumit_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/db-admin-password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      AWS_BACKUP_BUCKET: ${AWS_BACKUP_BUCKET:-missing-backup-bucket}
+    secrets: [db-admin-password, db-app-password, db-migration-password, db-backup-password, db-server.crt, db-server.key, backup-aws.json, pgbackrest-password]
+    volumes:
+      - consumit-backup-metrics:/var/lib/consumit/metrics
+    healthcheck:
+      test: [CMD, pg_isready, -U, consumit_admin, -d, consumit]
+  migrate:
+    environment: !override
+      DATABASE_DEPLOYMENT: self-hosted
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:-postgresql://consumit_migrate:missing-password@postgres:5432/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt}
+    secrets: [db-ca.crt]
+  api:
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    env_file: !reset []
+    environment: !override
+      NODE_ENV: production
+      PORT: 3001
+      APP_ORIGIN: ${APP_ORIGIN:-https://consumit.online}
+      AUTH_CODE_PEPPER: ${AUTH_CODE_PEPPER:-missing-auth-pepper}
+      AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-Consumit <auth@consumit.online>}
+      AUTH_EMAIL_PROVIDER: ses
+      SES_REGION: ca-central-1
+      SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-consumit-auth}
+      SES_CREDENTIALS_FILE: /run/secrets/ses-aws.json
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit_app:missing-password@postgres:5432/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt}
+      DATABASE_SSL_MODE: require
+      DATABASE_DEPLOYMENT: self-hosted
+      DATABASE_SSL_CA_FILE: /run/secrets/db-ca.crt
+      VALKEY_URL: valkey://valkey:6379/0
+      TMDB_API_READ_TOKEN: ${TMDB_API_READ_TOKEN:-missing-catalog-token}
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      SUBTITLES_DIR: /var/lib/consumit/subtitles
+      SUBDL_API_KEY: ${SUBDL_API_KEY:-}
+      JIMAKU_API_KEY: ${JIMAKU_API_KEY:-}
+      OPENSUBTITLES_API_KEY: ${OPENSUBTITLES_API_KEY:-}
+      OPENSUBTITLES_USER: ${OPENSUBTITLES_USER:-}
+      OPENSUBTITLES_PASS: ${OPENSUBTITLES_PASS:-}
+      PLAYBACK_ENABLED: "true"
+      PLAYBACK_VALKEY_URL: valkey://playback-valkey:6379/0
+      PLAYBACK_MEDIA_CONFIG: /run/consumit/providers.json
+      PLAYBACK_INSTANCES: "1"
+      PLAYBACK_PROBE_INTERVAL_MINUTES: ${PLAYBACK_PROBE_INTERVAL_MINUTES:-30}
+      PLAYBACK_RELAY_ENABLED: ${PLAYBACK_RELAY_ENABLED:-false}
+      PLAYBACK_RELAY_ORIGIN: ${PLAYBACK_RELAY_ORIGIN:-}
+      PLAYBACK_RELAY_SECRET: ${PLAYBACK_RELAY_SECRET:-}
+      PLAYBACK_RELAY_PROVIDERS: ${PLAYBACK_RELAY_PROVIDERS:-}
+      PLAYBACK_RELAY_PROVIDER_ORIGINS: ${PLAYBACK_RELAY_PROVIDER_ORIGINS:-}
+      PLAYBACK_RELAY_CONTROL_PROVIDERS: ${PLAYBACK_RELAY_CONTROL_PROVIDERS:-}
+      PLAYBACK_RELAY_DISCOVERY_PROVIDERS: ${PLAYBACK_RELAY_DISCOVERY_PROVIDERS:-}
+      PLAYBACK_NODE_ENABLED: ${PLAYBACK_NODE_ENABLED:-false}
+      PLAYBACK_NODE_ORIGIN: ${PLAYBACK_NODE_ORIGIN:-}
+      PLAYBACK_NODE_SECRET: ${PLAYBACK_NODE_SECRET:-}
+      PLAYBACK_NODE_PROVIDERS: ${PLAYBACK_NODE_PROVIDERS:-}
+      PLAYBACK_RESOLVER_ENABLED: ${PLAYBACK_RESOLVER_ENABLED:-false}
+      PLAYBACK_RESOLVER_ORIGIN: ${PLAYBACK_RESOLVER_ORIGIN:-}
+      PLAYBACK_RESOLVER_SECRET: ${PLAYBACK_RESOLVER_SECRET:-}
+      PLAYBACK_RESOLVER_API_PROVIDERS: ${PLAYBACK_RESOLVER_API_PROVIDERS:-}
+      PLAYBACK_RESOLVER_PROVIDER_ORIGINS: ${PLAYBACK_RESOLVER_PROVIDER_ORIGINS:-}
+      PLAYBACK_RESOLVER_COMPUTE_ENABLED: ${PLAYBACK_RESOLVER_COMPUTE_ENABLED:-false}
+      PLAYBACK_RESOLVER_COMPUTE_SECRET: ${PLAYBACK_RESOLVER_COMPUTE_SECRET:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      ADMIN_METRICS_URL: http://prometheus:9090
+    secrets: [db-ca.crt, ses-aws.json]
+    volumes:
+      - type: bind
+        source: ${CONSUMIT_PROVIDER_CONFIG:-./infra/playback/providers.local.json}
+        target: /run/consumit/providers.json
+        read_only: true
+        bind: {create_host_path: false}
+  ses-feedback:
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    build: {context: ., target: api}
+    command: [node, ses-feedback-worker.js]
+    environment:
+      SES_REGION: ca-central-1
+      SES_FEEDBACK_QUEUE_URL: ${SES_FEEDBACK_QUEUE_URL:-missing-feedback-queue}
+      SES_FEEDBACK_CREDENTIALS_FILE: /run/secrets/feedback-aws.json
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: consumit-email-feedback
+    secrets: [feedback-aws.json]
+    restart: unless-stopped
+    depends_on: {otel-collector: {condition: service_started}}
+  web:
+    image: consumit-web:${CONSUMIT_WEB_RELEASE:-${CONSUMIT_RELEASE:-local}}
+    env_file: !reset []
+    build:
+      args: {NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:-https://consumit.online}", NEXT_PUBLIC_CAST_RECEIVER_ID: "${NEXT_PUBLIC_CAST_RECEIVER_ID:-}"}
+  gateway:
+    image: consumit-gateway:${CONSUMIT_RELEASE:-local}
+    ports: !reset []
+  alertmanager:
+    volumes: !override
+      - type: bind
+        source: ${ALERTMANAGER_CONFIG:-./infra/secrets/alertmanager.yml}
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - consumit-alertmanager:/alertmanager
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    command: [--path.rootfs=/host, --collector.textfile.directory=/metrics]
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+      - consumit-backup-metrics:/metrics:ro
+    restart: unless-stopped
+  prometheus:
+    volumes: !override
+      - ./infra/observability/prometheus.production.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./infra/observability/production-alerts.yml:/etc/prometheus/production-alerts.yml:ro
+      - consumit-prometheus:/prometheus
+  cloudflared:
+    image: cloudflare/cloudflared:2026.8.0
+    command: [tunnel, --no-autoupdate, run]
+    environment: {TUNNEL_TOKEN_FILE: /run/secrets/tunnel-token}
+    secrets: [tunnel-token]
+    depends_on: {gateway: {condition: service_healthy}}
+    restart: unless-stopped
+  backup:
+    profiles: [backup]
+    image: consumit-backup:${CONSUMIT_RELEASE:-local}
+    command: !reset []
+    restart: "no"
+    build: {context: ., dockerfile: infra/backup/Dockerfile}
+    environment: !override
+      DATABASE_URL: ${BACKUP_DATABASE_URL:-postgresql://consumit_backup:missing-password@postgres:5432/consumit?sslmode=verify-full&sslrootcert=/run/secrets/db-ca.crt}
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: /run/secrets/db-ca.crt
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-s3:https://s3.ca-central-1.amazonaws.com/missing-bucket/restic}
+      RESTIC_PASSWORD_FILE: /run/secrets/restic-password
+      BACKUP_HOST: consumit-production
+      BACKUP_KEEP_DAILY: "14"
+      BACKUP_KEEP_WEEKLY: "4"
+      BACKUP_KEEP_MONTHLY: "6"
+      BACKUP_CHECK_SUBSET: 5%
+      AWS_CREDENTIALS_FILE: /run/secrets/backup-aws.json
+      AWS_DEFAULT_REGION: ca-central-1
+    secrets: [db-ca.crt, restic-password, backup-aws.json]
+    volumes: !override
+      - type: bind
+        source: .
+        target: /deployment
+        read_only: true
+      - consumit-backup-metrics:/metrics
+    depends_on: {postgres: {condition: service_healthy}}
+  credit-monitor:
+    profiles: [backup]
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    user: root
+    command: [node, aws-credit-monitor.js]
+    environment: {AWS_CREDIT_EXPIRES_AT: "${AWS_CREDIT_EXPIRES_AT:-missing-expiry}"}
+    secrets: [credit-aws.json]
+    volumes: [consumit-backup-metrics:/metrics]
+    restart: "no"
+  retention-drill:
+    profiles: [recovery]
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    user: root
+    command: [node, s3-retention-drill.js]
+    environment: {AWS_BACKUP_BUCKET: "${AWS_BACKUP_BUCKET:-missing-bucket}"}
+    secrets: [backup-aws.json, recovery-aws.json]
+    restart: "no"
+  bootstrap-admin:
+    profiles: [recovery]
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    command: [node, bootstrap-admin.js]
+    environment: {DATABASE_URL: "${MIGRATION_DATABASE_URL:-missing-migration-database}"}
+    secrets: [db-ca.crt]
+    stdin_open: true
+    restart: "no"
+  aws-identity-check:
+    profiles: [backup]
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    user: root
+    command: [node, aws-identity-check.js]
+    secrets: [ses-aws.json, backup-aws.json, feedback-aws.json, credit-aws.json]
+    restart: "no"
+  smoke:
+    profiles: [backup]
+    image: consumit-api:${CONSUMIT_RELEASE:-local}
+    command: [node, smoke-production.js]
+    environment:
+      CONSUMIT_SMOKE_URL: ${APP_ORIGIN:-https://consumit.online}
+      CONSUMIT_SMOKE_PLAYBACK_BODY: ${CONSUMIT_SMOKE_PLAYBACK_BODY:-}
+    restart: "no"
+volumes:
+  consumit-backup-metrics:
+secrets:
+  db-admin-password: {file: ./infra/secrets/db-admin-password}
+  db-app-password: {file: ./infra/secrets/db-app-password}
+  db-migration-password: {file: ./infra/secrets/db-migration-password}
+  db-backup-password: {file: ./infra/secrets/db-backup-password}
+  db-server.crt: {file: ./infra/secrets/db-server.crt}
+  db-server.key: {file: ./infra/secrets/db-server.key}
+  db-ca.crt: {file: ./infra/secrets/db-ca.crt}
+  pgbackrest-password: {file: ./infra/secrets/pgbackrest-password}
+  restic-password: {file: "${RESTIC_PASSWORD_FILE:-./infra/secrets/restic-password}"}
+  backup-aws.json: {file: ./infra/secrets/backup-aws.json}
+  ses-aws.json: {file: ./infra/secrets/ses-aws.json}
+  feedback-aws.json: {file: ./infra/secrets/feedback-aws.json}
+  tunnel-token: {file: ./infra/secrets/tunnel-token}
+  credit-aws.json: {file: ./infra/secrets/credit-aws.json}
+  recovery-aws.json: {file: ./infra/secrets/recovery-aws.json}

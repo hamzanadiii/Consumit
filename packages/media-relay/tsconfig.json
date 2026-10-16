@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "lib": ["ES2024", "DOM"], "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "allowImportingTsExtensions": true, "types": ["node", "vitest/globals"] },
+  "include": ["src/**/*.ts"]
+}

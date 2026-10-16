@@ -1,0 +1,13 @@
+{
+  "labels": [
+    "2160p",
+    "1080p",
+    "720p",
+    "480p"
+  ],
+  "width": 1280,
+  "height": 720,
+  "position": 45.014917,
+  "playing": true,
+  "decodedFrames": 75
+}

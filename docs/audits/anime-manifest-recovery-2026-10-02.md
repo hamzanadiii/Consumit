@@ -1,0 +1,15 @@
+# Anime manifest recovery — 2026-10-02
+
+The member reported that anime providers were no longer working after shared playback changes. The member job is starting the selected canonical anime episode through the existing Consumit Player. The four configured anime adapters remain registered and available; no adapter, provider order, enabled state, member progress, or history was changed by this repair.
+
+The running API returned 200 resolves for AniList 21 episode 1 and 7785 episode 1. The deployed Watch page decoded 7785 through Kyren, but 21 through AnimeParadise did not decode within 26 seconds and requested four same-provider refreshes. API resolution alone was therefore insufficient evidence of usable playback.
+
+Ranked hypotheses were unusable provider media, a same-provider renewal loop, and a regression in the shared media engine. A focused browser comparison used the same resolved URL and installed HLS version with progressive loading disabled and enabled: both failed with fatal manifestLoadError and status 0. A direct bounded request to that manifest returned HTTP 502, an HTML response rather than a playlist, and no CORS header. This identifies a failing upstream source plus a recovery-policy bug; it does not establish a global anime outage or prove that the preceding loader rollback caused the provider failure.
+
+The coordinator accepted each changed signed URL as a successful renewal and returned to the same browser-unusable endpoint. Two deterministic regressions reproduced that pattern for manifest and CORS delivery failures: a renewal offered a rotated URL, but recovery should select the compatible backup. Both tests failed before the repair.
+
+The coordinator now skips same-provider renewal after bounded engine recovery for manifest and CORS failures, as it already does for timeout and header-gated delivery. It requests a direct fallback under the existing budgets. Healthy expiry renewal and ordinary segment/network renewal retain their existing behavior. The shared controller, poster delivery, canonical episode identity, and visual player remain unchanged in this slice.
+
+All 44 Watch/coordinator tests passed, along with web type checking, changed-code lint, and the optimized production web build. The running web container was recreated. In desktop Chrome from the Consumit gateway, AniList 21 episode 1 now requested one successful Kyren fallback and decoded at 1440 pixels without another same-provider refresh. Episodes 1 of AniList 7785, 113415, and 172463 also decoded, through Kyren or AnimeParadise, at 1920 pixels. All four checks advanced beyond one second with zero page errors. These are startup checks, not full-episode or catalog-wide availability guarantees.
+
+The companion JSON contains sanitized before/after and loader-comparison evidence, without source URLs, signed parameters, cookies, or raw provider responses. Temporary diagnostics were removed after verification. API and web remained healthy; no API restart was necessary for this client recovery repair.

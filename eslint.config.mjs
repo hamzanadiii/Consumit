@@ -6,24 +6,36 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig([
   globalIgnores([
-    '**/.next/**',
+    '**/.next*/**',
     '**/coverage/**',
     '**/dist/**',
+    '**/generated/**',
     '**/node_modules/**',
+    // Vendored minified signing code from the upstream player bundle.
+    'packages/provider-sdk/src/adapters/aphrodite-gate.ts',
     'design/**',
+    'local/**',
+    '**/tmp-*/**',
+    '**/tmp-*',
   ]),
   {
     files: ['apps/web/**/*.{js,jsx,ts,tsx}'],
     extends: [nextVitals, nextTypeScript],
   },
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.{ts,tsx}'],
+    files: ['apps/api/**/*.ts', 'apps/playback/**/*.ts', 'apps/worker/**/*.ts', 'apps/release-worker/**/*.ts', 'packages/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
     },
   },
 ])

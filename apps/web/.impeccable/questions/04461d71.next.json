@@ -1,0 +1,123 @@
+{
+  "title": "Choose Consumit's redesign direction",
+  "question": "The roll assigned Screening Arcade. Keep it, choose an alternate, or reroll. Every option keeps Consumit's original orange brand; your choice will guide the redesign of every screen and shared component.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Screening Arcade",
+      "kicker": "THE ROLL",
+      "lineage": "Late-night arcade cabinets, cinema marquees, and the fun of choosing what to play next.",
+      "thesis": "Make choosing a story feel playful, then make Play the quickest move.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8", "#262326"],
+      "materials": ["satin-black cabinet surfaces", "orange illuminated controls", "screen-lit poster artwork"],
+      "viewport": "Home opens with a small, useful night picker beside one fully legible featured title; orange Play, format paths, and a quiet Circle doorway remain easy to find.",
+      "risk": "Arcade cues can turn a useful film journal into a game interface.",
+      "raised": [
+        {"from": "House Lights", "raise": "One controlled focal area makes every screen easy to scan."},
+        {"from": "Movie Panels", "raise": "Diary and review activity can unfold in a clear, sequential reading rhythm."},
+        {"from": "Layered Papercut", "raise": "A single overlapping poster layer supplies depth without adding routine shadows."},
+        {"from": "Game Boy Field", "raise": "Selection and playback states stay discrete, named, and unmistakable."},
+        {"from": "Phosphor Terminal", "raise": "Universal search stays keyboard-first and visible."},
+        {"from": "Shader Portal", "raise": "Motion is limited to one short, optional transition; content remains still and available."}
+      ],
+      "comp": ".impeccable/mocks/decision/screening-arcade.png"
+    },
+    {
+      "id": "model-pick",
+      "label": "Pocket Film Zine",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "Independent film fanzines and the little ticket stubs tucked inside them.",
+      "thesis": "Give every screening the personality of a page worth keeping and passing around.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8", "#262326"],
+      "materials": ["ink-heavy cover art", "halftone artwork", "hand-marked orange notes"],
+      "viewport": "Home reads like a new issue: a clear cover story leads into short discovery columns, member writing, and a visible Play action.",
+      "risk": "Editorial detail may slow down members who want to start watching quickly.",
+      "comp": ".impeccable/mocks/decision/pocket-film-zine.png"
+    },
+    {
+      "id": "challenger-comic",
+      "label": "Movie Panels",
+      "verdict": "competitive",
+      "lineage": "Silver-age comic pages: panels, Ben-Day dots, and expressive captions.",
+      "thesis": "Let discovery and diary entries read as small stories instead of rows of media.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8", "#49759a"],
+      "materials": ["halftone print", "offset ink", "caption panels"],
+      "viewport": "One title owns the opening panel; smaller panels lead to formats, Circle activity, and fast follow-up choices.",
+      "case": "Strong audience energy and a clear sequence; its expressive panels compete with the direct Play path.",
+      "risk": "Speech bubbles and bursts can make reviews and controls noisy.",
+      "comp": ".impeccable/mocks/decision/movie-panels.png",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-benday-comic-page-hero.webp"
+    },
+    {
+      "id": "challenger-house-lights",
+      "label": "House Lights",
+      "verdict": "competitive",
+      "lineage": "A theatre lighting desk, with named cues and a single lit stage.",
+      "thesis": "Use light and darkness to guide the eye from a title choice into its screening.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8", "#38302b"],
+      "materials": ["blackout velvet", "warm work lights", "projector spill"],
+      "viewport": "A quiet dark stage frames one title and its Play decision, with smaller cues for friends and the next programme.",
+      "case": "Strong cinema identity and focal control; it offers less playful exploration than the requested experience.",
+      "risk": "The theatre metaphor can repeat a standard streaming hero.",
+      "comp": ".impeccable/mocks/decision/house-lights.png",
+      "hero": "https://impeccable.style/worlds/cards/stagecraft-theater-lighting-cyclorama-dawn-hero.webp"
+    },
+    {
+      "id": "challenger-papercut",
+      "label": "Layered Papercut",
+      "verdict": "declined",
+      "lineage": "Symmetrical folk papercuts made from flat pieces of colored paper.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8"],
+      "materials": ["flat paper layers", "cut silhouettes"],
+      "case": "Fuses weakly with fast streaming and social tasks; keeping one clear overlapping layer adds useful depth.",
+      "kept": "Use one measured overlap to separate artwork from controls without adding shadow stacks.",
+      "hero": "https://impeccable.style/worlds/cards/craft-making-lowicz-layered-papercut-hero.webp"
+    },
+    {
+      "id": "challenger-gameboy",
+      "label": "Game Boy Field",
+      "verdict": "declined",
+      "lineage": "A four-shade handheld game screen with tile-based navigation.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8"],
+      "materials": ["coarse pixel grid", "fixed-frame screen"],
+      "case": "The pixel limit makes real artwork, title copy, and dense diary rows harder to scan; keep its explicit selection states.",
+      "kept": "Selection and playback states have one discrete, named visual treatment.",
+      "hero": "https://impeccable.style/worlds/cards/digital-design-canon-gameboy-four-shade-field-hero.webp"
+    },
+    {
+      "id": "challenger-terminal",
+      "label": "Phosphor Terminal",
+      "verdict": "declined",
+      "lineage": "A green-phosphor text terminal in a dark machine room.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8"],
+      "materials": ["monospace text", "glass afterimage"],
+      "case": "A terminal is a poor model for poster-led choice and expressive member profiles; preserve its efficient keyboard path.",
+      "kept": "Search and navigation remain fast from the keyboard with visible focus.",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight-hero.webp"
+    },
+    {
+      "id": "challenger-shader",
+      "label": "Shader Portal",
+      "verdict": "declined",
+      "lineage": "A full-screen GPU shader with cursor-reactive distortion and scene transitions.",
+      "palette": ["#09090b", "#ff5d38", "#f4f0e8"],
+      "materials": ["live shader field", "film grain"],
+      "case": "Ambient rendering adds cost and distraction without helping members pick, play, or remember a title.",
+      "kept": "Use only a short, reduced-motion-aware transition when a selection changes.",
+      "hero": "https://impeccable.style/worlds/cards/webgl-shader-portal-hero.webp"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "buildPath": {"value": "comp", "toggle": true},
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "A familiar catalogue with a strong featured title and polished poster rails.",
+    "palette": ["#09090b", "#ff5d38", "#f4f0e8"],
+    "materials": ["flat digital surfaces", "catalog artwork"],
+    "viewport": "A conventional responsive entertainment homepage with clear Movies, Series, Anime, Library, and Play destinations.",
+    "risk": "It is easy to understand but could resemble every other streaming service.",
+    "comp": ".impeccable/mocks/decision/category-standard.png"
+  },
+  "steer": true
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@consumit/media-relay",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": { ".": "./src/grants.ts", "./manifest": "./src/manifest.ts", "./provider-headers": "./src/provider-headers.ts", "./worker": "./src/worker.ts", "./resolver-worker": "./src/resolver-worker.ts" },
+  "dependencies": { "@consumit/contracts": "workspace:*", "zod": "^4.5.4" },
+  "scripts": { "build": "bun build src/worker.ts --target browser --outfile dist/worker.js", "build:resolver": "wrangler deploy --dry-run --config ../../infra/cloudflare/provider-resolver.wrangler.jsonc", "lint": "eslint .", "typecheck": "tsc --noEmit", "test": "vitest run" }
+}

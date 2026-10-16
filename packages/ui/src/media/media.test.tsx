@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { ArtworkFrame, LandscapeStill, PosterCard } from './media'
+import { ArtworkFrame, PosterStack } from './media'
 
 describe('media components', () => {
   it('uses supplied artwork when available and a named fallback otherwise', () => {
@@ -21,29 +21,16 @@ describe('media components', () => {
     ).toBeInTheDocument()
   })
 
-  it('exposes poster destinations and viewing progress', () => {
-    render(
-      <>
-        <PosterCard href="/titles/northbound" title="Northbound" />
-        <LandscapeStill
-          alt="Fault Lines episode still"
-          playHref="/watch/fault-lines"
-          progress={42}
-        />
-      </>,
-    )
+  it('keeps five collection covers individually named and linked, including missing artwork', () => {
+    render(<PosterStack items={Array.from({ length: 6 }, (_, index) => ({ key: String(index), label: `Title ${index}`, href: `/title/${index}` }))} />)
+    expect(screen.getAllByRole('link')).toHaveLength(5)
+    expect(screen.getByRole('link', { name: 'Title 4' })).toHaveAttribute('href', '/title/4')
+    expect(screen.queryByRole('link', { name: 'Title 5' })).not.toBeInTheDocument()
+  })
 
-    expect(screen.getByRole('link', { name: 'Northbound' })).toHaveAttribute(
-      'href',
-      '/titles/northbound',
-    )
-    expect(screen.getByRole('link', { name: 'Continue watching' })).toHaveAttribute(
-      'href',
-      '/watch/fault-lines',
-    )
-    expect(screen.getByRole('progressbar', { name: '42% watched' })).toHaveAttribute(
-      'aria-valuenow',
-      '42',
-    )
+  it('gives empty collections a stable artwork fallback without inventing a destination', () => {
+    render(<PosterStack items={[]} />)
+    expect(screen.getByRole('img', { name: 'Collection artwork unavailable' })).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 })

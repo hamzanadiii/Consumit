@@ -1,98 +1,55 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import {
-  ContentCard,
-  ContinueCard,
-  CuratedListCard,
-  TrendingCard,
-} from './content-cards'
+import { CuratedListCard, WatchCard } from './content-cards'
 
 describe('content cards', () => {
-  it('keeps title destinations and saved state explicit', () => {
+  it('renders curated-list ownership with a title destination', () => {
     render(
-      <ContentCard
-        href="/titles/northbound"
-        state="saved"
-        title="Northbound"
+      <CuratedListCard
+        artworkSources={[]}
+        curator="Yasmine"
+        href="/lists/memory"
+        saves="426"
+        title="Films that feel like a memory"
       />,
     )
 
-    expect(screen.getByRole('link', { name: 'Northbound' })).toHaveAttribute(
-      'href',
-      '/titles/northbound',
-    )
-    expect(screen.getByText('Saved')).toHaveClass('sr-only')
-  })
-
-  it('exposes a specific continuation action and progress', () => {
-    render(
-      <ContinueCard
-        href="/watch/fault-lines"
-        meta="S1 E06 · 29 min left"
-        progress={34}
-        title="Fault Lines"
-      />,
-    )
-
-    expect(screen.getByRole('link', { name: 'Continue Fault Lines' })).toHaveAttribute(
-      'href',
-      '/watch/fault-lines',
-    )
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '34')
-  })
-
-  it('renders trend proof and curated-list ownership', () => {
-    render(
-      <>
-        <TrendingCard
-          completionProof="94% finished"
-          memberScore={8.7}
-          rank={1}
-          title="Sea of Names"
-        />
-        <CuratedListCard
-          artworkSources={[]}
-          curator="Yasmine"
-          saves="426"
-          title="Films that feel like a memory"
-        />
-      </>,
-    )
-
-    expect(screen.getByText('Rank 1')).toBeInTheDocument()
-    expect(screen.getByText('8.7 member')).toBeInTheDocument()
     expect(screen.getByText("Yasmine's list")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Films that feel like a memory' })).toHaveClass('min-h-11')
+    expect(screen.getByRole('link', { name: 'Films that feel like a memory' })).toHaveAttribute(
+      'href',
+      '/lists/memory',
+    )
   })
 
-  it('anchors the trending rank behind the poster instead of below the card', () => {
+  it('keeps the curated-list overlay destination under the artwork', () => {
     const { container } = render(
-      <TrendingCard
-        completionProof="94% finished"
-        memberScore={8.7}
-        rank={1}
-        title="Sea of Names"
+      <CuratedListCard artworkSources={[]} curator="Yasmine" href="/lists/memory" title="Films that feel like a memory" />,
+    )
+
+    const overlay = container.querySelector('a[aria-hidden="true"][tabindex="-1"]')
+    expect(overlay).toHaveAttribute('href', '/lists/memory')
+    expect(overlay?.className).toMatch(/absolute/)
+    expect(overlay?.className).toMatch(/inset-0/)
+  })
+
+  it('keeps the poster title link accessible beside the bookmark action', () => {
+    render(
+      <WatchCard
+        bookmark={<button type="button">Save Dune</button>}
+        href="/watch/movie/693134"
+        meta="2024"
+        rating={8.2}
+        title="Dune: Part Two"
+        titleHref="/title/693134"
       />,
     )
 
-    const posterGroup = container.querySelector<HTMLElement>(
-      '[data-consumit-trending-poster]',
-    )
-    const rank = container.querySelector<HTMLElement>(
-      '[data-consumit-trending-rank]',
-    )
-    const card = container.querySelector<HTMLElement>(
-      '[data-consumit-trending-card]',
-    )
-
-    expect(card).toHaveClass('relative')
-    expect(posterGroup).toContainElement(rank)
-    expect(rank).toHaveClass(
-      'absolute',
-      'top-1/2',
-      'left-2',
-      '-translate-y-1/2',
-      'text-[6.25rem]',
-    )
+    expect(screen.queryByRole('link', { name: 'Watch Dune: Part Two' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
+    expect(screen.getAllByRole('link', { name: 'Dune: Part Two' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Save Dune' })).toBeInTheDocument()
+    expect(screen.getByText('8.2')).toBeInTheDocument()
   })
 })

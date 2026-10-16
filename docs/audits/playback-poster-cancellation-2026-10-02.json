@@ -1,0 +1,159 @@
+{
+  "reported": [
+    "poster-cors",
+    "fetch-loader-abort",
+    "fallback-503"
+  ],
+  "tests": {
+    "apiPlayback": 50,
+    "uiPlayback": 96,
+    "watchAndCoordinator": 42
+  },
+  "beforeSeekRepair": {
+    "resumedPosition": 47.449705,
+    "requested": 600,
+    "fallbackStatus": 200
+  },
+  "live": {
+    "at": "2026-10-02T15:11:16.872Z",
+    "origin": "http://localhost:8080",
+    "ref": {
+      "kind": "movie",
+      "id": 1007757
+    },
+    "poster": {
+      "sameOrigin": true,
+      "decoded": false,
+      "width": 0
+    },
+    "suppliedPoster": {
+      "decoded": true,
+      "width": 1200
+    },
+    "playedAfterSeeks": true,
+    "pageErrors": [],
+    "posterCors": 0,
+    "actions": [
+      {
+        "action": "resolve",
+        "status": 200,
+        "provider": "riveapogee"
+      },
+      {
+        "action": "fallback",
+        "status": 503
+      }
+    ],
+    "fallback": {
+      "status": 503,
+      "fallbackMs": 15800,
+      "resumed": false,
+      "retained": {
+        "position": 600,
+        "width": 1920,
+        "seeking": true
+      }
+    }
+  },
+  "controlled": {
+    "at": "2026-10-02T15:13:23.148Z",
+    "controlled": true,
+    "requestedSeek": 24,
+    "elapsedMs": 12223,
+    "resumed": true,
+    "retained": {
+      "position": 24.771632,
+      "width": 640,
+      "seeking": false,
+      "paused": false
+    },
+    "actions": [
+      {
+        "action": "fallback",
+        "failure": {
+          "sourceId": "primary",
+          "reason": "network",
+          "deliveryFailure": "timeout"
+        }
+      }
+    ],
+    "pageErrors": []
+  },
+  "providers": {
+    "at": "2026-10-02T14:56:45.969Z",
+    "browser": "Chrome",
+    "origin": "http://localhost:8080",
+    "providers": [
+      {
+        "id": "lookmovie",
+        "runtimeId": "lookmovie",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "id": 1007757,
+              "kind": "movie"
+            },
+            "resolved": 0,
+            "resolveMs": 1478,
+            "direct": false,
+            "attempts": [],
+            "code": "no-validated-sources"
+          }
+        ]
+      },
+      {
+        "id": "vixsrc",
+        "runtimeId": "vixsrc",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "id": 1007757,
+              "kind": "movie"
+            },
+            "resolved": 1,
+            "resolveMs": 911,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "riveapogee",
+        "runtimeId": "riveapogee",
+        "enabled": true,
+        "delivery": "direct",
+        "checks": [
+          {
+            "kind": "movie",
+            "ref": {
+              "id": 1007757,
+              "kind": "movie"
+            },
+            "resolved": 1,
+            "resolveMs": 281,
+            "direct": true,
+            "attempts": [
+              {
+                "type": "hls",
+                "ok": true,
+                "code": "first-frame"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

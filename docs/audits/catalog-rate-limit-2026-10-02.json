@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-02",
+  "reproducedCause": "Shared local API rate-limit bucket for SSR metadata reads",
+  "before": {
+    "attempts": 101,
+    "statuses": {
+      "200": 13,
+      "429": 88
+    },
+    "next": {
+      "status": 429,
+      "code": "RATE_LIMITED",
+      "limit": 100,
+      "remaining": 0,
+      "retryAfterSeconds": 28
+    },
+    "watchShowsCatalogFailure": true
+  },
+  "after": {
+    "at": "2026-10-02T16:07:59.18Z",
+    "statuses": {
+      "200": 101
+    },
+    "next": {
+      "status": 200,
+      "limit": "600"
+    },
+    "pages": [
+      {
+        "path": "/",
+        "status": 200,
+        "ms": 133,
+        "catalogFailure": false
+      },
+      {
+        "path": "/anime",
+        "status": 200,
+        "ms": 66,
+        "catalogFailure": false
+      },
+      {
+        "path": "/anime/16498",
+        "status": 200,
+        "ms": 377,
+        "catalogFailure": false
+      },
+      {
+        "path": "/watch/anime/101922?episode=1",
+        "status": 200,
+        "ms": 95,
+        "catalogFailure": false
+      },
+      {
+        "path": "/title/550",
+        "status": 200,
+        "ms": 68,
+        "catalogFailure": false
+      },
+      {
+        "path": "/movies",
+        "status": 200,
+        "ms": 135,
+        "catalogFailure": false
+      },
+      {
+        "path": "/series",
+        "status": 200,
+        "ms": 50,
+        "catalogFailure": false
+      }
+    ],
+    "repeated": {
+      "count": 20,
+      "failures": 0,
+      "extraMetadataReads": 0,
+      "minMs": 25,
+      "maxMs": 91
+    }
+  },
+  "browser": {
+    "at": "2026-10-02T16:09:44.63Z",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "pages": [
+      {
+        "path": "/",
+        "status": 200,
+        "ms": 597,
+        "catalogFailure": false
+      },
+      {
+        "path": "/anime",
+        "status": 200,
+        "ms": 238,
+        "catalogFailure": false
+      },
+      {
+        "path": "/anime/16498",
+        "status": 200,
+        "ms": 258,
+        "catalogFailure": false
+      },
+      {
+        "path": "/title/550",
+        "status": 200,
+        "ms": 332,
+        "catalogFailure": false
+      }
+    ],
+    "pageErrors": []
+  },
+  "checks": {
+    "apiTests": 35,
+    "webTests": 15,
+    "webTypecheck": "passed",
+    "focusedApiLimiterTypecheck": "passed",
+    "changedFileLint": "passed",
+    "apiBundle": "passed",
+    "optimizedWebBuild": "passed",
+    "apiWideTypecheck": "Existing retired-social/private-visibility errors outside the changed limiter"
+  },
+  "limits": [
+    "Local warm-cache measurements, not a cold-network guarantee.",
+    "Upstream metadata outages and quotas remain independent of the repaired local budget."
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "module": "Preserve", "moduleResolution": "Bundler", "noEmit": true, "types": ["node", "vitest/globals"], "lib": ["DOM", "ES2024"] },
+  "include": ["src/**/*.ts"]
+}

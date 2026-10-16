@@ -1,0 +1,226 @@
+name: consumit
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    profiles: [playback]
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./infra/observability/otel-collector.yaml:/etc/otel/config.yaml:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    profiles: [playback]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - consumit-prometheus:/prometheus
+    depends_on:
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [playback]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./infra/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - consumit-alertmanager:/alertmanager
+    restart: unless-stopped
+
+  playback-valkey:
+    image: valkey/valkey:9.1.1-alpine
+    profiles: [playback]
+    command: ["valkey-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: consumit
+      POSTGRES_PASSWORD: ${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}
+      POSTGRES_USER: consumit
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U consumit -d consumit"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    volumes:
+      - consumit-postgres:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey:9.1.1-alpine
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    volumes:
+      - consumit-valkey:/data
+
+  migrate:
+    build:
+      context: .
+      target: api-migrate
+    environment:
+      # External managed Postgres (Neon): set DATABASE_URL in .env or the
+      # shell. Falls back to the local container for plain local runs.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: api
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./apps/api/.env
+        required: false
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+      DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
+      NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}
+      PORT: 3001
+      TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
+      TMDB_REGION: ${TMDB_REGION:-US}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
+      VALKEY_URL: valkey://valkey:6379/0
+      SUBTITLES_DIR: /var/lib/consumit/subtitles
+    volumes:
+      - consumit-subtitles:/var/lib/consumit/subtitles
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const response = await fetch('http://127.0.0.1:3001/health/ready'); if (!response.ok) process.exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
+        NEXT_PUBLIC_GA_PROMPT: ${NEXT_PUBLIC_GA_PROMPT:-on}
+        NEXT_PUBLIC_CAST_RECEIVER_ID: ${NEXT_PUBLIC_CAST_RECEIVER_ID:-}
+        NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED: ${NEXT_PUBLIC_CONSUMIT_WELCOME_ENABLED:-false}
+        NEXT_PUBLIC_CONSUMIT_DISCORD_URL: ${NEXT_PUBLIC_CONSUMIT_DISCORD_URL:-https://discord.gg/p7XVyk6vs}
+        NEXT_PUBLIC_CONSUMIT_REDDIT_URL: ${NEXT_PUBLIC_CONSUMIT_REDDIT_URL:-https://www.reddit.com/r/Consumit/}
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./apps/web/.env
+        required: false
+    environment:
+      CONSUMIT_API_URL: http://api:3001
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      target: gateway
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "${CONSUMIT_PORT:-8080}:80"
+    restart: unless-stopped
+
+  # Nightly Postgres backup (Neon). Dumps $DATABASE_URL at 03:00 UTC,
+  # keeps 7 daily dumps in the consumit-backups volume, and snapshots the
+  # provider-overrides file alongside. See infra/docker/backup.sh for the
+  # manual run + restore drill. Local postgres stays as the drill target
+  # and the offline fallback; Valkey intentionally has no backup (total
+  # loss only logs members out â€” see ARCHITECTURE.md).
+  backup:
+    # pg_dump must be >= the server version (Neon runs PG18).
+    image: postgres:18-alpine
+    command: ["sh", "-c", "echo '0 3 * * * sh /backup.sh >> /var/log/backup.log 2>&1' | crontab - && exec crond -f"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
+    volumes:
+      - ./infra/docker/backup.sh:/backup.sh:ro
+      - consumit-backups:/backups
+      - ./infra/playback:/config-overrides:ro
+    restart: unless-stopped
+
+  postgres-test:
+    image: postgres:17-alpine
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: consumit_test
+      POSTGRES_PASSWORD: consumit
+      POSTGRES_USER: consumit
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U consumit -d consumit_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  valkey-test:
+    image: valkey/valkey:9.1.1-alpine
+    profiles: ["test"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6380:6379"
+    tmpfs:
+      - /data
+
+volumes:
+  consumit-prometheus:
+  consumit-alertmanager:
+  consumit-postgres:
+  consumit-valkey:
+  consumit-backups:
+  consumit-subtitles:

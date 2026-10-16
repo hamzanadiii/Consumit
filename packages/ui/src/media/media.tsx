@@ -1,8 +1,6 @@
-import type { ComponentProps, ReactNode } from 'react'
-import { Play } from 'lucide-react'
+import type { ComponentProps, ElementType, ReactNode } from 'react'
 
 import { cn } from '../lib/cn'
-import { Badge } from '../signals/signals'
 
 const ratioClasses = {
   landscape: 'aspect-video',
@@ -76,7 +74,7 @@ export function ArtworkFrame({
       {src ? (
         <img
           alt={alt}
-          className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.025] motion-reduce:transition-none"
+          className="size-full object-cover"
           loading={loading}
           src={src}
         />
@@ -88,116 +86,25 @@ export function ArtworkFrame({
   )
 }
 
-export type PosterCardProps = Omit<ComponentProps<'article'>, 'children'> & {
-  alt?: string | undefined
-  badge?: ReactNode | undefined
-  footer?: ReactNode | undefined
-  href?: string | undefined
-  meta?: ReactNode | undefined
-  src?: string | undefined
-  title: string
+export type PosterStackProps = Omit<ComponentProps<'div'>, 'children'> & {
+  items: readonly { key: string; label: string; src?: string | undefined; href?: string | undefined }[]
+  linkComponent?: ElementType | undefined
 }
 
-export function PosterCard({
-  alt,
-  badge,
-  className,
-  footer,
-  href,
-  meta,
-  src,
-  title,
-  ...props
-}: PosterCardProps) {
-  const titleText = (
-    <span className="font-bold text-ink transition-colors group-hover:text-orange motion-reduce:transition-none">
-      {title}
-    </span>
-  )
-
+/** A compact collection preview. The first cover leads; every linked cover stays keyboard reachable. */
+export function PosterStack({ items, className, linkComponent: LinkComponent = 'a', ...props }: PosterStackProps) {
   return (
-    <article
-      className={cn('group min-w-0', className)}
-      data-consumit-poster-card
-      {...props}
-    >
-      <ArtworkFrame alt={alt ?? `${title} poster`} src={src}>
-        {badge ? <div className="absolute top-3 left-3">{badge}</div> : null}
-      </ArtworkFrame>
-      <div className="mt-3 min-w-0">
-        {href ? (
-          <a
-            className="rounded-micro outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-            href={href}
-          >
-            {titleText}
-          </a>
-        ) : (
-          titleText
-        )}
-        {meta ? <div className="mt-1 text-xs text-muted">{meta}</div> : null}
-        {footer ? <div className="mt-2">{footer}</div> : null}
-      </div>
-    </article>
-  )
-}
-
-export type LandscapeStillProps = Omit<ComponentProps<'div'>, 'children'> & {
-  alt: string
-  playHref?: string | undefined
-  playLabel?: string | undefined
-  progress?: number | undefined
-  src?: string | undefined
-}
-
-export function LandscapeStill({
-  alt,
-  className,
-  playHref,
-  playLabel = 'Continue watching',
-  progress,
-  src,
-  ...props
-}: LandscapeStillProps) {
-  const safeProgress =
-    progress === undefined ? undefined : Math.min(Math.max(progress, 0), 100)
-
-  return (
-    <div
-      className={cn('group relative', className)}
-      data-consumit-landscape-still
-      {...props}
-    >
-      <ArtworkFrame alt={alt} ratio="landscape" src={src}>
-        {playHref ? (
-          <a
-            aria-label={playLabel}
-            className="absolute top-1/2 left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-ink/35 bg-canvas/80 text-ink outline-none transition-[background-color,transform] hover:scale-105 hover:bg-canvas focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none"
-            href={playHref}
-          >
-            <Play aria-hidden="true" className="size-5 fill-current" />
-          </a>
-        ) : null}
-      </ArtworkFrame>
-      {safeProgress === undefined ? null : (
-        <div
-          aria-label={`${safeProgress}% watched`}
-          aria-valuemax={100}
-          aria-valuemin={0}
-          aria-valuenow={safeProgress}
-          className="absolute inset-x-0 bottom-0 h-1 bg-surface-raised"
-          role="progressbar"
-        >
-          <span
-            className="block h-full bg-orange"
-            style={{ width: `${safeProgress}%` }}
-          />
-        </div>
-      )}
+    <div className={cn('relative aspect-[12/5] min-w-0', className)} data-consumit-poster-stack {...props}>
+      {items.slice(0, 5).map((item, index) => {
+        const style = { left: `${index * (100 - 250 / 9) / 4}%`, width: `${250 / 9}%`, zIndex: 5 - index }
+        const artwork = <ArtworkFrame alt={item.href ? '' : item.label} className="h-full w-full" src={item.src} />
+        return item.href ? (
+          <LinkComponent aria-label={item.label} className="consumit-poster-stack-cover absolute inset-y-0 block rounded-card outline-none" href={item.href} key={item.key} style={style} title={item.label}>
+            {artwork}
+          </LinkComponent>
+        ) : <div className="consumit-poster-stack-cover absolute inset-y-0" key={item.key} style={style}>{artwork}</div>
+      })}
+      {items.length === 0 ? <ArtworkFrame alt="Collection artwork unavailable" className="absolute inset-y-0 w-[27.7778%]" /> : null}
     </div>
   )
-}
-
-export function PosterMatchBadge({ score }: { score: number }) {
-  return <Badge tone="orange">{Math.round(score)}% match</Badge>
 }

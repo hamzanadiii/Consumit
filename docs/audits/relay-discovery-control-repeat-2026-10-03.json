@@ -1,0 +1,49 @@
+[
+  {
+    "provider": "stormboron",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200,
+      200
+    ],
+    "pageErrors": [],
+    "quality": "Auto",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 802,
+      "position": 94.020759,
+      "frames": 610
+    }
+  },
+  {
+    "provider": "wecollege-miami",
+    "ref": {
+      "kind": "movie",
+      "id": 1022789
+    },
+    "passed": true,
+    "failedMediaStatuses": [],
+    "failedMediaRequests": [],
+    "phase": "first-frame",
+    "controlStatuses": [
+      200
+    ],
+    "pageErrors": [],
+    "quality": "1080p",
+    "delivery": "relay",
+    "media": {
+      "width": 1920,
+      "height": 1080,
+      "position": 94.031646,
+      "frames": 225
+    }
+  }
+]

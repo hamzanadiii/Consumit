@@ -1,0 +1,67 @@
+name: consumit-rebuild-images
+services:
+  trace-volume-init:
+    image: alpine:3.22
+    command: [sh, -c, 'chmod 0700 /traces && chown 10001:10001 /traces']
+    volumes: [rebuild-image-traces:/traces]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    network_mode: none
+    mem_limit: 16m
+  api:
+    image: consumit-api:rebuild-20261014-v4
+    command: [node, --import, /fixtures.mjs, index.js]
+    environment: &foundation
+      NODE_ENV: development
+      APP_ORIGIN: http://127.0.0.1:28119
+      APPLICATION_MODE: product
+      INTERNAL_PLAYBACK_ORIGIN: http://playback:3002
+      INTERNAL_SERVICE_SECRET: rebuild-fixture-internal-secret-at-least-32
+      BACKGROUND_JOBS_ENABLED: 'true'
+      DATABASE_URL: postgresql://consumit:rebuild-test-only@host.docker.internal:15435/consumit_rebuild_test
+      DATABASE_SSL_MODE: disable
+      AUTH_CODE_PEPPER: rebuild-fixture-auth-pepper-at-least-32
+      AUTH_EMAIL_FROM: Consumit <fixture@example.test>
+      AUTH_EMAIL_PROVIDER: resend
+      RESEND_API_KEY: fixture-unused
+      VALKEY_URL: redis://host.docker.internal:16383/0
+      PLAYBACK_ENABLED: 'true'
+      PLAYBACK_VALKEY_URL: redis://host.docker.internal:16384/0
+      PLAYBACK_MEDIA_CONFIG: /providers.json
+      PLAYBACK_PROBE_INTERVAL_MINUTES: '0'
+      TMDB_API_READ_TOKEN: fixture-unused
+      CONSUMIT_CONTROLLED_FIXTURES: '1'
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4318
+      OTEL_SERVICE_NAME: consumit-api
+      OTEL_TRACES_SAMPLER: always_on
+    volumes: [./image-fixtures.mjs:/fixtures.mjs:ro, ../../local/rebuild-browser-providers.json:/providers.json:ro]
+    mem_limit: 512m
+    depends_on: {collector: {condition: service_started}}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/health/ready').then(r=>process.exit(r.ok?0:1))"], interval: 3s, timeout: 5s, retries: 20}
+  playback:
+    image: consumit-playback:rebuild-20261014-v4
+    command: [node, --import, /fixtures.mjs, index.js]
+    environment:
+      <<: *foundation
+      APPLICATION_MODE: playback
+      INTERNAL_API_ORIGIN: http://api:3001
+      PORT: '3002'
+      OTEL_SERVICE_NAME: consumit-playback
+    volumes: [./image-fixtures.mjs:/fixtures.mjs:ro, ../../local/rebuild-browser-providers.json:/providers.json:ro]
+    mem_limit: 512m
+    depends_on: {api: {condition: service_healthy}}
+    healthcheck: {test: [CMD, node, -e, "fetch('http://127.0.0.1:3002/health/ready').then(r=>process.exit(r.ok?0:1))"], interval: 3s, timeout: 5s, retries: 20}
+  gateway:
+    image: consumit-gateway-rebuild:rebuild-20261014-v4
+    environment: {CONSUMIT_PLAYBACK_CANARY_PERCENT: '100', CONSUMIT_PLAYBACK_PRIMARY_UPSTREAM: 'playback:3002'}
+    ports: ['127.0.0.1:18591:80']
+    depends_on: {api: {condition: service_healthy}, playback: {condition: service_healthy}}
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    command: [--config=/etc/otel/config.yaml]
+    volumes: [../../infra/observability/otel-collector.rebuild.yaml:/etc/otel/config.yaml:ro, rebuild-image-traces:/var/lib/consumit/traces]
+    mem_limit: 256m
+    depends_on: {trace-volume-init: {condition: service_completed_successfully}}
+volumes:
+  rebuild-image-traces:

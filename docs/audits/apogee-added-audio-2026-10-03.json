@@ -1,0 +1,183 @@
+{
+  "checkedAt": "2026-10-03T04:40:06.287Z",
+  "scope": "Opt-in Apogee added audio; movie and TV Both registration",
+  "lanterns": {
+    "result": {
+      "provider": "vixsrc",
+      "languages": [
+        "en",
+        "ta",
+        "hi",
+        "te"
+      ],
+      "initial": {
+        "active": true,
+        "error": null,
+        "videoDuration": 3388.635561999979,
+        "audioDuration": 3400.78958200002,
+        "unchanged": true,
+        "audioReady": 4
+      },
+      "samples": [
+        {
+          "position": 3.906089,
+          "audio": 3.838973,
+          "drift": 0.06711599999999995
+        },
+        {
+          "position": 128.849344,
+          "audio": 128.790666,
+          "drift": 0.05867800000001466,
+          "active": true,
+          "error": null
+        },
+        {
+          "paused": true
+        }
+      ],
+      "events": [
+        {
+          "active": false,
+          "loading": true,
+          "error": null
+        },
+        {
+          "active": false,
+          "loading": true,
+          "error": null
+        },
+        {
+          "active": true,
+          "loading": false,
+          "error": null
+        }
+      ]
+    },
+    "errors": []
+  },
+  "desktop": [
+    {
+      "width": 1440,
+      "initial": {
+        "video": 1.346262,
+        "audio": 1.32496
+      },
+      "seek": {
+        "video": 120,
+        "audio": 120.2,
+        "rate": 1
+      },
+      "bounds": {
+        "x": 686,
+        "y": 41,
+        "width": 300,
+        "height": 424.5625
+      },
+      "stage": {
+        "x": 49,
+        "y": 15,
+        "width": 961,
+        "height": 540.5625
+      },
+      "unchanged": true,
+      "recovery": true,
+      "errors": []
+    },
+    {
+      "width": 1024,
+      "initial": {
+        "video": 1.290667,
+        "audio": 1.274081
+      },
+      "seek": {
+        "video": 120.380011,
+        "audio": 120.569344,
+        "rate": 1
+      },
+      "bounds": {
+        "x": 290,
+        "y": 41,
+        "width": 300,
+        "height": 213.0625
+      },
+      "stage": {
+        "x": 29,
+        "y": 15,
+        "width": 585,
+        "height": 329.0625
+      },
+      "unchanged": true,
+      "recovery": true,
+      "errors": []
+    }
+  ],
+  "swapped": {
+    "movie": 1007757,
+    "provider": "riveapogee",
+    "movieEligible": true,
+    "tracks": [
+      "1. Arabic",
+      "2. Czech",
+      "3. Danish",
+      "4. German",
+      "5. Greek",
+      "6. English",
+      "7. Spanish",
+      "8. Spanish",
+      "9. Finnish",
+      "10. Filipino (Tagalog)",
+      "11. French",
+      "12. Hebrew",
+      "13. Hindi",
+      "14. Croatian",
+      "15. Hungarian",
+      "16. Indonesian",
+      "17. Italian",
+      "18. Japanese",
+      "19. Korean",
+      "20. Malay",
+      "21. Norwegian",
+      "22. Dutch",
+      "23. Polish",
+      "24. Portuguese",
+      "25. Portuguese",
+      "26. Romanian",
+      "27. Russian",
+      "28. Swedish",
+      "29. Tamil",
+      "30. Telugu",
+      "31. Thai",
+      "32. Turkish"
+    ],
+    "initial": {
+      "video": 4.204541,
+      "audio": 4.195833,
+      "videoDuration": 6105.416674000013,
+      "audioDuration": 6105.535181000058
+    },
+    "seek": {
+      "video": 61.386667,
+      "audio": 61.040292
+    },
+    "unchanged": true,
+    "errors": []
+  },
+  "movieDiscovery": {
+    "withoutConfiguredOrigin": {
+      "masterBytes": 74,
+      "audioTracks": 0
+    },
+    "withConfiguredOrigin": {
+      "masterBytes": 3683,
+      "audioTracks": 32
+    }
+  },
+  "compatibility": "Clock synchronization and sampled decoding only; no full-episode dialogue certification",
+  "deployment": {
+    "api": "healthy; readiness ok",
+    "web": "healthy; compiled image matches local latest",
+    "providerRole": "both",
+    "movieAndTv": true,
+    "savedOrderPreserved": true
+  }
+}

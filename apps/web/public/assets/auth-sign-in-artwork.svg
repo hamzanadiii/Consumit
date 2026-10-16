@@ -1,0 +1,31 @@
+<svg width="790" height="1000" viewBox="0 0 790 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="art" x1="0" y1="0" x2="790" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10151B"/>
+      <stop offset=".46" stop-color="#24363E"/>
+      <stop offset=".72" stop-color="#6D3E47"/>
+      <stop offset="1" stop-color="#21131A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(525 260) rotate(90) scale(255)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFCC9F" stop-opacity=".48"/>
+      <stop offset="1" stop-color="#FF5D38" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain">
+      <feTurbulence baseFrequency=".72" numOctaves="3" type="fractalNoise"/>
+      <feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .09 0"/>
+    </filter>
+  </defs>
+  <rect width="790" height="1000" fill="url(#art)"/>
+  <rect width="790" height="1000" fill="url(#glow)"/>
+  <circle cx="535" cy="264" r="128" fill="#E6C6AB" fill-opacity=".54"/>
+  <circle cx="535" cy="264" r="92" fill="none" stroke="#FFF" stroke-opacity=".16"/>
+  <path d="M0 765 238 425 493 648 635 480 790 655V1000H0Z" fill="#0A1015" fill-opacity=".88"/>
+  <path d="M0 835 325 585 560 770 790 620V1000H0Z" fill="#141219" fill-opacity=".78"/>
+  <g opacity=".18" stroke="#FFF">
+    <path d="M395 0 555 1000"/>
+    <path d="M460 0 620 1000"/>
+    <path d="M525 0 685 1000"/>
+    <path d="M590 0 750 1000"/>
+  </g>
+  <rect width="790" height="1000" filter="url(#grain)" opacity=".42"/>
+</svg>

@@ -1,0 +1,487 @@
+{
+  "before": {
+    "movie": {
+      "provider": "rivezephyr",
+      "fallbackProvider": "wecollege-miami",
+      "relayStatuses": [
+        403,
+        403,
+        403
+      ]
+    },
+    "series": {
+      "id": 1399,
+      "season": 1,
+      "episode": 1,
+      "switchStatus": 503
+    }
+  },
+  "lifetimeComparison": [
+    {
+      "stage": "adapter",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "ok": true,
+      "code": false,
+      "validated": 1
+    },
+    {
+      "stage": "candidate",
+      "source": "zephyr:2160p:0",
+      "height": 2160,
+      "host": "zcdn.bluevelvet.space",
+      "headerNames": [
+        "referer",
+        "origin",
+        "user-agent"
+      ],
+      "expiryEstimated": true
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "height": 2160,
+      "lifetime": 90000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3094,
+      "edgeClockDeltaMs": 897
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "height": 2160,
+      "lifetime": 1800000,
+      "status": 403,
+      "manifest": false,
+      "bytes": 18,
+      "edgeClockDeltaMs": 923,
+      "reason": "Media unavailable."
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "height": 2160,
+      "lifetime": 1795000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3094,
+      "edgeClockDeltaMs": 961
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "height": 2160,
+      "lifetime": 1770000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3094,
+      "edgeClockDeltaMs": 995
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "height": 2160,
+      "lifetime": 1740000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3094,
+      "edgeClockDeltaMs": 1029
+    },
+    {
+      "stage": "adapter",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "ok": true,
+      "code": false,
+      "validated": 1
+    },
+    {
+      "stage": "candidate",
+      "source": "zephyr:2160p:0",
+      "height": 2160,
+      "host": "zcdn.bluevelvet.space",
+      "headerNames": [
+        "referer",
+        "origin",
+        "user-agent"
+      ],
+      "expiryEstimated": true
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "height": 2160,
+      "lifetime": 90000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3102,
+      "edgeClockDeltaMs": 1352
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "height": 2160,
+      "lifetime": 1800000,
+      "status": 403,
+      "manifest": false,
+      "bytes": 18,
+      "edgeClockDeltaMs": 1374,
+      "reason": "Media unavailable."
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "height": 2160,
+      "lifetime": 1795000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3102,
+      "edgeClockDeltaMs": 409
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "height": 2160,
+      "lifetime": 1770000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3102,
+      "edgeClockDeltaMs": 441
+    },
+    {
+      "stage": "relay",
+      "ref": {
+        "kind": "series",
+        "id": 1399,
+        "season": 1,
+        "episode": 1
+      },
+      "height": 2160,
+      "lifetime": 1740000,
+      "status": 200,
+      "manifest": true,
+      "bytes": 3102,
+      "edgeClockDeltaMs": 477
+    }
+  ],
+  "seriesAfter": {
+    "switches": [
+      {
+        "status": 200,
+        "provider": "rivezephyr",
+        "quality": "2160p"
+      }
+    ],
+    "errors": [],
+    "media": [
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/mp4"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/mp4"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      }
+    ],
+    "states": [
+      {
+        "width": 1280,
+        "height": 720,
+        "position": 2.486114,
+        "paused": false,
+        "ready": 4,
+        "frames": 63
+      },
+      {
+        "width": 1280,
+        "height": 720,
+        "position": 4.51663,
+        "paused": false,
+        "ready": 4,
+        "frames": 112
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 6.547119,
+        "paused": false,
+        "ready": 4,
+        "frames": 161
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 8.569182,
+        "paused": false,
+        "ready": 4,
+        "frames": 209
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 10.632744,
+        "paused": false,
+        "ready": 4,
+        "frames": 259
+      }
+    ]
+  },
+  "movieAfter": {
+    "switches": [
+      {
+        "status": 200,
+        "provider": "rivezephyr",
+        "quality": "2160p"
+      }
+    ],
+    "errors": [],
+    "media": [
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/mp4"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "application/vnd.apple.mpegurl"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/mp4"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      },
+      {
+        "status": 200,
+        "host": "consumit-media-relay.consumit-project.workers.dev",
+        "type": "video/iso.segment"
+      }
+    ],
+    "states": [
+      {
+        "width": 1280,
+        "height": 720,
+        "position": 2.040368,
+        "paused": false,
+        "ready": 4,
+        "frames": 54
+      },
+      {
+        "width": 1280,
+        "height": 720,
+        "position": 4.062915,
+        "paused": false,
+        "ready": 4,
+        "frames": 102
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 6.134956,
+        "paused": false,
+        "ready": 4,
+        "frames": 152
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 8.163311,
+        "paused": false,
+        "ready": 4,
+        "frames": 200
+      },
+      {
+        "width": 3840,
+        "height": 2160,
+        "position": 10.194629,
+        "paused": false,
+        "ready": 4,
+        "frames": 249
+      }
+    ]
+  }
+}

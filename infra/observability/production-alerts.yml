@@ -1,0 +1,81 @@
+groups:
+  - name: consumit-production
+    rules:
+      - alert: ConsumitReleaseQueueDelayed
+        expr: sum(rate(consumit_releases_queue_age_seconds_sum[15m])) / clamp_min(sum(rate(consumit_releases_queue_age_seconds_count[15m])), 0.001) > 3600
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Episode release work is over an hour behind; inspect safe queue counts and worker readiness."}
+      - alert: ConsumitReleaseCatalogFailures
+        expr: sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) >= 10 and sum(increase(consumit_releases_catalog_refreshes_total{outcome="failed"}[30m])) / clamp_min(sum(increase(consumit_releases_catalog_refreshes_total[30m])), 1) > 0.5
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Recent episode catalog refreshes are failing; last known metadata is retained."}
+      - alert: ConsumitReleaseVerificationFailures
+        expr: sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) >= 10 and sum(increase(consumit_releases_verification_results_total{outcome="failed"}[1h])) / clamp_min(sum(increase(consumit_releases_verification_results_total[1h])), 1) > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Automatic episode checks are mostly failing; inspect the sandbox and provider configuration separately from live resolver health."}
+      - alert: ConsumitHostMetricsUnavailable
+        expr: up{job="consumit-host"} == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations: {summary: "Host metrics are unavailable. The external check covers complete VPS outages."}
+      - alert: ConsumitDiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.15
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "VPS disk space is below 15%; unarchived WAL must never be removed."}
+      - alert: ConsumitArchiveLag
+        expr: consumit_archive_lag_seconds > 240
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "WAL has waited more than four minutes. Check S3 and credentials; preserve the backlog."}
+      - alert: ConsumitPhysicalBackupStale
+        expr: time() - consumit_physical_backup_timestamp_seconds > 108000 or absent(consumit_physical_backup_timestamp_seconds)
+        for: 10m
+        labels: {severity: critical}
+        annotations: {summary: "A successful physical backup is missing or older than 30 hours."}
+      - alert: ConsumitLogicalBackupStale
+        expr: time() - consumit_logical_backup_timestamp_seconds > 108000 or absent(consumit_logical_backup_timestamp_seconds)
+        for: 10m
+        labels: {severity: critical}
+        annotations: {summary: "A successful encrypted logical backup is missing or older than 30 hours."}
+      - alert: ConsumitBackupMonitorStale
+        expr: time() - consumit_backup_monitor_timestamp_seconds > 180 or absent(consumit_backup_monitor_timestamp_seconds)
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "Database backup monitoring stopped reporting."}
+      - alert: ConsumitDatabaseCertificateExpiring
+        expr: consumit_db_certificate_expiry_seconds - time() < 2592000
+        labels: {severity: warning}
+        annotations: {summary: "Renew the PostgreSQL server certificate within 30 days, retaining the trusted CA."}
+      - alert: ConsumitSesDeliveryFailures
+        expr: sum(increase(consumit_consumit_email_deliveries_total{outcome!="sent"}[10m])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "Authentication email delivery failed; inspect safe categories and SES quotas."}
+      - alert: ConsumitSesFeedbackUnavailable
+        expr: sum(increase(consumit_consumit_email_feedback_total{outcome=~"consumer_unavailable|invalid"}[10m])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "Private SES feedback processing needs attention; inspect queue and DLQ safely."}
+      - alert: ConsumitSesComplaint
+        expr: sum(increase(consumit_consumit_email_feedback_total{outcome="complaint"}[10m])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "SES reported a complaint; account suppression is enabled."}
+      - alert: ConsumitCreditMonitorStale
+        expr: time() - consumit_credit_monitor_timestamp_seconds > 7200 or absent(consumit_credit_monitor_timestamp_seconds)
+        for: 10m
+        labels: {severity: critical}
+        annotations: {summary: "AWS credit monitoring is missing or stale. Verify the billing console."}
+      - alert: ConsumitAwsUpgradeRequired
+        expr: consumit_credit_upgrade_required == 1
+        labels: {severity: critical}
+        annotations: {summary: "Switch AWS to Paid: fewer than 30 days remain or credit is below $20. Confirm completion before suspension."}
+      - alert: ConsumitAwsAccountUnavailable
+        expr: consumit_credit_account_unavailable == 1
+        labels: {severity: critical}
+        annotations: {summary: "AWS account state or credit balance could not be confirmed. Check the billing console."}
+      - alert: ConsumitAwsGrossUsage
+        expr: consumit_aws_gross_usage_usd > 2
+        labels: {severity: warning}
+        annotations: {summary: "AWS gross monthly usage exceeded $2 before credits. Review retained versions and requests."}
