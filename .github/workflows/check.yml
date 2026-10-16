@@ -37,17 +37,19 @@ jobs:
       DATABASE_URL: postgresql://consumit:consumit@127.0.0.1:5432/consumit_test?schema=public
       VALKEY_URL: redis://127.0.0.1:6379
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.21.0
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.13.3
       - run: bun install --frozen-lockfile
+      - run: bun --filter @consumit/api db:generate
       - run: bun --filter @consumit/api db:migrate:deploy
       - run: bun run check
       - run: bun --filter @consumit/api test:integration
