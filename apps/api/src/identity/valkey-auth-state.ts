@@ -90,7 +90,7 @@ local function lock()
   redis.call('SET', KEYS[3], '1', 'PX', ARGV[6])
 end
 local accountAttempts = tonumber(redis.call('GET', KEYS[2]) or '0')
-if accountAttempts >= tonumber(ARGV[5]) then
+if accountAttempts >= tonumber(ARGV[5]) or redis.call('EXISTS', KEYS[3]) == 1 then
   local held = redis.call('GET', KEYS[1])
   if held then release(cjson.decode(held)); redis.call('DEL', KEYS[1]) end
   lock()
