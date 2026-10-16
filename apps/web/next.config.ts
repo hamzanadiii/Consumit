@@ -12,9 +12,12 @@ import type { NextConfig } from 'next'
 // - Development additionally needs 'unsafe-eval' and websocket origins for
 //   Next's HMR runtime; production never includes them.
 const isDev = process.env.NODE_ENV !== 'production'
+// Exact controlled-media origin, admitted only by the isolated development fixture.
+const playbackFixtureMedia = isDev && process.env.PLAYBACK_FIXTURE_PROXY === '1' ? ['http://127-0-0-1.nip.io:18560'] : []
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src-attr 'none'",
+  ...(isDev ? ["script-src 'self' 'unsafe-eval'"] : []),
   [
     "script-src-elem 'self' 'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
@@ -25,10 +28,11 @@ const CONTENT_SECURITY_POLICY = [
   "font-src 'self'",
   [
     "connect-src 'self'",
+    ...playbackFixtureMedia,
     ...(isDev ? ['ws: wss:'] : []),
     'https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://www.gstatic.com https://www.google.com',
   ].join(' '),
-  "media-src 'self' blob: https:",
+  ["media-src 'self' blob: https:", ...playbackFixtureMedia].join(' '),
   "frame-src 'self' https://www.gstatic.com",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
