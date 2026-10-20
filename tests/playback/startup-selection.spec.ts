@@ -12,27 +12,27 @@ test('a saved watch resumes on a chosen server after automatic startup fails', a
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThanOrEqual(2)
   await video.evaluate((el: HTMLVideoElement) => { el.currentTime = 12; el.pause() })
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('consumit.progress:guest:movie:1:0:0') ?? '{}').positionSeconds)).toBeGreaterThanOrEqual(12)
-  await page.route('**/v1/playback/resolve', route => route.request().postDataJSON().providerId ? route.continue() : route.fulfill({ status: 503, json: { error: { code: 'PLAYBACK_UNAVAILABLE', message: 'Automatic playback could not start.', requestId: 'fixture-request', retryable: true } } }))
+  await page.route('**/v1/playback/attempts', route => route.fulfill({ status: 503, json: { error: { code: 'PLAYBACK_UNAVAILABLE', message: 'Automatic playback could not start.', requestId: 'fixture-request', retryable: true } } }))
   await page.reload()
-  await page.getByRole('button', { name: 'Choose another server' }).click()
-  await expect(page.getByRole('option', { name: 'backup', exact: true })).toBeAttached()
-  const server = page.getByRole('combobox', { name: 'Server' })
-  await expect(server).toBeEnabled()
+  await page.getByRole('button', { name: 'Server Auto', exact: true }).click()
+  await expect(page.getByRole('option', { name: /backup/ })).toBeAttached()
+  const server = page.getByRole('listbox', { name: 'Server' })
+  await expect(server).toBeVisible()
   if (process.env.PLAYBACK_VISUAL === '1') {
     await mkdir('.impeccable/review', { recursive: true })
     await page.screenshot({ path: `.impeccable/review/startup-server-${info.project.name}.png` })
   }
   const selected = page.waitForResponse(response => response.url().endsWith('/resolve') && response.ok())
-  await server.selectOption('backup')
+  await server.getByRole('option', { name: /backup/ }).click()
   expect((await (await selected).json()).source.providerId).toBe('backup')
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.videoWidth)).toBe(640)
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThanOrEqual(12)
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)
 })
 
-test('startup server discovery and the selected server both remain retryable', async ({ page }) => {
-  let lists = 0, starts = 0
-  await page.route('**/v1/playback/providers', route => ++lists === 1 ? route.fulfill({ status: 503, json: {} }) : route.continue())
+test('automatic startup and the selected server both remain retryable', async ({ page }) => {
+  let starts = 0
+  await page.route('**/v1/playback/attempts', route => route.fulfill({ status: 503, json: { error: { code: 'PLAYBACK_UNAVAILABLE', message: 'Automatic playback could not start.', requestId: 'fixture-request', retryable: true } } }))
   await page.route('**/v1/playback/resolve', route => {
     const selected = route.request().postDataJSON().providerId
     if (!selected || ++starts === 1) return route.fulfill({ status: 503, json: { error: { code: 'PLAYBACK_UNAVAILABLE', message: 'This server could not start.', requestId: 'fixture-request', retryable: true } } })
@@ -40,14 +40,12 @@ test('startup server discovery and the selected server both remain retryable', a
     return route.continue()
   })
   await page.goto('/watch/movie/1')
-  await page.getByRole('button', { name: 'Choose another server' }).click()
-  await page.getByRole('button', { name: 'Retry server list' }).click()
-  await expect(page.getByRole('option', { name: 'backup', exact: true })).toBeAttached()
-  await page.getByRole('combobox', { name: 'Server' }).selectOption('backup')
+  await page.getByRole('button', { name: 'Server Auto', exact: true }).click()
+  await expect(page.getByRole('option', { name: /backup/ })).toBeAttached()
+  await page.getByRole('listbox', { name: 'Server' }).getByRole('option', { name: /backup/ }).click()
   await expect(page.getByRole('region', { name: 'Playback reference 1 playback', exact: true }).getByRole('alert')).toContainText('This server could not start.')
-  await expect(page.getByRole('combobox', { name: 'Server' })).toHaveValue('backup')
+  await expect(page.getByRole('button', { name: /Server 2 · backup/ })).toBeVisible()
   await page.getByRole('button', { name: 'Try again', exact: true }).click()
   await expect.poll(() => page.locator('video').evaluate((el: HTMLVideoElement) => el.videoWidth)).toBe(640)
-  expect(lists).toBe(2)
   expect(starts).toBe(2)
 })

@@ -51,7 +51,7 @@ test('unified deck and drawers fit desktop, phone, narrow phone and landscape', 
       expect(box.y + box.height).toBeCloseTo(trigger.y - 8, 0)
       const expectedX = Math.max(player.x + inset.left + 12, Math.min(player.x + inset.left + inset.width - box.width - 12, trigger.x + trigger.width / 2 - box.width / 2))
       expect(box.x).toBeCloseTo(expectedX, 0)
-      expect(box.height).toBeLessThanOrEqual(Math.min(height * .62, 520, trigger.y - player.y - inset.top - 8) + 1)
+      expect(box.height).toBeLessThanOrEqual(Math.min(height * .84, 520, trigger.y - player.y - inset.top - 8) + 1)
       await page.screenshot({ scale: 'css', path: `.impeccable/review/unified-deck/${name}-${panel.split(' ')[0].toLowerCase()}.png` })
       await page.keyboard.press('Escape')
       await expect(drawer).toHaveCount(0)

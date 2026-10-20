@@ -47,6 +47,9 @@ test('captions never move the time display or seek bar', async ({ page }, info) 
 
 test('touch can reveal and adjust the volume slider without hover', async ({ page }, info) => {
   test.skip(info.project.name !== 'chrome-touch', 'Tap fallback belongs to touch.')
+  // Phone layouts intentionally omit volume controls; exercise the same
+  // touch interaction at tablet width where the desktop volume control is shown.
+  await page.setViewportSize({ width: 768, height: 1024 })
   const volume = page.getByRole('slider', { name: 'Volume', exact: true })
   await expect(volume).toHaveCSS('opacity', '0')
   await page.getByRole('button', { name: 'Mute', exact: true }).tap()

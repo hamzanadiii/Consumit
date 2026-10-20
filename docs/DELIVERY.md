@@ -1,5 +1,24 @@
 # Delivery strategy
 
+## End-to-end playback reliability pass — local, 2026-10-20
+
+The local reliability pass fixed confirmed Watch issues in the provider relay, controls and recovery fixtures. The relay now applies the reviewed BingeBang manifest transform to its current rotated media host while retaining exact provider and host checks. The touch skip prompt now sits above the seek input, so Skip intro/recap taps reach the button. Player panels can use up to 84% of a short viewport for caption choices. Browser startup recovery checks now follow the current automatic `/v1/playback/attempts` route and server picker. The shared browser fixture server disables only its process-local rate limiter so independent browser cases do not consume one another's API quota; production rate limits remain enabled. Watch's batched anime episode metadata now keeps null/not-found results in its existing short cache, avoiding repeated provider fan-out for unavailable episode art.
+
+The latest [31-case production provider recheck](./audits/provider-production-recheck-2026-10-20.md) recorded 17 cases with a source and first media prefix; that evidence does not establish a decoded frame or sustained playback. AuroraScreen, MovieNight and StreamingUnity still receive upstream HTTP 403 from both production egress paths; Rigel and Aether had no source in the sampled movie/series cases. Resolve/start success, startup latency and stall timing were not measured with a sufficient decoded-playback sample to assess the reference SLOs (resolve success above 99%, fresh resolve p95 below 1.5s, playback start above 98%). Physical Android, Safari/iPhone and the reported PC issue remain unverified.
+
+The pre-existing local `bingebangymovies` enable/priority edit is preserved separately and is not release-ready: a live configured source could not be exercised here for a decoded frame, seek/resume and 60 seconds of sustained playback without a fatal media error. Production provider settings and the 1% playback-process canary are unchanged. No deployment or database migration was performed.
+
+Local verification after the fixes: API tests pass 641/641, UI tests 279/279 and media-relay tests 67/67. API, web, UI and relay lint/type checks pass. The full 84-case browser playback run recorded 73 passes and 9 intentional skips; its two failures used the prior 62% panel-height assertion. After updating that assertion to the shipped 84% limit, the five-viewport panel case passed in both Chrome and Chrome-touch. The separate full web unit run passed 575 tests and failed four unrelated Admin provider-bench, profile-edit and GA4-navigation cases; those failures remain outside this playback slice.
+
+### Release checklist — future rollout only
+
+- [ ] Back up the current provider configuration and take the normal verified database backup before rollout.
+- [ ] Keep the existing 1% playback-process canary. Smoke one movie, one series episode and one anime episode from exact title identity through resolve, decoded frame, seek/resume, and sustained playback.
+- [ ] Exercise startup timeout, stalls, source expiry/renewal, fallback and exhaustion, cancellation, source switching, audio/captions and episode transitions; confirm play intent and progress survive recovery.
+- [ ] Watch the existing resolve/start metrics, startup latency and stall/fatal/provider alerts through the canary. Compare with the documented SLOs only when the sample is large enough; record upstream blocks separately.
+- [ ] Roll back by restoring the prior application release and provider configuration from the saved backup, then rerun the playback smoke checks. Do not promote BingeBang unless it passes the 60-second decoded-playback acceptance above.
+- [ ] Run physical Android, Safari/iPhone and reported-PC checks before marking those device gaps verified.
+
 ## GA4 funnel events — local implementation, 2026-10-20
 
 The opt-in GA4 path now emits `title_opened`, `playback_started`, `playback_30s`, and verified-email `sign_up`. Playback starts only after a decoded native frame or an active Cast status; thirty-second events count advancing playback and exclude observed pauses, stalls and seeks. External frames remain unmeasured without a reviewed player protocol. Event parameters are limited to content type, player type or email method, and Watch/sign-up use grouped page labels with no page views. Consent, account/privacy exclusions and Enhanced measurement-off requirements remain in force. Web lint, typecheck and optimized production build pass locally. This implementation is not deployed, and GA4 property settings remain unchanged. Mark `sign_up` and `playback_30s` as key events and register `content_type`/`player_type` in GA4 after deployment if those reports are wanted.

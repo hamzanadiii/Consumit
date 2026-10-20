@@ -39,8 +39,8 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
       const minLeft = Math.max(12, rootLeft + 12)
       const maxLeft = Math.min(rootLeft + rootWidth - width - 12, viewportWidth - width - 12)
       const screenLeft = Math.max(minLeft, Math.min(maxLeft, anchorRect.left + anchorRect.width / 2 - width / 2))
+      const viewportLimit = Math.min(viewportHeight * 0.84, 520)
       const availableAbove = Math.max(0, anchorRect.top - 8 - Math.max(rootTop, 12))
-      const viewportLimit = Math.min(viewportHeight * 0.62, 520)
       const containingBlock = element.offsetParent instanceof HTMLElement ? element.offsetParent : root
       const blockRect = containingBlock.getBoundingClientRect()
       const blockLeft = blockRect.left + containingBlock.clientLeft
@@ -70,7 +70,7 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
     }
   }, [anchorElement, anchorSelector])
   const content = (
-    <div aria-labelledby={props['aria-label'] ? undefined : headingId} {...props} className={cn('consumit-player-panel z-30 overflow-hidden overscroll-contain rounded-card border border-white/15 bg-canvas', className)} data-player-panel ref={panel} role={role} style={{ position: 'absolute', inset: 'auto 12px 72px auto', width: 'min(380px, calc(100% - 24px))', maxHeight: 'min(62dvh, 520px)', ...placement, ...props.style }} aria-modal={role === 'dialog' ? true : undefined} onKeyDown={event => {
+    <div aria-labelledby={props['aria-label'] ? undefined : headingId} {...props} className={cn('consumit-player-panel z-30 overflow-hidden overscroll-contain rounded-card border border-white/15 bg-canvas', className)} data-player-panel ref={panel} role={role} style={{ position: 'absolute', inset: 'auto 12px 72px auto', width: 'min(380px, calc(100% - 24px))', maxHeight: 'min(84dvh, 520px)', ...placement, ...props.style }} aria-modal={role === 'dialog' ? true : undefined} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
       if (event.key !== 'Tab') return
       const candidates = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') ?? []).filter(item => !item.closest('[hidden]'))

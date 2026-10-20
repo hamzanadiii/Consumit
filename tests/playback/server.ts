@@ -147,6 +147,9 @@ const subtitles = createSubtitleService({
 })
 const app = await buildApp({
   env: loadEnv({ NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:27911' }),
+  // These browser checks share one long-lived fixture server. Production
+  // route quotas belong to API tests, not the cross-test fixture process.
+  enableRateLimit: false,
   catalog: createFakeCatalog({ titles: [...titles, series], seasons }),
   subtitles,
   animeCatalog,

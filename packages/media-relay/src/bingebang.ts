@@ -1,8 +1,9 @@
-// Fixed reviewed PROVE recipe, confined to this provider and media host.
+// Fixed reviewed PROVE recipe, confined to this provider and its reviewed media hosts.
 // No caller-selected key, decoder or transformation is accepted.
 const key = Uint8Array.from([86, 82, 132, 178, 234, 93, 156, 216, 222, 68, 110, 37, 115, 52, 99, 18, 159, 22, 49, 115, 77, 91, 187, 73, 74, 71, 15, 77, 48, 204, 58, 69], (byte, index) => byte ^ ((index * 37 + 11) & 255))
+const manifestHosts = new Set(['os.bingebangstream.online', 'reliablephonerepairs.website'])
 export function isBingeManifest(provider: string, url: string) {
-  return provider === 'bingebangymovies' && new URL(url).hostname === 'os.bingebangstream.online'
+  return provider === 'bingebangymovies' && manifestHosts.has(new URL(url).hostname)
 }
 export function bingeFetchUrl(provider: string, value: string, manifest: boolean) {
   const url = new URL(value)

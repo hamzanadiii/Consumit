@@ -2233,7 +2233,7 @@ export function ConsumitPlayer({
         ) : null}
 
         {activeSkip && (!autoSkip || !isPlaying) && hasSource && !hasError ? (
-          <div className="consumit-player-skip-prompt absolute right-4 bottom-44 z-20 sm:right-6 sm:bottom-48">
+          <div className="consumit-player-skip-prompt absolute right-4 bottom-44 z-30 sm:right-6 sm:bottom-48">
             <button
               data-skip-kind={activeSkip.kind}
               className="inline-flex min-h-11 items-center gap-2 rounded-control border border-control-outline bg-black/80 px-4 text-sm font-bold text-ink outline-none transition-[background-color,border-color,transform] hover:-translate-y-0.5 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"

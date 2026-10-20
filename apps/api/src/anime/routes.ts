@@ -154,7 +154,11 @@ export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps)
           const entry = cached
           void pending.then(
             (value) => { if (value && episodeCache.get(key) === entry) entry.until = Date.now() + 6 * 3600_000 },
-            () => { if (episodeCache.get(key) === entry) episodeCache.delete(key) },
+            // Keep negative results briefly too. The batch endpoint already
+            // turns unavailable episode art into null, and immediately
+            // evicting that result makes every repeated Watch request fan out
+            // to the metadata providers again.
+            () => undefined,
           )
           if (episodeCache.size > 1000) episodeCache.delete(episodeCache.keys().next().value!)
         }

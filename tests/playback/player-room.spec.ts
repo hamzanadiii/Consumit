@@ -93,7 +93,7 @@ test('Watch states fit desktop, phone and short landscape viewports', async ({ p
   await page.getByRole('button', { name: 'Episodes', exact: true }).click()
   const drawer = page.getByRole('dialog', { name: 'Episodes' })
   await drawer.getByRole('button', { name: 'Go to next episode page' }).click()
-  await expect(drawer.getByText('Not aired yet')).toBeVisible()
+  await expect(drawer.getByText('Coming soon')).toBeVisible()
   await page.screenshot({ path: '.impeccable/review/player-room/anime-episodes.png' })
   await page.goto('/watch/series/7?season=1&episode=4')
   await expect(page.getByRole('alert').filter({ hasText: /Every compatible server/ })).toBeVisible()

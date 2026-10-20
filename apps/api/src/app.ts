@@ -118,9 +118,11 @@ type BuildAppOptions = {
   repository?: IdentityRepository
   subtitles?: SubtitleService
   subtitlePreferences?: SubtitlePreferences
+  /** Test harnesses may opt out of process-local rate buckets for deterministic integration runs. */
+  enableRateLimit?: boolean
 }
 
-export async function buildApp({ experience, publicMembers, releases, catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, animeCanonicalEpisodeArt, env = loadEnv(), identity, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences }: BuildAppOptions = {}) {
+export async function buildApp({ experience, publicMembers, releases, catalog = unavailableCatalogAdapter, animeCatalog, animeEpisodeArt, animeTmdbEpisodeArt, animeCanonicalEpisodeArt, env = loadEnv(), identity, memberData, providerConfigStore, repository: overrideRepository, playback, subtitles, subtitlePreferences, enableRateLimit = true }: BuildAppOptions = {}) {
   const app = Fastify({
     bodyLimit: 1_048_576,
     // Matches requestTimeout: subtitle aggregation may legitimately work
@@ -146,16 +148,18 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     try { await requestLimits.connect() } catch (error) { requestLimits.disconnect(); throw error }
     app.addHook('onClose', async () => { requestLimits.disconnect() })
   }
-  await app.register(rateLimit, {
-    ...(requestLimits ? { redis: requestLimits, nameSpace: 'consumit:http-limits:v1:' } : {}),
-    skipOnError: false,
-    errorResponseBuilder: () => rateLimitExceeded(),
-    // Public catalog fan-out has a separate bounded bucket; it cannot
-    // consume the general member budget. Credential routes remain stricter.
-    keyGenerator: (request) => apiRateLimitKey(request, resolvedIdentity, sessionCookieName(env)),
-    max: (request) => isCatalogRead(request) ? 600 : 100,
-    timeWindow: '1 minute',
-  })
+  if (enableRateLimit) {
+    await app.register(rateLimit, {
+      ...(requestLimits ? { redis: requestLimits, nameSpace: 'consumit:http-limits:v1:' } : {}),
+      skipOnError: false,
+      errorResponseBuilder: () => rateLimitExceeded(),
+      // Public catalog fan-out has a separate bounded bucket; it cannot
+      // consume the general member budget. Credential routes remain stricter.
+      keyGenerator: (request) => apiRateLimitKey(request, resolvedIdentity, sessionCookieName(env)),
+      max: (request) => isCatalogRead(request) ? 600 : 100,
+      timeWindow: '1 minute',
+    })
+  }
 
   registerErrorHandlers(app)
   registerRequestContext(app)

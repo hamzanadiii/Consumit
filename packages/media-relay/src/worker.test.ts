@@ -318,15 +318,18 @@ describe('Worker delivery boundary', () => {
   it('decodes the fixed BingeBang manifest recipe, rewrites nested jpg fetches and leaves native bytes untouched', async () => {
     const encoded = Uint8Array.from(atob('fieJnDiqINzOWUvTmYBfd5DE0fjvYstZj9WA/mm0DIoZNpn1RJMDt591cunA9h8Xsa6e'), char => char.charCodeAt(0))
     const envBinge = { ...env, RELAY_PROVIDERS: JSON.stringify({ bingebangymovies: ['os.bingebangstream.online'] }) }
-    const { worker, fetcher } = setup(new Response(encoded, { headers: { 'content-type': 'image/jpeg' } }))
-    const root = await worker.fetch(await request({ provider: 'bingebangymovies', url: 'https://os.bingebangstream.online/master.m3u8', headerHost: 'os.bingebangstream.online' }), envBinge)
-    expect(root.status).toBe(200)
-    expect(fetcher.mock.calls[0]?.[0]).toBe('https://os.bingebangstream.online/master.jpg')
-    const text = await root.text()
-    expect(text).toContain('#EXT-X-STREAM-INF')
-    const codec = await createGrantCodec(secret)
-    const child = await codec.open(text.split('\n')[2]!.split('/media/')[1]!, now)
-    expect(child).toMatchObject({ url: 'https://os.bingebangstream.online/variant.m3u8', kind: 'hls' })
+    for (const host of ['os.bingebangstream.online', 'reliablephonerepairs.website']) {
+      const hostEnv = { ...env, RELAY_PROVIDERS: JSON.stringify({ bingebangymovies: [host] }) }
+      const { worker, fetcher } = setup(new Response(encoded, { headers: { 'content-type': 'image/jpeg' } }))
+      const root = await worker.fetch(await request({ provider: 'bingebangymovies', url: `https://${host}/master.m3u8`, headerHost: host }), hostEnv)
+      expect(root.status).toBe(200)
+      expect(fetcher.mock.calls[0]?.[0]).toBe(`https://${host}/master.jpg`)
+      const text = await root.text()
+      expect(text).toContain('#EXT-X-STREAM-INF')
+      const codec = await createGrantCodec(secret)
+      const child = await codec.open(text.split('\n')[2]!.split('/media/')[1]!, now)
+      expect(child).toMatchObject({ url: `https://${host}/variant.m3u8`, kind: 'hls' })
+    }
     const native = setup(new Response(new Uint8Array([0, 1, 2, 3]), { status: 206 }))
     const segment = await native.worker.fetch(await request({ provider: 'bingebangymovies', url: 'https://os.bingebangstream.online/segment.mp4', headerHost: 'os.bingebangstream.online', kind: 'auto' }, { headers: { Range: 'bytes=0-3' } }), envBinge)
     expect([...new Uint8Array(await segment.arrayBuffer())]).toEqual([0, 1, 2, 3])
