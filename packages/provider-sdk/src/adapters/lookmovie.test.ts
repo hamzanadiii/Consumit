@@ -14,8 +14,8 @@ describe('Lookmovie direct adapter', () => {
       const bytes = new Uint8Array(564); bytes[0] = bytes[188] = bytes[376] = 71
       return { status: 200, url, text: '', bytes, headers: new Headers({ 'content-type': 'video/mp2t' }) }
     }), { mediaScope: () => http })
-    const relay = createLookmovieProvider(http, metadata, () => 1_800_000_000_000, { id: 'lookmovie-relay', relayHostDiscovery: true })
-    expect(relay.id).toBe('lookmovie-relay')
+    const relay = createLookmovieProvider(http, metadata, () => 1_800_000_000_000, { id: 'lookmovie', relayHostDiscovery: true })
+    expect(relay.id).toBe('lookmovie')
     const result = await relay.resolve(input, new AbortController().signal)
     expect(result).toMatchObject({ ok: true, sources: [{ height: 1080, relayRecipe: 'lookmovie-v1', relayHosts: ['srv310.seclar.cyou', 'srv313.seclar.cyou'] }] })
     if (result.ok) expect(result.sources).toHaveLength(1)

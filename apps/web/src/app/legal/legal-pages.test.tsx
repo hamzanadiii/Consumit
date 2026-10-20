@@ -26,7 +26,7 @@ describe('legal pages', () => {
     renderWithProviders(<TermsPage />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Terms of Service' })).toBeInTheDocument()
-    expect(screen.getByText('Last updated: October 7, 2026')).toBeInTheDocument()
+    expect(screen.getByText('Last updated: October 19, 2026')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '5. Third-party sources and availability' })).toBeInTheDocument()
     expect(screen.getByText(/does not host, upload, or store video files/)).toBeInTheDocument()
   })
@@ -36,7 +36,10 @@ describe('legal pages', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeInTheDocument()
     expect(screen.getByText(/Consumit does not host any media/)).toBeInTheDocument()
-    expect(screen.getByText(/advertising partner highrevenueformat/)).toBeInTheDocument()
+    expect(screen.getByText(/advertising partner profitableratecpmnetwork/)).toBeInTheDocument()
+    expect(screen.getByText(/Profile identity is public, and those sections are visible by default/)).toBeInTheDocument()
+    expect(screen.getByText(/The setting is off by default and independent of profile visibility/)).toBeInTheDocument()
+    expect(screen.getByText(/A member's Saved Lists are private/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'contact us through the report form' })).toHaveAttribute('href', '/report-issue')
   })
 

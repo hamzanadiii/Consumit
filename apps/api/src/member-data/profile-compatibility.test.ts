@@ -7,11 +7,11 @@ import { loadEnv } from '../config/env.ts'
 import type { PrismaClient } from '../../generated/prisma/client.js'
 import { createPostgresMemberData } from './postgres-member-data.ts'
 
-describe('personal profiles with legacy stored visibility', () => {
+describe('profile privacy after public identity migration', () => {
   const apps: Awaited<ReturnType<typeof buildApp>>[] = []
   afterEach(async () => Promise.all(apps.splice(0).map((app) => app.close())))
 
-  it.each(['public', 'private'])('serves an owner profile stored as %s through the response contract', async (visibility) => {
+  it.each(['public', 'private'])('serves a profile stored with legacy visibility %s through the response contract', async (visibility) => {
     const identity = createFakeIdentity()
     await identity.register({ email: 'profile@example.com', password: 'long-enough-password', username: 'profile_owner' })
     const delivery = identity.notifier.deliveries.findLast((item) => item.kind === 'verification')
@@ -42,10 +42,10 @@ describe('personal profiles with legacy stored visibility', () => {
     const response = await app.inject({ cookies, method: 'GET', url: '/v1/profiles/profile_owner' })
     expect(response.statusCode).toBe(200)
     expect(response.headers['cache-control']).toBe('private, no-store')
-    expect(response.json()).toMatchObject({ canonicalUsername: 'profile_owner', viewerIsOwner: true, profile: { visibility }, social: { followers: 0, following: 0 } })
+    expect(response.json()).toMatchObject({ canonicalUsername: 'profile_owner', viewerIsOwner: true, profile: { sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } }, social: { followers: 0, following: 0 } })
     const settings = await app.inject({ cookies, method: 'GET', url: '/v1/me/profile' })
     expect(settings.statusCode).toBe(200)
-    expect(settings.json()).toMatchObject({ visibility: 'private' })
+    expect(settings.json()).toMatchObject({ sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } })
 
     expect(await memberData.profile('profile_owner', 'another-member')).toBeNull()
     vi.spyOn(identity, 'getSession').mockResolvedValueOnce({ ...session.member, id: 'another-member' })

@@ -31,6 +31,29 @@ describe('resolveSubtitles', () => {
     expect(tracks[0]?.label).toContain('(a)')
   })
 
+  it('normalizes legacy Arabic bytes before exposing a VTT track', async () => {
+    const store = createMemoryPlaybackStore()
+    const payload = Buffer.concat([
+      Buffer.from('WEBVTT\n\n00:00:01.000 --> 00:00:04.000\n', 'utf8'),
+      Buffer.from([0xe3, 0xd1, 0xcd, 0xc8, 0xc7, 0x20, 0xe3, 0xd1, 0xcd, 0xc8, 0xc7, 0x20, 0xe3, 0xd1, 0xcd, 0xc8, 0xc7]),
+      Buffer.from('\n', 'utf8'),
+    ])
+    const fetchFile = vi.fn(async () => payload)
+    const tracks = await resolveSubtitles(
+      { type: 'movie', langs: ['ar'] },
+      [provider('arabic-feed', [direct('arabic-feed', 'ar', 'https://subs.example/ar.vtt')])],
+      createStoreFileStore(store),
+      'https://api.example',
+      signal,
+      fetchFile as never,
+    )
+
+    expect(fetchFile).toHaveBeenCalledOnce()
+    expect(tracks[0]?.url).toMatch(/^https:\/\/api\.example\/v1\/subtitles\/file\//)
+    const key = tracks[0]!.url.split('/').pop()!
+    expect(await createStoreFileStore(store).getVtt(key)).toContain('مرحبا')
+  })
+
   it('keeps every returned track in one language', async () => {
     const store = createMemoryPlaybackStore()
     const raws = Array.from({ length: 20 }, (_, i) => direct('a', 'en', `https://cdn.example/en-${i}.vtt`))
@@ -277,6 +300,30 @@ describe('scoring v2', () => {
     expect(tracks[0]?.url).toBe('https://cdn.example/en.vtt')
     expect(tracks[0]).toMatchObject({ recommended: true })
   })
+
+  it('breaks full-track ties by converted cue count so the denser conversion wins', async () => {
+    const store = createMemoryPlaybackStore()
+    const sparse = '1\n00:00:01,000 --> 00:00:02,000\nOnly cue\n'
+    const dense = Array.from({ length: 8 }, (_, i) => `${i + 1}\n00:00:0${i + 1},000 --> 00:00:0${i + 1},500\nCue ${i + 1}\n`).join('\n')
+    const fetchFile = vi.fn(async (url: string) => Buffer.from(url.includes('dense') ? dense : sparse, 'utf8'))
+    const tracks = await resolveSubtitles(
+      { type: 'movie', langs: ['en'] },
+      [provider('a', [
+        { url: 'https://subs.example/sparse.srt', lang: 'en', label: 'English', format: 'srt', provider: 'a' },
+        { url: 'https://subs.example/dense.srt', lang: 'en', label: 'English', format: 'srt', provider: 'a' },
+      ])],
+      createStoreFileStore(store),
+      'https://api.example',
+      signal,
+      fetchFile as never,
+    )
+    expect(fetchFile).toHaveBeenCalledTimes(2)
+    expect(tracks).toHaveLength(2)
+    expect(tracks[0]?.url).toContain('subtitles/file/')
+    expect(tracks[0]?.cueCount).toBe(8)
+    expect(tracks[1]?.cueCount).toBe(1)
+    expect(tracks[0]).toMatchObject({ recommended: true })
+  })
 })
 
 describe('entryMatchesLang', () => {
@@ -285,6 +332,14 @@ describe('entryMatchesLang', () => {
     expect(entryMatchesLang('Movie_English.srt', 'en')).toBe(true)
     expect(entryMatchesLang('french.srt', 'en')).toBe(false)
     expect(entryMatchesLang(' subs.srt', 'en')).toBe(false)
+  })
+
+  it('treats hostile provider language codes as literals without backtracking', () => {
+    const started = Date.now()
+    expect(entryMatchesLang(`${'a'.repeat(64)}!.srt`, '(a+)+b')).toBe(false)
+    expect(entryMatchesLang('movie.en.srt', '(en)+')).toBe(false)
+    expect(entryMatchesLang('movie.en.srt', 'en')).toBe(true)
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 })
 
@@ -316,6 +371,50 @@ describe('createSubtitleService', () => {
     })
     await service.search({ kind: 'anime', id: 21, episode: 1001 }, signal)
     expect(seen).toEqual(['One Piece'])
+  })
+
+  it('uses TMDB episode coordinates for TMDB subtitle providers while retaining the anime episode identity', async () => {
+    const store = createMemoryPlaybackStore()
+    const seen: import('./types.ts').SubtitleQuery[] = []
+    const tmdbProvider: SubtitleSearchProvider = {
+      id: 'tmdb-anime',
+      name: 'TMDB anime fixture',
+      supports: query => query.type === 'anime' && Boolean(query.tmdbId),
+      search: async query => { seen.push(query); return [direct('tmdb-anime', 'en', 'https://cdn.example/episode-7.vtt')] },
+    }
+    const service = createSubtitleService({
+      providers: [tmdbProvider],
+      animeTitle: async () => ({ title: 'Split Cour Fixture' }),
+      animeMapping: async () => ({ tmdbId: 9876, anidbEid: 460, season: 2, episode: 7 }) as never,
+      animeTmdbEpisode: async () => ({ season: 2, episode: 7 }),
+      store,
+      origin: 'https://api.example',
+    })
+
+    const tracks = await service.search({ kind: 'anime', id: 21, episode: 25 }, signal)
+
+    expect(tracks).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ type: 'anime', tmdbId: 9876, anidbEid: 460, season: 2, episode: 7, absoluteEpisode: 25, anilistId: 21 })
+    for await (const _event of service.discovery!.discover({ kind: 'anime', id: 21, episode: 25 }, signal, undefined, ['ar', 'en'])) { /* drain incremental discovery */ }
+    expect(seen[1]).toMatchObject({ type: 'anime', tmdbId: 9876, anidbEid: 460, season: 2, episode: 7, absoluteEpisode: 25, anilistId: 21, langs: ['ar', 'en'] })
+  })
+
+  it('falls back to the mapped IMDb identity when an anime has no TMDB id', async () => {
+    const store = createMemoryPlaybackStore()
+    const seen: import('./types.ts').SubtitleQuery[] = []
+    const keyedProvider: SubtitleSearchProvider = {
+      id: 'imdb-anime', name: 'IMDb anime fixture',
+      supports: query => query.type === 'anime' && Boolean(query.tmdbId || query.imdbId),
+      search: async query => { seen.push(query); return [direct('imdb-anime', 'en', 'https://cdn.example/imdb.vtt')] },
+    }
+    const service = createSubtitleService({
+      providers: [keyedProvider], animeTitle: async () => ({ title: 'IMDb Fixture' }),
+      animeMapping: async () => ({ imdbId: 'tt1234567', season: 1, episode: 4 }),
+      store, origin: 'https://api.example',
+    })
+
+    expect(await service.search({ kind: 'anime', id: 21, episode: 4 }, signal)).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ type: 'anime', imdbId: 'tt1234567', season: 1, episode: 4, absoluteEpisode: 4 })
   })
 
   it('reads the durable catalog before live discovery and writes through after', async () => {

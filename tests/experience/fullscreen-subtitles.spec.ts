@@ -34,9 +34,9 @@ for (const sourceType of ['native', 'hls']) {
     const player = page.locator('[data-consumit-player]').first()
     await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0)
     await video.evaluate(async (v: HTMLVideoElement) => { v.muted = true; await v.play(); v.pause(); v.currentTime = 2 })
-    await page.getByRole('button', { name: 'Subtitles', exact: true }).click()
+    await page.getByRole('button', { name: 'Captions', exact: true }).click()
     await page.getByRole('searchbox').fill('French')
-    await page.getByRole('menuitemradio', { name: /Français/ }).click()
+    await page.getByRole('radio', { name: /Français/ }).click()
     await expect(captions).toHaveText('Provider caption')
     await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click()
     await expect(player).toHaveAttribute('data-viewport-fullscreen', 'true')
@@ -54,7 +54,7 @@ for (const sourceType of ['native', 'hls']) {
     for (const [extension, width, height] of [['srt', 390, 844], ['vtt', 844, 390]] as const) {
       await page.setViewportSize({ width, height })
       await video.evaluate((v: HTMLVideoElement) => { v.currentTime = 2 })
-      await page.getByRole('button', { name: 'Subtitles', exact: true }).click()
+      await page.getByRole('button', { name: 'Captions', exact: true }).click()
       const body = `00:00:00.000 --> 00:00:04.000\nUploaded ${extension}\n\n00:00:08.000 --> 00:00:12.000\nLater ${extension}\n`
       await page.locator('input[type="file"]').setInputFiles({ name: `captions.${extension}`, mimeType: extension === 'srt' ? 'application/x-subrip' : 'text/vtt', buffer: Buffer.from(extension === 'srt' ? body.replaceAll('.', ',') : `WEBVTT\n\n${body}`) })
       await expect(captions).toHaveText(`Uploaded ${extension}`)
@@ -72,8 +72,8 @@ for (const sourceType of ['native', 'hls']) {
       await expect(player).toHaveAttribute('data-viewport-fullscreen', 'true')
       await expect(captions).toHaveText(`Later ${extension}`)
     }
-    await page.getByRole('button', { name: 'Subtitles', exact: true }).click()
-    await page.getByRole('menuitemradio', { name: 'Off', exact: true }).click()
+    await page.getByRole('button', { name: 'Captions', exact: true }).click()
+    await page.getByRole('radio', { name: 'Off', exact: true }).click()
     await expect(captions).toHaveCount(0)
     await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).click()
     expect(errors).toEqual([])

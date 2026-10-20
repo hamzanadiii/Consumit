@@ -8,8 +8,8 @@ import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types
 // ignored). Keyless, no quotas: security-key -> search -> details (+season)
 // -> getVideo2 per audio track (720p carries the same subtitles as the
 // permission-gated 1080p) -> direct subtitle file URLs. Movies + TV +
-// anime (title-keyed; anime rides the TV path with the mapped season and
-// the absolute episode, falling back to season 1 when the bridge misses).
+// anime (title-keyed; anime rides the TV path with TMDB season/episode
+// coordinates, falling back to season 1 plus the absolute episode).
 
 const CASTLE_BASE = 'https://api.hlowb.com'
 const PKG = 'com.external.castle'
@@ -87,6 +87,8 @@ export function createCastleSubsProvider(http: SubtitleHttp): SubtitleSearchProv
       const title = query.title!.trim()
       const isTv = query.type !== 'movie'
       const season = Number(query.season ?? 1)
+      // Anime queries carry TMDB's season/episode coordinates; absolute
+      // numbering stays available to native anime providers.
       const episode = Number(query.episode ?? 1)
 
       const secKey: string = await castleGet(

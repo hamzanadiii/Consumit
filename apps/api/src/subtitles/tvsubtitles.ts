@@ -55,7 +55,7 @@ export function createTvSubtitlesProvider(http: SubtitleHttp): SubtitleSearchPro
     name: 'TVSubtitles',
     supports(query: SubtitleQuery) {
       // TV + anime series (the index lists anime like Naruto/One Piece;
-      // best-effort mapping with season 1 and the absolute episode number).
+      // anime-native lookup uses the canonical absolute episode number).
       return (query.type === 'tv' || query.type === 'anime') && !!query.title
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {
@@ -71,7 +71,7 @@ export function createTvSubtitlesProvider(http: SubtitleHttp): SubtitleSearchPro
       }
       if (!best || bestScore < 0.5) throw new Error(`TVSubtitles has no show matching "${query.title}".`)
       const season = query.type === 'anime' ? 1 : (query.season ?? 1)
-      const episode = query.episode ?? 1
+      const episode = query.type === 'anime' ? query.absoluteEpisode ?? query.episode ?? 1 : query.episode ?? 1
       const { text } = await http.get(`${BASE}/tvshow-${best}-${season}.html`, { 'User-Agent': UA, Accept: 'text/html' }, signal)
       const wantLangs = (query.langs?.length ? query.langs : []).map((lang) => lang.toLowerCase())
       const out: RawSubtitle[] = []

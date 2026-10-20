@@ -22,6 +22,8 @@ import { TitleCard } from '../shared/title-card'
 type SearchScreenProps = {
   /** AniList anime matches. TMDB never serves anime, so these arrive separately. */
   animeResults?: readonly AnimeTitleSummary[] | undefined
+  /** Anime search needs a session. Say so instead of reporting an empty match set. */
+  animeSignInRequired?: boolean | undefined
   initialKind?: 'all' | 'movie' | 'series' | 'anime'
   initialQuery: string
   page: CatalogPage
@@ -41,7 +43,7 @@ function AnimeSearchCard({ anime }: { anime: AnimeTitleSummary }) {
   )
 }
 
-export function SearchScreen({ animeResults, initialKind = 'all', initialQuery, page, queryTooShort }: SearchScreenProps) {
+export function SearchScreen({ animeResults, animeSignInRequired = false, initialKind = 'all', initialQuery, page, queryTooShort }: SearchScreenProps) {
   const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series' | 'anime'>(initialKind)
   // TMDB serves movies and series only — anime matches come from AniList.
   const animeItems = animeResults ?? []
@@ -49,6 +51,7 @@ export function SearchScreen({ animeResults, initialKind = 'all', initialQuery, 
     if (activeKind === 'anime') return []
     return activeKind === 'all' ? page.items : page.items.filter((item) => item.kind === activeKind)
   }, [activeKind, page.items])
+  const animeSectionVisible = (activeKind === 'all' || activeKind === 'anime') && (animeItems.length > 0 || animeSignInRequired)
   const showAnime = (activeKind === 'all' || activeKind === 'anime') && animeItems.length > 0
   const best = results[0] ?? page.items[0]
 
@@ -106,19 +109,18 @@ export function SearchScreen({ animeResults, initialKind = 'all', initialQuery, 
             )}
           </section>
 
-          {showAnime ? (
+          {animeSectionVisible ? (
             <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="anime-results" aria-labelledby="anime-results-heading">
-              <SectionHeading description={`Anime metadata by AniList · ${animeItems.length} ${animeItems.length === 1 ? 'match' : 'matches'}`} id="anime-results-heading" title="Anime" />
-              <ul className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {animeItems.map((anime) => <AnimeSearchCard anime={anime} key={`anime:${anime.anilistId}`} />)}
-              </ul>
-            </section>
-          ) : activeKind === 'anime' ? (
-            <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="anime-results" aria-labelledby="anime-results-heading">
-              <SectionHeading description="Anime metadata by AniList" id="anime-results-heading" title="Anime" />
-              <div className="mt-9">
-                <EmptyState description="Try a different title, spelling, or switch back to all results." title="No anime found" />
-              </div>
+              <SectionHeading description={showAnime ? `Anime metadata by AniList · ${animeItems.length} ${animeItems.length === 1 ? 'match' : 'matches'}` : 'Anime metadata by AniList'} id="anime-results-heading" title="Anime" />
+              {showAnime ? (
+                <ul className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {animeItems.map((anime) => <AnimeSearchCard anime={anime} key={`anime:${anime.anilistId}`} />)}
+                </ul>
+              ) : (
+                <div className="mt-9">
+                  <EmptyState description={animeSignInRequired ? 'Anime search is available to signed-in members. Sign in to see AniList matches for this query.' : 'Try a different title, spelling, or switch back to all results.'} title={animeSignInRequired ? 'Sign in to search anime' : 'No anime found'} />
+                </div>
+              )}
             </section>
           ) : null}
 

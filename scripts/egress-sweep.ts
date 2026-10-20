@@ -41,7 +41,7 @@ type Probe = {
   resolveCode?: string
   resolveMs?: number
   sourceCount?: number
-  sources?: { type: string; host: string }[]
+  sources?: { type: string; host: string; serverName?: string }[]
   mediaOk?: boolean | null
   mediaCode?: string
   mediaStatus?: number
@@ -90,6 +90,7 @@ const configPath = args.get('config') ?? process.env.PLAYBACK_MEDIA_CONFIG ?? 'i
 const label = args.get('label') ?? hostname().toLowerCase()
 const via = args.get('via') ?? 'local'
 const origin = args.get('origin') ?? 'http://localhost:8080'
+const metadataApi = args.get('api') ?? process.env.PLAYBACK_DIAGNOSTIC_API ?? 'http://localhost:3001'
 const runBrowser = boolArg('browser', true)
 const limit = Number(args.get('limit') ?? 3)
 const outPath = args.get('out') ?? `tmp/egress-sweep-${label}.json`
@@ -104,7 +105,7 @@ const probeRefs: Record<string, { ref: Record<string, unknown>; audioLanguage: s
 // Anime adapters resolve through the local catalog API. When it is not
 // running those lookups fail for an environmental reason, which must never be
 // reported as a provider verdict.
-const metadataAvailable = await fetch('http://localhost:3001/v1/anime/21', { signal: AbortSignal.timeout(4_000) })
+const metadataAvailable = await fetch(`${metadataApi}/v1/anime/21`, { signal: AbortSignal.timeout(4_000) })
   .then((response) => response.ok).catch(() => false)
 if (!metadataAvailable) console.error('WARN: catalog metadata API is unreachable; anime lookups will report "unmeasured" instead of a provider verdict.')
 
@@ -123,7 +124,7 @@ const animeCache = new Map<number, Promise<any>>()
 function animeMetadata(id: number) {
   let pending = animeCache.get(id)
   if (!pending) {
-    pending = fetch(`http://localhost:3001/v1/anime/${id}`, { signal: AbortSignal.timeout(8000) })
+    pending = fetch(`${metadataApi}/v1/anime/${id}`, { signal: AbortSignal.timeout(8000) })
       .then((response) => { if (!response.ok) throw new Error('metadata unavailable'); return response.json() })
     animeCache.set(id, pending)
   }
@@ -311,7 +312,7 @@ async function probeProvider(provider: ProviderRegistration) {
     if (!probe.resolveOk && !metadataAvailable && kind === 'anime') probe.resolveCode = 'metadata-unavailable'
     probe.sourceCount = sources.length
     probe.sources = sources.slice(0, limit).map((source) => {
-      try { return { type: source.type, host: new URL(source.url).hostname } } catch { return { type: source.type, host: 'invalid-url' } }
+      try { return { type: source.type, host: new URL(source.url).hostname, ...(source.serverName ? { serverName: source.serverName.slice(0, 80) } : {}) } } catch { return { type: source.type, host: 'invalid-url', ...(source.serverName ? { serverName: source.serverName.slice(0, 80) } : {}) } }
     })
 
     const candidates = sources.filter((source) => source.type !== 'iframe').slice(0, limit)

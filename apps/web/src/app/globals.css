@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '@consumit/ui/styles.css';
+@import 'lenis/dist/lenis.css';
 @source '../../../../packages/ui/src';
 
 /* Embeds size controls against the iframe itself, not the host page viewport. */
@@ -105,6 +106,19 @@ select {
 .fs-mobile-menu a, .fs-mobile-menu button { min-height: 44px; }
 .fs-mobile-menu .fs-navigation-label { display: inline; }
 .consumit-settings-savebar { padding-bottom: env(safe-area-inset-bottom); }
+.fs-profile-editor-overlay {
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+.fs-profile-editor-panel { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); }
+
+@media (min-width: 640px) {
+  .fs-profile-editor-overlay {
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+  .fs-profile-editor-panel { max-height: calc(100vh - 3rem); max-height: calc(100dvh - 3rem); }
+}
 
 @media (max-width: 1023px) {
   .fs-content {

@@ -6,7 +6,7 @@ import type { MediaTransport } from './transport.ts'
 import { allowedMediaUrl, suppliesVideo } from '@consumit/provider-sdk'
 import type { ResolvedSource } from './resolver.ts'
 
-export type RelayDiscovery = Record<string, 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1'>
+export type RelayDiscovery = Record<string, 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1' | 'aether-v1'>
 export type PlaybackRelayNode = { origin: string; secret: string; providers: Record<string, string[]> }
 export type PlaybackRelayConfig = PlaybackRelayNode & { discovery?: RelayDiscovery; node?: PlaybackRelayNode; providerOrigins?: Readonly<Record<string, string>>; controlProviders?: readonly 'rigel'[] }
 type RelayControlFetch = (input: string | URL, init?: RequestInit) => Promise<Response>
@@ -18,14 +18,14 @@ export function parseRelayControlProviders(raw: string): 'rigel'[] {
 export function validateRelayNode(node: PlaybackRelayNode) {
   const url = new URL(node.origin)
   if (url.protocol !== 'https:' || url.origin !== node.origin || url.username || url.password || node.secret.length < 32
-    || Object.keys(node.providers).some(id => id !== 'lookmovie-relay')) throw new Error('Invalid approved media node.')
+    || Object.keys(node.providers).some(id => id !== 'lookmovie')) throw new Error('Invalid approved media node.')
   parseRelayProviders(JSON.stringify(node.providers))
   return node
 }
 export function parseRelayDiscovery(raw: string): RelayDiscovery {
   const value: unknown = JSON.parse(raw)
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.entries(value).some(([id, recipe]) =>
-    !(id === 'stormboron' && recipe === 'storm-boron-v1' || ['wecollege-miami', 'wecollege-boise'].includes(id) && recipe === 'wecollege-city-v1' || id === 'lookmovie-relay' && recipe === 'lookmovie-v1'))) throw new Error('Unknown relay discovery recipe.')
+    !(id === 'stormboron' && recipe === 'storm-boron-v1' || ['wecollege-miami', 'wecollege-boise'].includes(id) && recipe === 'wecollege-city-v1' || id === 'lookmovie' && recipe === 'lookmovie-v1' || id === 'aether' && recipe === 'aether-v1'))) throw new Error('Unknown relay discovery recipe.')
   return value as RelayDiscovery
 }
 export function parseRelayProviders(raw: string): Record<string, string[]> {
@@ -44,7 +44,7 @@ export function createPlaybackRelay(config: PlaybackRelayConfig, transport?: Med
     if (!config.providers[id]?.length || url.protocol !== 'https:' || url.origin !== origin || url.username || url.password) throw new Error('Invalid regional relay origin.')
     return [id, createRelayIssuer({ ...config, origin }, transport, true, controlFetch)]
   }))
-  const node = config.node ? createRelayIssuer({ ...validateRelayNode(config.node), discovery: { 'lookmovie-relay': 'lookmovie-v1' } }, transport, false) : undefined
+  const node = config.node ? createRelayIssuer({ ...validateRelayNode(config.node), discovery: { 'lookmovie': 'lookmovie-v1' } }, transport, false) : undefined
   if (config.node && (config.node.secret === config.secret || config.node.origin === config.origin && Object.keys(config.providers).length)) throw new Error('Media node requires an independent signing key and origin.')
   const route = (id: string) => node?.includes(id) ? node : regional.get(id) ?? edge
   const codec = createGrantCodec(config.secret)
@@ -90,7 +90,7 @@ function createRelayIssuer(config: PlaybackRelayConfig, transport?: MediaTranspo
         const token = await (await codec).seal({ version: 1, provider: registration.adapter.id, url: source.url,
           expires: expiry, origin, headers: source.headers, headerHost: new URL(source.url).hostname, kind: source.type, depth: 0,
           ...(discoveredHosts(source, registration).length ? { recipe: source.relayRecipe!, hosts: discoveredHosts(source, registration) } : {}) })
-        return controlManifests && registration.adapter.id !== 'lookmovie-relay' && source.type === 'hls' && compilesControl(registration.adapter.id) ? manifestGrantUrl(origin, token) : mediaGrantUrl(config.origin, token)
+        return controlManifests && registration.adapter.id !== 'lookmovie' && source.type === 'hls' && compilesControl(registration.adapter.id) ? manifestGrantUrl(origin, token) : mediaGrantUrl(config.origin, token)
       } catch { return null }
     },
     async accepts(src: string, provider: string): Promise<boolean> {

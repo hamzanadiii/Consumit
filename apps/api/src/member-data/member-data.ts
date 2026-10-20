@@ -31,6 +31,7 @@ import type {
 
 export interface MemberData {
   continueWatching?(memberId: string, cursor: string | undefined, limit: number): Promise<import('@consumit/contracts').ContinueWatchingPage>
+  publicMemberTrends?(): Promise<CatalogRef[]>
   hideContinueWatching?(memberId: string, ref: CatalogRef): Promise<void>
   recommendationDismissals?(memberId: string): Promise<CatalogRef[]>
   dismissRecommendation?(memberId: string, ref: CatalogRef, dismissed: boolean): Promise<void>
@@ -44,6 +45,9 @@ export interface MemberData {
   like(memberId: string, ref: CatalogRef): Promise<MemberTitleRecord | null>
   list(slug: string, viewerMemberId?: string): Promise<MemberListDetail | null>
   createList(memberId: string, input: CreateMemberListRequest): Promise<MemberListDetail>
+  appendListTitle?(memberId: string, listId: string, title: CatalogRef): Promise<boolean>
+  saveList?(memberId: string, slug: string): Promise<boolean>
+  removeSavedList?(memberId: string, listId: string): Promise<boolean>
   
   updateListContent(memberId: string, listId: string, changes: UpdateMemberListContentRequest): Promise<boolean>
   deleteList(memberId: string, listId: string): Promise<boolean>

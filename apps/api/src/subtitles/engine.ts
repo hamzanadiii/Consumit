@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 import { assToVtt } from './ass.ts'
-import { langLabel } from './lang.ts'
+import { langLabel, normLang } from './lang.ts'
 import { decodeSubtitleText, srtToVtt, unzipEntries } from './srt.ts'
 import { contentPath, type OriginalFile, type SubtitleFileStore } from './storage.ts'
 import { fetchSubtitleBytes } from './http.ts'
@@ -14,7 +14,8 @@ import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types
 export function entryMatchesLang(filename: string, lang: string): boolean {
   const name = filename.toLowerCase()
   const code = lang.toLowerCase()
-  if (new RegExp(`(^|[^a-z])${code}([^a-z]|$)`).test(name)) return true
+  const literal = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (new RegExp(`(^|[^a-z])${literal}([^a-z]|$)`).test(name)) return true
   return name.includes(langLabel(code).toLowerCase())
 }
 
@@ -353,6 +354,20 @@ export async function resolveSubtitles(
   }
   const labelFor = (entry: RawSubtitle) =>
     `${langLabel(entry.lang.toLowerCase())}${entry.hi ? ' [HI]' : ''} (${entry.providerName ?? entry.provider})`
+  const directTrackFor = (entry: RawSubtitle, scope: FileScope | null | undefined): ServedSubtitle | null => {
+    if (scope === undefined) return null
+    try {
+      const url = new URL(entry.url)
+      if (url.protocol !== 'https:' || url.username || url.password || (scope && !allowedMediaUrl(url, scope.hosts, scope.patterns))) return null
+    } catch { return null }
+    const lang = entry.lang.toLowerCase()
+    return {
+      id: trackId(entry.provider, `d-${createHash('sha1').update(entry.url).digest('hex').slice(0, 8)}`),
+      label: labelFor(entry), language: lang, url: entry.url, format: 'vtt', provider: entry.provider,
+      ...(entry.hi ? { hi: true } : {}), ...(typeof entry.rating === 'number' ? { rating: entry.rating } : {}),
+      ...(entry.release ? { release: entry.release } : {}), ...flagFields(entry),
+    }
+  }
   const flagFields = (entry: RawSubtitle): Partial<Pick<ServedSubtitle, 'forced' | 'sdh' | 'signs' | 'songs' | 'machineTranslated'>> => {
     const flags = detectTrackFlags(`${entry.url} ${entry.label}`)
     return {
@@ -380,19 +395,13 @@ export async function resolveSubtitles(
       group.map(async (entry): Promise<{ kind: 'direct' | 'served'; track: ServedSubtitle } | null> => {
         const scope = scopes.get(entry.provider)
         if (scope === undefined) return null
-        if (!forceFirstParty && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
-          try {
-            const url = new URL(entry.url)
-            if (url.protocol !== 'https:' || url.username || url.password) return null
-            if (scope && !allowedMediaUrl(url, scope.hosts, scope.patterns)) return null
-          } catch { return null }
-          const lang = entry.lang.toLowerCase()
-          return { kind: 'direct', track: {
-            id: trackId(entry.provider, `d-${createHash('sha1').update(entry.url).digest('hex').slice(0, 8)}`),
-            label: labelFor(entry), language: lang, url: entry.url, format: 'vtt', provider: entry.provider,
-            ...(entry.hi ? { hi: true } : {}), ...(typeof entry.rating === 'number' ? { rating: entry.rating } : {}),
-            ...(entry.release ? { release: entry.release } : {}), ...flagFields(entry),
-          } }
+        // Arabic releases commonly use Windows-1256 even when the upstream
+        // calls the file WebVTT. Pass Arabic through the byte decoder and
+        // first-party VTT cache instead of letting browser <track> decode it
+        // as UTF-8 based on an unreliable upstream content-type.
+        if (!forceFirstParty && normLang(entry.lang) !== 'ar' && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
+          const track = directTrackFor(entry, scope)
+          return track ? { kind: 'direct', track } : null
         }
         const lang = entry.lang.toLowerCase()
         const key = subtitleFileKey(entry)
@@ -401,6 +410,7 @@ export async function resolveSubtitles(
         try {
           const cached = await files.getVtt(key)
           if (cached && cached.startsWith('WEBVTT') && cached.includes('-->')) {
+            const cachedCueCount = (cached.match(/-->/g) || []).length
             return {
               kind: 'served',
               track: {
@@ -413,6 +423,7 @@ export async function resolveSubtitles(
                 ...(entry.hi ? { hi: true } : {}),
                 ...(typeof entry.rating === 'number' ? { rating: entry.rating } : {}),
                 ...(entry.release ? { release: entry.release } : {}),
+                ...(cachedCueCount > 0 ? { cueCount: cachedCueCount } : {}),
                 ...flagFields(entry),
               },
             }
@@ -426,7 +437,16 @@ export async function resolveSubtitles(
           toVtt(entry, signal, fetchFile, scope),
           new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Subtitle file timed out.')), fileTimeout)),
         ])
-        if (!normalized) return null
+        if (!normalized) {
+          // Preserve the existing usable-upstream fallback when normalization
+          // cannot fetch the file; the track remains selectable and its
+          // availability feedback is handled by the player.
+          if (!forceFirstParty && normLang(entry.lang) === 'ar' && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
+            const track = directTrackFor(entry, scope)
+            if (track) return { kind: 'direct', track }
+          }
+          return null
+        }
         try {
           await files.putVtt(key, normalized.vtt, { content, ttlSeconds: FILE_TTL_SECONDS })
           if (normalized.original) {
@@ -456,13 +476,37 @@ export async function resolveSubtitles(
     )
     for (let gi = 0; gi < group.length; gi++) {
       const result = settled[gi]!
-      if (result.status !== 'fulfilled' || !result.value) continue
+      if (result.status !== 'fulfilled' || !result.value) {
+        const entry = group[gi]!
+        if (!forceFirstParty && normLang(entry.lang) === 'ar' && !isZip(entry) && (entry.format === 'vtt' || /\.vtt(\?|#|$)/i.test(entry.url))) {
+          const track = directTrackFor(entry, scopes.get(entry.provider))
+          if (track) direct.push(track)
+        }
+        continue
+      }
       if (result.value.kind === 'served') tracks.push(result.value.track)
       else direct.push(result.value.track)
     }
   }
   // Served first-party files before remote direct tracks: same-origin VTT
-  // cannot expire, hit CORS walls, or vanish mid-watch.
+  // cannot expire, hit CORS walls, or vanish mid-watch. Within served
+  // tracks, re-apply the scoring order now that converted cue counts are
+  // known — a dense conversion outranks a sparse one that tied on kind,
+  // HI, and provider rating. Stable, so raw-rank order survives full ties.
+  const trackKindRank = (track: ServedSubtitle) => {
+    if (track.signs || track.songs) return 3
+    if (track.forced) return 1
+    if (track.machineTranslated) return 4
+    return 0
+  }
+  tracks.sort(
+    (a, b) =>
+      langRank(a.language) - langRank(b.language) ||
+      trackKindRank(a) - trackKindRank(b) ||
+      Number(a.hi ?? false) - Number(b.hi ?? false) ||
+      (b.rating || 0) - (a.rating || 0) ||
+      (b.cueCount || 0) - (a.cueCount || 0),
+  )
   const ordered = [...tracks, ...direct]
   // Mark the top pick per wanted language: first full (non-forced,
   // non-adjunct, human) track. The menu surfaces it as Recommended.

@@ -1,8 +1,8 @@
 'use client'
 
-import type { ReactNode, RefObject } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { Minus, Plus, RotateCcw } from 'lucide-react'
-import type { CaptionSize, CaptionBackground, CaptionPosition, CaptionFont } from './player-settings'
+import { CAPTION_COLOR_VALUES, type CaptionSize, type CaptionBackground, type CaptionPosition, type CaptionFont, type CaptionColor } from './player-settings'
 import { formatSubtitleDelayMs, type SubtitleCue } from './subtitle-sync'
 
 function ChoiceRow<T extends string>({ label, value, options, onChange }: {
@@ -16,18 +16,32 @@ function ChoiceRow<T extends string>({ label, value, options, onChange }: {
   </div>
 }
 
-export function SubtitleAppearance({ size, background, position, font, preview, onSize, onBackground, onPosition, onFont }: {
-  size: CaptionSize; background: CaptionBackground; position: CaptionPosition; font: CaptionFont
+function ColorRow({ value, onChange }: { value: CaptionColor; onChange: (value: CaptionColor) => void }) {
+  const colors: readonly { value: CaptionColor; label: string }[] = [
+    { value: 'ivory', label: 'Ivory' }, { value: 'warm', label: 'Warm yellow' },
+    { value: 'sky', label: 'Sky blue' }, { value: 'mint', label: 'Mint green' },
+  ]
+  return <div aria-label="Caption color" className="consumit-caption-choice" role="group">
+    <span className="text-xs text-copy">Text color</span>
+    <div className="flex min-w-0 items-center gap-2">
+      {colors.map(color => <button aria-label={color.label} aria-pressed={value === color.value} className="consumit-caption-color" key={color.value} onClick={() => onChange(color.value)} style={{ '--caption-swatch': CAPTION_COLOR_VALUES[color.value] } as CSSProperties} title={color.label} type="button"><span aria-hidden="true" /></button>)}
+    </div>
+  </div>
+}
+
+export function SubtitleAppearance({ size, background, position, font, color, preview, onSize, onBackground, onPosition, onFont, onColor }: {
+  size: CaptionSize; background: CaptionBackground; position: CaptionPosition; font: CaptionFont; color: CaptionColor
   preview: ReactNode
   onSize: (value: CaptionSize) => void; onBackground: (value: CaptionBackground) => void
-  onPosition: (value: CaptionPosition) => void; onFont: (value: CaptionFont) => void
+  onPosition: (value: CaptionPosition) => void; onFont: (value: CaptionFont) => void; onColor: (value: CaptionColor) => void
 }) {
   return <div className="px-3 py-2">
     <div aria-label="Subtitle preview" className="flex min-h-24 items-center justify-center overflow-hidden border-b border-border py-4">{preview}</div>
     <ChoiceRow label="Size" value={size} onChange={onSize} options={[{ value: 'small', label: 'Small', short: 'S' }, { value: 'medium', label: 'Medium', short: 'M' }, { value: 'large', label: 'Large', short: 'L' }, { value: 'xlarge', label: 'Extra large', short: 'XL' }]} />
     <ChoiceRow label="Style" value={background} onChange={onBackground} options={[{ value: 'cinematic', label: 'Cinematic' }, { value: 'boxed', label: 'Boxed' }, { value: 'subtle', label: 'Subtle' }]} />
     <ChoiceRow label="Position" value={position} onChange={onPosition} options={[{ value: 'bottom', label: 'Bottom' }, { value: 'top', label: 'Top' }]} />
-    <ChoiceRow label="Font" value={font} onChange={onFont} options={[{ value: 'filscreen', label: 'FilScreen' }, { value: 'sans', label: 'Sans' }]} />
+    <ChoiceRow label="Font" value={font} onChange={onFont} options={[{ value: 'filscreen', label: 'Classic' }, { value: 'sans', label: 'DejaVu' }, { value: 'inter', label: 'Inter' }]} />
+    <ColorRow value={color} onChange={onColor} />
   </div>
 }
 

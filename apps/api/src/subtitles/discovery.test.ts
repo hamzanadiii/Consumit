@@ -22,6 +22,19 @@ function fixture(providers: SubtitleSearchProvider[]) {
 }
 
 describe('subtitle discovery', () => {
+  it('passes preferred languages into the first provider batch', async () => {
+    const seen: (readonly string[] | undefined)[] = []
+    const store = createMemoryPlaybackStore()
+    const files = createStoreFileStore(store)
+    const discovery = createSubtitleDiscovery({
+      providers: [provider('language-aware', async query => { seen.push(query.langs); return [raw('language-aware', 'ar', 1)] })],
+      store, files, origin: 'https://api.example',
+      query: async (_ref, _signal, preferredLanguages) => ({ type: 'anime', anilistId: 21, langs: [...(preferredLanguages ?? [])] }),
+    })
+    await Array.fromAsync(discovery.discover({ kind: 'anime', id: 21, episode: 1100 }, signal, undefined, ['ar', 'en']))
+    expect(seen).toEqual([['ar', 'en']])
+  })
+
   it('continues a large roster without losing late providers and replays a batch without duplicate searches', async () => {
     const searches = Array.from({ length: 29 }, (_, index) => vi.fn(async () => [raw(`p${index}`, index === 28 ? 'pt-BR' : 'en', index)]))
     const { discovery } = fixture(searches.map((search, index) => provider(`p${index}`, search)))

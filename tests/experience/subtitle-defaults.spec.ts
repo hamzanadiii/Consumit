@@ -34,9 +34,9 @@ for (const fallback of [false, true]) {
     await expect(page.getByText('Automatic saved captions.', { exact: true })).toBeVisible()
     // Automatic fallback changes the active track, never the saved order or switch.
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('consumit.experience.guest.v1')!))).toMatchObject({ subtitlesEnabled: true, subtitleLanguages: ['ar', 'en'] })
-    await page.getByRole('button', { name: 'Subtitles', exact: true }).click()
-    await expect(page.getByRole('menuitemradio', { name: 'Off', exact: true })).toHaveAttribute('aria-checked', 'false')
-    await page.getByRole('menuitemradio', { name: 'Off', exact: true }).click()
+    await page.getByRole('button', { name: 'Captions', exact: true }).click()
+    await expect(page.getByRole('radio', { name: 'Off', exact: true })).toHaveAttribute('aria-checked', 'false')
+    await page.getByRole('radio', { name: 'Off', exact: true }).click()
     await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => [...video.textTracks].filter(track => track.mode === 'hidden').length)).toBe(0)
   })
 }

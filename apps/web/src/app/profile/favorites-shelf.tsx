@@ -165,7 +165,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
               aria-label={`Add favorite ${items.length + index + 1}`}
               className="group grid aspect-[2/3] w-full cursor-pointer place-items-center rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] outline-none transition-all duration-200 ease-out hover:border-[var(--fs-accent)]/60 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none disabled:cursor-default disabled:opacity-45 disabled:hover:transform-none"
               disabled={busy}
-              onClick={() => setPaletteOpen(true)}
+              onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setPaletteOpen(true) }}
               type="button"
             >
               <span className="grid size-11 place-items-center rounded-full bg-[var(--fs-hover)] text-[var(--fs-muted)] transition-colors duration-200 group-hover:bg-[var(--fs-accent-soft)] group-hover:text-[var(--fs-accent)] motion-reduce:transition-none">

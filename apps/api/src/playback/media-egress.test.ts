@@ -5,9 +5,9 @@ import { createMediaEgress } from './media-egress.ts'
 import type { MediaTransport } from './transport.ts'
 
 const origin = 'https://watch.example', media = 'https://media.example', secret = 'media-node-separate-secret-at-least-32-chars'
-const env = { RELAY_ENABLED: 'true', RELAY_SECRET: secret, APP_ORIGIN: origin, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }
+const env = { RELAY_ENABLED: 'true', RELAY_SECRET: secret, APP_ORIGIN: origin, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie': 'lookmovie-v1' }) }
 async function request(init?: RequestInit) {
-  const token = await (await createGrantCodec(secret)).seal({ version: 1, provider: 'lookmovie-relay', url: 'https://srv313.seclar.cyou/part.ts', expires: Date.now() + 60000, origin, headers: {}, headerHost: 'srv313.seclar.cyou', kind: 'auto', depth: 1, recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
+  const token = await (await createGrantCodec(secret)).seal({ version: 1, provider: 'lookmovie', url: 'https://srv313.seclar.cyou/part.ts', expires: Date.now() + 60000, origin, headers: {}, headerHost: 'srv313.seclar.cyou', kind: 'auto', depth: 1, recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
   return new Request(mediaGrantUrl(media, token), { headers: { origin }, ...init })
 }
 function setup(body: Readable = Readable.from([Buffer.from('media')]), dailyBytes = 1000, active = 1, deadlineMs = 5000) {

@@ -88,3 +88,12 @@
     transition: none;
   }
 }
+
+/* Keep actions distinct over bright artwork without changing the hero composition. */
+.actions a { flex-shrink: 0; }
+.actions a + a { background-color: rgb(0 0 0 / 72%); }
+.overview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+@media (max-width: 639px) {
+  .overview { -webkit-line-clamp: 2; }
+  .actions { padding-top: 4px; }
+}

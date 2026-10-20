@@ -100,7 +100,15 @@ export async function listProviderHealth(signal?: AbortSignal): Promise<Record<'
 }
 
 export type ProviderMetrics = { starts: number; playbackFailures: number; buffers: number; directSelections: number; resolveSuccess: number; resolveFailures: number; startupP50Ms?: number; startupP95Ms?: number; startupP99Ms?: number; stallP50Ms?: number; stallP95Ms?: number; stallP99Ms?: number }
-export async function listProviderMetrics(signal?: AbortSignal): Promise<{ available: boolean; windowMinutes: number; metrics: Record<string, ProviderMetrics> }> {
+export type ProviderComparisonRow = {
+  provider: string; kind: ProviderKind; region: string; browser: string
+  delivery: 'all' | 'direct' | 'relay' | 'embed' | 'unattributed'; evidence: 'native' | 'resolution' | 'provider-reported'
+  starts?: number; playbackFailures?: number; buffers?: number; startupSamples?: number; stallSamples?: number
+  startupP50Ms?: number; startupP95Ms?: number; stallP50Ms?: number; stallP95Ms?: number
+  resolveSuccess?: number; resolveFailures?: number; resolveCancelled?: number
+  failureReasons?: Record<string, number>; reportedEvents?: Record<string, number>
+}
+export async function listProviderMetrics(signal?: AbortSignal): Promise<{ available: boolean; windowMinutes: number; metrics: Record<string, ProviderMetrics>; comparisonAvailable?: boolean; comparisonRows?: ProviderComparisonRow[] }> {
   return request('/v1/admin/providers/metrics', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 

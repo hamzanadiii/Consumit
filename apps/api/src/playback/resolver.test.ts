@@ -355,4 +355,39 @@ describe('bounded playback resolution', () => {
     const registration = provider('direct')
     await expect(createResolver([registration], { region: 'US' }).resolve(input, new AbortController().signal)).resolves.toMatchObject({ source: { key: 'main' } })
   })
+  it('hedges to the next candidate after the hedge window when the primary is slow', async () => {
+    vi.useFakeTimers()
+    const slow = provider('slow'); const fast = provider('fast')
+    slow.adapter.resolve = vi.fn(() => new Promise<Awaited<ReturnType<typeof slow.adapter.resolve>>>((resolve) => {
+      setTimeout(() => resolve({ ok: true as const, sources: [{ ...source, key: 'slow-win' }] }), 4000)
+    }))
+    fast.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [{ ...source, key: 'fast-win' }] }))
+    const resolver = createResolver([slow, fast], { region: 'US', hedgeMs: 1000 })
+    const task = resolver.resolve(input, new AbortController().signal)
+    // Fast starts within the hedge window and resolves, but slow is still in
+    // flight at higher priority; fast only wins once slow's attempt budget
+    // elapses (3000ms default) — total wait is one attempt window, not two.
+    await vi.advanceTimersByTimeAsync(3100)
+    expect((await task)?.registration.adapter.id).toBe('fast')
+    expect((await task)?.source.key).toBe('fast-win')
+    expect(slow.adapter.resolve).toHaveBeenCalledOnce()
+    expect(fast.adapter.resolve).toHaveBeenCalledOnce()
+  })
+  it('never lets a lower-priority hedge result shadow a higher-priority in-flight success', async () => {
+    vi.useFakeTimers()
+    const winner = provider('winner'); const companion = provider('companion')
+    winner.adapter.resolve = vi.fn(() => new Promise<Awaited<ReturnType<typeof winner.adapter.resolve>>>((resolve) => {
+      setTimeout(() => resolve({ ok: true as const, sources: [{ ...source, key: 'winner-src' }] }), 700)
+    }))
+    companion.adapter.resolve = vi.fn(async () => ({ ok: true as const, sources: [{ ...source, key: 'companion-src', subtitles: [{ id: 'en', label: 'English', language: 'en', url: 'https://media.example/subs/en.vtt', format: 'vtt' as const }] }] }))
+    const resolver = createResolver([winner, companion], { region: 'US', hedgeMs: 500 })
+    const task = resolver.resolve(input, new AbortController().signal)
+    // Companion resolves within its hedge window but winner is still in
+    // flight at higher priority; winner's later success wins.
+    await vi.advanceTimersByTimeAsync(800)
+    const resolved = await task
+    expect(resolved?.registration.adapter.id).toBe('winner')
+    expect(resolved?.source.key).toBe('winner-src')
+    expect(resolved?.subtitles).toEqual([])
+  })
 })

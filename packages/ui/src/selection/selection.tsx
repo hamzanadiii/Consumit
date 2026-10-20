@@ -115,6 +115,7 @@ export function FilterChip({
 
 export type SelectionOption = {
   disabled?: boolean
+  group?: string
   label: string
   value: string
 }
@@ -261,21 +262,25 @@ export function Select({
     if (open) optionRefs.current[activeIndex]?.focus()
   }, [activeIndex, open])
 
-  // Toolbar filters can sit at either screen edge. Contain their popup and
-  // use the room above a low trigger instead of placing options off-screen.
+  // Keep the popup inside its clipping container. Player panels have a fixed
+  // header and a scrolling body, so viewport-only placement can hide options
+  // behind that header on short screens.
   useLayoutEffect(() => {
     if (!open || !listboxRef.current || !triggerRef.current) return
     const listbox = listboxRef.current
     const trigger = triggerRef.current.getBoundingClientRect()
-    const below = window.innerHeight - trigger.bottom - 16
-    const above = trigger.top - 16
-    if (below < 224 && above > below) {
-      listbox.style.top = 'auto'
-      listbox.style.bottom = '100%'
-      listbox.style.marginTop = '0'
-      listbox.style.marginBottom = '8px'
-    }
-    listbox.style.maxHeight = `${Math.min(224, Math.max(88, above > below && below < 224 ? above : below))}px`
+    const panelBody = listbox.closest<HTMLElement>('.consumit-player-panel-body')
+    const panelBounds = panelBody?.getBoundingClientRect()
+    const topLimit = panelBounds?.top ?? 8
+    const bottomLimit = panelBounds?.bottom ?? window.innerHeight - 8
+    const above = trigger.top - topLimit - 8
+    const below = bottomLimit - trigger.bottom - 8
+    const placeAbove = below < 224 && above > below
+    listbox.style.top = placeAbove ? 'auto' : '100%'
+    listbox.style.bottom = placeAbove ? '100%' : 'auto'
+    listbox.style.marginTop = placeAbove ? '0' : '8px'
+    listbox.style.marginBottom = placeAbove ? '8px' : '0'
+    listbox.style.maxHeight = `${Math.max(1, Math.min(224, placeAbove ? above : below))}px`
     const bounds = listbox.getBoundingClientRect()
     const shift = bounds.left < 16 ? 16 - bounds.left : bounds.right > window.innerWidth - 16 ? window.innerWidth - 16 - bounds.right : 0
     listbox.style.translate = `${shift}px 0`
@@ -367,10 +372,13 @@ export function Select({
         >
           {options.map((option, index) => {
             const isSelected = option.value === value
+            const startsGroup = option.group !== undefined && option.group !== options[index - 1]?.group
             return (
               <li key={option.value} role="presentation">
+                {startsGroup ? <span aria-hidden="true" className="block px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.1em] text-muted">{option.group}</span> : null}
                 <button
                   aria-selected={isSelected}
+                  aria-label={option.group ? `${option.group}: ${option.label}` : undefined}
                   className={cn(
                     'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors motion-reduce:transition-none',
                     isSelected

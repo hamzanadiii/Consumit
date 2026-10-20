@@ -263,7 +263,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
   const ratingDistribution = data.ratingDistribution ?? []
   const ratingCount = ratingDistribution.reduce((total, rating) => total + rating.count, 0)
   const tallestRatingBar = Math.max(1, ...ratingDistribution.map((rating) => rating.count))
-  const meta = [`@${data.profile.username}`, data.profile.location ?? null, `Joined ${new Date(data.profile.createdAt).getUTCFullYear()}`].filter(Boolean).join(' · ')
+  const meta = [`@${data.profile.username}`, `Joined ${new Date(data.profile.createdAt).getUTCFullYear()}`].join(' · ')
   const activity = buildActivity(data)
   const sectionCounts: Partial<Record<ProfileSectionId, number>> = {
     diary: data.statistics.diaryEntries,
@@ -309,7 +309,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                 </div>
 
                 <div className="flex shrink-0 flex-wrap items-center gap-2.5 sm:pb-1">
-                  {data.profile.visibility === 'public' ? <ShareProfile username={data.profile.username} variant="inline" /> : null}
+                  <ShareProfile username={data.profile.username} variant="inline" />
                   {owner ? (
                     <>
                       <Link
@@ -337,7 +337,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
           {owner ? <BannerEditor currentBannerUrl={data.profile.bannerUrl} /> : null}
 
           <div className="mt-5 sm:mt-6">
-            <ProfileSectionNavigation counts={sectionCounts} name={name} owner={owner} username={data.profile.username} />
+            <ProfileSectionNavigation counts={sectionCounts} name={name} owner={owner} username={data.profile.username} visibility={data.profile.sectionVisibility} />
 
             {catalogUnavailable ? (
               <p className="mt-5 border-y border-[var(--fs-line)] py-3 text-xs leading-5 text-[var(--fs-muted)]" role="status">
@@ -435,7 +435,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                         ))}
                       </div>
                       <div aria-hidden="true" className="mt-2 flex justify-between text-xs font-bold tabular-nums text-[var(--fs-muted)]"><span>1</span><span>10</span></div>
-                      <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">{owner ? 'Select a bar to see titles at that rating. These ratings are only visible to you.' : 'Only grouped totals appear here. Individual title ratings stay private.'}</p>
+                      <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">Grouped totals appear here. Individual ratings are shown in the Ratings section.</p>
                     </section>
                   ) : null}
                 </aside>

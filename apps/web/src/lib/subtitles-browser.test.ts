@@ -10,12 +10,15 @@ describe('subtitle response boundaries', () => {
   it('reads fragmented discovery events and a final line without a newline', async () => {
     const event = { type: 'complete', searchId, languages: [{ code: 'ar', count: 2 }] }
     const text = JSON.stringify(event)
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new ReadableStream({
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({
       start(controller) { const encoder = new TextEncoder(); controller.enqueue(encoder.encode(text.slice(0, 20))); controller.enqueue(encoder.encode(text.slice(20))); controller.close() },
-    }))))
+    })))
+    vi.stubGlobal('fetch', fetcher)
     const received = vi.fn()
-    await discoverSubtitles(ref, signal, received)
+    await discoverSubtitles(ref, signal, received, ['ar', 'en'])
     expect(received).toHaveBeenCalledExactlyOnceWith(event)
+    const requestUrl = new URL(String(fetcher.mock.calls[0]?.[0]), 'https://app.example')
+    expect(requestUrl.searchParams.get('langs')).toBe('ar,en')
   })
   it.each([
     `${JSON.stringify({ type: 'complete', searchId, languages: [{ code: 'ar', count: -1 }] })}\n`,

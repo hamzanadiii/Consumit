@@ -10,6 +10,8 @@ import type {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { buildApp } from '../app.ts'
+import { loadEnv } from '../config/env.ts'
+import { createFakeIdentity } from '../identity/fake-identity.ts'
 import type { AnimeCatalog } from '../catalog/anilist/adapter.ts'
 import { AnimeError } from './errors.ts'
 
@@ -88,6 +90,31 @@ describe('anime routes', () => {
     expect(animeCatalog.trending).not.toHaveBeenCalled()
     expect(animeCatalog.title).not.toHaveBeenCalled()
     expect(animeCatalog.batch).not.toHaveBeenCalled()
+  })
+
+  it('keeps anime search behind a signed-in member while browsing stays public', async () => {
+    const animeCatalog = fakeAnimeCatalog()
+    const identity = createFakeIdentity()
+    const app = await buildApp({ animeCatalog, identity, env: loadEnv({ NODE_ENV: 'test' }) })
+    openApps.push(app)
+
+    const anonymous = await app.inject({ method: 'GET', url: '/v1/anime/search?q=one%20piece' })
+    expect(anonymous.statusCode).toBe(401)
+    expect(anonymous.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } })
+    expect(animeCatalog.search).not.toHaveBeenCalled()
+
+    await identity.register({ email: 'searcher@example.com', password: 'password12345', username: 'searcher' })
+    const delivery = identity.notifier.deliveries.findLast((row) => row.kind === 'verification')
+    if (!delivery || !('code' in delivery)) throw new Error('Missing verification code')
+    const session = await identity.verifyEmail({ code: delivery.code, email: 'searcher@example.com' })
+
+    const hit = await app.inject({ method: 'GET', url: '/v1/anime/search?q=one%20piece', cookies: { consumit_session: session.sessionToken } })
+    expect(hit.statusCode).toBe(200)
+    expect(animeCatalog.search).toHaveBeenCalledWith('one piece', 1)
+
+    // Shared catalog reads stay public — only the free-text search is gated.
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/trending' })).statusCode).toBe(200)
+    expect((await app.inject({ method: 'GET', url: '/v1/anime/1' })).statusCode).toBe(200)
   })
 
   it('preserves upstream outages instead of answering with a false 404', async () => {

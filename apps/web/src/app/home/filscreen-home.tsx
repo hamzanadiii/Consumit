@@ -1,6 +1,6 @@
 'use client'
 
-import type { AnimeTitleSummary, CatalogTitleSummary } from '@consumit/contracts'
+import type { AnimeTitleSummary, CatalogTitleSummary, PublicListDiscoveryItem } from '@consumit/contracts'
 import { Clock, Flame } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -13,11 +13,16 @@ import { CommunityCards } from '../experience/community-cards'
 import { FilScreenHeroRotator } from './hero-rotator'
 import { FilScreenShell } from './filscreen-shell'
 import { TitleRail } from '../shared/title-rail'
+import { PublicListRail } from './public-list-rail'
+
+type HomeListCard = PublicListDiscoveryItem & { artworkSources: readonly (string | undefined)[] }
 
 export type FilScreenHomeProps = {
   awardWinningShows?: readonly CatalogTitleSummary[] | undefined
   hero: HeroDetail
   mindfuckMovies?: readonly CatalogTitleSummary[] | undefined
+  newFromNetworkLists?: readonly HomeListCard[] | undefined
+  popularLists?: readonly HomeListCard[] | undefined
   popular?: readonly CatalogTitleSummary[] | undefined
   serviceRail?: ReactNode | undefined
   spotlight?: readonly HeroDetail[] | undefined
@@ -27,12 +32,15 @@ export type FilScreenHomeProps = {
   trendingAnime?: readonly AnimeTitleSummary[] | undefined
   trendingMovies?: readonly CatalogTitleSummary[] | undefined
   trendingSeries?: readonly CatalogTitleSummary[] | undefined
+  trendingWithMembers?: readonly CatalogTitleSummary[] | undefined
 }
 
 export function FilScreenHome({
   awardWinningShows = [],
   hero,
   mindfuckMovies = [],
+  newFromNetworkLists = [],
+  popularLists = [],
   serviceRail,
   spotlight,
   topRatedMovies = [],
@@ -40,6 +48,7 @@ export function FilScreenHome({
   trendingAnime = [],
   trendingMovies = [],
   trendingSeries = [],
+  trendingWithMembers = [],
 }: FilScreenHomeProps) {
   return (
     <FilScreenShell activeKindTab="new" pageHeading="Consumit home">
@@ -49,6 +58,15 @@ export function FilScreenHome({
 
       <NewEpisodesRail />
       <BecauseYouWatchedRail />
+      {newFromNetworkLists.length ? <PublicListRail id="filscreen-new-from-network" items={newFromNetworkLists} title="New from your network" /> : null}
+      {popularLists.length ? <PublicListRail id="filscreen-popular-lists" items={popularLists} title="Popular with members" /> : null}
+      {trendingWithMembers.length > 0 ? <TitleRail
+        description="A shared pulse from members who opted in."
+        icon={<Flame aria-hidden="true" className="size-4 text-[var(--fs-flame)]" />}
+        id="filscreen-trending-with-members"
+        items={trendingWithMembers}
+        title="Trending with members"
+      /> : null}
       <CommunityCards dismissible />
 
       {trendingMovies && trendingMovies.length > 0 ? (

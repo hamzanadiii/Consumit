@@ -1,31 +1,96 @@
 'use client'
 
-import { useEffect, useId, useRef, type ComponentProps, type CSSProperties, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /** Shared first-party player panels; the backdrop and transport remain visible. */
-export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
+export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, role = 'dialog', anchorSelector, anchorElement, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
   title: string
   heading?: string
   meta?: ReactNode
   onBack?: (() => void) | undefined
   backLabel?: string
   onClose: () => void
+  /** Internal player destination used to align the compact panel to its trigger. */
+  anchorSelector?: string
+  /** External wrapper trigger; supplied directly to avoid cross-root selectors. */
+  anchorElement?: HTMLElement | null
 }) {
   const panel = useRef<HTMLDivElement>(null)
-  useEffect(() => { panel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true }) }, [])
-  return (
-    <div {...props} className={cn('consumit-player-panel fixed inset-x-0 bottom-0 z-30 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-card border border-white/15 bg-canvas sm:absolute sm:inset-x-auto sm:bottom-20 sm:right-6 sm:max-h-[70dvh] sm:w-84 sm:rounded-card', className)} data-player-panel ref={panel} role="menu">
-      <header className="consumit-player-panel-header sticky top-0 z-10 flex min-h-[52px] items-center gap-2 border-b border-border bg-canvas px-3 py-1.5">
+  const headingId = useId()
+  const [placement, setPlacement] = useState<CSSProperties | null>(null)
+  useEffect(() => { panel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true }) }, [title])
+  useLayoutEffect(() => {
+    const element = panel.current
+    const root = element?.closest<HTMLElement>('[data-consumit-player], [data-provider-frame]')
+    const anchor = anchorElement ?? (anchorSelector ? root?.querySelector<HTMLElement>(anchorSelector) : null)
+    if (!element || !root || !anchor) return
+
+    const position = () => {
+      const rootRect = root.getBoundingClientRect()
+      const anchorRect = anchor.getBoundingClientRect()
+      const rootLeft = rootRect.left + root.clientLeft
+      const rootTop = rootRect.top + root.clientTop
+      const rootWidth = root.clientWidth || rootRect.width
+      const viewportWidth = window.visualViewport?.width ?? window.innerWidth
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const width = Math.max(0, Math.min(380, rootWidth - 24, viewportWidth - 24))
+      const minLeft = Math.max(12, rootLeft + 12)
+      const maxLeft = Math.min(rootLeft + rootWidth - width - 12, viewportWidth - width - 12)
+      const screenLeft = Math.max(minLeft, Math.min(maxLeft, anchorRect.left + anchorRect.width / 2 - width / 2))
+      const availableAbove = Math.max(0, anchorRect.top - 8 - Math.max(rootTop, 12))
+      const viewportLimit = Math.min(viewportHeight * 0.62, 520)
+      const containingBlock = element.offsetParent instanceof HTMLElement ? element.offsetParent : root
+      const blockRect = containingBlock.getBoundingClientRect()
+      const blockLeft = blockRect.left + containingBlock.clientLeft
+      const blockTop = blockRect.top + containingBlock.clientTop
+      const blockBottom = blockTop + (containingBlock.clientHeight || blockRect.height)
+      const nextPlacement: CSSProperties = {
+        position: 'absolute', inset: 'auto', top: 'auto', right: 'auto',
+        left: screenLeft - blockLeft, bottom: Math.max(0, blockBottom - anchorRect.top + 8), width,
+        maxWidth: 'none', maxHeight: Math.min(viewportLimit, availableAbove),
+      }
+      setPlacement(current => current && current.left === nextPlacement.left && current.bottom === nextPlacement.bottom && current.width === nextPlacement.width && current.maxHeight === nextPlacement.maxHeight ? current : nextPlacement)
+    }
+    position()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(position)
+    observer?.observe(root)
+    observer?.observe(anchor)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    window.visualViewport?.addEventListener('resize', position)
+    window.visualViewport?.addEventListener('scroll', position)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+      window.visualViewport?.removeEventListener('resize', position)
+      window.visualViewport?.removeEventListener('scroll', position)
+    }
+  }, [anchorElement, anchorSelector])
+  const content = (
+    <div aria-labelledby={props['aria-label'] ? undefined : headingId} {...props} className={cn('consumit-player-panel z-30 overflow-hidden overscroll-contain rounded-card border border-white/15 bg-canvas', className)} data-player-panel ref={panel} role={role} style={{ position: 'absolute', inset: 'auto 12px 72px auto', width: 'min(380px, calc(100% - 24px))', maxHeight: 'min(62dvh, 520px)', ...placement, ...props.style }} aria-modal={role === 'dialog' ? true : undefined} onKeyDown={event => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
+      if (event.key !== 'Tab') return
+      const candidates = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') ?? []).filter(item => !item.closest('[hidden]'))
+      const radios = candidates.filter((item): item is HTMLInputElement => item instanceof HTMLInputElement && item.type === 'radio')
+      const radioStop = radios.find(item => item.checked) ?? radios[0]
+      const items = candidates.filter(item => !radios.includes(item as HTMLInputElement) || item === radioStop)
+      const first = items[0], last = items.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }}>
+      <header className="consumit-player-panel-header">
         {onBack ? <button aria-label={backLabel} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" className="size-5" /></button> : null}
-        <h3 className="min-w-0 flex-1 text-base font-semibold text-ink">{heading}</h3>
+        <h3 className="min-w-0 flex-1 text-base font-semibold text-ink" id={headingId}>{heading}</h3>
         {meta ? <span className="text-xs tabular-nums text-muted">{meta}</span> : null}
         <button aria-label={`Close ${title.toLowerCase()}`} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
       </header>
-      {children}
+      <div className="consumit-player-panel-body">{children}</div>
     </div>
   )
+  return content
 }
 
 export function PlayerSettingRow({ icon, label, value, onClick, disabled }: {
@@ -67,4 +132,22 @@ export function PlayerAdjustment({ label, accessibleLabel = label, valueLabel, v
       {ticks.map((tick) => <span key={tick.value} style={{ left: `${max === min ? 0 : (tick.value - min) / (max - min) * 100}%` }}>{tick.label}</span>)}
     </div>
   </div>
+}
+
+const RadioName = createContext<string | undefined>(undefined)
+
+/** Native radios supply arrow selection and a single tab stop in each panel. */
+export function PlayerRadioGroup({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  const name = useId()
+  return <RadioName.Provider value={name}><div aria-label={label} className={className} role="radiogroup">{children}</div></RadioName.Provider>
+}
+
+export function PlayerRadioOption({ selected, onSelect, disabled, busy, className, title, children }: {
+  selected: boolean; onSelect: () => void; disabled?: boolean; busy?: boolean; className?: string; title?: string; children: ReactNode
+}) {
+  const name = useContext(RadioName)
+  return <label className={cn('consumit-player-radio-option', className)} data-disabled={disabled || undefined} title={title}>
+    <input aria-busy={busy} aria-checked={selected} checked={selected} className="consumit-player-radio-input" disabled={disabled} name={name} onChange={onSelect} type="radio" />
+    {children}
+  </label>
 }

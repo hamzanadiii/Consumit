@@ -20,7 +20,7 @@ describe('shared playback coordinator', () => {
     await coordinator.recover(session, 'media', signal)
     expect(transport.recover).toHaveBeenCalledWith(session, 'fallback', expect.objectContaining({ preferences: { qualityHeight: 1080, audioLanguage: 'fr' } }), signal)
     await coordinator.switch(session, 'backup', signal)
-    expect(transport.switch).toHaveBeenCalledWith(session, 'backup', signal, { qualityHeight: 1080, audioLanguage: 'fr' })
+    expect(transport.switch).toHaveBeenCalledWith(session, 'backup', signal, { qualityHeight: 1080, audioLanguage: 'fr' }, undefined)
     coordinator.setPreferences({ qualityHeight: null })
     await coordinator.recover(session, 'media', signal)
     expect(transport.recover).toHaveBeenLastCalledWith(session, 'fallback', expect.objectContaining({ preferences: { qualityHeight: null, audioLanguage: 'fr' } }), signal)

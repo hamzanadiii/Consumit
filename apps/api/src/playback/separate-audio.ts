@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { allowedMediaUrl, assertHlsManifest, isRelayMediaUrl, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration, validatedSources, type ProviderHttp, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
+import { allowedMediaUrl, assertHlsManifest, isRelayMediaUrl, parseHlsAttributeList, parseHlsReferences, sumMediaPlaylistDuration, userAgent, validatedSources, type ProviderHttp, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import type { ResolvePlaybackRequest, SeparateAudioTrack } from '@consumit/contracts'
 import { ApiError } from '../http/errors.ts'
 import { createProviderHttp } from './provider-http.ts'
@@ -57,7 +57,15 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
         if (!source) continue
         // Inspect the same representation delivered to our browser origin.
         // Some CDNs otherwise return a single-language wrapper instead.
-        const headers = { ...source.headers, ...(appOrigin ? { origin: appOrigin } : {}) }
+        // An adapter-pinned Origin wins: some media edges (e.g. Movy) accept
+        // only their own origin, and the relay re-sends the pinned headers.
+        const headers: Record<string, string> = { ...source.headers }
+        if (appOrigin && !source.headers?.origin) headers.origin = appOrigin
+        // The Worker supplies Chrome/131 by default, while the provider lookup
+        // uses the SDK's Chrome UA. Pin it during Apogee audio inspection and
+        // carry it into the grant so preparation and edge delivery match.
+        if (['riveapogee', 'riveapogee-audio'].includes(p.adapter.id)
+          && !Object.keys(headers).some(name => name.toLowerCase() === 'user-agent')) headers['user-agent'] = userAgent
         const master = await audioMaster(source.url, headers, p, bounded)
         if (!master) continue
         for (const line of master.text.split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('#EXT-X-MEDIA:'))) {
@@ -96,7 +104,7 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
       const duration = sumMediaPlaylistDuration(response.text)
       if (!duration || duration > 86400) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio timeline is unavailable.')
       const expiry = Math.min(Date.parse(track.expiresAt) - 5000, Date.now() + MAX_GRANT_MS - 5000)
-      const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source: { ...track.source, url: response.url, key: `audio-${track.id}`, type: 'hls' }, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '') : response.url
+      const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source: { ...track.source, url: response.url, key: `audio-${track.id}`, type: 'hls', headers: track.headers }, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '') : response.url
       if (!src || expiry <= Date.now() || !eligible().includes(track.registration)) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio delivery path is unavailable.')
       return { id: track.id, label: track.label, language: track.language, provider: track.provider, src, duration, expiresAt: new Date(expiry).toISOString() }
     },

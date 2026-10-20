@@ -3,7 +3,7 @@ import { normLang } from './lang.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
 
 // VDRK (sub.vdrk.site) — keyless TMDB-keyed subtitle API, movies + TV +
-// anime (ani.zip bridge: canonical episode -> TMDB id + TVDB season/ep).
+// anime (AniZip identity bridge plus TMDB-catalog season/episode coordinates).
 // GET /v1/movie/{tmdbId} | /v1/tv/{tmdbId}/{season}/{episode} returns
 // [{file, label}]. Files are direct VTT on cache.vdrk.site (CORS-open,
 // text/vtt), so tracks pass straight through to the player untouched.

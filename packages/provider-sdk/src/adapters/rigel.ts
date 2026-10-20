@@ -6,8 +6,7 @@ import { adapter, document, sourceAccess, ProviderFailure, type ProviderHttp } f
 const streamsSchema = z.object({ streams: z.array(z.object({ url: z.url().max(4096), quality: z.string().nullable().optional(), label: z.string().nullable().optional() })).max(32) })
 // PROVE 2026-10-05 budgets: the old playlist+probe timeouts plus API timeout
 // blew the per-provider pipeline budget. /v1/play/ links hang instead of
-// fast-failing, and slow /v1/vs/ nested masters are skipped per operator
-// request, so every leg gets a short timeout and fails fast.
+// fast-failing, so every leg gets a short timeout and fails fast.
 const API_TIMEOUT_MS = 6000
 const PLAYLIST_TIMEOUT_MS = 3000
 const SEGMENT_TIMEOUT_MS = 2500
@@ -35,13 +34,16 @@ export function createRigelProvider(http: ProviderHttp, now = Date.now) {
     const api = bounded(signal, API_TIMEOUT_MS)
     let data: z.infer<typeof streamsSchema>
     try {
-      data = streamsSchema.parse(JSON.parse((await document(http, `https://movish.to/player-sources/rigel${path}`, api.signal)).text))
+        data = streamsSchema.parse(JSON.parse((await document(http, `https://movish.to/player-sources/rigel${path}`, api.signal, { referer: 'https://movish.to/' })).text))
     } finally {
       api.cleanup()
     }
-    // Operator request 2026-10-05: drop the slow /v1/vs/ nested masters —
-    // only /v1/play/ and other non-vs URLs are kept.
-    const candidates = data.streams.filter((stream) => !/\/v1\/vs\//i.test(stream.url)).slice(0, MAX_STREAMS)
+    // Rechecked 2026-10-20: movish.to answers 403 without a Referer, and the
+    // /v1/play/ lanes answer 403 PROOF_REQUIRED for every browser-legal header
+    // set (Origin/Referer/session cookies/XSRF), so only the bounded /v1/vs/
+    // chain can be walked. Keep the 2026-10-05 protection by reading a bounded
+    // prefix of that chain.
+    const candidates = data.streams.filter((stream) => !/\/v1\/play\//i.test(stream.url)).slice(0, MAX_STREAMS)
     // Verify chains in parallel — sequential nesting walks blow the
     // per-provider budget (/v1/play/ links hang instead of fast-failing,
     // hence the short per-leg timeouts above).
@@ -57,9 +59,20 @@ export function createRigelProvider(http: ProviderHttp, now = Date.now) {
             leg.cleanup()
           }
           const inspected = inspectHlsManifest(response.text, response.url)
+          if (inspected.kind === 'master') {
+            const nested = inspected.references[0]?.url
+            if (!nested) return null
+            url = nested
+            continue
+          }
+          // Rechecked 2026-10-20: every surviving dlproxy media playlist ships
+          // AES-128 whose /key/ endpoint answers 403 `proof required` for every
+          // browser-legal header set, while segments themselves answer 206.
+          // An encrypted lane can never play in Consumit, so reject it before
+          // probing instead of returning a source that dies on decryption.
+          if (/#EXT-X-KEY:METHOD=/.test(response.text)) return null
           const next = inspected.references[0]?.url
           if (!next) return null
-          if (inspected.kind === 'master') { url = next; continue }
           const probe = bounded(signal, SEGMENT_TIMEOUT_MS)
           try {
             const segment = await document(http, next, probe.signal, { range: 'bytes=0-1023' }, { readPrefixBytes: 1024 })

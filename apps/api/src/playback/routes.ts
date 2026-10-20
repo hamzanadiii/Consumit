@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { playbackAttemptRequestSchema, playbackAttemptSchema, playbackEventsSchema, playbackFailureRequestSchema, playbackProviderListSchema, playbackSessionSchema, playbackSwitchRequestSchema, resolvePlaybackRequestSchema, separateAudioListSchema, separateAudioSourceSchema } from '@consumit/contracts'
 import { z } from 'zod'
+import { frameDiagnosticsSchema } from '@consumit/contracts'
 import { isAllowedOrigin } from '../http/csrf.ts'
 import { ApiError } from '../http/errors.ts'
 import type { Playback } from './playback.ts'
@@ -95,7 +96,7 @@ export function registerPlaybackRoutes(app: FastifyInstance, deps: { playback: P
     const parsed = playbackSwitchRequestSchema.safeParse(request.body)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Choose an available playback provider.')
     reply.header('cache-control', 'private, no-store')
-    return playbackSessionSchema.parse(await deps.playback.switchProvider(owner(request), id(request), parsed.data.providerId, signal(request, reply), parsed.data.preferences))
+    return playbackSessionSchema.parse(await deps.playback.switchProvider(owner(request), id(request), parsed.data.providerId, signal(request, reply), parsed.data.preferences, parsed.data.sourceKey))
   })
   for (const action of ['refresh', 'fallback'] as const) app.post(`/v1/playback/:id/${action}`, { config }, async (request, reply) => {
     guard(request)
@@ -103,6 +104,15 @@ export function registerPlaybackRoutes(app: FastifyInstance, deps: { playback: P
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide the failed playback source.')
     reply.header('cache-control', 'private, no-store')
     return playbackSessionSchema.parse(await deps.playback.recover(owner(request), id(request), parsed.data, action === 'refresh', signal(request, reply)))
+  })
+  app.post('/v1/playback/:id/frame-diagnostics', { bodyLimit: 4096, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
+    guard(request)
+    reply.header('cache-control', 'private, no-store')
+    const parsed = frameDiagnosticsSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide a bounded external-player diagnostic batch.')
+    if (!deps.playback.frameDiagnostics) throw new ApiError('PLAYBACK_UNAVAILABLE', 'External-player diagnostics are unavailable.')
+    await deps.playback.frameDiagnostics(owner(request), id(request), parsed.data)
+    return reply.code(204).send()
   })
   app.post('/v1/playback/:id/events', { bodyLimit: 8192, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     guard(request)

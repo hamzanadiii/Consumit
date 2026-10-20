@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { LOGIN_MAX_ATTEMPTS } from './auth-state.ts'
 import type { AuthStateStore } from './auth-state.ts'
 import { IdentityError } from './errors.ts'
 import type { Identity } from './identity.ts'
@@ -61,6 +62,28 @@ export function describeIdentityContract(name: string, setup: () => Promise<Iden
         expect(wrong.code).toBe('INVALID_CREDENTIALS')
         expect(unknown.code).toBe(wrong.code)
         expect(unknown.message).toBe(wrong.message)
+      } finally {
+        await harness.cleanup()
+      }
+    })
+
+    it('locks a known account after repeated wrong passwords without locking unknown addresses', async () => {
+      const harness = await setup()
+      try {
+        await verifyNewMember(harness)
+        for (let attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt += 1) {
+          expect((await caughtIdentityError(harness.identity.login({ email: 'hamza@example.com', password: 'wrong-password-long' }))).code).toBe('INVALID_CREDENTIALS')
+        }
+        // The correct password is refused too, so a distributed spray cannot
+        // keep guessing once the account budget is gone.
+        const locked = await caughtIdentityError(harness.identity.login({ email: 'hamza@example.com', password: 'long-enough-password' }))
+        expect(locked.code).toBe('TOO_MANY_ATTEMPTS')
+        // Unknown addresses keep answering as invalid credentials, so the
+        // lockout itself does not confirm whether an account exists.
+        const unknown = await caughtIdentityError(harness.identity.login({ email: 'nobody@example.com', password: 'wrong-password-long' }))
+        expect(unknown.code).toBe('INVALID_CREDENTIALS')
+        await harness.state.clearFailedLogins('hamza@example.com')
+        await expect(harness.identity.login({ email: 'hamza@example.com', password: 'long-enough-password' })).resolves.toMatchObject({ member: { email: 'hamza@example.com' } })
       } finally {
         await harness.cleanup()
       }

@@ -88,6 +88,17 @@ describe('filscreen live home', () => {
     )
   })
 
+  it('shows the anonymous member-trend row only when hydrated titles are available', () => {
+    const { rerender } = render(<ShellStateProvider><FilScreenHome hero={hero} /></ShellStateProvider>)
+    expect(screen.queryByRole('heading', { name: 'Trending with members' })).not.toBeInTheDocument()
+
+    rerender(<ShellStateProvider><FilScreenHome hero={hero} trendingWithMembers={[{ ...movieSummary, id: 987, title: 'A shared pulse' }]} /></ShellStateProvider>)
+
+    const rail = screen.getByRole('region', { name: 'Trending with members titles' })
+    expect(within(rail).getByText('A shared pulse')).toBeInTheDocument()
+    expect(within(rail).queryByText(/\b\d+\s+(viewers?|members)\b|watching now|live now/i)).not.toBeInTheDocument()
+  })
+
   it('keeps the home surface personal with no social feed', () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 

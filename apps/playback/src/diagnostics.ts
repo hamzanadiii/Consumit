@@ -16,7 +16,7 @@ import type { PlaybackStore } from '../../api/src/playback/state.ts'
 export type DiagnosticResult = { statusCode: number; body: unknown }
 type ScoutCatalog = (() => readonly ProviderRegistration[]) | undefined
 
-const statusByCode: Record<string, number> = { BAD_REQUEST: 400, NOT_FOUND: 404, CONFLICT: 409, PLAYBACK_UNAVAILABLE: 503 }
+const statusByCode: Record<string, number> = { BAD_REQUEST: 400, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409, PLAYBACK_UNAVAILABLE: 503 }
 function errorResult(error: unknown): DiagnosticResult {
   if (error instanceof ApiError) return { statusCode: statusByCode[error.code] ?? 500, body: { error: error.code } }
   return { statusCode: 502, body: { error: 'PLAYBACK_UNAVAILABLE' } }

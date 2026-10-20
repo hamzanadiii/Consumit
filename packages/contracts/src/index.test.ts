@@ -4,6 +4,7 @@ import {
   playbackProviderListSchema,
   playbackSourceSchema,
   catalogTitleSummarySchema,
+  createMemberListRequestSchema,
   accountDeletionRequestSchema,
   apiErrorResponseSchema,
   avatarUrlSchema,
@@ -119,12 +120,18 @@ describe('catalog contracts', () => {
   })
 
   it('validates editable profiles and username availability', () => {
-    expect(updateProfileRequestSchema.parse({ avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: '  Films, quietly.  ', displayName: ' Hamza ', location: ' Rabat ', username: 'HAMZA_8', visibility: 'private' })).toEqual({
-      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', location: 'Rabat', username: 'hamza_8', visibility: 'private',
+    expect(updateProfileRequestSchema.parse({ avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: '  Films, quietly.  ', displayName: ' Hamza ', sectionVisibility: { ratings: false, watchlist: true }, username: 'HAMZA_8' })).toEqual({
+      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza_8',
     })
     expect(updateProfileRequestSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false)
-    expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, location: null, nextUsernameChangeAt: null, username: 'hamza_8', usernameChangedAt: null, visibility: 'private' }).success).toBe(true)
+    expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza_8', usernameChangedAt: null }).success).toBe(true)
+    expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, location: 'Rabat', username: 'hamza_8', usernameChangedAt: null }).data).not.toHaveProperty('location')
     expect(usernameAvailabilityResponseSchema.parse({ available: true, username: 'HAMZA_8' })).toEqual({ available: true, username: 'hamza_8' })
+  })
+
+  it('defaults new lists to public while retaining an explicit private choice and per-section profile defaults', () => {
+    expect(createMemberListRequestSchema.parse({ idempotencyKey: '07a4d96f-54bf-4688-9d63-fd92ccefc940', name: 'Night films' }).visibility).toBe('public')
+    expect(createMemberListRequestSchema.parse({ idempotencyKey: '07a4d96f-54bf-4688-9d63-fd92ccefc940', name: 'Night films', visibility: 'private' }).visibility).toBe('private')
   })
 
   it('validates non-empty member record edits', () => {
@@ -164,7 +171,7 @@ describe('catalog contracts', () => {
     expect(titleReviewsQuerySchema.parse({ audience: 'circle' })).toEqual({ page: 1, sort: 'recent' })
     expect(titleReviewsQuerySchema.safeParse({ page: 0 }).success).toBe(false)
     expect(titleReviewsQuerySchema.safeParse({ sort: 'top' }).success).toBe(false)
-    expect(updateProfileRequestSchema.safeParse({ visibility: 'public' }).success).toBe(true)
+    expect(updateProfileRequestSchema.safeParse({ visibility: 'public' }).success).toBe(false)
     expect(updateMemberListRequestSchema.safeParse({ visibility: 'public' }).success).toBe(true)
   })
 

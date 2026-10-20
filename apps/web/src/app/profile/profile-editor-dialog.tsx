@@ -26,6 +26,7 @@ type ProfileEditorDialogProps = {
  */
 export function ProfileEditorDialog({ children, description, eyebrow, footer, labelledBy, maxWidthClassName = 'max-w-3xl', onClose, title }: ProfileEditorDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
   const [theme, setTheme] = useState<FilScreenTheme>('dark')
 
   // Mount-only sync of the device-stored FilScreen theme (external store),
@@ -42,24 +43,38 @@ export function ProfileEditorDialog({ children, description, eyebrow, footer, la
     if (next) setTheme(next)
   }, [])
 
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
+
   useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusable = () => [...panel.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true')
+    focusable()[0]?.focus({ preventScroll: true })
+
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onClose()
+        event.preventDefault()
+        event.stopPropagation()
+        onCloseRef.current()
         return
       }
-      if (event.key !== 'Tab' || !panelRef.current) return
-      const focusable = [...panelRef.current.querySelectorAll<HTMLElement>('button, textarea, input, select, [href]')]
-        .filter((element) => !element.hasAttribute('disabled'))
-      if (focusable.length === 0) return
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
-      if (event.shiftKey && document.activeElement === first) {
+      if (event.key !== 'Tab') return
+      const controls = focusable()
+      if (controls.length === 0) {
         event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
+        panel!.focus({ preventScroll: true })
+        return
+      }
+      const first = controls[0]!
+      const last = controls[controls.length - 1]!
+      if (event.shiftKey && (document.activeElement === first || !panel!.contains(document.activeElement))) {
         event.preventDefault()
-        first.focus()
+        last.focus({ preventScroll: true })
+      } else if (!event.shiftKey && (document.activeElement === last || !panel!.contains(document.activeElement))) {
+        event.preventDefault()
+        first.focus({ preventScroll: true })
       }
     }
     document.addEventListener('keydown', onKey)
@@ -68,8 +83,9 @@ export function ProfileEditorDialog({ children, description, eyebrow, footer, la
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previousOverflow
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
     }
-  }, [onClose])
+  }, [])
 
   // Portals only exist in the browser; the server render stays empty.
   if (typeof document === 'undefined') return null
@@ -77,7 +93,7 @@ export function ProfileEditorDialog({ children, description, eyebrow, footer, la
   return createPortal(
     <div data-filscreen-home data-theme={theme} style={{ colorScheme: theme }}>
       <div
-        className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:p-6"
+        className="fs-profile-editor-overlay fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 backdrop-blur-sm"
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClose()
         }}
@@ -85,9 +101,11 @@ export function ProfileEditorDialog({ children, description, eyebrow, footer, la
         <div
           aria-labelledby={labelledBy}
           aria-modal="true"
-          className={`my-8 flex max-h-[calc(100vh-4rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fs-field-border)] bg-[var(--fs-shell)] shadow-2xl ${maxWidthClassName}`}
+          className={`fs-profile-editor-panel my-0 flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--fs-field-border)] bg-[var(--fs-shell)] shadow-2xl ${maxWidthClassName}`}
           ref={panelRef}
           role="dialog"
+          tabIndex={-1}
+          data-filscreen-profile-dialog
         >
           <div className="flex shrink-0 items-start justify-between gap-4 border-b border-[var(--fs-line)] p-5 sm:p-6">
             <div className="min-w-0">

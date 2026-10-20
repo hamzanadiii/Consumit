@@ -10,9 +10,12 @@ import {
   CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_WINDOW_MS,
   MAX_MEMBER_SESSIONS,
   challengeCodeHash,
   challengeLookup,
+  loginLookup,
   type AuthChallenge,
   type AuthStateStore,
   type RegistrationChallenge,
@@ -165,6 +168,12 @@ redis.call('DEL', KEYS[1])
 return #hashes
 `
 
+const failedLoginLua = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+return count
+`
+
 function sessionRecord(value: z.infer<typeof storedSessionSchema>): SessionRecord {
   return {
     absoluteExpiresAt: new Date(value.absoluteExpiresAt),
@@ -220,6 +229,10 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
 
   function accountSendKey(purpose: AuthChallenge['kind'], email: string) {
     return `${keyPrefix}sends:${purpose}:${challengeLookup(codePepper, purpose, email)}`
+  }
+
+  function loginAttemptsKey(email: string) {
+    return `${keyPrefix}login-attempts:${loginLookup(codePepper, email)}`
   }
 
   function memberSessionsKey(memberId: string) {
@@ -292,6 +305,9 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       const parsed = storedChallengeSchema.safeParse(JSON.parse(raw))
       return parsed.success ? parsed.data.payload : null
     }),
+    clearFailedLogins: (email) => run(async () => {
+      await client.del(loginAttemptsKey(email))
+    }),
     health: () => run(async () => (await client.ping()) === 'PONG'),
     issueSession: (input) => run(async () => {
       const token = newSessionToken()
@@ -321,6 +337,7 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       return { record: sessionRecord(value), token }
     }),
     isUsernameReserved: (username) => run(async () => (await client.exists(usernameReservationKey(username))) === 1),
+    loginLocked: (email) => run(async () => Number(await client.get(loginAttemptsKey(email)) ?? 0) >= LOGIN_MAX_ATTEMPTS),
     pendingRegistration: (email) => run(async () => {
       const raw = await client.get(challengeKey('registration', email))
       if (!raw) return null
@@ -335,6 +352,9 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       if (typeof raw !== 'string') return null
       const parsed = storedSessionSchema.safeParse(JSON.parse(raw))
       return parsed.success ? sessionRecord(parsed.data) : null
+    }),
+    registerFailedLogin: (email) => run(async () => {
+      await client.eval(failedLoginLua, 1, loginAttemptsKey(email), LOGIN_WINDOW_MS)
     }),
     revokeMemberSessions: (memberId) => run(async () => {
       await client.eval(revokeAllLua, 1, memberSessionsKey(memberId), sessionPrefix)

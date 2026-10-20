@@ -1,4 +1,4 @@
-import { animeContextSchema, providerStateSchema, resolverMetadataSchema, subtitleCatalogRowsSchema } from '@consumit/contracts/internal'
+import { animeContextSchema, providerStateSchema, resolverMetadataSchema, subtitleCatalogRowsSchema, tmdbEpisodeMappingSchema } from '@consumit/contracts/internal'
 import type { InternalClient } from '@consumit/server'
 import type { PlaybackRef } from '@consumit/contracts'
 import type { ProviderConfigStore } from '../../api/src/admin/provider-config.ts'
@@ -21,10 +21,13 @@ export function createProductClient(call: InternalClient) {
     if (!value.title || !value.year) throw new Error('Canonical metadata unavailable.')
     return { ...value, title: value.title, year: value.year }
   }
+  const tmdbEpisode = async (tmdbId: number, absoluteEpisode: number, signal: AbortSignal) => tmdbEpisodeMappingSchema.parse(
+    await call('/v1/internal/playback/tmdb-episode', { tmdbId, absoluteEpisode }, { signal }),
+  )
   const subtitles: SubtitleCatalog = {
     async find(ref, langs) { try { return subtitleCatalogRowsSchema.parse(await call('/v1/internal/playback/subtitles', { operation: 'find', ref, langs })) } catch { return [] } },
     async save(ref, tracks) { try { await call('/v1/internal/playback/subtitles', { operation: 'save', ref, tracks }) } catch { /* Subtitle metadata remains best effort. */ } },
   }
-  return { config, snapshot: state, anime, metadata, tmdb, subtitles }
+  return { config, snapshot: state, anime, metadata, tmdb, tmdbEpisode, subtitles }
 }
 

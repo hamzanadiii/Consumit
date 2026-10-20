@@ -70,7 +70,7 @@ describe('Worker delivery boundary', () => {
     expect((await setup(new Response(text)).worker.fetch(control(await codec.seal(base, now)), env)).status).toBe(403)
   })
   it('resolves LookMovie and discovers its HLS host graph from authenticated Worker egress', async () => {
-    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie': 'lookmovie-v1' }) }
     const segment = new Uint8Array(564); segment[0] = 71; segment[188] = 71; segment[376] = 71
     const fetcher = vi.fn<typeof fetch>(async input => {
       const url = new URL(String(input))
@@ -100,13 +100,28 @@ describe('Worker delivery boundary', () => {
   })
 
   it('allows LookMovie rotating hosts only through its exact Worker recipe and signed host scope', async () => {
-    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }
-    const grant = { provider: 'lookmovie-relay', url: 'https://srv313.seclar.cyou/part.ts', kind: 'auto' as const, recipe: 'lookmovie-v1' as const, hosts: ['srv313.seclar.cyou'] }
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie': 'lookmovie-v1' }) }
+    const grant = { provider: 'lookmovie', url: 'https://srv313.seclar.cyou/part.ts', kind: 'auto' as const, recipe: 'lookmovie-v1' as const, hosts: ['srv313.seclar.cyou'] }
     const fetcher = vi.fn<typeof fetch>(async () => new Response('media'))
     const dependencies = { fetch: fetcher, now: () => now, verifyPublicHost: async () => undefined }
     expect((await createRelayWorker(dependencies).fetch(await request(grant), settings)).status).toBe(200)
     expect((await createRelayWorker(dependencies).fetch(await request({ ...grant, url: 'https://unrelated.example/part.ts', hosts: ['unrelated.example'] }), settings)).status).toBe(403)
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+  it('leases Aether rotating tnmr hosts only through its exact recipe and replays the adapter UA', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ aether: ['cdn1018.cdn-tnmr.org'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ aether: 'aether-v1' }) }
+    const grant = { provider: 'aether', url: 'https://cjdgxnffutfw.tnmr.org/hls2/master.m3u8', headerHost: 'cjdgxnffutfw.tnmr.org', kind: 'hls' as const, recipe: 'aether-v1' as const, hosts: ['cjdgxnffutfw.tnmr.org'], headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36' } }
+    const playlist = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nseg0.ts\n#EXT-X-ENDLIST\n'
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(playlist, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const verifyPublicHost = vi.fn<(host: string, signal: AbortSignal) => Promise<void>>(async () => undefined)
+    const dependencies = { fetch: fetcher, now: () => now, verifyPublicHost }
+    const worker = createRelayWorker(dependencies)
+    expect((await worker.fetch(await request(grant), settings)).status).toBe(200)
+    expect(verifyPublicHost).toHaveBeenCalledWith('cjdgxnffutfw.tnmr.org', expect.any(AbortSignal))
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('user-agent')).toBe('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36')
+    expect((await worker.fetch(await request({ ...grant, hosts: ['evil.example'], url: 'https://evil.example/master.m3u8' }), settings)).status).toBe(403)
+    expect((await worker.fetch(await request(grant), { ...settings, RELAY_DISCOVERY_PROVIDERS: '{}' })).status).toBe(403)
+    expect((await worker.fetch(await request({ provider: 'aether', url: 'https://cjdgxnffutfw.tnmr.org/hls2/master.m3u8', headerHost: 'cjdgxnffutfw.tnmr.org', kind: 'hls' as const, headers: { 'user-agent': 'Mozilla/5.0' } }), settings)).status).toBe(403)
   })
   it('requires independent recipe opt-in, an exact signed scope and public DNS before fetching a rotating host', async () => {
     const settings={...env,RELAY_PROVIDERS:JSON.stringify({'wecollege-miami':['moon.zenoak.top']}),RELAY_DISCOVERY_PROVIDERS:JSON.stringify({'wecollege-miami':'wecollege-city-v1'})}
@@ -256,6 +271,36 @@ describe('Worker delivery boundary', () => {
     const denied = await worker.fetch(await request({ ...grant, url: 'https://unapproved.transcode.cfd/variant.m3u8' }), settings)
     expect(denied.status).toBe(403)
   })
+
+  it('preserves JustAnime site headers on its approved CDN segment hosts', async () => {
+    const { fetcher, worker } = setup(new Response(new Uint8Array([0, 0, 0]), { status: 200 }))
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ justanime: ['core.justanime.to', 'vault-92.rundowncdn.top'] }) }
+    const grant = { provider: 'justanime', url: 'https://vault-92.rundowncdn.top/segment.ts', headerHost: 'core.justanime.to',
+      headers: { origin: 'https://justanime.to', referer: 'https://justanime.to/', 'user-agent': 'JustAnime test agent' }, kind: 'auto' as const }
+    const response = await worker.fetch(await request(grant), settings)
+    expect(response.status).toBe(200)
+    const outgoing = new Headers(fetcher.mock.calls[0]?.[1]?.headers)
+    expect(outgoing.get('origin')).toBe('https://justanime.to')
+    expect(outgoing.get('referer')).toBe('https://justanime.to/')
+    expect(outgoing.get('user-agent')).toBe('JustAnime test agent')
+  })
+
+  it('preserves AniClover and AnimeDex site headers on their approved nested media hosts', async () => {
+    for (const [provider, headerHost, nestedHost, referrer] of [
+      ['aniclover', 'beta.zanora.xyz', 'misty-thistle-2c17.kvofjofh103.workers.dev', 'https://aniclover.cc/'],
+      ['animedex', 'new.vidnest.fun', 'vidnest.fun', 'https://vidnest.fun/'],
+    ]) {
+      const { fetcher, worker } = setup(new Response(new Uint8Array([0, 0, 0]), { status: 200 }))
+      const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ [provider!]: [headerHost!, nestedHost!] }) }
+      const grant = { provider: provider!, url: `https://${nestedHost}/segment.ts`, headerHost: headerHost!,
+        headers: { origin: new URL(referrer!).origin, referer: referrer! }, kind: 'auto' as const }
+      const response = await worker.fetch(await request(grant), settings)
+      expect(response.status).toBe(200)
+      const outgoing = new Headers(fetcher.mock.calls[0]?.[1]?.headers)
+      expect(outgoing.get('origin')).toBe(new URL(referrer!).origin)
+      expect(outgoing.get('referer')).toBe(referrer)
+    }
+  })
   it('accepts only verified TS bytes from reviewed Storm/Zeta hosts despite their HTML content type', async () => {
     const bytes = new Uint8Array(564); bytes[0] = bytes[188] = bytes[376] = 0x47
     for (const [provider, host] of [['stormboron', 'celestialdreamer.lol'], ['stormboron', 'moonfirekeeper.lol'], ['stormboron', 'emberwindkeeper.lol'], ['zeta', 'remoteconsultinggroup.site']]) {
@@ -330,6 +375,15 @@ describe('Worker delivery boundary', () => {
     const { worker, fetcher } = setup(new Response(`#EXTM3U\n#EXTINF:6,\n${ref}\n`))
     expect((await worker.fetch(await request(), env)).status).toBe(502)
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+  it('reports only the hostname for blocked playlist destinations', async () => {
+    const { worker, report } = setup(new Response('#EXTM3U\n#EXTINF:6,\nhttps://cdn.unapproved.example/secret/path?token=private\n'))
+    expect((await worker.fetch(await request(), env)).status).toBe(502)
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({
+      provider: 'owned', kind: 'manifest', status: 502, stage: 'manifest-host-scope', blockedHost: 'cdn.unapproved.example',
+    }))
+    expect(JSON.stringify(report.mock.calls)).not.toContain('secret/path')
+    expect(JSON.stringify(report.mock.calls)).not.toContain('private')
   })
   it.each(['#EXTM3U\n#EXT-X-DEFINE:NAME="x",VALUE="evil"\n', '#EXTM3U\n#EXT-X-CONTENT-STEERING:SERVER-URI="https://media.example/x"', '<html>error</html>', '#EXTM3U\n' + 'a'.repeat(512 * 1024)])('rejects unsupported or oversized manifests', async text => {
     const { worker } = setup(new Response(text))

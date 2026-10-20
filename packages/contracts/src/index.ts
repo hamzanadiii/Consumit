@@ -434,8 +434,19 @@ export const safeMemberSchema = z.object({
 })
 export type SafeMember = z.infer<typeof safeMemberSchema>
 
-export const profileVisibilitySchema = z.enum(['private', 'public'])
-export type ProfileVisibility = z.infer<typeof profileVisibilitySchema>
+export const profileSectionVisibilitySchema = z.object({
+  favorites: z.boolean().default(true),
+  ratings: z.boolean().default(true),
+  reviews: z.boolean().default(true),
+  lists: z.boolean().default(true),
+  network: z.boolean().default(true),
+  likes: z.boolean().default(true),
+  tags: z.boolean().default(true),
+  watchlist: z.boolean().default(true),
+}).strict()
+export type ProfileSectionVisibility = z.infer<typeof profileSectionVisibilitySchema>
+export const defaultProfileSectionVisibility = (): ProfileSectionVisibility => profileSectionVisibilitySchema.parse({})
+export const profileSectionVisibilityPatchSchema = profileSectionVisibilitySchema.partial().strict()
 
 const optionalProfileText = (maximum: number) => z.string().trim().min(1).max(maximum).nullable().optional()
 
@@ -445,9 +456,8 @@ export const updateProfileRequestSchema = z.object({
   bannerUrl: bannerUrlSchema.nullable().optional(),
   bio: optionalProfileText(500),
   displayName: optionalProfileText(80),
-  location: optionalProfileText(100),
+  sectionVisibility: profileSectionVisibilityPatchSchema.optional(),
   username: usernameSchema.optional(),
-  visibility: profileVisibilitySchema.optional(),
 }).refine((profile) => Object.values(profile).some((value) => value !== undefined), 'Provide at least one profile change.')
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>
 
@@ -458,11 +468,10 @@ export const profileSchema = z.object({
   bio: z.string().nullable(),
   createdAt: z.iso.datetime(),
   displayName: z.string().nullable(),
-  location: z.string().nullable(),
   nextUsernameChangeAt: z.iso.datetime().nullable(),
+  sectionVisibility: profileSectionVisibilitySchema,
   username: usernameSchema,
   usernameChangedAt: z.iso.datetime().nullable(),
-  visibility: profileVisibilitySchema,
 })
 export type MemberProfile = z.infer<typeof profileSchema>
 
@@ -582,7 +591,7 @@ export const memberListSummarySchema = z.object({
   name: z.string().min(1).max(120),
   origin: recordOriginSchema,
   slug: z.string().min(1).max(160),
-  visibility: profileVisibilitySchema,
+  visibility: z.enum(['private', 'public']),
 })
 export type MemberListSummary = z.infer<typeof memberListSummarySchema>
 
@@ -590,7 +599,7 @@ export const createMemberListRequestSchema = z.object({
   description: z.string().trim().max(2_000).nullable().optional(),
   idempotencyKey: z.uuid(),
   name: z.string().trim().min(1).max(120),
-  visibility: profileVisibilitySchema.default('private'),
+  visibility: z.enum(['private', 'public']).default('public'),
 })
 export type CreateMemberListRequest = z.infer<typeof createMemberListRequestSchema>
 
@@ -603,7 +612,7 @@ export const updateMemberListContentRequestSchema = z.object({
   description: z.string().trim().max(2_000).nullable(),
   items: memberListItemsRequestSchema.shape.items,
   name: z.string().trim().min(1).max(120),
-  visibility: profileVisibilitySchema,
+  visibility: z.enum(['private', 'public']),
 }).refine(({ items }) => new Set(items.map(({ id, kind }) => `${kind}:${id}`)).size === items.length, 'A list cannot contain the same title twice.')
 export type UpdateMemberListContentRequest = z.infer<typeof updateMemberListContentRequestSchema>
 
@@ -617,15 +626,27 @@ export const memberListOwnerSchema = z.object({ displayName: z.string().nullable
 export const updateMemberListRequestSchema = z.object({
   description: z.string().trim().min(1).max(2_000).nullable().optional(),
   name: z.string().trim().min(1).max(120).optional(),
-  visibility: profileVisibilitySchema.optional(),
+  visibility: z.enum(['private', 'public']).optional(),
 }).refine(hasChange, 'Provide at least one list change.')
 export type UpdateMemberListRequest = z.infer<typeof updateMemberListRequestSchema>
+
+export const savedMemberListSchema = z.object({
+  available: z.boolean(),
+  itemCount: z.int().nonnegative().nullable(),
+  listId: z.string().min(1),
+  listName: z.string().min(1).max(120),
+  listSlug: z.string().min(1).max(160),
+  ownerDisplayName: z.string().nullable(),
+  ownerUsername: usernameSchema,
+  savedAt: z.iso.datetime(),
+})
+export type SavedMemberList = z.infer<typeof savedMemberListSchema>
 
 export const memberLibrarySchema = z.object({
   diary: z.array(diaryEntrySchema),
   favorites: z.array(favoriteSchema).max(MAX_MEMBER_FAVORITES),
   lists: z.array(memberListSummarySchema),
-  
+  savedLists: z.array(savedMemberListSchema),
   saved: z.array(memberTitleRecordSchema),
   watched: z.array(memberTitleRecordSchema),
 })
@@ -635,17 +656,18 @@ const memberLibraryPageCursorSchema = z.string().min(1).max(128).nullable()
 export const memberLibraryTitlePageSchema = z.object({ items: z.array(memberTitleRecordSchema).max(50), nextCursor: memberLibraryPageCursorSchema })
 export const memberLibraryDiaryPageSchema = z.object({ items: z.array(diaryEntrySchema).max(50), nextCursor: memberLibraryPageCursorSchema })
 export const memberLibraryListsPageSchema = z.object({ items: z.array(memberListSummarySchema).max(50), nextCursor: memberLibraryPageCursorSchema })
+export const memberLibrarySavedListsPageSchema = z.object({ items: z.array(savedMemberListSchema).max(50), nextCursor: memberLibraryPageCursorSchema })
 
 export const memberLibrarySnapshotSchema = z.object({
   diary: memberLibraryDiaryPageSchema,
   favorites: z.array(favoriteSchema).max(MAX_MEMBER_FAVORITES),
   lists: memberLibraryListsPageSchema,
-  
+  savedLists: memberLibrarySavedListsPageSchema,
   saved: memberLibraryTitlePageSchema,
 })
 export type MemberLibrarySnapshot = z.infer<typeof memberLibrarySnapshotSchema>
 
-export const memberLibraryCollectionSchema = z.enum(['diary', 'lists', 'saved'])
+export const memberLibraryCollectionSchema = z.enum(['diary', 'lists', 'saved', 'savedLists'])
 export type MemberLibraryCollection = z.infer<typeof memberLibraryCollectionSchema>
 export const memberLibraryPageQuerySchema = z.object({
   cursor: z.string().min(1).max(128).optional(),
@@ -654,6 +676,7 @@ export const memberLibraryPageQuerySchema = z.object({
 export const memberLibraryCollectionPageSchema = z.discriminatedUnion('collection', [
   z.object({ collection: z.literal('diary'), items: z.array(diaryEntrySchema).max(50), nextCursor: memberLibraryPageCursorSchema }),
   z.object({ collection: z.literal('lists'), items: z.array(memberListSummarySchema).max(50), nextCursor: memberLibraryPageCursorSchema }),
+  z.object({ collection: z.literal('savedLists'), items: z.array(savedMemberListSchema).max(50), nextCursor: memberLibraryPageCursorSchema }),
   z.object({ collection: z.literal('saved'), items: z.array(memberTitleRecordSchema).max(50), nextCursor: memberLibraryPageCursorSchema }),
 ])
 export type MemberLibraryCollectionPage = z.infer<typeof memberLibraryCollectionPageSchema>
@@ -793,6 +816,7 @@ export const playbackCapabilitiesSchema = z.object({
 export const providerRoleSchema = z.enum(['video', 'audio', 'both'])
 export type ProviderRole = z.infer<typeof providerRoleSchema>
 export const playbackPreferencesSchema = z.object({
+  // Legacy clients may send this field; playback ignores it in favor of Admin order.
   providerOrder: z.array(z.string().min(1).max(80)).max(128).refine(ids => new Set(ids).size === ids.length).optional(),
   adsEnabled: z.boolean().optional(),
   qualityHeight: z.int().min(144).max(4320).nullable().optional(),
@@ -809,6 +833,7 @@ export const resolvePlaybackRequestSchema = z.object({
   capabilities: playbackCapabilitiesSchema,
   audioLanguage: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/).default('en'),
   providerId: z.string().min(1).max(80).optional(),
+  sourceKey: z.string().min(1).max(100).optional(),
   preferences: playbackPreferencesSchema.optional(),
 })
 export const playbackTrackSchema = z.object({
@@ -848,6 +873,7 @@ export const frameSandboxSchema = z.enum(['restricted', 'none'])
 export type FrameSandbox = z.infer<typeof frameSandboxSchema>
 export const playbackSourceSchema = z.object({
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
+  serverId: z.string().min(1).max(100).optional(), serverName: z.string().min(1).max(80).optional(),
   type: z.enum(['hls', 'dash', 'native', 'iframe']), src: z.string().min(1).max(4096),
   qualityHint: z.string().min(1).max(24).optional(),
   hlsSubtitlePlaylistFormat: z.literal('vtt').optional(),
@@ -878,6 +904,17 @@ export const playbackEventsSchema = z.object({ events: z.array(z.object({
   delivery: playbackDeliverySchema.optional(),
   browser: z.enum(['chrome', 'edge', 'firefox', 'safari', 'other']).optional(),
 })).min(1).max(20) })
+/** External reports never establish decoded native playback or member history. */
+export const frameDiagnosticEventSchema = z.strictObject({
+  type: z.enum(['playing', 'paused', 'progress', 'ended', 'unavailable', 'error']),
+  browser: z.enum(['chrome', 'edge', 'firefox', 'safari', 'other']),
+})
+export const frameDiagnosticsSchema = z.strictObject({
+  sourceId: z.string().min(1).max(160),
+  events: z.array(frameDiagnosticEventSchema).min(1).max(20),
+})
+export type FrameDiagnosticEvent = z.infer<typeof frameDiagnosticEventSchema>
+export type FrameDiagnostics = z.infer<typeof frameDiagnosticsSchema>
 /** Low-cardinality, anonymous browser performance measurements. Page values
  *  are route groups only; never send URLs, member identifiers, or referrers. */
 export const webVitalMetricSchema = z.enum(['CLS', 'FCP', 'INP', 'LCP', 'TTFB'])
@@ -895,10 +932,12 @@ export type WebVitalEvent = z.infer<typeof webVitalEventSchema>
 export type WebVitalBatch = z.infer<typeof webVitalBatchSchema>
 export const clientErrorNames = ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'NetworkError', 'AbortError', 'Unknown'] as const
 export const clientErrorBatchSchema = z.strictObject({ events: z.array(z.strictObject({ page: webVitalPageSchema, kind: z.enum(['error', 'promise']), name: z.enum(clientErrorNames) })).min(1).max(10) })
-export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80), preferences: playbackPreferencesSchema.optional() })
+export const playbackSwitchRequestSchema = z.object({ providerId: z.string().min(1).max(80), sourceKey: z.string().min(1).max(100).optional(), preferences: playbackPreferencesSchema.optional() })
 export const playbackProviderSchema = z.object({
   id: z.string().min(1).max(80), label: z.string().min(1).max(80),
   detail: z.string().min(1).max(80).optional(),
+  /** Named upstream servers returned by this provider for the current title. */
+  servers: z.array(z.object({ id: z.string().min(1).max(96), label: z.string().min(1).max(80), sourceKey: z.string().min(1).max(100) })).max(32).optional(),
   /** Mirror family (base adapter, e.g. `vidcore`) and mirror name (config
    *  suffix, e.g. `nova`, or `auto` for the whole-provider aggregate).
    *  The player groups the server menu by family so members choose between
@@ -1034,7 +1073,7 @@ export const memberProfileDataSchema = z.object({
 })
 export type MemberProfileData = z.infer<typeof memberProfileDataSchema>
 
-/** Public reads deliberately have no diary, history, location or import fields. */
+/** Public reads deliberately have no diary, history or import fields. */
 export const publicMemberSummarySchema = z.object({
   id: z.string().min(1), username: usernameSchema, displayName: z.string().nullable(),
   avatarStyle: avatarStyleSchema, avatarUrl: avatarUrlSchema.nullable(), isFollowing: z.boolean(),
@@ -1043,6 +1082,7 @@ export type PublicMemberSummary = z.infer<typeof publicMemberSummarySchema>
 export const publicProfileSchema = z.object({
   viewerIsOwner: z.literal(false), canonicalUsername: usernameSchema,
   profile: publicMemberSummarySchema.extend({ bio: z.string().nullable(), bannerUrl: bannerUrlSchema.nullable() }),
+  sectionVisibility: profileSectionVisibilitySchema,
   favorites: z.array(catalogRefSchema.extend({ position: z.int().positive() })).max(MAX_MEMBER_FAVORITES),
   ratingDistribution: z.array(z.object({ count: z.int().nonnegative(), value: z.int().min(1).max(10) })).length(10),
   statistics: z.object({ ratings: z.int().nonnegative(), reviews: z.int().nonnegative(), lists: z.int().nonnegative() }),
@@ -1069,8 +1109,8 @@ export type PublicProfileCollectionPage = z.infer<typeof publicProfileCollection
 export const publicMembersPageQuerySchema = z.object({ cursor: z.string().min(1).max(1024).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) })
 export const memberSearchQuerySchema = publicMembersPageQuerySchema.extend({ q: z.string().trim().min(3).max(100) })
 
-/** Owner-only archives keep the profile overview bounded. Watchlist remains in the personal Library. */
-export const memberProfileArchiveKindSchema = z.enum(['activity', 'diary', 'films', 'likes', 'lists', 'reviews', 'tags'])
+/** Profile archives are individually guarded by their public section setting; private history stays private. */
+export const memberProfileArchiveKindSchema = z.enum(['activity', 'diary', 'films', 'likes', 'lists', 'reviews', 'tags', 'watchlist'])
 export type MemberProfileArchiveKind = z.infer<typeof memberProfileArchiveKindSchema>
 export const memberProfileArchiveQuerySchema = z.object({
   cursor: z.string().min(1).max(512).optional(),
@@ -1098,6 +1138,7 @@ export const memberProfileArchivePageSchema = z.discriminatedUnion('collection',
   z.object({ collection: z.literal('lists'), items: z.array(memberListSummarySchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('reviews'), items: z.array(memberReviewSchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('tags'), items: z.array(memberProfileTagSchema).max(100), nextCursor: z.null() }),
+  z.object({ collection: z.literal('watchlist'), items: z.array(catalogRefSchema).max(50), nextCursor: z.string().max(512).nullable() }),
 ])
 export type MemberProfileArchivePage = z.infer<typeof memberProfileArchivePageSchema>
 
@@ -1107,16 +1148,41 @@ export const memberListDetailSchema = z.object({
   owner: memberListOwnerSchema,
   
   viewerIsOwner: z.boolean(),
+  viewerHasSaved: z.boolean(),
 })
 export type MemberListDetail = z.infer<typeof memberListDetailSchema>
 export const publicListDetailSchema = z.object({
   viewerIsOwner: z.literal(false),
+  viewerHasSaved: z.boolean(),
   owner: memberListOwnerSchema,
   list: memberListSummarySchema.omit({ origin: true }),
   items: z.array(catalogRefSchema.extend({ note: z.string().nullable(), position: z.int().positive() })),
 })
 export type PublicListDetail = z.infer<typeof publicListDetailSchema>
 export const listReadResponseSchema = z.union([publicListDetailSchema, memberListDetailSchema])
+
+export const appendListTitleRequestSchema = catalogRefSchema
+export type AppendListTitleRequest = z.infer<typeof appendListTitleRequestSchema>
+export const publicMemberTrendsSchema = z.object({ items: z.array(catalogRefSchema).max(20) })
+export type PublicMemberTrends = z.infer<typeof publicMemberTrendsSchema>
+
+export const publicListDiscoveryItemSchema = z.object({
+  list: z.object({
+    description: z.string().nullable(),
+    id: z.string().min(1),
+    itemCount: z.int().nonnegative(),
+    name: z.string().min(1).max(120),
+    slug: z.string().min(1).max(160),
+  }),
+  owner: memberListOwnerSchema,
+  preview: z.array(catalogRefSchema).max(5),
+})
+export type PublicListDiscoveryItem = z.infer<typeof publicListDiscoveryItemSchema>
+export const publicListDiscoverySchema = z.object({
+  newFromNetwork: z.array(publicListDiscoveryItemSchema).max(8),
+  popular: z.array(publicListDiscoveryItemSchema).max(8),
+})
+export type PublicListDiscovery = z.infer<typeof publicListDiscoverySchema>
 
 
 export const memberExportSchema = z.object({

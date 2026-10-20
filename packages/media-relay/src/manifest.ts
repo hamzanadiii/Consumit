@@ -11,7 +11,8 @@ export async function rewriteRelayManifest(text:string,base:string,grant:RelayGr
  }).join('\n')
  if(references.length>(grant.provider==='rigel'?6000:2000)||/__CONSUMIT_/.test(text))throw new Error('Invalid manifest.')
  const urls=references.map(ref=>new URL(ref.uri,base).href)
- if(urls.some(url=>!relayDestination(url,hosts)))throw new Error('Blocked manifest destination.')
+ const blocked=urls.find(url=>!relayDestination(url,hosts))
+ if(blocked)throw new Error(`Blocked manifest destination: ${new URL(blocked).hostname}.`)
  const tokens=await Promise.all(urls.map((url,index)=>codec.seal({...grant,url,kind:references[index]!.playlist?'hls':'auto',depth:grant.depth+1,...(grant.recipe&&!references[index]!.playlist?{hosts:[new URL(url).hostname]}:{})},now)))
  return replaced.replace(/__CONSUMIT_(\d+)__/g,(_match,index:string)=>playlistOrigin&&references[Number(index)]!.playlist?manifestGrantUrl(playlistOrigin,tokens[Number(index)]!):mediaGrantUrl(origin,tokens[Number(index)]!))
 }

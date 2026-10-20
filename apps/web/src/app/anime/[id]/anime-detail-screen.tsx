@@ -176,8 +176,9 @@ export function indexStreamingMeta(detail: AnimeTitleDetail): Map<number, { titl
   return indexed
 }
 
-/** Episode details come from the current page's bounded batch. Streaming
- *  art can fill a missing still; title art is labeled when neither has one. */
+/** Episode details come from the current page's bounded batch. AniList's
+ *  streaming thumbnails are often reused season promos, so missing episode
+ *  stills fall back to labeled title art instead of a misleading duplicate. */
 function AnimeEpisodeWithArt({ anilistId, art, duration, episode, fallbackArt, stream, upcoming }: {
   anilistId: number
   art?: AnimeEpisode | null | undefined
@@ -196,7 +197,7 @@ function AnimeEpisodeWithArt({ anilistId, art, duration, episode, fallbackArt, s
       duration={art?.duration ? formatDuration(art.duration) : duration}
       episode={episode}
       fallbackArt={fallbackArt}
-      stillUrl={stream?.thumbnail ?? art?.thumbnail ?? null}
+      stillUrl={art?.thumbnail ?? null}
       summary={art?.description}
       title={name}
       upcoming={upcoming}

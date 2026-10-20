@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+'use client'
+
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -6,13 +8,22 @@ import Link from 'next/link'
 import { FilScreenFooter } from '../home/filscreen-footer'
 import styles from './watch-surface.module.css'
 
+const WatchTheater = createContext<{ theater: boolean; setTheater?: (value: boolean) => void }>({ theater: false })
+export const useWatchTheater = () => useContext(WatchTheater)
+
+/** Full-viewport player canvas without the discovery page chrome. */
+export function WatchPlayerSurface({ children }: { children: ReactNode }) {
+  return <WatchTheater.Provider value={{ theater: true }}>{children}</WatchTheater.Provider>
+}
+
 /** Page chrome only; playback, preferences and episode identity stay with their owners. */
 export function WatchSurface({ backHref, children }: {
   backHref: string
   children: ReactNode
 }) {
+  const [theater, setTheater] = useState(false)
   return (
-    <div className={styles.surface}>
+    <WatchTheater.Provider value={{ theater, setTheater }}><div className={`${styles.surface}${theater ? ` ${styles.theater}` : ''}`} data-watch-theater={theater}>
       <div className={styles.container}>
         <header className={styles.header}>
           <Link aria-label="Return to title" className={styles.back} href={backHref}>
@@ -26,7 +37,7 @@ export function WatchSurface({ backHref, children }: {
         {children}
       </div>
       <div className={styles.footer}><FilScreenFooter /></div>
-    </div>
+    </div></WatchTheater.Provider>
   )
 }
 

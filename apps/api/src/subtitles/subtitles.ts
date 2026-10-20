@@ -7,6 +7,7 @@ import { resolveSubtitles, type ServedSubtitle } from './engine.ts'
 import { MAX_OFFSET_MS, shiftVtt } from './sync.ts'
 import { createStoreFileStore, type OriginalFile, type SubtitleFileStore } from './storage.ts'
 import type { AnimeMappingResolver } from './anizip.ts'
+import type { TmdbEpisodeCoordinates } from './tmdb-episode.ts'
 import type { SubtitleSearchProvider } from './types.ts'
 import type { SubtitleQuery } from './types.ts'
 import { z } from 'zod'
@@ -84,9 +85,12 @@ export function createSubtitleService(deps: {
    *  it, title-keyed providers skip and only tmdbId-keyed ones answer. */
   metadata?: TitleMetadataResolver | undefined
   animeTitle: AnimeTitleLookup
-  /** Canonical anime episode to TMDB identity (ani.zip bridge). Absent
-   *  keeps title/AniList-only anime queries; the TMDB-keyed fleet skips. */
+  /** AniZip identity bridge (TMDB/IMDb ids, AniDB episode, and TVDB
+   *  coordinates). Absent keeps title/AniList-only anime queries. */
   animeMapping?: AnimeMappingResolver | undefined
+  /** TMDB's season numbering for a canonical anime episode. AniZip's season
+   *  coordinates are TVDB numbering and must not be passed to TMDB providers. */
+  animeTmdbEpisode?: ((tmdbId: number, absoluteEpisode: number, signal: AbortSignal) => Promise<TmdbEpisodeCoordinates | null>) | undefined
   store: PlaybackStore
   origin: string
   /** File backend for converted VTT + originals. Defaults to the
@@ -101,14 +105,17 @@ export function createSubtitleService(deps: {
   /** Best-effort TMDB identity for a canonical anime episode. Bounded so a
    *  slow mapping never holds discovery; misses just narrow the provider set
    *  to title/AniList-keyed sources. */
-  async function animeMap(anilistId: number, episode: number, signal: AbortSignal): Promise<{ tmdbId?: number | undefined; season?: number | undefined }> {
+  async function animeMap(anilistId: number, episode: number, signal: AbortSignal): Promise<{ tmdbId?: number | undefined; imdbId?: string | undefined; anidbEid?: number | undefined; season?: number | undefined; episode?: number | undefined }> {
     if (!deps.animeMapping) return {}
     try {
       const mapped = await optionalLookup(bounded => deps.animeMapping!(anilistId, episode, bounded), signal)
       if (!mapped) return {}
       return {
         ...(mapped.tmdbId !== undefined ? { tmdbId: mapped.tmdbId } : {}),
+        ...(mapped.imdbId ? { imdbId: mapped.imdbId } : {}),
+        ...(mapped.anidbEid !== undefined ? { anidbEid: mapped.anidbEid } : {}),
         ...(mapped.season !== undefined ? { season: mapped.season } : {}),
+        ...(mapped.episode !== undefined ? { episode: mapped.episode } : {}),
       }
     } catch {
       return {}
@@ -121,7 +128,8 @@ export function createSubtitleService(deps: {
     }))
     return checked.filter((track): track is ServedSubtitle => track !== null)
   }
-  async function queryFor(ref: SubtitleRef, signal: AbortSignal): Promise<SubtitleQuery> {
+  async function queryFor(ref: SubtitleRef, signal: AbortSignal, preferredLanguages: readonly string[] = []): Promise<SubtitleQuery> {
+    const langs = cleanQueryLangs(preferredLanguages.join(','))
     const season = ref.season ?? 1
     const episode = ref.episode ?? 1
     if (ref.kind === 'anime') {
@@ -129,9 +137,22 @@ export function createSubtitleService(deps: {
         optionalLookup(() => deps.animeTitle(ref.id), signal),
         animeMap(ref.id, episode, signal),
       ])
-      // Episode stays canonical (absolute): AnimeTosho keys off it while the
-      // mapped TVDB season unlocks the TMDB-keyed fleet for the same query.
-      return { type: 'anime', ...(detail?.title ? { title: detail.title } : {}), episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped }
+      const tmdbCoordinates = mapped.tmdbId && deps.animeTmdbEpisode
+        ? await optionalLookup(bounded => deps.animeTmdbEpisode!(mapped.tmdbId!, episode, bounded), signal)
+        : null
+      // Never pass AniZip's TVDB season/episode pair to TMDB-keyed sources.
+      // Use TMDB's exact coordinates when available, with the canonical
+      // one-season form as a bounded fallback. Anime-native providers read
+      // absoluteEpisode directly.
+      const season = tmdbCoordinates?.season ?? (mapped.tmdbId ? 1 : mapped.season ?? 1)
+      const providerEpisode = tmdbCoordinates?.episode ?? (mapped.tmdbId ? episode : mapped.episode ?? episode)
+      return {
+        type: 'anime', ...(detail?.title ? { title: detail.title } : {}),
+        ...(mapped.tmdbId ? { tmdbId: mapped.tmdbId } : {}), ...(mapped.imdbId ? { imdbId: mapped.imdbId } : {}),
+        ...(mapped.anidbEid ? { anidbEid: mapped.anidbEid } : {}),
+        season, episode: providerEpisode, absoluteEpisode: episode, anilistId: ref.id,
+        ...(langs.length ? { langs } : {}),
+      }
     }
     let title: string | undefined
     let year: number | undefined
@@ -144,11 +165,12 @@ export function createSubtitleService(deps: {
       type: ref.kind === 'movie' ? 'movie' : 'tv', tmdbId: ref.id,
       ...(imdbId ? { imdbId } : {}), ...(title ? { title } : {}), ...(year ? { year } : {}),
       season, episode,
+      ...(langs.length ? { langs } : {}),
     }
   }
   const discovery = createSubtitleDiscovery({
     providers: deps.providers, store: deps.store, files, origin: deps.origin, catalog: deps.catalog,
-    query: queryFor, requirements: deps.requirements,
+    query: (ref, signal, preferredLanguages) => queryFor(ref, signal, preferredLanguages), requirements: deps.requirements,
   })
   return {
     discovery,
@@ -158,7 +180,7 @@ export function createSubtitleService(deps: {
       const wanted = cleanQueryLangs(langs?.join(',')).slice(0, 3)
       // Repeat views resolve instantly: the converted files behind these
       // URLs live 7 days, so an hour-old track list is always playable.
-      const cacheKey = `subsearch:${ref.kind}:${ref.id}:${season}:${episode}:${wanted.join('+') || 'en'}`
+      const cacheKey = `subsearch:v2:${ref.kind}:${ref.id}:${season}:${episode}:${wanted.join('+') || 'en'}`
       try {
         const cached = await deps.store.get(cacheKey)
         if (cached) {
@@ -193,10 +215,9 @@ export function createSubtitleService(deps: {
       }
       let tracks: ServedSubtitle[]
       if (ref.kind === 'anime') {
-        const detail = await deps.animeTitle(ref.id)
-        const mapped = await animeMap(ref.id, episode, signal)
+        const query = await queryFor(ref, signal, queryLangs)
         tracks = await resolveSubtitles(
-          { type: 'anime', title: detail.title, episode, absoluteEpisode: episode, anilistId: ref.id, ...mapped, ...(queryLangs ? { langs: queryLangs } : {}) },
+          query,
           deps.providers.filter(provider => !provider.discoveryOnly),
           files,
           deps.origin,

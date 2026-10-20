@@ -16,7 +16,9 @@ import {
 
 import { useSession } from '../session/session'
 import { LogDialog } from './log-dialog'
+import { AddTitleToList } from './add-title-to-list'
 import { RatingWidget } from './rating-widget'
+import { MEMBER_TITLE_ACTION_ICON_CLASS, MEMBER_TITLE_ACTION_ROW_CLASS } from './title-action-styles'
 
 type MemberActionPanelProps = {
   id: number
@@ -78,12 +80,6 @@ function ShelfToggle({ active, activeLabel, engagedLabel, fillClass, icon, inact
     </button>
   )
 }
-
-const SHELF_ROW_CLASS =
-  'group flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-control px-3 text-left text-sm font-semibold text-copy outline-none transition-colors hover:bg-white/5 hover:text-ink active:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none'
-
-const SHELF_ICON_CLASS =
-  'grid place-items-center text-muted transition-colors group-hover:text-ink motion-reduce:transition-none'
 
 /**
  * Member shelf for title heroes: watched / liked / saved toggles with
@@ -177,7 +173,7 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
   }
 
   return (
-    <div className="rounded-card border border-border bg-nav p-4 text-ink" data-consumit-member-shelf>
+    <div className="rounded-card border border-border bg-surface p-4 text-ink" data-consumit-member-shelf>
       {session.member ? (
         <div className="grid grid-cols-3 gap-2" role="group" aria-label="Your shelf for this title">
           <ShelfToggle
@@ -213,7 +209,7 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
         </div>
       ) : null}
       {error ? <p className="mt-3 text-xs text-danger" role="alert">{error}</p> : null}
-      <div className="mt-3 rounded-control border border-border bg-surface p-3.5">
+      <div className="mt-3 rounded-control border border-border bg-surface-raised p-3.5">
         <p className="text-sm font-bold text-ink">Your rating</p>
         <div className="mt-2">
           <RatingWidget id={id} kind={kind} title={title} />
@@ -222,34 +218,35 @@ export function MemberActionPanel({ id, kind, posterUrl, shareUrl, title, year }
       <div className="mt-3 grid gap-1 border-t border-border pt-3">
         {session.member ? (
           <button
-            className={SHELF_ROW_CLASS}
+            className={MEMBER_TITLE_ACTION_ROW_CLASS}
             onClick={() => {
               setLogged(false)
               setLogging(true)
             }}
             type="button"
           >
-            <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+            <span aria-hidden="true" className={MEMBER_TITLE_ACTION_ICON_CLASS}>
               <PenLine aria-hidden="true" className="size-[18px]" />
             </span>
             Add review
           </button>
         ) : null}
+        {session.member ? <AddTitleToList posterUrl={posterUrl} title={{ id, kind }} titleName={title} /> : null}
         <button
-          className={SHELF_ROW_CLASS}
+          className={MEMBER_TITLE_ACTION_ROW_CLASS}
           onClick={() => void share()}
           type="button"
         >
-          <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+          <span aria-hidden="true" className={MEMBER_TITLE_ACTION_ICON_CLASS}>
             {copied ? <Check aria-hidden="true" className="size-[18px] text-orange" /> : <Link2 aria-hidden="true" className="size-[18px]" />}
           </span>
           {copied ? 'Link copied' : 'Share'}
         </button>
         <Link
-          className={SHELF_ROW_CLASS}
+          className={MEMBER_TITLE_ACTION_ROW_CLASS}
           href={session.member ? `/profile/${encodeURIComponent(session.member.username)}/activity` : '/sign-in'}
         >
-          <span aria-hidden="true" className={SHELF_ICON_CLASS}>
+          <span aria-hidden="true" className={MEMBER_TITLE_ACTION_ICON_CLASS}>
             <ArrowRight aria-hidden="true" className="size-[18px]" />
           </span>
           Your activity

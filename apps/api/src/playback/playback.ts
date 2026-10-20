@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { metrics } from '@opentelemetry/api'
+import { frameDiagnosticsSchema, type FrameDiagnostics } from '@consumit/contracts'
 import { playbackProviderListSchema, playbackSessionSchema, type PlaybackEvents, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackPreferences, type ResolvePlaybackRequest } from '@consumit/contracts'
-import { allowedMediaUrl, isRelayMediaUrl, sourceIdentity, suppliesVideo, type ProviderHttp, type ProviderRegistration } from '@consumit/provider-sdk'
+import { allowedMediaUrl, isRelayMediaUrl, sourceIdentity, suppliesVideo, type ProviderHttp, type ProviderRegistration, type ProviderSource } from '@consumit/provider-sdk'
 import { MAX_GRANT_MS } from '@consumit/media-relay'
 import { ApiError } from '../http/errors.ts'
 import { collectSubtitleCandidates, createResolver, dedupeSubtitleTracks, type ResolvedSource, type SubtitleCandidate } from './resolver.ts'
@@ -25,8 +26,9 @@ export interface Playback {
   resolve(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackSession>
   recover(owner: string, id: string, failure: PlaybackFailureRequest, refresh: boolean, signal: AbortSignal): Promise<PlaybackSession>
   listProviders(input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackProvider[]>
-  switchProvider(owner: string, id: string, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences): Promise<PlaybackSession>
+  switchProvider(owner: string, id: string, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences, sourceKey?: string): Promise<PlaybackSession>
   events(owner: string, id: string, events: PlaybackEvents): Promise<void>
+  frameDiagnostics?(owner: string, id: string, batch: FrameDiagnostics): Promise<void>
   providerStatus?(kind: ResolvePlaybackRequest['ref']['kind']): Array<{ id: string; failures: number; playbackFailures: number; openUntil: number; outcomes: number; success: number; latency: number }>
   resetProviderCircuit?(providerId: string, kind: ResolvePlaybackRequest['ref']['kind']): Promise<void>
 }
@@ -73,7 +75,8 @@ export function createPlayback({ providers, store, region, providerOrders, audio
   }) : undefined
   const embedResolver = createResolver(providers, { region, store, healthScope: 'embed', providerFilter: provider => provider.deliveryMode === 'embed', ...(providerOrders ? { providerOrders } : {}) })
   const resolverFor = (delivery: PlaybackSession['source']['delivery']) => delivery === 'embed' ? embedResolver : delivery === 'relay' ? relayResolver : resolver
-  // Each delivery tier gets its own finite provider waterfall and circuit.
+  const groupKey = (group: string, delivery: PlaybackSession['source']['delivery']) => `${delivery}:${group}`
+  // Delivery scopes keep independent circuits while sharing Admin ordering.
   // A blocked browser path must not cool the same provider's edge path.
   const fallbackLimit = (input: ResolvePlaybackRequest) => relay ? Math.min(128, Math.max(MAX_FALLBACKS_PER_WINDOW,
     providers.filter(provider => provider.enabled && suppliesVideo(provider) && provider.approvedRegions.includes(region)
@@ -91,6 +94,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
   const selected = metrics.getMeter('consumit.playback').createCounter('playback.source.selected')
   const recoveries = metrics.getMeter('consumit.playback').createCounter('playback.recovery')
   const viewing = metrics.getMeter('consumit.playback').createCounter('playback.viewing.duration', { unit: 's' })
+  const frameReported = metrics.getMeter('consumit.playback').createCounter('playback.frame.reported')
   async function claimRecovery(id: string): Promise<string> {
     const token = randomUUID()
     if (!await store.claim(`recovery:${id}`, token, 60)) throw new ApiError('CONFLICT', 'Playback is already recovering.', { retryable: true })
@@ -108,6 +112,12 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     if (!validDelivery) {
       throw new ApiError('NOT_FOUND', 'This playback session needs a new source. Start playback again.', { retryable: true })
     }
+    // Older sessions kept exclusions only within their active delivery tier.
+    // Preserve that scope now that the Admin order can alternate transports.
+    const scoped = (group: string) => /^(direct|relay|embed):/.test(group) ? group : groupKey(group, record.session.source.delivery)
+    record.group = scoped(record.group)
+    record.excluded = record.excluded.map(scoped)
+    if (record.excludedAt) record.excludedAt = Object.fromEntries(Object.entries(record.excludedAt).map(([group, at]) => [scoped(group), at]))
     return record
   }
 
@@ -130,7 +140,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     // with it. Only upstream https WebVTT survives — legacy lease paths from
     // pre-removal sessions fail closed here and refresh into direct tracks.
     const carried: SubtitleCandidate[] = (previous?.session.source.subtitles ?? [])
-      .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
+      .filter((track) => track.url.startsWith('https://'))
       .map((track) => ({ track, hosts: [], headers: {} }))
     const subtitles = dedupeSubtitleTracks([
       ...collectSubtitleCandidates([source], registration),
@@ -138,31 +148,40 @@ export function createPlayback({ providers, store, region, providerOrders, audio
       ...carried,
     ])
       .map(({ track }) => track)
-      .filter((track) => track.format === 'vtt' && track.url.startsWith('https://'))
+      .filter((track) => track.url.startsWith('https://'))
     const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
       id: previous?.session.id ?? randomUUID(), ref: input.ref,
-      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.frameSandbox ? { frameSandbox: source.frameSandbox } : {}), ...(source.type === 'hls' && source.hlsSubtitlePlaylistFormat ? { hlsSubtitlePlaylistFormat: source.hlsSubtitlePlaylistFormat } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: (delivery === 'embed' ? [] : subtitles).filter((track) => track.format === 'vtt'), skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
+      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, ...(source.serverName ? { serverId: source.key, serverName: source.serverName.slice(0, 80) } : {}), type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.type === 'iframe' ? { frameSandbox: 'none' as const } : {}), ...(source.type === 'hls' && source.hlsSubtitlePlaylistFormat ? { hlsSubtitlePlaylistFormat: source.hlsSubtitlePlaylistFormat } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: delivery === 'embed' ? [] : subtitles, skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
       fallbackCount: windowedFallbacks.length,
-      capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.some((track) => track.format === 'vtt') },
+      capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.length > 0 },
     }
     playbackSessionSchema.parse(session)
-    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: registration.upstreamGroup, excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
+    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: groupKey(registration.upstreamGroup, delivery), excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
     selected.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region, delivery, surface: owner.startsWith('embed') ? 'embed' : 'watch', action: previous ? previous.session.source.providerId === registration.adapter.id ? 'refresh' : 'switch' : 'resolve' })
     return session
   }
 
   const eligible = (input: ResolvePlaybackRequest) => {
     const admin = providerOrders?.[input.ref.kind] ?? []
-    const personal = input.preferences?.providerOrder ?? []
     const rank = (id: string, order: string[]) => { const index = order.indexOf(id); return index < 0 ? 10000 : index }
-    const tier = (provider: ProviderRegistration) => provider.deliveryMode === 'embed' ? 2 : provider.deliveryMode === 'relay' ? 1 : 0
     return providers.filter(provider => provider.enabled && suppliesVideo(provider) && provider.approvedRegions.includes(region)
       && provider.mediaKinds.includes(input.ref.kind) && supportsRequestedAudio(provider, input)
       && (provider.deliveryMode !== 'relay' || relay?.includes(provider.adapter.id)))
-      .sort((a, b) => rank(a.adapter.id, personal) - rank(b.adapter.id, personal) || tier(a) - tier(b)
-        || rank(a.adapter.id, admin) - rank(b.adapter.id, admin) || (b.priority ?? 0) - (a.priority ?? 0))
+      .sort((a, b) => rank(a.adapter.id, admin) - rank(b.adapter.id, admin) || (b.priority ?? 0) - (a.priority ?? 0))
+  }
+  // Delivery selects transport and health scope; Admin alone selects order.
+  async function resolveInOrder(input: ResolvePlaybackRequest, parent: AbortSignal, excluded: readonly string[] = [], fresh = false) {
+    const signal = AbortSignal.any([parent, AbortSignal.timeout(20_000)])
+    for (const provider of eligible(input)) {
+      if (signal.aborted) return null
+      const delivery = provider.deliveryMode ?? 'direct'
+      const groups = excluded.filter(group => group.startsWith(`${delivery}:`)).map(group => group.slice(delivery.length + 1))
+      const result = await resolverFor(delivery)?.resolve(input, signal, groups, provider.adapter.id, fresh, false)
+      if (result && !signal.aborted) return { result, delivery }
+    }
+    return null
   }
   type AttemptRecord = { owner: string; input: ResolvePlaybackRequest; order: string[]; visited: string[]; sessionId?: string; result?: PlaybackSession; cancelled?: boolean }
   const readAttempt = async (owner: string, id: string) => {
@@ -268,33 +287,45 @@ export function createPlayback({ providers, store, region, providerOrders, audio
           && (provider.deliveryMode !== 'relay' || relay?.includes(provider.adapter.id)))
         if (!target) throw new ApiError('BAD_REQUEST', 'Choose an available playback provider.')
         const delivery = target.deliveryMode ?? 'direct'
-        const result = await resolverFor(delivery)?.resolve(input, signal, [], target.adapter.id, true)
+        const result = await resolverFor(delivery)?.resolve(input, signal, [], target.adapter.id, true, true, input.sourceKey)
         if (!result || signal.aborted) throw unavailable(input)
         return save(owner, input, result, undefined, delivery)
       }
-      const result = await resolver.resolve(input, signal)
-      if (signal.aborted) throw unavailable(input)
-      if (result) return save(owner, input, result)
-      const relayed = await relayResolver?.resolve(input, signal)
-      if (signal.aborted) throw unavailable(input)
-      if (relayed) return save(owner, input, relayed, undefined, 'relay')
-      const framed = await embedResolver.resolve(input, signal)
-      if (!framed || signal.aborted) throw unavailable(input)
-      return save(owner, input, framed, undefined, 'embed')
+      const selected = await resolveInOrder(input, signal)
+      if (!selected || signal.aborted) throw unavailable(input)
+      return save(owner, input, selected.result, undefined, selected.delivery)
     },
-    async listProviders(input) {
-      // Watch requests this fixed snapshot only when opening Server. No
-      // existing session or upstream probe is needed, so it consumes no
-      // provider quota, including when automatic startup has failed.
+    async listProviders(input, signal) {
+      // Watch requests this snapshot when opening Server. Anime adapters are
+      // probed in parallel to reveal their validated upstream server choices.
       const permitted = eligible(input)
+      const animeSources = input.ref.kind === 'anime' ? await Promise.all(permitted.map(async registration => {
+        if (registration.deliveryMode === 'embed' || signal.aborted) return [registration.adapter.id, [] as ProviderSource[]] as const
+        const delivery = registration.deliveryMode ?? 'direct'
+        const result = await resolverFor(delivery)?.resolve(input, AbortSignal.any([signal, AbortSignal.timeout(11_000)]), [], registration.adapter.id)
+        return [registration.adapter.id, result?.serverSources ?? []] as const
+      })) : []
+      const animeServerSources = new Map(animeSources)
       const seen = new Set<string>()
       const listed: PlaybackProvider[] = []
       for (const registration of permitted) {
         if (seen.has(registration.adapter.id)) continue
         seen.add(registration.adapter.id)
         const dash = registration.adapter.id.indexOf('-')
+        let servers: NonNullable<PlaybackProvider['servers']> | undefined
+        if (input.ref.kind === 'anime' && registration.deliveryMode !== 'embed') {
+          const sourceRows = animeServerSources.get(registration.adapter.id) ?? []
+          const used = new Set<string>()
+          servers = sourceRows.flatMap(source => {
+            const id = source.serverName?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 96)
+            if (!id || used.has(id)) return []
+            used.add(id)
+            return [{ id, label: source.serverName!.slice(0, 80), sourceKey: source.key }]
+          }).slice(0, 32)
+        }
         listed.push({
-          id: registration.adapter.id, label: registration.adapter.id,
+          id: registration.adapter.id, label: registration.adapter.label ?? registration.adapter.id,
+          ...(servers?.length ? { servers } : {}),
           // Mirror families: `vidcore-nova` serves family `vidcore`,
           // mirror `nova`; a whole-provider aggregate serves mirror `auto`.
           family: dash === -1 ? registration.adapter.id : registration.adapter.id.slice(0, dash),
@@ -308,7 +339,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
       }
       return playbackProviderListSchema.parse({ providers: listed }).providers
     },
-    async switchProvider(owner, id, providerId, signal, preferences) {
+    async switchProvider(owner, id, providerId, signal, preferences, sourceKey) {
       const lock = await claimRecovery(id)
       try {
         const record = await read(owner, id)
@@ -316,14 +347,14 @@ export function createPlayback({ providers, store, region, providerOrders, audio
         if (!target) throw new ApiError('BAD_REQUEST', 'Choose an available playback provider.')
         record.input = withPreferences(record.input, preferences)
         const delivery = target.deliveryMode ?? 'direct'
-        if (record.session.source.providerId === providerId && !preferences && record.session.source.delivery === delivery) return record.session
+        if (record.session.source.providerId === providerId && (!sourceKey || record.session.source.serverId === sourceKey) && !preferences && record.session.source.delivery === delivery) return record.session
         // Manual switches ride outside the automatic fallback budget and never
         // extend the exclusion history: the member explicitly chose this
         // provider, including retrying one that failed before. Route-level
         // rate limits still bound switching.
-        const excluded = record.excluded.filter((group) => group !== target.upstreamGroup)
+        const excluded = record.excluded.filter(group => group.startsWith(`${delivery}:`)).map(group => group.slice(delivery.length + 1)).filter(group => group !== target.upstreamGroup)
         const targetResolver = resolverFor(delivery)
-        const result = await targetResolver?.resolve(record.input, signal, excluded, providerId, true)
+        const result = await targetResolver?.resolve(record.input, signal, excluded, providerId, true, true, sourceKey)
         if (!result || signal.aborted) throw unavailable()
         record.excluded = []
         record.excludedAt = {}
@@ -345,16 +376,14 @@ export function createPlayback({ providers, store, region, providerOrders, audio
         if (!refresh) {
           const windowed = prunedFallbacks(record.fallbackAt)
           if (windowed.length >= fallbackLimit(record.input)) throw unavailable()
-          const order = providerOrders?.[record.input.ref.kind] ?? providers
-            .filter((provider) => provider.mediaKinds.includes(record.input.ref.kind))
-            .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
-            .map((provider) => provider.adapter.id)
+          const order = eligible(record.input).map(provider => provider.adapter.id)
           const position = order.indexOf(record.session.source.providerId)
           // Manual selection jumps the waterfall; earlier providers have not
           // failed. Retry the configured order while excluding this selection.
           const attempted = !record.restartFallback && position >= 0 ? order.slice(0, position + 1) : [record.session.source.providerId]
           for (const id of attempted) {
-            const group = providers.find((provider) => provider.adapter.id === id)?.upstreamGroup
+            const provider = providers.find(provider => provider.adapter.id === id)
+            const group = provider ? groupKey(provider.upstreamGroup, provider.deliveryMode ?? 'direct') : undefined
             // Earlier misses retain their original cooling window.
             if (group && record.excludedAt[group] === undefined) record.excludedAt[group] = now
           }
@@ -379,23 +408,11 @@ export function createPlayback({ providers, store, region, providerOrders, audio
           deliveryFailure: failure.deliveryFailure ?? 'none',
           reason: failure.reason,
         }
-        let nextDelivery = failedDelivery
         const currentResolver = resolverFor(failedDelivery)
-        let result = await currentResolver?.resolve(record.input, signal, record.excluded, refresh ? record.session.source.providerId : undefined, true)
-        if (!result && !refresh && failedDelivery === 'direct' && relayResolver && !signal.aborted) {
-          // Enter the relay tier only after the direct waterfall finishes.
-          // Direct exclusions never suppress approved relay candidates.
-          result = await relayResolver.resolve(record.input, signal, [], undefined, true)
-          if (result) {
-            nextDelivery = 'relay'
-            record.excluded = []
-            record.excludedAt = {}
-          }
-        }
-        if (!result && !refresh && failedDelivery !== 'embed' && !signal.aborted) {
-          result = await embedResolver.resolve(record.input, signal, [], undefined, true)
-          if (result) { nextDelivery = 'embed'; record.excluded = []; record.excludedAt = {} }
-        }
+        const selected = refresh ? undefined : await resolveInOrder(record.input, signal, record.excluded, true)
+        const excludedGroups = record.excluded.filter(group => group.startsWith(`${failedDelivery}:`)).map(group => group.slice(failedDelivery.length + 1))
+        const result = refresh ? await currentResolver?.resolve(record.input, signal, excludedGroups, record.session.source.providerId, true) : selected?.result
+        const nextDelivery = selected?.delivery ?? failedDelivery
         if (!result || signal.aborted) {
           // A failed same-provider refresh still teaches the circuit breaker:
           // without this, a dead preferred provider would be retried at full
@@ -410,6 +427,18 @@ export function createPlayback({ providers, store, region, providerOrders, audio
         recoveries.add(1, { ...recoveryAttributes, outcome: 'success' })
         return next
       } finally { await store.release(`recovery:${id}`, lock) }
+    },
+    async frameDiagnostics(owner, id, input) {
+      const batch = frameDiagnosticsSchema.parse(input)
+      const record = await read(owner, id)
+      if (record.session.source.type !== 'iframe' || record.session.source.delivery !== 'embed' || record.session.source.providerId !== 'vidriftframe' || record.input.ref.kind === 'anime') throw new ApiError('BAD_REQUEST', 'This source does not support external-player diagnostics.')
+      if (record.session.source.id !== batch.sourceId) throw new ApiError('CONFLICT', 'The external player changed.')
+      // A shared-store cap also bounds callers that bypass the browser bridge.
+      if (!await store.claim(`frame-diagnostics:${id}`, 'batch', 5)) return
+      for (const event of batch.events) frameReported.add(1, {
+        provider: record.session.source.providerId, kind: record.input.ref.kind,
+        region, delivery: 'embed', browser: event.browser, event: event.type,
+      })
     },
     async events(owner, id, batch) {
       const record = await read(owner, id)

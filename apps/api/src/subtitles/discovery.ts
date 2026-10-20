@@ -61,12 +61,18 @@ export function createSubtitleDiscovery(deps: {
   files: SubtitleFileStore
   origin: string
   catalog?: SubtitleCatalog | undefined
-  query(ref: SubtitleRef, signal: AbortSignal): Promise<SubtitleQuery>
+  query(ref: SubtitleRef, signal: AbortSignal, preferredLanguages?: readonly string[]): Promise<SubtitleQuery>
   requirements?: Readonly<Record<string, string>> | undefined
 }) {
   const outcomes = new Map<string, ProviderOutcome>()
   const key = (id: string) => `subtitle:discovery:${id}`
   const latestKey = (ref: SubtitleRef) => `subtitle:latest:${ref.kind}:${ref.id}:${ref.season ?? 0}:${ref.episode ?? 0}`
+  const preparedFileKey = (url: string | undefined): string | null => {
+    const prefix = `${deps.origin.replace(/\/$/, '')}/v1/subtitles/file/`
+    if (!url?.startsWith(prefix)) return null
+    const key = url.slice(prefix.length)
+    return /^[0-9a-f]{16}$/.test(key) ? key : null
+  }
   const available = (candidate: Candidate) => {
     if (!candidate.public.provider.startsWith('stream-')) return true
     const provider = deps.providers.find(provider => provider.id === candidate.public.provider)
@@ -104,7 +110,7 @@ export function createSubtitleDiscovery(deps: {
     const id = candidateId(raw)
     return mergeCandidate(snapshot, { public: publicTrack(raw, id), raw })
   }
-  async function* discover(ref: SubtitleRef, signal: AbortSignal, cursor?: string): AsyncGenerator<DiscoveryEvent> {
+  async function* discover(ref: SubtitleRef, signal: AbortSignal, cursor?: string, preferredLanguages: readonly string[] = []): AsyncGenerator<DiscoveryEvent> {
     if (cursor && !/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/.test(cursor)) throw new Error('Invalid subtitle continuation.')
     const prior = cursor ? await read(cursor.split('.')[0]!) : null
     if (cursor && (!prior || JSON.stringify(prior.ref) !== JSON.stringify(ref))) throw new Error('Search subtitles again.')
@@ -117,17 +123,17 @@ export function createSubtitleDiscovery(deps: {
     if (lock && !await deps.store.claim(lock, lease, 30)) throw new Error('Subtitle discovery is busy. Try again.')
     const emitted: DiscoveryEvent[] = []
     try {
-    for await (const event of discoverBatch(ref, signal, prior ?? undefined)) { emitted.push(event); yield event }
+    for await (const event of discoverBatch(ref, signal, prior ?? undefined, preferredLanguages)) { emitted.push(event); yield event }
     if (cursor) await deps.store.set(`subtitle:batch:${cursor}`, JSON.stringify(emitted), TTL)
     } finally { if (lock) await deps.store.release(lock, lease) }
   }
-  async function* discoverBatch(ref: SubtitleRef, signal: AbortSignal, prior?: Snapshot): AsyncGenerator<DiscoveryEvent> {
-    const snapshot: Snapshot = prior ?? { id: randomUUID(), ref, candidates: [], version: 2 }
+  async function* discoverBatch(ref: SubtitleRef, signal: AbortSignal, prior?: Snapshot, preferredLanguages: readonly string[] = []): AsyncGenerator<DiscoveryEvent> {
+    const snapshot: Snapshot = prior ?? { id: randomUUID(), ref, candidates: [], version: 3 }
     if (!prior) {
     try {
       const previousId = await deps.store.get(latestKey(ref))
       const previous = previousId ? await read(previousId) : null
-      if (previous?.version === 2) {
+      if (previous?.version === 3) {
         const usable = await Promise.all(previous.candidates.map(async (candidate) => {
           if (candidate.prepared && candidate.public.preparedUrl) {
             const fileKey = candidate.public.preparedUrl.match(/\/file\/([0-9a-f]{16})$/)?.[1]
@@ -164,7 +170,7 @@ export function createSubtitleDiscovery(deps: {
     }
 
     }
-    const query = snapshot.query ?? await deps.query(ref, signal)
+    const query = snapshot.query ?? await deps.query(ref, signal, preferredLanguages)
     snapshot.query = query
     snapshot.remaining ??= deps.providers.filter(provider => { try { return provider.supports(query) } catch { return false } }).map(provider => provider.id)
     const batch = snapshot.remaining.splice(0, 12)
@@ -192,7 +198,7 @@ export function createSubtitleDiscovery(deps: {
           const result = await Promise.race([
             provider.search(query, controller.signal),
             new Promise<never>((_, reject) => { abortSearch = () => reject(new DOMException('Subtitle search cancelled.', 'AbortError')); if (signal.aborted) abortSearch() }),
-            new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')) }, PROVIDER_TIMEOUT_MS) }),
+            new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')) }, provider.timeoutMs ?? PROVIDER_TIMEOUT_MS) }),
           ])
           return { provider, raws: result, durationMs: Date.now() - started }
         } catch (error) {
@@ -252,8 +258,20 @@ export function createSubtitleDiscovery(deps: {
     const candidate = snapshot?.candidates.find((entry) => entry.public.id === candidateId)
     if (!snapshot || !candidate || !available(candidate)) return null
     if (candidate.prepared) {
-      const fileKey = candidate.prepared.url.match(/\/file\/([0-9a-f]{16})$/)?.[1]
-      return fileKey && await deps.files.getVtt(fileKey) ? candidate.prepared : null
+      const fileKey = preparedFileKey(candidate.prepared.url)
+      if (fileKey) {
+        try {
+          const cached = await deps.files.getVtt(fileKey)
+          if (cached?.startsWith('WEBVTT') && cached.includes('-->')) return candidate.prepared
+        } catch {
+          // A stale file-store read should not make a retained provider
+          // candidate permanently unselectable; retry normalization below.
+        }
+      }
+      // The discovery snapshot can outlive an evicted/corrupt prepared file.
+      // Drop that pointer and rebuild from the still-validated raw candidate.
+      delete candidate.prepared
+      delete candidate.public.preparedUrl
     }
     if (!candidate.raw) return null
     try {
@@ -282,8 +300,7 @@ export function createSubtitleDiscovery(deps: {
       }
       // resolveSubtitles historically passed remote VTT URLs through. The
       // browser-facing discovery contract only accepts first-party files.
-      if (!track.url.startsWith(`${deps.origin.replace(/\/$/, '')}/v1/subtitles/file/`)) return null
-      const fileKey = track.url.match(/\/file\/([0-9a-f]{16})$/)?.[1]
+      const fileKey = preparedFileKey(track.url)
       if (!fileKey || !await deps.files.getVtt(fileKey)) return null
       candidate.prepared = track
       candidate.public.preparedUrl = track.url

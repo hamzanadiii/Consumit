@@ -25,7 +25,7 @@ const integer = (name: string, fallback: number, maximum: number) => {
   if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) throw new Error('Invalid media resource limit.')
   return value
 }
-const media = createMediaEgress({ RELAY_ENABLED: 'true', RELAY_SECRET: node.secret, APP_ORIGIN: appOrigin, RELAY_PROVIDERS: JSON.stringify(node.providers), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' }) }, {
+const media = createMediaEgress({ RELAY_ENABLED: 'true', RELAY_SECRET: node.secret, APP_ORIGIN: appOrigin, RELAY_PROVIDERS: JSON.stringify(node.providers), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie': 'lookmovie-v1' }) }, {
   active: integer('MEDIA_MAX_ACTIVE', 16, 64), bytesPerSecond: integer('MEDIA_BYTES_PER_SECOND', 1_500_000, 12_500_000), dailyBytes: integer('MEDIA_DAILY_BYTES', 8_000_000_000, 100_000_000_000), deadlineMs: 60_000,
 }, { state, save })
 const server = createServer(async (request, response) => {

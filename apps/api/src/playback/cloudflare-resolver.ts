@@ -6,9 +6,9 @@ const resultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), sources: z.array(z.unknown()).max(32) }),
   z.object({ ok: z.literal(false), code: z.enum(['empty', 'timeout', 'malformed', 'unavailable', 'cancelled']), retryable: z.boolean() }),
 ])
-const titleMetadataProviders = new Set(['wecollege', 'cinejoylisbon', 'purstream', 'lookmovie', 'castletv', 'bingebangymovies', 'kisskh', 'videasy'])
+const titleMetadataProviders = new Set(['wecollege', 'cinejoylisbon', 'purstream', 'lookmovie', 'castletv', 'bingebangymovies', 'kisskh', 'videasy', 'streamingunity', 'aurorascreen', 'movienight'])
 const identityProviders = new Set(['vaplayer', 'cinehd', 'filmu', 'filmuainary'])
-const animeTitleProviders = new Set(['anixo', 'kyren', 'anime123', 'animeparadise', 'animekai', 'animekitsu', 'megaplayframe'])
+const animeTitleProviders = new Set(['anixo', 'kyren', 'anime123', 'animeparadise', 'animekai', 'animekitsu', 'megaplayframe', 'miruro', 'allanime', 'kototv', 'fireanime', 'nekowatch', 'justanime'])
 
 async function boundedResponseText(response: Response, limit: number) {
   const reader = response.body?.getReader()
@@ -130,4 +130,6 @@ export function createResolverMetadata(options: {
   }
 }
 
-const animeTitlesProviders = new Set(['animeparadise', 'animekitsu', 'megaplayframe'])
+// Only title-search adapters receive AniList title variants. Keep this in
+// sync with the configured adapters that actually consume the alias list.
+const animeTitlesProviders = new Set(['anixo', 'kyren', 'anime123', 'animekai', 'animeparadise', 'animekitsu', 'megaplayframe', 'miruro', 'allanime', 'kototv', 'fireanime'])

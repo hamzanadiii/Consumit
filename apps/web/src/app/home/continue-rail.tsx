@@ -138,11 +138,11 @@ export function ContinueRail() {
 
                   {/* Bottom: Editorial title, time info, and progress rail */}
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 p-3 pt-6">
-                    <p className="truncate font-display text-lg font-normal leading-tight text-white sm:text-xl">
+                    <p className="line-clamp-2 font-display text-lg font-normal leading-tight text-white sm:text-xl">
                       {title.title}
                     </p>
-                    <div className="mt-1 flex items-center justify-between gap-2 text-xs tabular-nums text-white/70">
-                      {metaText ? <span className="truncate text-white/75">{metaText}</span> : <span />}
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs tabular-nums text-white/70">
+                      {metaText ? <span className="min-w-0 break-words text-white/85">{metaText}</span> : <span />}
                       <span className="shrink-0 font-medium text-white/80">
                         {totalMinutes === null ? `${positionMinutes}m` : `${positionMinutes}m of ${totalMinutes}m`}
                       </span>

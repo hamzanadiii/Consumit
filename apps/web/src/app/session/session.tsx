@@ -84,3 +84,8 @@ export function useSession() {
   if (!session) throw new Error('useSession must be used inside SessionProvider.')
   return session
 }
+
+/** Optional for reusable surfaces such as title cards rendered outside the app shell. */
+export function useOptionalSession() {
+  return useContext(SessionContext)
+}

@@ -7,6 +7,30 @@ import { renderWithProviders as render } from '@/test/render'
 
 import { ListsCollection, type ListCollectionItem } from './lists-collection'
 
+const { removeSavedListMock } = vi.hoisted(() => ({ removeSavedListMock: vi.fn(async () => {}) }))
+vi.mock('@/lib/identity-browser', () => ({
+  createMemberList: vi.fn(),
+  deleteMemberList: vi.fn(),
+  getMemberLibraryPage: vi.fn(),
+  getMemberListDetail: vi.fn(),
+  getMemberListRead: vi.fn(),
+  IdentityApiError: class IdentityApiError extends Error { status = 500 },
+  removeSavedMemberList: removeSavedListMock,
+  updateMemberListContent: vi.fn(),
+}))
+
+const unavailableSavedList = {
+  available: false,
+  itemCount: null,
+  listId: 'saved-original-id',
+  listName: 'Late night animation',
+  listSlug: 'late-night-animation',
+  ownerDisplayName: 'Old Curator',
+  ownerUsername: 'old_curator',
+  posters: [],
+  savedAt: '2026-10-12T10:00:00.000Z',
+}
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }))
 
 const watched: ListCollectionItem = {
@@ -73,5 +97,30 @@ describe('profile lists collection', () => {
     expect(screen.getByRole('button', { name: 'Create list' })).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: 'Search your lists' }))
     expect(screen.getByRole('link', { name: 'Cozy cinema, 12 titles' })).toBeInTheDocument()
+  })
+
+  it('shows unavailable saved-list bookmarks and lets the owner remove them', async () => {
+    const user = userEvent.setup()
+    render(<ListsCollection lists={[]} savedLists={[unavailableSavedList]} />)
+
+    expect(screen.getByRole('heading', { name: 'Saved Lists' })).toBeInTheDocument()
+    expect(screen.getByText('Unavailable')).toBeInTheDocument()
+    expect(screen.getByText(/no longer public/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    expect(removeSavedListMock).toHaveBeenCalledWith('saved-original-id')
+    expect(screen.queryByText('Late night animation')).not.toBeInTheDocument()
+    expect(screen.getByText(/Save a public list/)).toBeInTheDocument()
+  })
+
+  it('starts list creation as public and keeps the private choice available', async () => {
+    const user = userEvent.setup()
+    render(<ListsCollection lists={[]} />)
+    await user.click(screen.getByRole('button', { name: 'Create list' }))
+
+    expect(screen.getByRole('radio', { name: 'Public' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Private' })).not.toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'Private' }))
+    expect(screen.getByRole('radio', { name: 'Private' })).toBeChecked()
   })
 })

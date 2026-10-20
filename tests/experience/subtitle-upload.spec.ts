@@ -29,7 +29,7 @@ for (const extension of ['srt', 'vtt']) {
     await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2)
     await page.locator('video').evaluate((video: HTMLVideoElement) => { video.pause(); video.currentTime = 2 })
     const captions = page.locator('[data-consumit-player-caption]')
-    const subtitleButton = page.getByRole('button', { name: 'Subtitles', exact: true })
+    const subtitleButton = page.getByRole('button', { name: 'Captions', exact: true })
     const content = (text: string) => {
       const cues = `1\n00:00:00.000 --> 00:00:04.000\n${text}\n\n2\n00:00:08.000 --> 00:00:12.000\n${text} later\n\n3\n00:00:20.000 --> 00:00:26.000\n${text} last\n`
       return extension === 'srt' ? cues.replaceAll('.', ',') : `WEBVTT\n\n${cues}`
@@ -42,7 +42,7 @@ for (const extension of ['srt', 'vtt']) {
       await expect(captions).toBeVisible()
       await subtitleButton.click()
       await page.getByRole('searchbox').fill('')
-      await expect(page.getByRole('menuitemradio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
+      await expect(page.getByRole('radio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
       await expect(page.getByText('Uploaded · current viewing session')).toBeVisible()
       if (text === 'Replacement caption') {
         await page.screenshot({ path: `.impeccable/review/subtitles-upload/${sourceType}-${extension}-menu.png` })
@@ -53,9 +53,9 @@ for (const extension of ['srt', 'vtt']) {
         await page.getByRole('button', { name: 'Back to subtitles' }).click()
       }
       await page.getByRole('searchbox').fill('captions.')
-      await expect(page.getByRole('menuitemradio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
+      await expect(page.getByRole('radio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
       await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => [...video.textTracks].filter(track => track.mode === 'hidden').map(track => track.language))).toEqual(['und'])
-      await page.getByRole('menuitemradio', { name: /captions\./ }).click()
+      await page.getByRole('radio', { name: /captions\./ }).click()
       if (sourceType === 'hls') {
         await page.locator('video').evaluate(async (video: HTMLVideoElement) => { video.muted = true; await video.play() })
         await expect(captions).toHaveText(`${text} later`, { timeout: 15_000 })
@@ -71,8 +71,8 @@ for (const extension of ['srt', 'vtt']) {
     await subtitleButton.click()
     await page.locator('input[type="file"]').setInputFiles({ name: 'broken.vtt', mimeType: 'text/vtt', buffer: Buffer.from('WEBVTT\n\nno cues') })
     await expect(page.getByText('This file has no usable subtitle cues.')).toBeVisible()
-    await expect(page.getByRole('menuitemradio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
-    await page.getByRole('menuitemradio', { name: 'Off', exact: true }).click()
+    await expect(page.getByRole('radio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')
+    await page.getByRole('radio', { name: 'Off', exact: true }).click()
     await expect(captions).toHaveCount(0)
   })
 }

@@ -11,6 +11,7 @@ import {
   type AnimeBrowseQuery,
 } from '@consumit/contracts'
 import { connection } from 'next/server'
+import { cookies } from 'next/headers'
 import { cache } from 'react'
 import type { ZodType } from 'zod'
 
@@ -34,16 +35,25 @@ function apiBaseUrl() {
   return (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
 }
 
-type RenderMode = 'request' | 'cached-public'
+type RenderMode = 'request' | 'cached-public' | 'member'
+
+/** Member-gated anime reads forward the session cookie and never enter the
+ *  shared catalog cache: a signed-out request must not be answered from a
+ *  signed-in render, and vice versa. */
+async function memberCookieHeader(): Promise<Record<string, string>> {
+  const store = await cookies()
+  const cookie = store.get('__Host-consumit_session') ?? store.get('consumit_session')
+  return cookie ? { cookie: `${cookie.name}=${cookie.value}` } : {}
+}
 
 async function request<T>(path: string, schema: ZodType<T>, renderMode: RenderMode = 'request'): Promise<T> {
-  if (renderMode === 'request') await connection()
+  if (renderMode !== 'cached-public') await connection()
 
   let response: Response
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
-      ...publicCatalogFetchOptions(),
-      headers: { accept: 'application/json' },
+      ...(renderMode === 'member' ? { cache: 'no-store' as const } : publicCatalogFetchOptions()),
+      headers: { accept: 'application/json', ...(renderMode === 'member' ? await memberCookieHeader() : {}) },
       signal: AbortSignal.timeout(PUBLIC_CATALOG_REQUEST_TIMEOUT_MS),
     })
   } catch (cause) {
@@ -110,7 +120,7 @@ export const getCachedAnimeAiring = cache((anilistId: number) => (
 
 export function searchAnime(query: string, page = 1) {
   const params = new URLSearchParams({ q: query.trim().slice(0, 100), page: String(page) })
-  return request(`/v1/anime/search?${params}`, animeSearchResultSchema)
+  return request(`/v1/anime/search?${params}`, animeSearchResultSchema, 'member')
 }
 
 /** Confident AniList match for a TMDB title, or null when nothing matches.

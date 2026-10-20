@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-08T15:12:19Z",
+  "generatedAt": "2026-10-18T14:54:52Z",
   "title": "Design System: Consumit",
   "extensions": {
     "colorMeta": {
@@ -284,7 +284,103 @@
         "name": "xl",
         "value": "1280px"
       }
-    ]
+    ],
+    "playerModernization": {
+      "status": "historical player direction / superseded by playerUnifiedDeck",
+      "scope": "Watch Consumit Player and external-player controls",
+      "direction": "Preserve the current 16:9 stage and Cinema After Midnight identity. Use bundled Inter for player interface text and retain the cinematic title face; use 3px micro, 5px control, and 6px panel geometry. Use charcoal panels with fine borders. Keep fixed Consumit Server / External players tabs above a scrolling list, with search and favorite ordering scoped to the selected group. On phones keep play, seek, mute, captions, and fullscreen in the first row, with Sources and Settings in a compact safe-area-aware second row. Use short opacity/transform transitions and disable them for reduced motion.",
+      "reference": "docs/audits/player-modernization-direction-2026-10-18.md",
+      "supersededBy": "extensions.playerUnifiedDeck"
+    },
+    "playerUnifiedDeck": {
+      "status": "unified deck deployed locally; owner appearance refinement verified; production unchanged",
+      "scope": "Watch Consumit Player and ProviderFrame wrapper only; browsing design system is unchanged",
+      "supersedes": "Conflicting player-specific layouts in playerModernization and earlier player guidance",
+      "reference": "docs/audits/unified-player-deck-direction-2026-10-18.md",
+      "evidence": "docs/audits/unified-player-deck-2026-10-18.md",
+      "tokenRefs": {
+        "surfaces": [
+          "colors.player-canvas",
+          "colors.player-surface",
+          "colors.player-surface-raised"
+        ],
+        "identity": [
+          "colors.ink",
+          "colors.signal-orange"
+        ],
+        "geometry": [
+          "rounded.micro",
+          "rounded.control",
+          "rounded.card"
+        ],
+        "type": [
+          "typography.player-micro",
+          "typography.player-timing",
+          "typography.player-control",
+          "typography.player-body",
+          "typography.player-heading",
+          "typography.player-title"
+        ],
+        "components": [
+          "components.player-destination",
+          "components.player-panel",
+          "components.player-panel-header"
+        ]
+      },
+      "composition": "Compact Back/title/episode header; timing/timeline above desktop transport left and labeled Sources, Captions, Episodes and Settings right, then fullscreen. Phones keep stable transport and destination rows below the picture. Movies omit Episodes. Every destination shares one right drawer or phone sheet; its fixed header, nested Back and scrolling body retain focus containment and return.",
+      "ownership": "Captions owns Off/languages/search/upload/appearance/sync. Settings owns quality/audio/adjustments/viewing options/Cast/PiP/shortcuts/route preferences. Existing player props, callbacks, engines, provider order/validation, progress/history and preferences remain intact. Exported PlayerPanel is presentation only and is reused by ProviderFrame; iframe controls are unchanged.",
+      "interaction": "At least 44px targets, 56px desktop Play and 50px phone Play. On phones, Play, both seek actions and fullscreen use four equal-width touch slots; destinations occupy a separate row. The desktop 48px and phone 36px Consumit marks and enlarged episode icons match the restored player proportions. Keep timing/transport stable under caption changes and volume expansion. Hide volume in phone portrait and short landscape. Close/Escape returns focus; panel Escape precedes fullscreen exit. Open panels retain video DOM identity. Three-second hiding remains suspended by focused controls, pause, buffering and open panels.",
+      "motion": {
+        "panelReveal": "160ms cubic-bezier(.16,1,.3,1), opacity and 8px horizontal transform",
+        "controlState": "150ms background/color; volume opacity/transform",
+        "reducedMotion": "Remove authored transitions and animations throughout native-player and external-wrapper descendants, including shared panels"
+      },
+      "containerBreakpoints": [
+        {
+          "purpose": "compact destination labels",
+          "maxWidth": "900px"
+        },
+        {
+          "purpose": "stable phone rows and bottom sheet",
+          "maxWidth": "600px"
+        },
+        {
+          "purpose": "short desktop drawer above the deck",
+          "minWidth": "601px",
+          "minHeight": "521px",
+          "maxHeight": "720px",
+          "topInset": "16px",
+          "bottomInset": "134px"
+        },
+        {
+          "purpose": "short landscape overlay",
+          "maxHeight": "520px",
+          "minWidth": "601px"
+        }
+      ],
+      "depth": "Tonal charcoal layers and fine warm-ink borders; no decorative blur or panel/toast shadow",
+      "delivery": "Player size correction, legacy Arabic decoding and restored preparation motion verified against local browser fixtures; production unchanged",
+      "panelLayout": {
+        "headerToken": "components.player-panel-header",
+        "captionToolsHeight": "53px including border; 44px actions and 4px vertical padding",
+        "initialCaptionContent": "Off and search, then available language groups, then nonblocking availability notices and provider rediscovery",
+        "destinationTooltips": "No native title on destinations with visible labels; preserve accessible names"
+      },
+      "preparationPlacement": {
+        "artworkAnchor": "Preparation artwork joins the loading message as a bottom-left stack with safe-area clearance; paused artwork centers vertically on the left side of the picture",
+        "progressAnchor": "Animated stage strokes and status stay beneath preparation artwork at the bottom-left, above safe-area and inline player deck edges",
+        "portraitDeck": "Cover ends at measured deck height; reserved preparation deck paints canvas while controls remain hidden",
+        "titleArtwork": "Large contained preparation artwork at bottom-left above the animated loading strokes and status; 560px desktop/280px phone maxima; active stroke sweeps with transform/opacity and respects reduced motion",
+        "pausedArtwork": "Title artwork vertically centered on the picture's left side, with facts and synopsis grouped beneath on desktop; compact artwork and facts on phone"
+      },
+      "ownerAppearanceRefinement": {
+        "reference": "docs/audits/player-owner-refinement-2026-10-18.md",
+        "playButton": "Unboxed; 56px desktop / 50px phone, filled ivory triangle",
+        "iconScale": "26px desktop transport and destinations; 22–23px phone destinations and seek marks",
+        "volume": "Hide the volume action on phone portrait and short landscape",
+        "brandMark": "40px desktop / 32px phone"
+      }
+    }
   },
   "components": [
     {

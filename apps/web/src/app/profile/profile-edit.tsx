@@ -33,9 +33,8 @@ export function useProfileEdit() {
 export function EditBannerButton() {
   const { bannerOpen, setBannerOpen } = useProfileEdit()
   const open = useCallback(() => setBannerOpen(true), [setBannerOpen])
-  if (bannerOpen) return null
   return (
-    <Button onClick={open} variant="secondary">
+    <Button aria-expanded={bannerOpen} aria-haspopup="dialog" onClick={event => { event.currentTarget.focus({ preventScroll: true }); open() }} variant="secondary">
       Edit banner
     </Button>
   )

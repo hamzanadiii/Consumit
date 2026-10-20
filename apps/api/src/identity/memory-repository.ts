@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { defaultProfileSectionVisibility, profileSectionVisibilitySchema } from '@consumit/contracts'
 
 import type { IdentityRepository, IdentityRecord } from './repository.ts'
 
 function copy(record: IdentityRecord): IdentityRecord {
-  return { ...record, profile: { ...record.profile } }
+  return { ...record, profile: { ...record.profile, sectionVisibility: { ...record.profile.sectionVisibility } } }
 }
 
 export function createMemoryIdentityRepository(): IdentityRepository & { count(): number } {
@@ -39,7 +40,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
         emailVerifiedAt: now,
         id: randomUUID(),
         passwordHash: input.passwordHash,
-        profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, location: null, username: input.username, usernameChangedAt: now, visibility: 'private' },
+        profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, sectionVisibility: defaultProfileSectionVisibility(), username: input.username, usernameChangedAt: now },
         role: 'MEMBER',
         status: 'ACTIVE',
       }
@@ -53,7 +54,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       if (!member || member.status !== 'ACTIVE') return null
       return {
         exportedAt: exportedAt.toISOString(),
-        library: { diary: [], favorites: [], lists: [], saved: [], watched: [] },
+        library: { diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] },
         watchHistory: [],
         member: {
           avatarStyle: member.profile.avatarStyle,
@@ -72,10 +73,9 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
           bannerUrl: member.profile.bannerUrl,
           bio: member.profile.bio,
           displayName: member.profile.displayName,
-          location: member.profile.location,
+          sectionVisibility: member.profile.sectionVisibility,
           username: member.profile.username,
           usernameChangedAt: member.profile.usernameChangedAt?.toISOString() ?? null,
-          visibility: member.profile.visibility,
         },
         ratings: [],
         reviews: [],
@@ -121,7 +121,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       member.emailVerifiedAt = null
       member.authVersion += 1
       member.passwordHash = null
-        member.profile = { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, location: null, username: `deleted_${member.id}`, usernameChangedAt: null, visibility: 'private' }
+        member.profile = { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, sectionVisibility: defaultProfileSectionVisibility(), username: `deleted_${member.id}`, usernameChangedAt: null }
       member.status = 'DELETED'
     },
     async updateProfile(memberId, input, changedAt) {
@@ -141,8 +141,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       if (input.bannerUrl !== undefined) member.profile.bannerUrl = input.bannerUrl
       if (input.bio !== undefined) member.profile.bio = input.bio
       if (input.displayName !== undefined) member.profile.displayName = input.displayName
-      if (input.location !== undefined) member.profile.location = input.location
-      if (input.visibility !== undefined) member.profile.visibility = input.visibility
+      if (input.sectionVisibility !== undefined) member.profile.sectionVisibility = profileSectionVisibilitySchema.parse({ ...member.profile.sectionVisibility, ...input.sectionVisibility })
       return copy(member)
     },
   }

@@ -8,7 +8,8 @@ import { unavailableMemberData } from './unavailable-member-data.ts'
 import type { PublicMembers } from './public-members.ts'
 
 const origin = 'http://localhost:3000'
-const fixture: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'film_fan', profile: { id: 'public-id', username: 'film_fan', displayName: 'Film Fan', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: 'Public taste', isFollowing: false }, favorites: [], ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ count: 0, value: index + 1 })), statistics: { lists: 0, ratings: 0, reviews: 0 }, social: { followers: 0, following: 0 } }
+const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }
+const fixture: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'film_fan', sectionVisibility, profile: { id: 'public-id', username: 'film_fan', displayName: 'Film Fan', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: 'Public taste', isFollowing: false }, favorites: [], ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ count: 0, value: index + 1 })), statistics: { lists: 0, ratings: 0, reviews: 0 }, social: { followers: 0, following: 0 } }
 const apps: Array<Awaited<ReturnType<typeof buildApp>>> = []
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())) })
 async function setup() {
@@ -19,7 +20,7 @@ async function setup() {
   const session = await identity.verifyEmail({ code: delivery.code, email: 'viewer@example.test' })
   const env = loadEnv({ APP_ORIGIN: origin, NODE_ENV: 'test' })
   const publicMembers: PublicMembers = { profile: vi.fn(async username => username === 'film_fan' ? fixture : null), search: vi.fn(async () => ({ items: [fixture.profile], nextCursor: null })), collection: vi.fn(async () => ({ collection: 'ratings' as const, items: [], nextCursor: null })), follow: vi.fn(async () => {}) }
-  const memberData = { ...unavailableMemberData, profile: vi.fn(async () => null) }
+  const memberData = { ...unavailableMemberData, profile: vi.fn(async () => null), profileArchive: vi.fn(async (_username, collection, viewer) => viewer && collection === 'watchlist' ? { collection: 'watchlist' as const, items: [], nextCursor: null } : null) }
   const app = await buildApp({ env, identity, memberData, publicMembers })
   apps.push(app)
   return { app, memberData, publicMembers, cookies: { [sessionCookieName(env)]: session.sessionToken }, memberId: session.member.id }
@@ -38,7 +39,7 @@ describe('public member API boundaries', () => {
       expect(response.json().error.message).toBe('Profile not found.')
     }
     expect((await app.inject('/v1/profiles/film_fan/collections/ratings')).statusCode).toBe(200)
-    expect((await app.inject('/v1/profiles/film_fan/archives/diary')).statusCode).toBe(401)
+    expect((await app.inject('/v1/profiles/film_fan/archives/diary')).statusCode).toBe(404)
   })
   it('searches public members independently of unavailable catalogs with bounded inputs and no-store', async () => {
     const { app, publicMembers } = await setup()
@@ -47,6 +48,13 @@ describe('public member API boundaries', () => {
     expect(response.headers['cache-control']).toBe('private, no-store')
     expect(publicMembers.search).toHaveBeenCalledWith('film', undefined, 20, undefined)
     for (const query of ['q=fi', 'q=' + 'a'.repeat(101), 'q=film&limit=51', 'q=film&limit=0']) expect((await app.inject(`/v1/members/search?${query}`)).statusCode).toBe(400)
+  })
+  it('passes visitor identity to section-protected archive reads and keeps private sections unavailable', async () => {
+    const { app, memberData, cookies } = await setup()
+    expect((await app.inject('/v1/profiles/film_fan/archives/watchlist')).statusCode).toBe(404)
+    expect(memberData.profileArchive).toHaveBeenCalledWith('film_fan', 'watchlist', undefined, undefined, 30)
+    expect((await app.inject({ cookies, url: '/v1/profiles/film_fan/archives/watchlist' })).statusCode).toBe(200)
+    expect(memberData.profileArchive).toHaveBeenLastCalledWith('film_fan', 'watchlist', expect.any(String), undefined, 30)
   })
   it('requires sign-in and mutation origin for follow writes and accepts repeated methods', async () => {
     const { app, publicMembers, cookies, memberId } = await setup()

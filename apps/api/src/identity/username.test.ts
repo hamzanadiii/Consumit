@@ -20,13 +20,12 @@ describe('member usernames', () => {
     const updated = await identity.updateProfile(currentSession.sessionToken, {
       bio: 'Real member profile.',
       displayName: 'Member',
-      location: 'Rabat',
+      sectionVisibility: { ratings: false, watchlist: false },
       username: 'second_name',
-      visibility: 'private',
     })
     expect(updated.username).toBe('second_name')
     expect((await identity.getSession(currentSession.sessionToken))?.id).toBe(authenticated.member.id)
-    expect(await identity.getProfile('first_name', currentSession.sessionToken)).toMatchObject({ canonicalUsername: 'second_name', profile: { username: 'second_name' } })
+    expect(await identity.getProfile('first_name', currentSession.sessionToken)).toMatchObject({ canonicalUsername: 'second_name', profile: { username: 'second_name', sectionVisibility: { ratings: false, watchlist: false } } })
     await expect(identity.getProfile('first_name')).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(await identity.usernameAvailability('first_name')).toEqual({ available: false, username: 'first_name' })
   })

@@ -11,6 +11,7 @@ import { ProfileArchiveScreen } from '../../profile-archive-screen'
 import { ProfileHistoryScreen } from '../../profile-history-screen'
 import { ProfileWatchlistScreen } from '../../profile-watchlist-screen'
 import { ProfileListsScreen } from '../../profile-lists-screen'
+import { VisitorProfileArchive } from '../../visitor-profile-archive'
 import { loadListsCollection } from '../../../lists/load-lists-collection'
 import type { ProfileSectionId } from '../../profile-section-navigation'
 import { parseRatingRange, type RatingRangeValue } from '../../../shared/rating-filter-value'
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 function refsInPage(page: MemberProfileArchivePage): CatalogRef[] {
   switch (page.collection) {
     case 'activity': return page.items.map((event) => ({ id: event.item.id, kind: event.item.kind }))
-    case 'diary': case 'films': case 'likes': case 'reviews': return page.items.map(({ id, kind }) => ({ id, kind }))
+    case 'diary': case 'films': case 'likes': case 'reviews': case 'watchlist': return page.items.map(({ id, kind }) => ({ id, kind }))
     default: return []
   }
 }
@@ -69,6 +70,16 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
   if (section === 'followers' || section === 'following') redirect(`/profile/${profile.canonicalUsername}/network?view=${section}`)
   const owner = profile.viewerIsOwner && session.status === 'authenticated' && session.member.username === profile.canonicalUsername
   if (profile.viewerIsOwner && !owner) notFound()
+  if (!profile.viewerIsOwner && ['likes', 'tags', 'watchlist'].includes(section)) {
+    const collection = section as 'likes' | 'tags' | 'watchlist'
+    let initialPage: MemberProfileArchivePage
+    try { initialPage = await getPublicProfileArchivePage(profile.canonicalUsername, collection) }
+    catch (error) { if (error instanceof MemberApiError && error.status === 404) notFound(); throw error }
+    let titles: CatalogTitleSummary[] = []
+    const refs = refsInPage(initialPage)
+    if (refs.length) try { titles = (await getCatalogBatchForRefs(refs.slice(0, MAX_PAGE_CATALOG_ENRICHMENT)))?.items ?? [] } catch { /* Public title references remain navigable without catalog details. */ }
+    return <VisitorProfileScreen data={profile} section={activeSection}><VisitorProfileArchive collection={collection} initialPage={initialPage} initialTitles={titles} username={profile.canonicalUsername} /></VisitorProfileScreen>
+  }
   if (!profile.viewerIsOwner || ['ratings', 'network'].includes(section)) {
     if (section === 'network') {
       const view = networkView ?? 'followers'

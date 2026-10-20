@@ -47,6 +47,36 @@ describe('admin routes', () => {
     expect(res.statusCode).toBe(403)
   })
 
+  it('keeps legacy metrics and comparison availability explicit without a metrics collector', async () => {
+    const identity = createFakeIdentity()
+    const app = Fastify()
+    await app.register(cookie)
+    registerErrorHandlers(app)
+    registerAdminRoutes(app, { env: loadEnv({ NODE_ENV: 'test' }), identity })
+    const token = await loginAs(identity, undefined as never, 'metrics-admin@example.com', 'admin')
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/providers/metrics', cookies: { consumit_session: token } })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['cache-control']).toBe('private, no-store')
+    expect(res.json()).toEqual({ available: false, windowMinutes: 15, metrics: {}, comparisonAvailable: false, comparisonRows: [] })
+    await app.close()
+  })
+
+  it('requires an admin for every admin route family member, checked or not', async () => {
+    const identity = createFakeIdentity()
+    const app = Fastify()
+    await app.register(cookie)
+    registerErrorHandlers(app)
+    registerAdminRoutes(app, { env: loadEnv({ NODE_ENV: 'test' }), identity })
+    app.get('/v1/admin/future', async () => ({ ok: true }))
+    expect((await app.inject({ method: 'GET', url: '/v1/admin/future' })).statusCode).toBe(401)
+    const member = await loginAs(identity, undefined as never, 'member-future@example.com', 'member')
+    expect((await app.inject({ method: 'GET', url: '/v1/admin/future', cookies: { consumit_session: member } })).statusCode).toBe(403)
+    const admin = await loginAs(identity, undefined as never, 'admin-future@example.com', 'admin')
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/future', cookies: { consumit_session: admin } })
+    expect(res.statusCode).toBe(200)
+    await app.close()
+  })
+
   it('lists providers with config', async () => {
     const identity = createFakeIdentity()
     const app = await buildApp({ identity })

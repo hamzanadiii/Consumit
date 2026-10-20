@@ -9,7 +9,7 @@ export const unavailableMemberData: MemberData = {
     throw new Error('MEMBER_DATA_UNAVAILABLE')
   },
   libraryPage: async (memberId, collection) => ({ collection, items: [], nextCursor: null }),
-  librarySnapshot: async () => ({ diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }),
+  librarySnapshot: async () => ({ diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, savedLists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }),
   like: async () => null,
   list: async () => null,
   createList: async () => { throw new Error('MEMBER_DATA_UNAVAILABLE') },

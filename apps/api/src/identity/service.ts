@@ -12,6 +12,7 @@ import type { IdentityRecord, IdentityRepository } from './repository.ts'
 const invalidCredentials = () => new IdentityError('INVALID_CREDENTIALS', 'Invalid email or password.')
 const invalidCode = () => new IdentityError('INVALID_VERIFICATION_CODE', 'The code is invalid or has expired.')
 const lockedCode = () => new IdentityError('TOO_MANY_ATTEMPTS', 'Too many incorrect codes. Wait a few minutes before trying again.', { retryable: true })
+const lockedLogin = () => new IdentityError('TOO_MANY_ATTEMPTS', 'Too many sign-in attempts. Wait a few minutes before trying again.', { retryable: true })
 const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000
 let dummyHash: Promise<string> | null = null
 
@@ -44,11 +45,10 @@ function profileView(member: IdentityRecord, now: Date): MemberProfile {
     bio: member.profile.bio,
     createdAt: member.createdAt.toISOString(),
     displayName: member.profile.displayName,
-    location: member.profile.location,
     nextUsernameChangeAt: nextChange && nextChange > now ? nextChange.toISOString() : null,
+    sectionVisibility: member.profile.sectionVisibility,
     username: member.profile.username,
     usernameChangedAt: member.profile.usernameChangedAt?.toISOString() ?? null,
-    visibility: member.profile.visibility,
   }
 }
 
@@ -164,6 +164,7 @@ export function createIdentity(options: {
     },
     async login({ email, password }) {
       const normalized = normalizeEmail(email)
+      if (await state.loginLocked(normalized)) throw lockedLogin()
       const member = await repository.findByEmail(normalized)
       const passwordHash = member?.passwordHash ?? await dummyPasswordHash()
       const valid = await verifyPassword(password, passwordHash)
@@ -172,8 +173,10 @@ export function createIdentity(options: {
         if (pending && await verifyPassword(password, pending.passwordHash)) {
           throw new IdentityError('EMAIL_NOT_VERIFIED', 'Verify your email before signing in.')
         }
+        if (member) await state.registerFailedLogin(normalized)
         throw invalidCredentials()
       }
+      await state.clearFailedLogins(normalized)
       if (!member.emailVerifiedAt) throw new IdentityError('EMAIL_NOT_VERIFIED', 'Verify your email before signing in.')
       return issue(member)
     },

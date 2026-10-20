@@ -31,16 +31,51 @@ describe('Vixsrc browser player registration', () => {
   })
 })
 
+describe('VidRock embed registration', () => {
+  const row = { id: 'vidrockframe', adapter: 'vidrockframe', deliveryMode: 'embed', regions: ['US'], mediaHosts: ['vidrock.to'], upstreamGroup: 'vidrockframe', mediaKinds: ['movie', 'series'] }
+  it('registers canonical VidRock iframe playback without changing the direct adapter', async () => {
+    const transport = vi.fn<MediaTransport>(async () => { throw new Error('Embed resolution must remain browser-owned') })
+    const [provider] = configuredProviders([row], { transport })
+    const result = await provider!.adapter.resolve({ ref: { kind: 'series', id: 1396, season: 1, episode: 1 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
+    expect(provider).toMatchObject({ deliveryMode: 'embed', adapter: { id: 'vidrockframe' } })
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://vidrock.to/tv/1396/1/1', type: 'iframe', frameSandbox: 'none' }] })
+    expect(transport).not.toHaveBeenCalled()
+    expect(() => configuredProviders([{ ...row, mediaHosts: ['evil.example'] }])).toThrow('canonical recipe id and exact published player origin')
+  })
+})
+
 describe('LookMovie relay registration', () => {
-  const row = { id: 'lookmovie-relay', adapter: 'lookmovie', deliveryMode: 'relay', relayHostDiscovery: 'lookmovie-v1', regions: ['US'], mediaKinds: ['movie'], mediaHosts: ['srv310.seclar.cyou'], upstreamGroup: 'lookmovie' }
-  it('requires the explicit relay namespace and reviewed recipe', () => {
-    expect(configuredProviders([row], { tmdbToken: 'fixture-token' })[0]?.adapter.id).toBe('lookmovie-relay')
+  const row = { id: 'lookmovie', adapter: 'lookmovie', deliveryMode: 'relay', relayHostDiscovery: 'lookmovie-v1', regions: ['US'], mediaKinds: ['movie'], mediaHosts: ['srv310.seclar.cyou'], upstreamGroup: 'lookmovie' }
+  it('requires the reviewed recipe on the relay delivery row', () => {
+    expect(configuredProviders([row], { tmdbToken: 'fixture-token' })[0]?.adapter.id).toBe('lookmovie')
+    const relayAlias = { ...row, id: 'lookmovie-relay' }
+    expect(configuredProviders([relayAlias], { tmdbToken: 'fixture-token' })[0]?.adapter.id).toBe('lookmovie-relay')
+    expect(() => configuredProviders([{ ...row, deliveryMode: 'direct' }], { tmdbToken: 'fixture-token' })).toThrow('reviewed adapter recipe')
+    expect(() => configuredProviders([{ ...row, relayHostDiscovery: 'storm-boron-v1' }], { tmdbToken: 'fixture-token' })).toThrow('reviewed adapter recipe')
+    expect(() => configuredProviders([{ ...row, id: 'lookmovie-other' }], { tmdbToken: 'fixture-token' })).toThrow('reviewed adapter recipe')
+  })
+})
+
+describe('Aether relay registration', () => {
+  const row = { id: 'aether', adapter: 'aether', deliveryMode: 'relay', relayHostDiscovery: 'aether-v1', regions: ['US'], mediaKinds: ['movie', 'series'], mediaHosts: ['cdn1018.cdn-tnmr.org'], upstreamGroup: 'aether' }
+  it('accepts only the reviewed aether-v1 recipe on the relay delivery row', () => {
+    expect(configuredProviders([row], { tmdbToken: 'fixture-token' })[0]).toMatchObject({ relayHostDiscovery: 'aether-v1', deliveryMode: 'relay' })
     expect(() => configuredProviders([{ ...row, deliveryMode: 'direct' }])).toThrow('reviewed adapter recipe')
-    expect(() => configuredProviders([{ ...row, id: 'lookmovie' }])).toThrow('reviewed adapter recipe')
+    expect(() => configuredProviders([{ ...row, id: 'aether-alias' }])).toThrow('reviewed adapter recipe')
+    expect(() => configuredProviders([{ ...row, relayHostDiscovery: 'storm-boron-v1' }])).toThrow('reviewed adapter recipe')
   })
 })
 
 describe('configured real provider integration', () => {
+  it('accepts only the observed rotating MegaVid source host family', async () => {
+    const rows: { id: string; enabled: boolean }[] = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const row = rows.find(row => row.id === 'megavid')!
+    const [provider] = configuredProviders([{ ...row, enabled: true }], { animeTitleResolver: async () => 'One Piece' })
+    expect(allowedMediaUrl('https://s-90.megavid.se/episode.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
+    expect(allowedMediaUrl('https://s-90.megavid.se.evil.example/episode.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(false)
+    expect(allowedMediaUrl('https://cdn.other.example/episode.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(false)
+  })
+
   it('keeps LookMovie fixed resolutions in one server and switches through its approved current CDN', async () => {
     const rows: { id: string; enabled: boolean }[] = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
     const row = rows.find(row => row.id === 'lookmovie')!
@@ -52,7 +87,7 @@ describe('configured real provider integration', () => {
           : { items: [{ id_movie: 'fight-club', title: 'Fight Club', year: 1999 }] }
       return { status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify(payload)]) }
     })
-    const [provider] = configuredProviders([{ ...row, enabled: true }], { transport, tmdbToken: 'fixture-token' })
+    const [provider] = configuredProviders([{ ...row, enabled: true, deliveryMode: 'direct', relayHostDiscovery: undefined }], { transport, tmdbToken: 'fixture-token' })
     expect(allowedMediaUrl('https://srv315.excentionses.cyou/movie/1080.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
     expect(allowedMediaUrl('https://srv315.tormisted.cyou/movie/720.m3u8', provider!.mediaHosts, provider!.mediaHostPatterns)).toBe(true)
     // The .cyou flux rotates domains faster than manual curation (tormisted
@@ -80,13 +115,15 @@ describe('configured real provider integration', () => {
   it('registers the requested PROVE relay roster with independent anime, movie and TV namespaces', async () => {
     const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
     const providers = configuredProviders(raw, { tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
-    const animeIds = ['megavid', '9anime', 'anixo', 'zoko', 'aniwave']
+    const animeIds = ['9anime', 'anixo', 'zoko', 'aniwave']
     const movieIds = ['bingebangymovies', 'stormboron', 'zeta', 'rivenebula', 'rivezephyr', 'wecollege-miami', 'wecollege-boise']
     for (const id of [...animeIds, ...movieIds]) {
       const provider = providers.find(row => row.adapter.id === id)
       expect(provider).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: animeIds.includes(id) ? ['anime'] : ['movie', 'series'] })
     }
     expect(providers.find(row => row.adapter.id === 'vixsrc')?.deliveryMode).toBe('direct')
+    expect(providers.find(row => row.adapter.id === 'megavid')?.deliveryMode).toBe('relay')
+    expect(providers.find(row => row.adapter.id === 'movy')).toMatchObject({ enabled: false, role: 'both', deliveryMode: 'relay', mediaKinds: ['movie'], mediaHosts: ['img.rousav.tech'] })
     expect(providers.find(row => row.adapter.id === '9anime')?.mediaHosts).not.toContain('ru-ri-cdn3.echovideo.to')
     expect(providers.find(row => row.adapter.id === 'zoko')?.mediaHosts).toContain('hls1.drama1.cfd')
     const [cookiebakers] = configuredProviders(
@@ -127,6 +164,23 @@ describe('configured real provider integration', () => {
       [{ id: 'vidcoreioframe', adapter: 'vidcoreioframe', regions: ['US'], mediaHosts: ['vidcore.io'], upstreamGroup: 'vidcoreioframe', mediaKinds: ['movie', 'series'], deliveryMode: 'direct' }],
     )).toThrow('embed delivery')
   })
+  it('registers Cinecat, Aether, Fmfau and StreamingUnity from the example roster', async () => {
+    const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const providers = configuredProviders(raw, { tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
+    const cinecat = providers.find(row => row.adapter.id === 'cinecat')
+    expect(cinecat).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaHosts: ['totallyacdn.org'], mediaKinds: ['movie', 'series'] })
+    const aether = providers.find(row => row.adapter.id === 'aether')
+    expect(aether).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaHosts: ['cdn1018.cdn-tnmr.org'], relayHostDiscovery: 'aether-v1' })
+    expect(aether?.mediaHostPatterns?.[0]?.test('cdn1018.cdn-tnmr.org')).toBe(true)
+    expect(aether?.mediaHostPatterns?.[0]?.test('cjdgxnffutfw.tnmr.org')).toBe(true)
+    expect(aether?.mediaHostPatterns?.[0]?.test('evil.example')).toBe(false)
+    expect(aether?.mediaHostPatterns?.[1]?.test('cflul.ax5.workers.dev')).toBe(true)
+    expect(aether?.mediaHostPatterns?.[1]?.test('evil.workers.dev')).toBe(false)
+    const fmfau = providers.find(row => row.adapter.id === 'fmfau')
+    expect(fmfau).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaHosts: ['hahaevilcraft.site'] })
+    const streamingunity = providers.find(row => row.adapter.id === 'streamingunity')
+    expect(streamingunity).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'direct', mediaHosts: ['vixcloud.co'] })
+  })
   it('registers Evion for TV video and keeps Apogee audio out of video attempts', async () => {
     const evion = { id: 'evion', adapter: 'evion', regions: ['US'], mediaHosts: ['img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['series'], role: 'video' }
     const apogee = { ...evion, id: 'riveapogee', adapter: 'riveapogee', mediaKinds: ['movie', 'series'], role: 'audio' }
@@ -153,6 +207,26 @@ describe('configured real provider integration', () => {
     expect(transport.mock.calls[0]?.[0]).toBe('https://scrapper.rivestream.app/api/provider?provider=apogee&id=550')
     const playback = createPlayback({ providers: [video!], store: createMemoryPlaybackStore(), region: 'US' })
     expect((await playback.listProviders({ ...input, capabilities: { hls: true, native: true, dash: true, nativeHls: false } }, new AbortController().signal)).map(p => p.id)).toEqual(['riveapogee'])
+  })
+  it('registers Movy movie video with declared audio lanes through the Both role', async () => {
+    const row = { id: 'movy', adapter: 'movy', regions: ['US'], mediaHosts: ['img.rousav.tech'], upstreamGroup: 'movy', mediaKinds: ['movie'], role: 'both' }
+    const master = '#EXTM3U\n#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aac",LANGUAGE="en",NAME="English",URI="track_en.m3u8"\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1920x1080,AUDIO="aac"\ntiles.m3u8'
+    const transport = vi.fn<MediaTransport>(async url => ({
+      status: 200, url, headers: new Headers(),
+      body: Readable.from([url.includes('api.movy.lol')
+        ? JSON.stringify({ sources: [{ url: 'https://img.rousav.tech/media/abc/index.m3u8?api_key=k', quality: '1080p', type: 'm3u8' }] })
+        : master]),
+    }))
+    const [provider] = configuredProviders([row], { transport })
+    expect(provider?.role).toBe('both')
+    expect(provider?.deliveryMode).toBe('direct')
+    expect(provider?.adapter.separateAudio).toEqual({ label: 'Movy' })
+    const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
+    expect(await provider!.adapter.resolve(input, new AbortController().signal)).toMatchObject({ ok: true, sources: [{ url: 'https://img.rousav.tech/media/abc/index.m3u8?api_key=k', type: 'hls' }] })
+    expect(transport.mock.calls[0]?.[0]).toBe('https://api.movy.lol/api/source/550?api_key=0f461eaa465bb2a7acd037425217f2f209ef540a3171e1ac')
+    expect(transport.mock.calls[0]?.[0]).toContain('api_key=')
+    const playback = createPlayback({ providers: [provider!], store: createMemoryPlaybackStore(), region: 'US' })
+    expect((await playback.listProviders({ ...input, capabilities: { hls: true, native: true, dash: true, nativeHls: false } }, new AbortController().signal)).map(p => p.id)).toEqual(['movy'])
   })
   it('registers Mirage as movie-only Direct through the Rive scraper', async () => {
     const row = { id: 'rivemirage', adapter: 'rivemirage', regions: ['US'], mediaHosts: ['cine4k.mpddash.workers.dev', 'carwashonline.site', 'nectronincllc.store', 'buswashsolarpanel.click'], upstreamGroup: 'rivemirage', mediaKinds: ['movie'] }
@@ -359,7 +433,7 @@ describe('configured real provider integration', () => {
     expect(Buffer.byteLength(hugeMedia)).toBeGreaterThan(1_048_576)
     const transport = vi.fn<MediaTransport>(async (url) => {
       const text = url.includes('movish.to')
-        ? JSON.stringify({ streams: [{ url: 'https://api.dlproxy.com/v1/play/huge.m3u8', quality: '1080p', label: 'Lyra' }] })
+        ? JSON.stringify({ streams: [{ url: 'https://api.dlproxy.com/v1/vs/huge.m3u8', quality: '1080p', label: 'Rigel' }] })
         : url.endsWith('huge.m3u8')
           ? '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvariant.m3u8'
           : url.endsWith('variant.m3u8')
@@ -374,9 +448,9 @@ describe('configured real provider integration', () => {
       { transport },
     )
     const result = await rigel!.adapter.resolve({ ref: { kind: 'movie', id: 550 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
-    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://api.dlproxy.com/v1/play/huge.m3u8', type: 'hls' }] })
-    const variantCall = transport.mock.calls.find(([url]) => url === 'https://api.dlproxy.com/v1/play/variant.m3u8')
-    expect(variantCall?.[0]).toBe('https://api.dlproxy.com/v1/play/variant.m3u8')
+    expect(result).toMatchObject({ ok: true, sources: [{ url: 'https://api.dlproxy.com/v1/vs/huge.m3u8', type: 'hls' }] })
+    const variantCall = transport.mock.calls.find(([url]) => url === 'https://api.dlproxy.com/v1/vs/variant.m3u8')
+    expect(variantCall?.[0]).toBe('https://api.dlproxy.com/v1/vs/variant.m3u8')
   })
   it('rejects wildcard allowlists for shared hosting tenants', () => {
     expect(() => configuredProviders([

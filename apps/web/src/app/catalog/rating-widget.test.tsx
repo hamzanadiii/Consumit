@@ -97,5 +97,6 @@ describe('rating widget', () => {
     render(<SessionProvider><RatingWidget id={693134} kind="movie" title="Dune: Part Two" /></SessionProvider>)
 
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
+    expect(screen.getByText('to rate Dune: Part Two.')).toHaveClass('text-[var(--fs-secondary)]')
   })
 })

@@ -6,15 +6,20 @@ import { decodeNxshaPayload, encodeNxshaPayload } from '@consumit/provider-sdk'
 import { createCastleSubsProvider } from './castlesubs.ts'
 import type { SubtitleHttp } from './http.ts'
 import { anizipEpisode } from './anizip.ts'
+import { createAddic7edProvider } from './addic7ed.ts'
 import { createAnimeToshoProvider } from './animetosho.ts'
+import { createBanimeProvider } from './banime.ts'
+import { createCineSrcProvider } from './cinesrc.ts'
 import { createJimakuProvider } from './jimaku.ts'
-import { normTrackLang } from './lang.ts'
+import { createMeguAnimeProvider } from './meguanime.ts'
+import { normTrackLang, normalizeTrackLanguage } from './lang.ts'
 import { createNatsukiProvider, releaseTagRating } from './natsuki.ts'
 import { createNxshaSubsProvider } from './nxshasubs.ts'
 import { createRiveSubsProvider } from './rivesubs.ts'
 import { createVdrkV2Provider } from './vdrkv2.ts'
 import { createOpenSubtitlesProvider } from './opensubtitles.ts'
 import { createSubDlProvider } from './subdl.ts'
+import { createSubf2mProvider } from './subf2m.ts'
 import { createSubSourceProvider } from './subsource.ts'
 import { createTvSubtitlesProvider } from './tvsubtitles.ts'
 import type { RawSubtitle } from './types.ts'
@@ -117,6 +122,20 @@ describe('subsource', () => {
     expect(found).toHaveLength(2)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'zip', provider: 'subsource' })
   })
+
+  it('uses mapped TV numbering when the anime episode has a split-season mapping', async () => {
+    const list = `<a href="/subtitle/example/english/100">Example S22E15 1080p</a><a href="/subtitle/example/english/101">Example S22E1100 1080p</a>`
+    const mappedProvider = createSubSourceProvider(stubHttp([
+      { match: '/subtitles/example-season', text: list },
+      { match: '/subtitle/example/english/100', text: SUB_ENTRY },
+      { match: '/subtitle/example/english/101', text: SUB_ENTRY },
+    ]))
+    const found = await mappedProvider.search({
+      type: 'anime', title: 'Example', season: 22, episode: 15, absoluteEpisode: 1100,
+    }, new AbortController().signal)
+    expect(found).toHaveLength(1)
+    expect(found[0]?.label).toContain('S22E15')
+  })
 })
 
 function castleEncrypt(payload: unknown, securityKeyB64: string): string {
@@ -167,6 +186,29 @@ describe('castlesubs', () => {
     const found = await provider.search({ type: 'anime', title: 'Example', episode: 2 }, new AbortController().signal)
     expect(found).toHaveLength(4)
     expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'castlesubs' })
+  })
+
+  it('uses mapped TV numbering when the anime episode has a split-season mapping', async () => {
+    const mappedHttp: SubtitleHttp = {
+      get: (async (url: string) => {
+        if (url.includes('getSecurityKey')) return { text: JSON.stringify({ code: 200, data: secKey }), cookies: [] }
+        if (url.includes('searchByKeyword')) return { text: enc({ data: { rows: [{ id: 7, title: 'Example' }] } }), cookies: [] }
+        if (url.includes('/movie?') && url.includes('movieId=7')) {
+          return { text: enc({ data: { seasons: [{ number: 22, movieId: 8 }], episodes: [] } }), cookies: [] }
+        }
+        if (url.includes('/movie?') && url.includes('movieId=8')) {
+          return { text: enc({ data: { episodes: [{ number: 15, id: 55, tracks: [{ languageId: '10', abbreviate: 'en' }] }] } }), cookies: [] }
+        }
+        throw new Error(`Unexpected GET ${url}`)
+      }) as SubtitleHttp['get'],
+      post: (async () => enc({ data: { subtitles: [{ url: 'https://cdn.castle.example/en.vtt', title: 'English', abbreviate: 'en' }] } })) as SubtitleHttp['post'],
+    }
+    const mappedProvider = createCastleSubsProvider(mappedHttp)
+    const found = await mappedProvider.search({
+      type: 'anime', title: 'Example', season: 22, episode: 15, absoluteEpisode: 1100,
+    }, new AbortController().signal)
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ lang: 'en', provider: 'castlesubs' })
   })
 
   it('trusts the file name over a mislabeled upstream language', async () => {
@@ -232,6 +274,7 @@ describe('subdl', () => {
     expect(createSubDlProvider(http).supports({ type: 'anime', tmdbId: 1 })).toBe(false)
     expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
     expect(provider.supports({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', imdbId: 'tt1234567', season: 1, episode: 1 })).toBe(true)
     expect(provider.supports({ type: 'anime', anilistId: 21 })).toBe(false)
   })
 
@@ -294,6 +337,7 @@ describe('opensubtitles', () => {
     expect(createOpenSubtitlesProvider(http).supports({ type: 'movie', tmdbId: 1 })).toBe(false)
     expect(provider.supports({ type: 'movie', tmdbId: 1 })).toBe(true)
     expect(provider.supports({ type: 'anime', tmdbId: 1100, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'anime', imdbId: 'tt1234567', season: 1, episode: 1 })).toBe(true)
     expect(provider.supports({ type: 'anime', anilistId: 1 })).toBe(false)
   })
 
@@ -458,6 +502,17 @@ describe('normTrackLang', () => {
   })
 })
 
+describe('normalizeTrackLanguage', () => {
+  it('uses a known display label when a streaming track has no language metadata', () => {
+    expect(normalizeTrackLanguage('und', 'English - Citadel')).toBe('en')
+    expect(normalizeTrackLanguage('zxx', 'العربية')).toBe('ar')
+  })
+  it('keeps provider language metadata authoritative and does not guess English', () => {
+    expect(normalizeTrackLanguage('fr', 'English')).toBe('fr')
+    expect(normalizeTrackLanguage('und', 'Commentary')).toBe('und')
+  })
+})
+
 describe('anizip', () => {
   const payload = {
     mappings: { anilist_id: 21, mal_id: 21, themoviedb_id: 37854, imdb_id: 'tt0388629' },
@@ -518,5 +573,360 @@ describe('animetosho', () => {
       { match: 'mappings?anilist_id=9', text: JSON.stringify({ mappings: {}, episodes: {} }) },
     ]))
     await expect(unmapped.search({ type: 'anime', anilistId: 9, episode: 1 }, new AbortController().signal)).resolves.toEqual([])
+  })
+
+  it('reuses the shared AniDB episode mapping instead of downloading AniZip again', async () => {
+    const shared = createAnimeToshoProvider(stubHttp([{ match: 'feed/json?eid=278201', text: '[]' }]))
+    await expect(shared.search({
+      type: 'anime', anilistId: 21, episode: 1, absoluteEpisode: 1100, anidbEid: 278201,
+    }, new AbortController().signal)).resolves.toEqual([])
+  })
+})
+
+describe('cinesrc', () => {
+  const posts: { url: string; body: string }[] = []
+  const http: SubtitleHttp = {
+    get: (async () => {
+      throw new Error('Unexpected GET')
+    }) as SubtitleHttp['get'],
+    post: (async (url: string, body: string) => {
+      posts.push({ url, body })
+      return JSON.stringify({ subtitles: [
+        { url: 'https://subs.bright67.online/c/a', language: 'English', display: 'English', format: 'srt' },
+        { url: 'https://subs.bright67.online/c/a', language: 'English', format: 'srt' },
+        { url: 'https://subs.bright67.online/c/b', language: 'Portuguese', display: 'Portuguese', format: 'ssa' },
+        { url: 'https://subs.bright67.online/c/c', language: 'German', format: 'sub' },
+        { url: 'https://subs.bright67.online/c/d', language: 'French', format: 'txt' },
+      ] })
+    }) as SubtitleHttp['post'],
+  }
+  const provider = createCineSrcProvider(http)
+  const signal = () => new AbortController().signal
+
+  it('supports TMDB-keyed queries only', () => {
+    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
+    expect(provider.supports({ type: 'tv', tmdbId: 1396, season: 1, episode: 1 })).toBe(true)
+    expect(provider.supports({ type: 'movie', title: 'Fight Club', imdbId: 'tt0137523' })).toBe(false)
+  })
+
+  it('posts TV coordinates and keeps convertible formats only', async () => {
+    const found = await provider.search({ type: 'tv', tmdbId: 1396, season: 2, episode: 3 }, signal())
+    expect(posts[0]?.url).toBe('https://cinesrc.st/api/subtitles/search')
+    expect(JSON.parse(posts[0]!.body)).toMatchObject({ tmdbId: '1396', season: '2', episode: '3', builtInSubtitles: [] })
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'cinesrc' })
+    expect(found[0]?.headers).toMatchObject({ Referer: 'https://cinesrc.st/', Origin: 'https://cinesrc.st' })
+    expect(found[1]).toMatchObject({ lang: 'pt', format: 'ass' })
+  })
+
+  it('omits season/episode for movies and honors preferred languages', async () => {
+    posts.length = 0
+    const found = await provider.search({ type: 'movie', tmdbId: 550, langs: ['en'] }, signal())
+    expect(JSON.parse(posts[0]!.body)).toEqual({ tmdbId: '550', builtInSubtitles: [] })
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ lang: 'en' })
+  })
+})
+
+describe('meguanime', () => {
+  const TRACKS = { tracks: [
+    { file: 'https://cdn.meguanime.com/p?u=one', label: 'English', kind: 'sub' },
+    { file: 'https://cdn2.meguanime.com/p?u=two', label: 'Portuguese (- Portugues(Brasil))', kind: 'sub' },
+    { file: 'https://cdn.meguanime.com/p?u=three', label: 'Bahasa Indonesia', kind: 'sub' },
+    { file: 'https://cdn.meguanime.com/thumbs', label: 'thumb', kind: 'thumbnails' },
+  ] }
+  const urls: string[] = []
+  const http: SubtitleHttp = {
+    get: (async (url: string) => {
+      urls.push(url)
+      if (url.includes('/api/miruro')) throw new Error('Subtitle page HTTP 500.')
+      return { text: JSON.stringify(TRACKS), cookies: [] }
+    }) as SubtitleHttp['get'],
+    post: (async () => {
+      throw new Error('Unexpected POST')
+    }) as SubtitleHttp['post'],
+  }
+  const provider = createMeguAnimeProvider(http)
+  const signal = () => new AbortController().signal
+
+  it('supports anime by AniList id only', () => {
+    expect(provider.supports({ type: 'anime', anilistId: 21 })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Show' })).toBe(false)
+    expect(provider.supports({ type: 'tv', tmdbId: 1 })).toBe(false)
+  })
+
+  it('falls back from miruro to zoko with cleaned language labels', async () => {
+    urls.length = 0
+    const found = await provider.search({ type: 'anime', anilistId: 21, absoluteEpisode: 1100 }, signal())
+    expect(urls[0]).toBe('https://meguanime.com/api/miruro?al=21&ep=1100&lang=sub')
+    expect(urls[1]).toBe('https://meguanime.com/api/zoko?al=21&ep=1100&lang=sub')
+    expect(found).toHaveLength(3)
+    expect(found.map((entry) => entry.lang)).toEqual(['en', 'pt', 'id'])
+    expect(found.every((entry) => entry.format === 'vtt' && entry.provider === 'meguanimesubs')).toBe(true)
+  })
+
+  it('drops tracks outside the preferred languages', async () => {
+    const found = await provider.search({ type: 'anime', anilistId: 21, episode: 1, langs: ['pt'] }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ lang: 'pt' })
+  })
+
+  it('returns nothing without an AniList id', async () => {
+    await expect(provider.search({ type: 'anime', title: 'Show', episode: 1 }, signal())).resolves.toEqual([])
+  })
+})
+
+describe('subf2m', () => {
+  const FILLER = `<p>${'x'.repeat(600)}</p>`
+  const page = (items: string) => `<html><body>${FILLER}<ul>${items}</ul></body></html>`
+  const item = (lang: string, release: string, href: string) =>
+    `<li class='item'><span class='language ${lang.toLowerCase()}'>${lang}</span><div><ul><li>${release}</li></ul></div><a class='download' href='${href}'>download</a></li>`
+  const signal = () => new AbortController().signal
+
+  it('supports movies, TV and anime by title', () => {
+    const provider = createSubf2mProvider(stubHttp([]))
+    expect(provider.supports({ type: 'movie', title: 'Fight Club' })).toBe(true)
+    expect(provider.supports({ type: 'tv', title: 'Show' })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Show' })).toBe(true)
+    expect(provider.supports({ type: 'movie' })).toBe(false)
+  })
+
+  it('parses movie items into gated zip downloads', async () => {
+    const provider = createSubf2mProvider(stubHttp([
+      { match: '/subtitles/fight-club', text: page(
+        item('English', 'Fight Club 1080p BluRay', '/subtitles/fight-club/english/17') +
+        item('French', 'Fight Club FRENCH', '/subtitles/fight-club/french/18'),
+      ) },
+    ]))
+    const found = await provider.search({ type: 'movie', title: 'Fight Club' }, signal())
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({
+      url: 'https://subf2m.co/subtitles/fight-club/english/17/download',
+      lang: 'en', format: 'zip', provider: 'subf2m', needsExtract: true,
+      label: 'Fight Club 1080p BluRay',
+    })
+    expect(found[0]?.headers).toEqual({ Referer: 'https://subf2m.co/subtitles/fight-club/english/17' })
+    expect(found[1]).toMatchObject({ lang: 'fr' })
+  })
+
+  it('keeps only the requested TV episode but retains season-wide packs', async () => {
+    const provider = createSubf2mProvider(stubHttp([
+      { match: '/subtitles/example-show-season-1', text: page(
+        item('English', 'Example Show S01E02 Second', '/subtitles/example-show/english/21') +
+        item('English', 'Example Show S01E01 Pilot', '/subtitles/example-show/english/20') +
+        item('Spanish', 'Example Show S01E01 Pilot', '/subtitles/example-show/spanish/22') +
+        item('French', 'Some Batch Without Tags', '/subtitles/example-show/french/23'),
+      ) },
+    ]))
+    const found = await provider.search({ type: 'tv', title: 'Example Show', season: 1, episode: 1 }, signal())
+    expect(found.map((entry) => entry.lang)).toEqual(['en', 'es', 'fr'])
+    expect(found[0]?.label).toBe('Example Show S01E01 Pilot')
+  })
+
+  it('falls back to the bare slug when the season slug misses', async () => {
+    // stubHttp matches by substring, so the season URL would hit the bare
+    // route; this stub 404s every -season- path to exercise the fallback.
+    const provider = createSubf2mProvider({
+      get: (async (url: string) => {
+        if (url.includes('-season-')) throw new Error('Subtitle page HTTP 404.')
+        return { text: page(item('English', 'Other Show S01E01 Pilot', '/subtitles/other-show/english/1')), cookies: [] }
+      }) as SubtitleHttp['get'],
+      post: (async () => {
+        throw new Error('Unexpected POST')
+      }) as SubtitleHttp['post'],
+    })
+    const found = await provider.search({ type: 'tv', title: 'Other Show', season: 1, episode: 1 }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]?.url).toBe('https://subf2m.co/subtitles/other-show/english/1/download')
+  })
+
+  it('falls back to the ordinal season slug when the digit slug misses', async () => {
+    const urls: string[] = []
+    const provider = createSubf2mProvider({
+      get: (async (url: string) => {
+        urls.push(url)
+        if (url.includes('-second-season')) {
+          return { text: page(item('English', 'Other Show S02E03 Third', '/subtitles/other-show/english/9')), cookies: [] }
+        }
+        if (url.includes('-season-')) throw new Error('Subtitle page HTTP 404.')
+        throw new Error(`Unexpected GET ${url}`)
+      }) as SubtitleHttp['get'],
+      post: (async () => {
+        throw new Error('Unexpected POST')
+      }) as SubtitleHttp['post'],
+    })
+    const found = await provider.search({ type: 'tv', title: 'Other Show', season: 2, episode: 3 }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]?.label).toBe('Other Show S02E03 Third')
+    expect(urls).toEqual([
+      'https://subf2m.co/subtitles/other-show-season-2',
+      'https://subf2m.co/subtitles/other-show-second-season',
+    ])
+  })
+})
+
+describe('addic7ed', () => {
+  const FILLER = `<p>${'x'.repeat(700)}</p>`
+  const movieSearch = `<html><body><table>
+<tr><td class="newsDate">12 Mar 2026</td><td>Version: WEB-DL 720p</td><td title="Hearing Impaired">HI</td><td><span class="language">English</span></td><td><a href="/original/85082/0">Download</a></td></tr>
+</table>${FILLER}<table>
+<tr><td class="newsDate">1 Mar 2026</td><td>Version: BDRip</td><td><span class="language">French</span></td><td><a href="/original/85083/0">Download</a></td></tr>
+</table></body></html>`
+  const showSearch = `<html><body>${FILLER}<a href="/show/42">Example Show</a><a href="/show/99">Other Show</a></body></html>`
+  const tvRow = (season: number, ep: number, title: string, lang: string, path: string) =>
+    `<tr class="epeven"><td>${season}</td><td>${ep}</td><td><a href="/serie/example-show/${season}/${ep}">${title}</a></td><td>${lang}</td><td class="c">WEB-DL</td><td>CC</td><td><a href="${path}">Download</a></td></tr>`
+  const ajax = `<table>${tvRow(1, 1, 'Pilot', 'English', '/updated/1/99/0')}${tvRow(1, 1, 'Pilot', 'French', '/updated/2/98/0')}${tvRow(1, 2, 'Second', 'English', '/updated/3/97/0')}${tvRow(2, 1, 'Other', 'English', '/updated/4/96/0')}</table>`
+  const signal = () => new AbortController().signal
+
+  it('supports movies and TV by title', () => {
+    const provider = createAddic7edProvider(stubHttp([]))
+    expect(provider.supports({ type: 'movie', title: 'Fight Club' })).toBe(true)
+    expect(provider.supports({ type: 'tv', title: 'Show' })).toBe(true)
+    expect(provider.supports({ type: 'anime', title: 'Show' })).toBe(false)
+  })
+
+  it('parses movie rows with release and hearing-impaired flags', async () => {
+    const provider = createAddic7edProvider(stubHttp([{ match: 'search.php', text: movieSearch }]))
+    const found = await provider.search({ type: 'movie', title: 'Fight Club' }, signal())
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({
+      url: 'https://www.addic7ed.com/original/85082/0',
+      lang: 'en', format: 'srt', provider: 'addic7ed', hi: true, release: 'WEB-DL 720p',
+      label: 'WEB-DL 720p [HI]',
+    })
+    expect(found[0]?.headers).toEqual({ Referer: 'https://www.addic7ed.com/' })
+    expect(found[1]).toMatchObject({ lang: 'fr', hi: false, release: 'BDRip' })
+  })
+
+  it('honors preferred languages on movie rows', async () => {
+    const provider = createAddic7edProvider(stubHttp([{ match: 'search.php', text: movieSearch }]))
+    const found = await provider.search({ type: 'movie', title: 'Fight Club', langs: ['en'] }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ lang: 'en' })
+  })
+
+  it('loads the show season over ajax and filters to one episode', async () => {
+    const provider = createAddic7edProvider(stubHttp([
+      { match: 'search.php', text: showSearch },
+      { match: 'ajax_loadShow.php', text: ajax },
+    ]))
+    const found = await provider.search({ type: 'tv', title: 'Example Show', season: 1, episode: 1 }, signal())
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({
+      url: 'https://www.addic7ed.com/updated/1/99/0',
+      lang: 'en', label: 'S01E01 Pilot WEB-DL', release: 'S01E01 Pilot',
+    })
+    expect(found[0]?.headers).toEqual({ Referer: 'https://www.addic7ed.com/show/42' })
+    expect(found[1]).toMatchObject({ lang: 'fr' })
+  })
+
+  it('drops rows from other seasons', async () => {
+    const provider = createAddic7edProvider(stubHttp([
+      { match: 'search.php', text: showSearch },
+      { match: 'ajax_loadShow.php', text: ajax },
+    ]))
+    const found = await provider.search({ type: 'tv', title: 'Example Show', season: 2, episode: 1 }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ label: 'S02E01 Other WEB-DL', release: 'S02E01 Other' })
+  })
+
+  // The real search page embeds the latest-season table plus a hidden
+  // showID input — the page's /show/ links are only sidebar noise.
+  const showSearchWithId = `<html><body>${FILLER}
+<input type="hidden" name="showID" value="240"/><input type="hidden" name="season" value="5"/>
+<table>${tvRow(5, 1, 'Backhand', 'English', '/updated/9/90/0')}${tvRow(5, 1, 'Backhand', 'French', '/updated/8/91/0')}</table>
+</body></html>`
+
+  function captureHttp(handlers: ((url: string) => { text: string } | null)[]) {
+    const urls: string[] = []
+    const http: SubtitleHttp = {
+      get: (async (url: string) => {
+        urls.push(url)
+        for (const handler of handlers) {
+          const hit = handler(url)
+          if (hit) return { text: hit.text, cookies: [] }
+        }
+        throw new Error(`Unexpected GET ${url}`)
+      }) as SubtitleHttp['get'],
+      post: (async () => {
+        throw new Error('Unexpected POST')
+      }) as SubtitleHttp['post'],
+    }
+    return { urls, http }
+  }
+
+  it('answers from the embedded season table without an ajax round trip', async () => {
+    const { urls, http } = captureHttp([(url) => (url.includes('search.php') ? { text: showSearchWithId } : null)])
+    const provider = createAddic7edProvider(http)
+    const found = await provider.search({ type: 'tv', title: 'Breaking Bad', season: 5, episode: 1 }, signal())
+    expect(urls).toEqual(['https://www.addic7ed.com/search.php?search=Breaking%20Bad'])
+    expect(found.map((entry) => entry.lang)).toEqual(['en', 'fr'])
+    expect(found[0]?.headers).toEqual({ Referer: 'https://www.addic7ed.com/search.php?search=Breaking%20Bad' })
+  })
+
+  it('keys other seasons through the hidden showID input', async () => {
+    const { urls, http } = captureHttp([
+      (url) => (url.includes('search.php') ? { text: showSearchWithId } : null),
+      (url) => (url.includes('ajax_loadShow.php') ? { text: ajax } : null),
+    ])
+    const provider = createAddic7edProvider(http)
+    const found = await provider.search({ type: 'tv', title: 'Breaking Bad', season: 1, episode: 1 }, signal())
+    expect(urls).toEqual([
+      'https://www.addic7ed.com/search.php?search=Breaking%20Bad',
+      'https://www.addic7ed.com/ajax_loadShow.php?show=240&season=1&langs=&hd=&hi=',
+    ])
+    expect(found).toHaveLength(2)
+    expect(found[0]?.headers).toEqual({ Referer: 'https://www.addic7ed.com/show/240' })
+  })
+
+  it('refuses a wrong show when the search page only has sidebar links', async () => {
+    const { urls, http } = captureHttp([(url) => (url.includes('search.php') ? { text: showSearch } : null)])
+    const provider = createAddic7edProvider(http)
+    const found = await provider.search({ type: 'tv', title: 'Never Mined', season: 1, episode: 1 }, signal())
+    expect(found).toEqual([])
+    expect(urls).toHaveLength(1)
+  })
+})
+
+describe('banime', () => {
+  const vtt = (cues: number) =>
+    'WEBVTT\n\n' + Array.from({ length: cues }, (_, i) => `00:00:0${i % 10}.000 --> 00:00:0${i % 10}.500\ncue ${i}\n\n`).join('')
+  const stub = (os: string, ank: string) => {
+    const urls: string[] = []
+    const http: SubtitleHttp = {
+      get: (async (url: string) => {
+        urls.push(url)
+        return { text: url.includes('/api/os/') ? os : ank, cookies: [] }
+      }) as SubtitleHttp['get'],
+      post: (async () => {
+        throw new Error('Unexpected POST')
+      }) as SubtitleHttp['post'],
+    }
+    return { urls, provider: createBanimeProvider(http) }
+  }
+  const signal = () => new AbortController().signal
+
+  it('supports anime by title only', () => {
+    const { provider } = stub('', '')
+    expect(provider.supports({ type: 'anime', title: 'Steins;Gate' })).toBe(true)
+    expect(provider.supports({ type: 'tv', title: 'Steins;Gate', tmdbId: 1 })).toBe(false)
+    expect(provider.supports({ type: 'anime' })).toBe(false)
+  })
+
+  it('returns both backends keyed by the canonical episode', async () => {
+    const { urls, provider } = stub(vtt(10), vtt(12))
+    const found = await provider.search({ type: 'anime', title: 'Steins;Gate', absoluteEpisode: 1100, episode: 3 }, signal())
+    expect(found).toHaveLength(2)
+    expect(found[0]).toMatchObject({ lang: 'en', format: 'vtt', provider: 'banimesubs', label: 'English (OS)' })
+    expect(found[1]).toMatchObject({ label: 'English (alt)' })
+    expect(urls[0]).toBe('https://banime.dedyn.io/api/os/sub?title=Steins%3BGate&ep=1100&lang=en')
+    expect(urls[1]).toBe('https://banime.dedyn.io/api/ank/sub?title=Steins%3BGate&ep=1100&lang=en')
+  })
+
+  it('rejects a backend whose cue count has not filled yet', async () => {
+    const { provider } = stub('WEBVTT\n\n00:00:00.000 --> 00:00:01.000\npending\n', vtt(11))
+    const found = await provider.search({ type: 'anime', title: 'Show', episode: 1 }, signal())
+    expect(found).toHaveLength(1)
+    expect(found[0]).toMatchObject({ label: 'English (alt)' })
   })
 })

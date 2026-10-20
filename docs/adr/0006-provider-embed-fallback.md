@@ -1,5 +1,37 @@
 # Provider embeds after Direct and Relay
 
+## 2026-10-20: VidBolt frame candidate
+
+The [VidBolt documentation](https://vidbolt.pro/) publishes iframe routes on `vidbolt.xyz` for TMDB movies, exact TV episodes, and anime keyed by AniList ID and episode. The `vidboltframe` adapter constructs only those canonical paths and admits the exact published origin. The example roster row remains disabled pending an explicit install and playback acceptance. Audio and subtitles stay inside VidBolt's external player; frame load and any provider messages are not trusted as playback, progress, completion, or auto-next evidence.
+
+## 2026-10-18: VidRock frame candidate
+
+VidRock is registered as a separate `vidrockframe` Embed for canonical TMDB movies and exact series episodes using its published `/movie/{tmdb}` and `/tv/{tmdb}/{season}/{episode}` URL shapes on `vidrock.to`. The existing `vidrock` Direct adapter remains independent. The frame uses the standard provider iframe policy and browser-owned loading; candidate resolution does not establish decoded playback. Its example roster entry remains disabled until explicitly enabled and verified.
+
+## 2026-10-18: Bounded provider-reported diagnostics
+
+Watch may observe the reviewed VidRift immediate-parent protocol for exact TMDB movie and series identity. The listener requires the current iframe window, exact `https://embed.vidrift.net` origin and configured path, strict bounded payloads, finite media positions, matching title/episode, a monotonic receive clock and progress samples, and at most twenty accepted messages per minute. Reload and source replacement invalidate the old listener. Unsupported providers, nested messages and AniList messages remain ignored; Vixsrc forwarding has not been verified.
+
+Accepted reports normalize to playing, paused, progress, ended, unavailable or error and enter the separate session-owned `POST /v1/playback/:id/frame-diagnostics` endpoint. Its strict contract admits at most twenty coarse-browser status events and the current source identity; it excludes raw payloads, media positions, URLs and free-form reasons. It validates ownership, active supported iframe and source identity, limits HTTP requests and admits at most one batch per five seconds in shared playback state. `playback.frame.reported` exposes only configured provider, kind, region, embed delivery, coarse browser and bounded event labels.
+
+These remain provider reports, including the status named playing. They neither prove a decoded frame nor feed native startup, stall, viewing, resolver health, member history, resume, completion or automatic episode navigation. Frame document load retains its existing meaning. See [protocol evidence and acceptance](../audits/external-frame-diagnostics-2026-10-18.md).
+
+## 2026-10-17: Separate external fallback choices and permit reviewed origins
+
+The owner requested that embeds remain separate from Consumit's servers as fallback choices, and clarified that this means the player menu, not a separately hosted website. Direct/Relay choices remain under Consumit Server; embeds appear under External players with readable provider names and explicit capability limitations. The external toolbar has distinct Consumit Server and External player selectors. This presentation change retains Admin attempt order, canonical identity, source validation and independent member progress.
+
+Production reproduced a parent-policy failure: `frame-src 'self' https://www.gstatic.com` rejected every external provider frame before its document could load. The web CSP now admits the finite reviewed HTTPS document origins used by the shipped frame adapters, while retaining the other browser restrictions and API-side configured-host validation. Neither provider pages nor video are proxied through Consumit for this fix. A browser policy violation is an error even if an iframe load event follows it. Providers may still reject framing or require verification; the outside reload, source choices and explicit new-tab link remain the recovery boundary. Parent permission is not evidence of provider playback.
+
+## 2026-10-15: All provider frames use plain iframes
+
+The owner's later instruction removes the sandbox attribute from every configured provider frame in Watch and Admin previews. Frame adapters declare `frameSandbox: none`; session publication normalizes legacy restricted frame sources to the same policy, and the shared renderer never adds a sandbox based on old metadata. This supersedes the provider-specific sandbox exceptions below. External providers can use their own popup/navigation behavior subject to browser rules. Consumit's Ad status controls its browsing advertising only and no longer filters or rejects provider frames, including results arriving after the setting changes. Provider ads are controlled by the provider.
+
+Exact configured HTTPS hosts, canonical title/episode and audio mapping, validated output, Admin order, reload/fallback and the absence of trusted frame playback/progress events retain their existing boundaries. The dormant display-ad iframe implementation is separate from provider playback. No deployment is implied by this workspace decision.
+
+## 2026-10-15: Admin ordering supersedes tier precedence
+
+The later Admin-order amendment in [ADR 0005](./0005-direct-first-worker-relay.md) supersedes this document's Direct → Relay → Embed and personal-order precedence. Automatic selection follows the eligible Admin order regardless of delivery mode. Embed still selects a validated external frame with the same sandbox, advertising restrictions and unsupported progress/auto-next capabilities. Watch retains manual selection and removes member ordering controls. Earlier ordering descriptions below are historical.
+
 ## 2026-10-15: personal ordering and advertising opt-out
 
 ADR 0005's personal-order amendment permits an explicitly ranked Embed before Direct or Relay; the original three tiers remain the default. Current provider, identity, region and source validation remains mandatory. Advertising Off rejects sources declaring `frameSandbox: 'none'` during resolution, including personal-order and manual choices, so automatic recovery offers compatible servers instead of requiring unsandboxed popup permissions. On retains the existing provider-scoped exception and frequency-limited browsing integration; display banners remain removed. Every external player is labeled with its unavailable Consumit subtitles, progress and auto-next capabilities. A resolved frame is still not decoded-playback evidence. Owned attempt continuation supersedes the historical one-request three-tier timeout below; each source request is bounded and the finite cycle is cancelable. Local implementation and verification limits are recorded in [the release audit](../audits/reliable-playback-2026-10-15.md).

@@ -126,6 +126,14 @@ export const THEME_STYLE = [
   '--color-field:#ffffff;--color-ink:#1a1512;--color-copy:#575046;--color-muted:#70695d;',
   '--color-faint:#a8a29e;--color-border:#ddd3c0;--color-control-outline:#d3c9b4;--color-orange:#c2431f;',
   '}',
+  // Title artwork keeps its cinematic dark treatment in both themes. The
+  // member shelf is a separate reading surface and follows the light theme,
+  // matching the anime detail shelf instead of inheriting the art overlay.
+  '[data-filscreen-home][data-theme="light"] [data-consumit-title-masthead] [data-consumit-member-shelf],',
+  'html[data-consumit-theme="light"] [data-filscreen-home] [data-consumit-title-masthead] [data-consumit-member-shelf]{',
+  '--consumit-surface:#ffffff;--consumit-surface-raised:#f3eee2;--consumit-ink:#1a1512;--consumit-copy:#575046;--consumit-muted:#70695d;--consumit-border:#ddd3c0;',
+  '--color-surface:#ffffff;--color-surface-raised:#f3eee2;--color-ink:#1a1512;--color-copy:#575046;--color-muted:#70695d;--color-border:#ddd3c0;',
+  '}',
   '[data-filscreen-home] *{--tw-ring-offset-color:var(--fs-shell)}',
   '[data-filscreen-home] ::selection{background:var(--fs-accent-strong);color:var(--fs-on-accent)}',
   '[data-filscreen-home] [data-scrollrow]{scrollbar-width:thin;scrollbar-color:#b9b6d2 transparent}',

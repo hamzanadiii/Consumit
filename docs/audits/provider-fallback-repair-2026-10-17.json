@@ -1,0 +1,1074 @@
+{
+  "at": "2026-10-17T21:57:22.421Z",
+  "scope": "Production external fallback and provider repairs; exact-sample evidence",
+  "production": {
+    "at": "2026-10-17T21:56:03.400Z",
+    "services": [
+      {
+        "name": "web",
+        "image": "consumit-web:provider-repair-20261017-v2",
+        "imageId": "sha256:95ca526e4d0dfa2100649b9a12bcac391e179cf5b5c3a2f2750cea8311fd9885",
+        "health": "healthy"
+      },
+      {
+        "name": "api",
+        "image": "consumit-api:provider-repair-20261017-v1",
+        "imageId": "sha256:1d936aebc4f9098651e35e6f08be9cd94fc2e401eb57b0d32e91f108923d392d",
+        "health": "healthy"
+      },
+      {
+        "name": "api-legacy",
+        "image": "consumit-api:provider-repair-20261017-v1",
+        "imageId": "sha256:1d936aebc4f9098651e35e6f08be9cd94fc2e401eb57b0d32e91f108923d392d",
+        "health": "healthy"
+      },
+      {
+        "name": "playback",
+        "image": "consumit-playback:provider-repair-20261017-v1",
+        "imageId": "sha256:fa1b8dd1141becbd018ee0e38a077f1acfdf78340ee833b11436f3f8b09707e2",
+        "health": "healthy"
+      },
+      {
+        "name": "worker",
+        "image": "consumit-worker:rebuild-20261017-anime-provider-v1",
+        "imageId": "sha256:9838311e9a36b93247c930ef9918fb318b8102dc3cde7e050fe2a6fc9840227e",
+        "health": "healthy"
+      },
+      {
+        "name": "gateway",
+        "image": "consumit-gateway-rebuild:rebuild-20261017-anime-provider-v1",
+        "imageId": "sha256:055d4d45453a23659a1c7fa314f8413d18b49eb967af3b7b65846cfc4f8b7189",
+        "health": "healthy"
+      }
+    ],
+    "routes": {
+      "yumezone": "https://consumit-provider-resolver-europe.consumit-project.workers.dev",
+      "yumezoneframe": "https://consumit-provider-resolver-europe.consumit-project.workers.dev"
+    },
+    "animekaiHosts": [
+      "edge1-waw-sprintcdn.r66nv9ed.com",
+      "edge2-waw-sprintcdn.r66nv9ed.com",
+      "edge1-vienna-sprintcdn.owphbf24.com",
+      "edge1-frankfurt-sprintcdn.owphbf24.com"
+    ],
+    "zenbuRelayApproved": false
+  },
+  "workers": {
+    "resolverBefore": "12ac6677-934d-4743-9dd4-7bfa79df2623",
+    "resolverAfter": "cf164b9b-252b-4117-90dc-debe3f962060",
+    "mediaBefore": "c2c14aaa-ccc7-4adc-a409-28771bc6af67",
+    "mediaAfter": "f2485c1e-b5f0-4295-9684-dc1bee5c357c"
+  },
+  "menu": {
+    "nativeChoices": 6,
+    "externalChoices": 10,
+    "nativeHasVixsrc": false,
+    "externalHasVixsrc": true
+  },
+  "animekaiCanary": {
+    "provider": "animekai",
+    "ok": true,
+    "startTime": 1.175918,
+    "seekResumed": true,
+    "width": 1280,
+    "height": 720,
+    "position": 61.262015,
+    "statuses": [
+      200,
+      200,
+      200,
+      200,
+      200
+    ]
+  },
+  "animekaiWatch": [
+    {
+      "id": "animekai",
+      "switches": [
+        {
+          "status": 200,
+          "provider": "animekai",
+          "type": "hls"
+        }
+      ],
+      "video": {
+        "time": 19.067603,
+        "width": 1280,
+        "ready": 4,
+        "paused": false
+      },
+      "title": "Watch ONE PIECE · Consumit",
+      "frameHosts": [
+        ""
+      ],
+      "status": [
+        ""
+      ]
+    }
+  ],
+  "yumezoneCanary": {
+    "provider": "yumezone",
+    "ok": true,
+    "startTime": 1.170105,
+    "seekResumed": true,
+    "width": 1440,
+    "height": 1080,
+    "position": 61.021738,
+    "statuses": []
+  },
+  "yumezoneWatch": [
+    {
+      "id": "yumezone",
+      "switches": [
+        {
+          "status": 200,
+          "provider": "yumezone",
+          "type": "hls"
+        }
+      ],
+      "video": {
+        "time": 1.569709,
+        "width": 1440,
+        "ready": 4,
+        "paused": false
+      },
+      "title": "Watch ONE PIECE · Consumit",
+      "frameHosts": [
+        ""
+      ],
+      "status": [
+        ""
+      ]
+    },
+    {
+      "id": "yumezoneframe",
+      "switches": [
+        {
+          "status": 200,
+          "provider": "yumezoneframe",
+          "type": "iframe"
+        }
+      ],
+      "video": {
+        "time": 0,
+        "width": 1440,
+        "ready": 4,
+        "paused": true
+      },
+      "title": "Watch ONE PIECE · Consumit",
+      "frameHosts": [
+        "",
+        "flixcloud.cc",
+        ""
+      ],
+      "status": [
+        "",
+        "External player selected.",
+        "Choose Japanese audio inside. Progress sync is unavailable."
+      ]
+    }
+  ],
+  "yumezoneFramePlaying": {
+    "ok": true,
+    "provider": "yumezoneframe",
+    "width": 1440,
+    "position": 1.2078,
+    "ready": 4,
+    "paused": false
+  },
+  "zenbuRejectedCanary": {
+    "provider": "zenbu",
+    "ok": false,
+    "phase": "startup",
+    "code": "manifestLoadError",
+    "status": 403,
+    "width": 0,
+    "height": 0,
+    "position": 0,
+    "statuses": []
+  },
+  "originalRegistrationSnapshot": [
+    {
+      "id": "lookmovie",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "direct",
+      "code": "unavailable",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "animeparadise",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 21
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "stream.animeparadise.moe"
+      ],
+      "session": {
+        "provider": "animeparadise",
+        "type": "hls",
+        "host": "stream.animeparadise.moe"
+      }
+    },
+    {
+      "id": "animekai",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "unavailable",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "animekitsu",
+      "ref": {
+        "id": 172463,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cdn.animekitsu.com"
+      ],
+      "session": {
+        "provider": "animekitsu",
+        "type": "native",
+        "host": "cdn.animekitsu.com"
+      }
+    },
+    {
+      "id": "riveapogee",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "img.rousav.tech"
+      ],
+      "session": {
+        "error": "PLAYBACK_UNAVAILABLE"
+      }
+    },
+    {
+      "id": "megavid",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cdnx.aniwatchtv.site"
+      ],
+      "session": {
+        "provider": "megavid",
+        "type": "hls",
+        "host": "cdnx.aniwatchtv.site"
+      }
+    },
+    {
+      "id": "anixo",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 7,
+      "sourceHosts": [
+        "anixo.buzz",
+        "anixo.buzz",
+        "anixo.buzz",
+        "anixo.buzz",
+        "anixo.buzz",
+        "anixo.buzz",
+        "anixo.buzz"
+      ],
+      "session": {
+        "provider": "anixo",
+        "type": "hls",
+        "host": "consumit-media-relay-production.consumit-project.workers.dev"
+      }
+    },
+    {
+      "id": "zoko",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "hls.dramahot.top"
+      ],
+      "session": {
+        "provider": "zoko",
+        "type": "hls",
+        "host": "consumit-media-relay-production.consumit-project.workers.dev"
+      }
+    },
+    {
+      "id": "wecollege-miami",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 4,
+      "sourceHosts": [
+        "moon.zenoak.top",
+        "moon.zenoak.top",
+        "moon.zenoak.top",
+        "moon.zenoak.top"
+      ],
+      "session": {
+        "provider": "wecollege-miami",
+        "type": "hls",
+        "host": "consumit.online"
+      }
+    },
+    {
+      "id": "rigel",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 4,
+      "sourceHosts": [
+        "api.dlproxy.com",
+        "api.dlproxy.com",
+        "api.dlproxy.com",
+        "api.dlproxy.com"
+      ],
+      "session": {
+        "provider": "rigel",
+        "type": "hls",
+        "host": "consumit.online"
+      }
+    },
+    {
+      "id": "reanimeframe",
+      "ref": {
+        "kind": "anime",
+        "id": 21,
+        "episode": 1
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "flixcloud.cc"
+      ],
+      "session": {
+        "provider": "reanimeframe",
+        "type": "iframe",
+        "host": "flixcloud.cc"
+      }
+    },
+    {
+      "id": "megaplayframe",
+      "ref": {
+        "kind": "anime",
+        "id": 21,
+        "episode": 1
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "megaplay.buzz"
+      ],
+      "session": {
+        "provider": "megaplayframe",
+        "type": "iframe",
+        "host": "megaplay.buzz"
+      }
+    },
+    {
+      "id": "apiplayerframe",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "embed",
+      "code": "unavailable",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "embedapiframe",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "watch.embed-api.stream"
+      ],
+      "session": {
+        "provider": "embedapiframe",
+        "type": "iframe",
+        "host": "watch.embed-api.stream"
+      }
+    },
+    {
+      "id": "vsembedframe",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vsembed.ru"
+      ],
+      "session": {
+        "provider": "vsembedframe",
+        "type": "iframe",
+        "host": "vsembed.ru"
+      }
+    },
+    {
+      "id": "cinesrcframe",
+      "ref": {
+        "kind": "movie",
+        "id": 550
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cinesrc.st"
+      ],
+      "session": {
+        "provider": "cinesrcframe",
+        "type": "iframe",
+        "host": "cinesrc.st"
+      }
+    },
+    {
+      "id": "purstream",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "free.finepulfe.xyz"
+      ],
+      "session": {
+        "provider": "purstream",
+        "type": "hls",
+        "host": "free.finepulfe.xyz"
+      }
+    },
+    {
+      "id": "cookiebakers",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cookiebakers23blog.xyz"
+      ],
+      "session": {
+        "provider": "cookiebakers",
+        "type": "hls",
+        "host": "cookiebakers23blog.xyz"
+      }
+    },
+    {
+      "id": "kazora",
+      "ref": {
+        "id": 19,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cdnx.aniwatchtv.site"
+      ],
+      "session": {
+        "provider": "kazora",
+        "type": "hls",
+        "host": "cdnx.aniwatchtv.site"
+      }
+    },
+    {
+      "id": "vixsrcframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vixsrc.to"
+      ],
+      "session": {
+        "provider": "vixsrcframe",
+        "type": "iframe",
+        "host": "vixsrc.to"
+      }
+    },
+    {
+      "id": "rivemirage",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "cine4k.mpddash.workers.dev"
+      ],
+      "session": {
+        "provider": "rivemirage",
+        "type": "hls",
+        "host": "consumit-media-relay-europe.consumit-project.workers.dev"
+      }
+    },
+    {
+      "id": "vidapiframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vaplayer.ru"
+      ],
+      "session": {
+        "provider": "vidapiframe",
+        "type": "iframe",
+        "host": "vaplayer.ru"
+      }
+    },
+    {
+      "id": "vidfastframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vidfast.vc"
+      ],
+      "session": {
+        "provider": "vidfastframe",
+        "type": "iframe",
+        "host": "vidfast.vc"
+      }
+    },
+    {
+      "id": "moviesapiframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "moviesapi.to"
+      ],
+      "session": {
+        "provider": "moviesapiframe",
+        "type": "iframe",
+        "host": "moviesapi.to"
+      }
+    },
+    {
+      "id": "vidlinkframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vidlink.pro"
+      ],
+      "session": {
+        "provider": "vidlinkframe",
+        "type": "iframe",
+        "host": "vidlink.pro"
+      }
+    },
+    {
+      "id": "vidnestframe",
+      "ref": {
+        "id": 550,
+        "kind": "movie"
+      },
+      "delivery": "embed",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "vidnest.fun"
+      ],
+      "session": {
+        "provider": "vidnestframe",
+        "type": "iframe",
+        "host": "vidnest.fun"
+      }
+    },
+    {
+      "id": "meguanime",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "megu-anivexa.meguanimes73.workers.dev"
+      ],
+      "session": {
+        "provider": "meguanime",
+        "type": "hls",
+        "host": "megu-anivexa.meguanimes73.workers.dev"
+      }
+    },
+    {
+      "id": "luffytv",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 6,
+      "sourceHosts": [
+        "luffytv.live",
+        "luffytv.live",
+        "luffytv.live",
+        "luffytv.live",
+        "luffytv.live",
+        "luffytv.live"
+      ],
+      "session": {
+        "provider": "luffytv",
+        "type": "hls",
+        "host": "luffytv.live"
+      }
+    },
+    {
+      "id": "yumezone",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "banime",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 2,
+      "sourceHosts": [
+        "reanime.sharky.systems",
+        "anikoto.sharky.systems"
+      ],
+      "session": {
+        "provider": "banime",
+        "type": "hls",
+        "host": "reanime.sharky.systems"
+      }
+    },
+    {
+      "id": "miruro",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "unavailable",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "allanime",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "kototv",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "direct",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "hls.kototv.to"
+      ],
+      "session": {
+        "provider": "kototv",
+        "type": "hls",
+        "host": "hls.kototv.to"
+      }
+    },
+    {
+      "id": "aniclover",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "yumezoneframe",
+      "ref": {
+        "kind": "anime",
+        "id": 21,
+        "episode": 1
+      },
+      "delivery": "embed",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "zenbu",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "unavailable",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "fireanime",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 21
+      },
+      "delivery": "direct",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "nekowatch",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "empty",
+      "sourceCount": 0,
+      "sourceHosts": []
+    },
+    {
+      "id": "justanime",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 4,
+      "sourceHosts": [
+        "core.justanime.to",
+        "www.animegg.org",
+        "www.animegg.org",
+        "core.justanime.to"
+      ],
+      "session": {
+        "provider": "justanime",
+        "type": "hls",
+        "host": "consumit-media-relay-production.consumit-project.workers.dev"
+      }
+    },
+    {
+      "id": "animedex",
+      "ref": {
+        "id": 21,
+        "kind": "anime",
+        "episode": 1
+      },
+      "delivery": "relay",
+      "code": "resolved",
+      "sourceCount": 1,
+      "sourceHosts": [
+        "ru-cdn2.echovideo.to"
+      ],
+      "session": {
+        "provider": "animedex",
+        "type": "hls",
+        "host": "consumit-media-relay-production.consumit-project.workers.dev"
+      }
+    }
+  ],
+  "externalBrowserSamples": [
+    {
+      "id": "vsembed",
+      "video": [
+        {
+          "width": 1920,
+          "height": 800,
+          "time": 2.508667,
+          "ready": 4,
+          "paused": false
+        }
+      ],
+      "frames": [
+        "vsembed.ru",
+        "stellarconductornexus.com",
+        "t.dtscout.com",
+        "stellarconductornexus.com",
+        "tags.crwdcntrl.net",
+        "bcp.crwdcntrl.net"
+      ],
+      "blocked": [],
+      "bodies": [
+        "FIGHT CLUB 1999",
+        ""
+      ]
+    },
+    {
+      "id": "cinesrc",
+      "video": [
+        {
+          "width": 1920,
+          "height": 1080,
+          "time": 0.116659,
+          "ready": 4,
+          "paused": false
+        }
+      ],
+      "frames": [
+        "cinesrc.st"
+      ],
+      "blocked": [],
+      "bodies": [
+        "YOU ARE WATCHING 1999 · 2h 19m · ★ 8.4 A ticking-time-bomb insomniac and a slippery soap salesman channel primal male aggression into a shocking new form of therapy. Thei"
+      ]
+    },
+    {
+      "id": "embedapi",
+      "frames": [
+        "empty"
+      ],
+      "blocked": [
+        "Refused to display 'https://watch.embed-api.stream' in a frame because it set 'X-Frame-Options' to 'sameorigin'."
+      ],
+      "bodies": [
+        "watch.embed-api.stream refused to connect."
+      ]
+    },
+    {
+      "id": "vidapi",
+      "error": "browser-check-failed"
+    },
+    {
+      "id": "vidfast",
+      "frames": [
+        "empty"
+      ],
+      "blocked": [
+        "Refused to display 'https://vidfast.vc' in a frame because it set 'X-Frame-Options' to 'sameorigin'."
+      ],
+      "bodies": [
+        "vidfast.vc refused to connect."
+      ]
+    },
+    {
+      "id": "vidlink",
+      "video": [
+        {
+          "width": 1154,
+          "height": 482,
+          "time": 0,
+          "ready": 4,
+          "paused": true
+        }
+      ],
+      "frames": [
+        "vidlink.pro",
+        "empty"
+      ],
+      "blocked": [],
+      "bodies": [
+        "0:00 Pause 0% 0:00 / 2:19:08 | Fight Club",
+        ""
+      ]
+    },
+    {
+      "id": "moviesapi",
+      "frames": [
+        "moviesapi.to"
+      ],
+      "blocked": [],
+      "bodies": [
+        "0:00 0% 0:00 / 0:00"
+      ]
+    },
+    {
+      "id": "vidnest",
+      "frames": [
+        "vidnest.fun"
+      ],
+      "blocked": [],
+      "bodies": [
+        "0:00 / 0:00"
+      ]
+    }
+  ],
+  "checks": {
+    "webTests": 62,
+    "uiTests": 5,
+    "providerSdkTests": 147,
+    "workerTests": 52,
+    "playbackTests": 6,
+    "total": 272,
+    "productionSmoke": "passed",
+    "backup": "incremental and archive check passed",
+    "migrationsRun": false,
+    "webLint": "pre-existing subtitle sync reset finding retained",
+    "windowsDependencyResolution": "same-source aliases used for Worker tests/bundles and API typecheck",
+    "apiTypecheck": "passed with same-workspace contracts alias"
+  },
+  "cleanup": {
+    "checkpointContainersRemoved": true,
+    "temporaryWorkerNames": [
+      "consumit-provider-resolver-europe-repair-canary",
+      "consumit-media-relay-europe-repair-canary"
+    ],
+    "temporaryWorkersRemoved": true
+  },
+  "finalSourceRecheck": {
+    "at": "2026-10-17T21:59:01.875Z",
+    "origin": "https://consumit.online",
+    "results": [
+      {
+        "id": "vixsrcframe",
+        "kind": "movie",
+        "delivery": "embed",
+        "status": 200,
+        "resolveMs": 279,
+        "exact": true,
+        "host": "vixsrc.to",
+        "result": "frame-candidate"
+      },
+      {
+        "id": "vixsrcframe",
+        "kind": "series",
+        "delivery": "embed",
+        "status": 200,
+        "resolveMs": 3805,
+        "exact": true,
+        "host": "vixsrc.to",
+        "result": "frame-candidate"
+      },
+      {
+        "id": "animekai",
+        "kind": "anime",
+        "delivery": "relay",
+        "status": 200,
+        "resolveMs": 10542,
+        "exact": true,
+        "host": "consumit-media-relay-europe.consumit-project.workers.dev",
+        "playback": {
+          "ok": true,
+          "code": "decoded",
+          "dimensions": [
+            1280,
+            720
+          ]
+        }
+      },
+      {
+        "id": "yumezone",
+        "kind": "anime",
+        "delivery": "direct",
+        "status": 200,
+        "resolveMs": 19689,
+        "exact": true,
+        "host": "yumezone.live",
+        "playback": {
+          "ok": true,
+          "code": "decoded",
+          "dimensions": [
+            1440,
+            1080
+          ]
+        }
+      }
+    ]
+  }
+}

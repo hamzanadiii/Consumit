@@ -18,7 +18,7 @@ import type { Playback } from '../playback/playback.ts'
 import type { SubtitleService } from '../subtitles/subtitles.ts'
 import type { ProviderConfigStore } from './provider-config.ts'
 import { applyOrdersInPlace, applyOverridesInPlace, configuredProviderRegions, isProviderRemoved, orderedProviderIds, providerKinds, type ProviderKind, type ProviderOverridePatch } from './provider-config.ts'
-import { aggregateProviderMetrics, readProviderAlerts, readProviderMetrics, type MetricsSnapshot } from './provider-metrics.ts'
+import { aggregateProviderMetrics, readProviderAlerts, readProviderComparisons, readProviderMetrics, type MetricsSnapshot, type ProviderComparisonRow } from './provider-metrics.ts'
 import { registerProviderInspection } from './inspection.ts'
 import { createMemoryPlaybackStore } from '../playback/state.ts'
 import { createPlaybackRelay } from '../playback/relay.ts'
@@ -85,6 +85,16 @@ export function registerAdminRoutes(
   const cookieName = sessionCookieName(env)
   let metricsCache: { at: number; data: MetricsSnapshot | null } | null = null
   let metricsPending: Promise<MetricsSnapshot | null> | null = null
+  let comparisonCache: { at: number; data: ProviderComparisonRow[] | null } | null = null
+  let comparisonPending: Promise<ProviderComparisonRow[] | null> | null = null
+  async function comparisonSnapshot(): Promise<ProviderComparisonRow[] | null> {
+    if (!env.adminMetricsUrl) return null
+    if (comparisonCache && Date.now() - comparisonCache.at < 15_000) return comparisonCache.data
+    comparisonPending ??= readProviderComparisons(env.adminMetricsUrl).catch(() => null).then(data => {
+      comparisonCache = { at: Date.now(), data }; return data
+    }).finally(() => { comparisonPending = null })
+    return comparisonPending
+  }
   async function metricsSnapshot(): Promise<MetricsSnapshot | null> {
     if (!env.adminMetricsUrl) return null
     if (metricsCache && Date.now() - metricsCache.at < 15_000) return metricsCache.data
@@ -98,6 +108,9 @@ export function registerAdminRoutes(
 
   function guardMutation(request: FastifyRequest) {
     if (!isAllowedOrigin(request.headers, env.appOrigin, env.nodeEnv !== 'production')) {
+      if (request.url === '/v1/admin/providers/inspect') {
+        request.log.warn({ origin: request.headers.origin ?? null, fetchSite: request.headers['sec-fetch-site'] ?? null, allowedOrigin: env.appOrigin }, 'provider inspection rejected by origin guard')
+      }
       throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
     }
   }
@@ -112,6 +125,10 @@ export function registerAdminRoutes(
     if (member.role !== 'admin') throw new ApiError('FORBIDDEN', 'Admin access required.')
     return member
   }
+
+  app.addHook('preHandler', async (request) => {
+    if (request.url.startsWith('/v1/admin/')) await requireAdmin(request)
+  })
 
   // When a remote playback service owns the live runtime, forward the admin
   // diagnostic operations to it as a typed operation. Admin auth and CSRF stay
@@ -222,8 +239,8 @@ export function registerAdminRoutes(
   app.get('/v1/admin/providers/metrics', async (request, reply) => {
     await requireAdmin(request)
     void reply.header('cache-control', 'private, no-store')
-    const data = await metricsSnapshot()
-    return { available: data !== null, windowMinutes: 15, metrics: data ?? {} }
+    const [data, comparisons] = await Promise.all([metricsSnapshot(), comparisonSnapshot()])
+    return { available: data !== null, windowMinutes: 15, metrics: data ?? {}, comparisonAvailable: comparisons !== null, comparisonRows: comparisons ?? [] }
   })
 
   app.get('/v1/admin/providers/alerts', async (request, reply) => {

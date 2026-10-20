@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { SIDEBAR_INIT_SCRIPT } from './filscreen-theme'
+import { SIDEBAR_INIT_SCRIPT, THEME_STYLE } from './filscreen-theme'
 
 function runInitScript() {
   // The layout inlines this script in <head>; run it against the jsdom
@@ -31,5 +31,13 @@ describe('sidebar pre-paint stamp', () => {
 
     expect(document.documentElement.hasAttribute('data-consumit-sidebar')).toBe(false)
     expect(document.querySelector('[data-consumit-sidebar-css]')).toBeNull()
+  })
+})
+
+describe('light title shelf theme', () => {
+  it('keeps the light member shelf white over cinematic title art, including pre-paint', () => {
+    expect(THEME_STYLE).toContain('[data-filscreen-home][data-theme="light"] [data-consumit-title-masthead] [data-consumit-member-shelf]')
+    expect(THEME_STYLE).toContain('html[data-consumit-theme="light"] [data-filscreen-home] [data-consumit-title-masthead] [data-consumit-member-shelf]')
+    expect(THEME_STYLE).toContain('--color-surface:#ffffff;--color-surface-raised:#f3eee2;--color-ink:#1a1512;')
   })
 })

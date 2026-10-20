@@ -1,9 +1,38 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRegistration } from '@consumit/provider-sdk'
-import { createCloudflareResolverAdapter } from './cloudflare-resolver.ts'
+import { createCloudflareResolverAdapter, createResolverMetadata } from './cloudflare-resolver.ts'
 import { createResolver } from './resolver.ts'
 
 describe('Cloudflare resolver adapter', () => {
+  it('sends canonical AniList titles to every title-based anime resolver adapter', async () => {
+    const animeTitle = vi.fn(async (id: number) => `Anime ${id}`)
+    const resolveMetadata = createResolverMetadata({ animeTitle })
+    const signal = new AbortController().signal
+
+    for (const providerId of ['miruro', 'allanime', 'kototv', 'fireanime', 'nekowatch', 'justanime']) {
+      await expect(resolveMetadata(providerId, { kind: 'anime', id: 16498, episode: 1 }, signal))
+        .resolves.toMatchObject({ animeTitle: 'Anime 16498' })
+    }
+
+    expect(animeTitle).toHaveBeenCalledTimes(6)
+    expect(animeTitle).toHaveBeenCalledWith(16498, signal)
+  })
+
+  it('sends canonical TMDB metadata to title-matched movie and series resolver adapters', async () => {
+    const tmdb = vi.fn(async () => ({ title: 'Fight Club', year: 1999 }))
+    const resolveMetadata = createResolverMetadata({ tmdb })
+    const signal = new AbortController().signal
+
+    for (const providerId of ['streamingunity', 'aurorascreen', 'movienight']) {
+      await expect(resolveMetadata(providerId, { kind: 'movie', id: 550 }, signal))
+        .resolves.toMatchObject({ title: 'Fight Club', year: 1999 })
+      await expect(resolveMetadata(providerId, { kind: 'series', id: 1396, season: 1, episode: 1 }, signal))
+        .resolves.toMatchObject({ title: 'Fight Club', year: 1999 })
+    }
+
+    expect(tmdb).toHaveBeenCalledTimes(6)
+  })
+
   it('selects an explicitly configured provider Worker without retrying through the default or API', async () => {
     const native = vi.fn()
     const fetcher = vi.fn<(input: URL, init?: RequestInit) => Promise<Response>>(async () => new Response('capacity', { status: 503 }))

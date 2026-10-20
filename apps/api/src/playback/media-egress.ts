@@ -15,8 +15,8 @@ const CHUNK = 32 * 1024
 /** Separate media daemon, sharing capabilities and pinned sockets with the
  * control plane. It has no database, identity, or arbitrary URL endpoint. */
 export function createMediaEgress(env: RelayEnv, limits: Limits, deps: Dependencies) {
-  if (Object.keys(JSON.parse(env.RELAY_PROVIDERS)).some(id => id !== 'lookmovie-relay')
-    || env.RELAY_DISCOVERY_PROVIDERS !== JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' })
+  if (Object.keys(JSON.parse(env.RELAY_PROVIDERS)).some(id => id !== 'lookmovie')
+    || env.RELAY_DISCOVERY_PROVIDERS !== JSON.stringify({ 'lookmovie': 'lookmovie-v1' })
     || !Object.values(limits).every(value => Number.isSafeInteger(value) && value > 0)) throw new Error('Invalid media daemon policy.')
   const transport = deps.transport ?? createMediaTransport(), now = deps.now ?? Date.now
   let state = { ...deps.state }, credit = 0, active = 0, nextSend = 0

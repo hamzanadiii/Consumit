@@ -2,6 +2,14 @@
 
 Status: Accepted; Resolver Worker connected to production API on 2026-10-11. Media Relay Worker refreshed on 2026-10-12; browser and relay acceptance remains provider-specific.
 
+## 2026-10-17: AnimeKai regional resolution and media-host repair
+
+The active Europe Resolver had the computation secret but lacked `RESOLVER_COMPUTE_ORIGIN`, leaving AnimeKai's proof calculation inside the Worker. Live error telemetry recorded `exceededCpu`. The reviewed configuration now includes the existing `https://consumit.online` bounded computation helper. The adapter also uses native Web Crypto for P-256 attestation and AES-GCM payload decryption; ECDSA signatures retain the provider's DER encoding and the private attestation key stays local to the invocation. Protocol tests verify the exact signed challenge and existing encrypted playback fixtures. No provider HTTP or media moves to the product API.
+
+The resolver returned `edge1-frankfurt-sprintcdn.owphbf24.com`, already inside AnimeKai's configured media-host scope but absent from the independent API/Media Worker relay policies. An isolated, authenticated Europe canary using that exact host decoded 1280×720 video, sought to 60 seconds and resumed, with five observed relay requests returning 200. The production API/combined fallback/playback policy and Europe Media Worker now include this exact host while preserving their other approved hosts. No generic host discovery or automatic Direct-to-Relay conversion is introduced. The deployment evidence and remaining provider failures are recorded in the 2026-10-17 fallback repair audit.
+
+An explicitly configured Worker origin supersedes the default native-lookup exception for that provider; otherwise a reviewed routing change could be silently ignored. Without an explicit origin, the existing native set retains its behavior. YumeZone Direct and YumeZone Frame now use the existing Europe Resolver after the native/default routes returned empty results and Europe returned validated exact-episode sources. A production-origin direct candidate decoded 1440×1080 video, sought and resumed, and its frame candidate decoded separately. Media delivery modes and host validation remain unchanged. Zenbu also resolved from Europe, but its relay media check returned 403; its missing API relay approval was deliberately left unchanged.
+
 ## Ownership update
 
 ADR 0010 transfers API-selected playback coordination to the separate playback process during the incremental migration. Durable provider writes and canonical catalog metadata remain in the product API. Worker deployments, provider order, delivery tiers and reviewed lookup/egress exceptions remain as decided here. The dated rebuild audit records activation evidence.

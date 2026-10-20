@@ -2,12 +2,16 @@ import { createHash } from 'node:crypto'
 import type { ServedSubtitle } from './engine.ts'
 import type { SubtitleRef } from './subtitles.ts'
 
+// Isolate anime subtitle rows collected with the earlier AniZip TVDB-to-TMDB
+// season assumption. This is a storage namespace marker, not a playback season.
+const ANIME_SUBTITLE_CATALOG_REVISION = 1
+
 /** Canonical content identity for subtitle cataloging. Movies key on
  *  tmdbId; series add season/episode; anime keys on the AniList id plus the
  *  canonical episode number (provider mappings stay out of storage). */
 export function catalogIdentity(ref: SubtitleRef): { kind: 'MOVIE' | 'SERIES' | 'ANIME'; tmdbId: number; anilistId: number; season: number; episode: number } {
   if (ref.kind === 'anime') {
-    return { kind: 'ANIME', tmdbId: 0, anilistId: ref.id, season: 0, episode: ref.episode ?? 1 }
+    return { kind: 'ANIME', tmdbId: 0, anilistId: ref.id, season: ANIME_SUBTITLE_CATALOG_REVISION, episode: ref.episode ?? 1 }
   }
   return {
     kind: ref.kind === 'movie' ? 'MOVIE' : 'SERIES',

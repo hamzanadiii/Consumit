@@ -53,6 +53,8 @@ Roll back this exception by setting the value to `[]` in the private production 
 
 ## Media relay
 
+AnimeKai repair (2026-10-17): the Europe Resolver must retain `RESOLVER_COMPUTE_ORIGIN=https://consumit.online` and its existing `RESOLVER_COMPUTE_SECRET`; preserving the secret alone leaves proof work inside the Worker and can exceed its CPU limit. The canonical regional config now includes the origin. Its attestation/decryption use native Web Crypto, with DER ECDSA signatures preserved. The independently approved relay map includes the exact Frankfurt host `edge1-frankfurt-sprintcdn.owphbf24.com`, alongside the existing Vienna/Warsaw hosts, after decoded/seek canary acceptance. Keep API and Media Worker host policies aligned; a successful source lookup does not grant an unapproved host.
+
 The separate Media Relay Worker is deployed from `infra/cloudflare/media-relay.wrangler.jsonc` and enabled for its existing approved provider map. Add rows only after they pass the complete relay canary. Only explicit relay rows receive signed grants. A direct source, manifest, and its segments continue to travel from the browser to the provider, so direct delivery incurs no Media Relay requests.
 
 The OVH media-node route is disabled in production (`PLAYBACK_NODE_ENABLED=false`) and its media containers are stopped; persistent volumes remain for rollback. The Cloudflare Media Relay remains enabled only for its approved provider map. OVH may continue to host the API/control plane. See the [deployment audit](../audits/cloudflare-provider-resolver-production-2026-10-11.md) and [ADR 0009](../adr/0009-cloudflare-provider-resolution.md).

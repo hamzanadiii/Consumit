@@ -6,10 +6,11 @@ import { OrderedTitleRow, SectionHeading, Tabs, buttonVariants } from '@consumit
 
 import { FilScreenShell } from '../shared'
 import { ListEditor } from './list-actions'
+import { ListShareActions } from './list-share-actions'
 
 function key(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
 
-export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavailable = false, data, titles }: {
+export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavailable = false, data, signedIn, titles }: {
   catalogDetailsLimited?: boolean
   catalogUnavailable?: boolean
   data: MemberListDetail | PublicListDetail
@@ -23,10 +24,11 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
         <section className="overflow-hidden border-b border-border px-5 py-14 sm:px-8 lg:px-[50px] lg:py-24">
           <div className="grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(27rem,1.05fr)] lg:items-center">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange">{data.list.visibility} list</p>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange">{data.list.visibility === 'public' ? 'Public list' : 'Private list'}</p>
               <h1 className="mt-4 max-w-[12ch] text-balance font-display text-5xl leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-[5rem]">{data.list.name}</h1>
               {data.list.description ? <p className="mt-6 max-w-[58ch] whitespace-pre-wrap text-sm leading-7 text-copy">{data.list.description}</p> : null}
               <p className="mt-7 text-sm text-muted">By <Link className="font-bold text-ink hover:text-orange" href={`/profile/${data.owner.username}`}>{data.owner.displayName ?? data.owner.username}</Link> · {data.items.length} {data.items.length === 1 ? 'title' : 'titles'}</p>
+              {data.list.visibility === 'public' ? <ListShareActions key={data.list.id} isOwner={data.viewerIsOwner} listId={data.list.id} saved={data.viewerHasSaved} signedIn={signedIn} slug={data.list.slug} /> : null}
             </div>
             <div aria-hidden="true" className="relative mx-auto h-72 w-full max-w-2xl sm:h-96">
               {data.items.slice(0, 4).map((item, index) => {
@@ -46,7 +48,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
             {data.viewerIsOwner && 'origin' in data.list ? (
               <>
                 <SectionHeading description="Edit details, add titles, and set their order." id="list-titles-heading" title="Your list" />
-                <div className="mt-8"><ListEditor data={data as MemberListDetail} titles={titles} /></div>
+                <div className="mt-8"><ListEditor data={data as MemberListDetail} key={data.list.id} titles={titles} /></div>
               </>
             ) : (
               <>
@@ -61,7 +63,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
 
           <section className="border-t border-border py-14" id="about" aria-labelledby="list-about-heading">
             <SectionHeading id="list-about-heading" title="About this list" />
-            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. {data.list.visibility === 'public' ? 'This list is shared while its owner’s profile is public.' : 'This list is private and only available to its owner.'}</p>
+            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. {data.list.visibility === 'public' ? 'This link stays available while its curator keeps the list and Lists section public.' : 'This list is private and only available to its owner.'}</p>
           </section>
         </div>
       </main>

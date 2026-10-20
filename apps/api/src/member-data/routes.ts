@@ -3,6 +3,7 @@ import {
   recommendationDismissalsSchema,
   catalogRefSchema,
   createMemberListRequestSchema,
+  appendListTitleRequestSchema,
   createDiaryEntryRequestSchema,
   createReviewRequestSchema,
   diaryEntrySchema,
@@ -28,6 +29,8 @@ import {
   memberTitleRecordSchema,
   memberTitleStateSchema,
   playbackProgressSchema,
+  publicMemberTrendsSchema,
+  publicListDiscoverySchema,
   progressRefSchema,
   progressWriteRequestSchema,
   watchHistoryPageSchema,
@@ -62,6 +65,19 @@ import { createSocialTelemetry } from './social-telemetry.ts'
 export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiEnv; identity: Identity; memberData: MemberData; publicMembers?: PublicMembers | undefined }) {
   const cookieName = sessionCookieName(deps.env)
   const observeSocial = createSocialTelemetry()
+
+  app.get('/v1/trends/members', async (_request, reply) => {
+    void reply.header('cache-control', 'no-store')
+    if (!deps.memberData.publicMemberTrends) return publicMemberTrendsSchema.parse({ items: [] })
+    return publicMemberTrendsSchema.parse({ items: await deps.memberData.publicMemberTrends() })
+  })
+
+  app.get('/v1/lists/discovery', async (request, reply) => {
+    void reply.header('cache-control', 'private, no-store')
+    const memberId = await viewer(request, false)
+    const data = await deps.publicMembers?.listDiscovery?.(memberId)
+    return publicListDiscoverySchema.parse(data ?? { newFromNetwork: [], popular: [] })
+  })
 
   function viewer(request: FastifyRequest, required: true): Promise<string>
   function viewer(request: FastifyRequest, required: false): Promise<string | undefined>
@@ -182,7 +198,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
       const validFields = parsed.success && parsed.data.collection === collection.data && (
         ['films', 'likes'].includes(collection.data) ? Boolean(parsed.data.updatedAt)
           : collection.data === 'diary' ? Boolean(parsed.data.createdAt && parsed.data.watchedOn)
-            : ['reviews', 'lists'].includes(collection.data) ? Boolean(collection.data === 'lists' ? parsed.data.updatedAt : parsed.data.createdAt)
+            : ['reviews', 'watchlist', 'lists'].includes(collection.data) ? Boolean(collection.data === 'lists' ? parsed.data.updatedAt : parsed.data.createdAt)
               : ['activity'].includes(collection.data) ? Boolean(parsed.data.createdAt && parsed.data.kind)
                 : false
       )
@@ -190,7 +206,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
       cursor = parsed.data
     }
     void reply.header('cache-control', 'private, no-store')
-    const page = await deps.memberData.profileArchive(username.data, collection.data, await viewer(request, true), cursor, query.data.limit)
+    const page = await deps.memberData.profileArchive(username.data, collection.data, await viewer(request, false), cursor, query.data.limit)
     if (!page) throw new ApiError('NOT_FOUND', 'Profile archive not found.')
     return memberProfileArchivePageSchema.parse(page)
   })
@@ -291,6 +307,38 @@ app.put('/v1/me/favorites', async (request, reply) => {
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide valid list details and an ordered list of unique titles.')
     const updated = await deps.memberData.updateListContent((await viewer(request, true))!, recordId(request), parsed.data)
     if (!updated) throw new ApiError('NOT_FOUND', 'List not found.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  app.post('/v1/me/lists/:id/items', async (request, reply) => {
+    guardMutation(request)
+    const title = appendListTitleRequestSchema.safeParse(request.body)
+    if (!title.success) throw new ApiError('BAD_REQUEST', 'Provide a valid title to add to this list.')
+    if (!deps.memberData.appendListTitle) throw new ApiError('CONFLICT', 'Adding titles to lists is temporarily unavailable.')
+    const added = await deps.memberData.appendListTitle((await viewer(request, true))!, recordId(request), title.data)
+    if (!added) throw new ApiError('NOT_FOUND', 'List not found.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  app.put('/v1/me/saved-lists/:slug', async (request, reply) => {
+    guardMutation(request)
+    const slug = (request.params as { slug?: unknown }).slug
+    if (typeof slug !== 'string' || !slug || slug.length > 160) throw new ApiError('BAD_REQUEST', 'Use a valid list slug.')
+    if (!deps.memberData.saveList) throw new ApiError('CONFLICT', 'Saved lists are temporarily unavailable.')
+    const saved = await deps.memberData.saveList((await viewer(request, true))!, slug)
+    if (!saved) throw new ApiError('NOT_FOUND', 'This list is no longer available to save.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  app.delete('/v1/me/saved-lists/:listId', async (request, reply) => {
+    guardMutation(request)
+    if (!deps.memberData.removeSavedList) throw new ApiError('CONFLICT', 'Saved lists are temporarily unavailable.')
+    const listId = (request.params as { listId?: unknown }).listId
+    if (typeof listId !== 'string' || !listId || listId.length > 100) throw new ApiError('BAD_REQUEST', 'Use a valid saved-list identifier.')
+    await deps.memberData.removeSavedList((await viewer(request, true))!, listId)
     void reply.header('cache-control', 'private, no-store')
     return reply.code(204).send()
   })

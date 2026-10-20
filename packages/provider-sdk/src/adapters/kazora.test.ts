@@ -56,6 +56,20 @@ describe('Kazora adapter', () => {
       url: openMaster, type: 'hls', language: 'original', qualityHint: 'Auto', subtitles: [],
     }] })
   })
+  it('mints every server lane in parallel before probing masters', async () => {
+    const { http, calls } = fixture({
+      watch: [{ m3u8: openMaster }],
+      masters: { [openMaster]: OPEN },
+    })
+    await createKazoraProvider(http, now).resolve(sub, new AbortController().signal)
+    const mints = calls.filter((call) => call.url.includes('/api/watch'))
+    expect(mints.map((call) => call.url)).toEqual([
+      expect.stringContaining('server=juju'),
+      expect.stringContaining('server=kyoo'),
+      expect.stringContaining('server=lufi'),
+    ])
+    expect(calls.findIndex((call) => call.url === openMaster)).toBeGreaterThanOrEqual(3)
+  })
   it('requests the dub lane for an explicit English audio preference', async () => {
     const { http, calls } = fixture({ watch: [{ m3u8: openMaster }], masters: { [openMaster]: OPEN } })
     const result = await createKazoraProvider(http, now).resolve(dub, new AbortController().signal)
@@ -72,6 +86,7 @@ describe('Kazora adapter', () => {
     expect(calls.filter((call) => call.url.includes('/api/watch')).map((call) => call.url)).toEqual([
       expect.stringContaining('server=juju'),
       expect.stringContaining('server=kyoo'),
+      expect.stringContaining('server=lufi'),
     ])
   })
   it('skips a master that answers without CORS', async () => {
@@ -111,7 +126,8 @@ describe('Kazora adapter', () => {
   it('bounds the master probe', async () => {
     const { http, calls } = fixture({ watch: [{ m3u8: openMaster }], masters: { [openMaster]: OPEN } })
     await createKazoraProvider(http, now).resolve(sub, new AbortController().signal)
-    expect(calls[1]?.init).toMatchObject({ readPrefixBytes: 65536 })
+    const probe = calls.find((call) => call.url === openMaster)
+    expect(probe?.init).toMatchObject({ readPrefixBytes: 65536 })
   })
   it.each([
     { watch: [] },

@@ -1,5 +1,11 @@
 # Start direct and trial Workers for necessary relay traffic
 
+## 2026-10-15: Admin order replaces delivery-tier and personal ordering
+
+The owner's later instruction makes the saved Admin attempt order per title kind authoritative across Direct, Relay and Embed. Delivery mode selects the configured transport and its independent health/admission checks; it does not rank a provider. Automatic startup, owned attempts, provider listing and legacy fallback follow the same eligible Admin order. Without a saved order, configured priority and registration order apply without delivery-tier sorting. Recovery exclusions remain scoped to delivery and upstream group, so a failed Direct route does not suppress an independently approved Relay route for the same upstream.
+
+Watch removes Manage servers, Move up/down and Reset to default. Manual server selection remains available and keeps title/episode identity and member progress. Existing personal orders may remain in stored preferences and old request contracts for compatibility, but playback ignores them. This supersedes the earlier personal-order amendment and Direct → Relay → Embed ordering statements in this ADR and ADR 0006. Existing source validation, independent Relay approvals, finite recovery and transport ownership remain required. The later plain-frame amendment in ADR 0006 removes provider-frame advertising exclusions. A renewal stays on the selected provider; failure recovery follows Admin order. No production rollout is implied by this workspace decision.
+
 ## 2026-10-15: personal server order and finite recovery
 
 The owner explicitly authorized personal Main Server / Backup ordering for movies, series and anime. A saved exact order now overrides Direct → Relay → Embed. Admin order and the existing delivery tiers remain the default and place newly added, unranked providers after saved choices. This amendment supersedes unconditional direct-first ordering statements below; it does not authorize extra spending, new hosts, disabled providers, regional bypasses or automatic Direct-to-Relay conversion.

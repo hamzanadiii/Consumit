@@ -1,10 +1,9 @@
 import { z } from 'zod'
-import type { FrameSandbox } from '@consumit/contracts'
 import type { ProviderInput, ProviderSource } from '../index.ts'
 import type { AnimeTitleVariantsResolver } from './animeparadise.ts'
 import { adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
 
-export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe', 'vixsrcframe', 'vidfastframe', 'vidapiframe', 'moviesapiframe', 'vidlinkframe', 'vidnestframe'] as const
+export const FRAME_IDS = ['reanimeframe', 'megaplayframe', 'apiplayerframe', 'embedapiframe', 'vsembedframe', 'vidcoreioframe', 'cinesrcframe', 'vidriftframe', 'vixsrcframe', 'vidfastframe', 'vidapiframe', 'moviesapiframe', 'vidlinkframe', 'vidnestframe', 'vidrockframe', 'vidboltframe', 'yumezoneframe'] as const
 export type FrameId = typeof FRAME_IDS[number]
 export function isFrameProviderId(value: string): value is FrameId { return FRAME_IDS.some(id => id === value) }
 
@@ -14,14 +13,10 @@ export function isFrameProviderId(value: string): value is FrameId { return FRAM
 export const MOVIE_FRAME_HOSTS = {
   vidapiframe: 'vaplayer.ru', vidfastframe: 'vidfast.vc', vidcoreioframe: 'vidcore.io',
   vidriftframe: 'embed.vidrift.net', moviesapiframe: 'moviesapi.to',
-  vidlinkframe: 'vidlink.pro', vidnestframe: 'vidnest.fun',
+  vidlinkframe: 'vidlink.pro', vidnestframe: 'vidnest.fun', vidrockframe: 'vidrock.to',
 } as const
-/** Published players that refuse any sandboxed frame (browser-verified
- *  2026-10-08: MegaPlay plays and VsEmbed loads its player only without one,
- *  while every sandbox, including pop-ups and top navigation, is refused;
- *  2026-10-11: Vixsrc movie and series decode only in the plain-frame control).
- *  They are framed as plain iframes; the rest keep the standard sandbox. */
-const SANDBOX_REFUSING = new Set<FrameId>(['megaplayframe', 'vsembedframe', 'vixsrcframe'])
+/** Exact document origins for the shared TMDB frames and VidBolt's multi-kind frame. */
+export const FRAME_HOSTS = { ...MOVIE_FRAME_HOSTS, vidboltframe: 'vidbolt.xyz' } as const
 const serversSchema = z.object({ servers: z.array(z.object({ dataLink: z.string().max(4096), dataType: z.string().max(16) })).max(32) })
 const searchSchema = z.object({ data: z.array(z.object({ slug: z.string().min(1).max(100), anilistId: z.number() })).max(100) })
 const lanesSchema = z.object({ servers: z.array(z.object({ id: z.string(), subTypes: z.array(z.string()).default([]) })).max(32) })
@@ -39,8 +34,8 @@ function frameUrl(value: string, host: string, path: RegExp) {
 function movieSeriesFrameUrl(id: FrameId, ref: ProviderInput['ref']): string {
   if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
   if (id === 'vidapiframe') return ref.kind === 'movie' ? `https://vaplayer.ru/embed/movie/${ref.id}` : `https://vaplayer.ru/embed/tv/${ref.id}/${ref.season}/${ref.episode}`
-  if (id === 'moviesapiframe' || id === 'vidlinkframe' || id === 'vidnestframe') {
-    const host = MOVIE_FRAME_HOSTS[id]
+  if (id === 'moviesapiframe' || id === 'vidlinkframe' || id === 'vidnestframe' || id === 'vidrockframe' || id === 'vidboltframe') {
+    const host = FRAME_HOSTS[id]
     return ref.kind === 'movie' ? `https://${host}/movie/${ref.id}` : `https://${host}/tv/${ref.id}/${ref.season}/${ref.episode}`
   }
   if (id === 'vixsrcframe') return ref.kind === 'movie' ? `https://vixsrc.to/movie/${ref.id}` : `https://vixsrc.to/tv/${ref.id}/${ref.season}/${ref.episode}`
@@ -72,7 +67,9 @@ export function createFrameProvider(id: FrameId, http: ProviderHttp, titles?: An
     const { ref } = input
     let url: string
     let language = 'original'
-    if (id === 'reanimeframe' || id === 'megaplayframe') {
+    if (id === 'vidboltframe' && ref.kind === 'anime') {
+      url = `https://${FRAME_HOSTS.vidboltframe}/anime/${ref.id}/${ref.episode}`
+    } else if (id === 'reanimeframe' || id === 'megaplayframe') {
       if (ref.kind !== 'anime') throw new ProviderFailure('empty')
       const requested = input.audioLanguage.split('-')[0]
       if (requested !== 'en' && requested !== 'ja') throw new ProviderFailure('empty')
@@ -120,7 +117,6 @@ export function createFrameProvider(id: FrameId, http: ProviderHttp, titles?: An
       if (/^[a-z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(input.audioLanguage) && input.audioLanguage.length <= 32) frame.searchParams.set('lang', input.audioLanguage.split('-')[0]!)
       url = frame.href
     }
-    const frameSandbox: FrameSandbox | undefined = SANDBOX_REFUSING.has(id) ? 'none' : undefined
-    return [{ key: 'frame', url, type: 'iframe', language, expiresAt: new Date(now() + 1_800_000).toISOString(), headers: {}, subtitles: [], ...(frameSandbox ? { frameSandbox } : {}) } satisfies ProviderSource]
+    return [{ key: 'frame', url, type: 'iframe', language, expiresAt: new Date(now() + 1_800_000).toISOString(), headers: {}, subtitles: [], frameSandbox: 'none' } satisfies ProviderSource]
   })
 }

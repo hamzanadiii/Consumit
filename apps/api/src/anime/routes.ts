@@ -15,11 +15,17 @@ import {
 import type { ZodType } from 'zod'
 
 import { ApiError } from '../http/errors.ts'
+import { requestMember } from '../http/request-member.ts'
+import type { ApiEnv } from '../config/env.ts'
+import type { Identity } from '../identity/identity.ts'
+import { sessionCookieName } from '../identity/session.ts'
 import type { AnimeService } from './anime-service.ts'
 import { AnimeError } from './errors.ts'
 
 type AnimeRoutesDeps = {
   anime: AnimeService
+  env: ApiEnv
+  identity: Identity
 }
 
 const pageSchema = z.coerce.number().int().min(1).max(500).optional().default(1)
@@ -65,11 +71,17 @@ function proveResponse<T>(schema: ZodType<T>, value: unknown): T {
 }
 
 export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps) {
-  const { anime } = deps
+  const { anime, env, identity } = deps
 
-  app.get('/v1/anime/search', async (request, reply) => {
+  // Anime search is the one metadata read that answers arbitrary free text
+  // straight from AniList. Keep it member-only on a tight per-member budget so
+  // anonymous scraping has no productive surface; browsing and title reads stay
+  // public because their pages are shared catalog content.
+  app.get('/v1/anime/search', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = searchQuerySchema.safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a search query between 2 and 100 characters and a page between 1 and 500.')
+    const member = await requestMember(request, identity, sessionCookieName(env))
+    if (!member) throw new ApiError('UNAUTHENTICATED', 'Sign in to search anime.')
     try {
       return reply.send(proveResponse(animeSearchResultSchema, await anime.search(parsed.data.q, parsed.data.page)))
     } catch (error) {
@@ -135,11 +147,15 @@ export function registerAnimeRoutes(app: FastifyInstance, deps: AnimeRoutesDeps)
         const key = `${params.data.anilistId}:${number}`
         let cached = episodeCache.get(key)
         if (!cached || cached.until <= Date.now()) {
-          const result = anime.episode(params.data.anilistId, number).catch(() => null)
+          const pending = anime.episode(params.data.anilistId, number)
+          const result = pending.catch(() => null)
           cached = { until: Date.now() + 5 * 60_000, result }
           episodeCache.set(key, cached)
           const entry = cached
-          void result.then((value) => { if (value && episodeCache.get(key) === entry) entry.until = Date.now() + 6 * 3600_000 })
+          void pending.then(
+            (value) => { if (value && episodeCache.get(key) === entry) entry.until = Date.now() + 6 * 3600_000 },
+            () => { if (episodeCache.get(key) === entry) episodeCache.delete(key) },
+          )
           if (episodeCache.size > 1000) episodeCache.delete(episodeCache.keys().next().value!)
         }
         results[index] = await cached.result

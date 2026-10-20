@@ -8,9 +8,9 @@ const response = (data: unknown) => vi.fn<typeof fetch>().mockImplementation(asy
 
 describe('exact skip timing adapters', () => {
   it('reads exact movie and episode identity, converts milliseconds and caches identical reads', async () => {
-    const fetcher = response({ tmdb_id: 550, type: 'movie', intro: [{ start_ms: 10000, end_ms: 90000 }] })
+    const fetcher = response({ tmdb_id: 550, type: 'movie', intro: [{ start_ms: 10000, end_ms: 90000 }], credits: [{ start_ms: 6300000, end_ms: null }] })
     const service = createSkipTimes({ animeMalId: async () => null, fetcher })
-    expect(await service.read(movie, 7200)).toEqual([{ kind: 'intro', start: 10, end: 90 }])
+    expect(await service.read(movie, 7200)).toEqual([{ kind: 'intro', start: 10, end: 90 }, { kind: 'outro', start: 6300, end: 7200 }])
     await service.read(movie, 7200)
     expect(fetcher).toHaveBeenCalledTimes(1)
     const url = new URL(String(fetcher.mock.calls[0]?.[0]))
@@ -25,16 +25,16 @@ describe('exact skip timing adapters', () => {
     expect(fetcher.mock.calls[1]?.[1]?.redirect).toBe('error')
   })
 
-  it('maps canonical AniList identity to MAL and accepts only exact opening/recap timings with matching runtime', async () => {
+  it('maps canonical AniList identity to MAL and accepts only exact opening/ending/recap timings with matching runtime', async () => {
     const animeMalId = vi.fn(async () => 100)
     const result = (skipType: string, startTime: number, endTime: number, episodeLength = 1440) => ({ skipType, interval: { startTime, endTime }, episodeLength })
-    const fetcher = response({ found: true, results: [result('recap', 10, 30), result('op', 100, 190), result('mixed-op', 200, 290), result('ed', 1300, 1390), result('op', 300, 390, 1500)] })
+    const fetcher = response({ found: true, results: [result('recap', 10, 30), result('op', 100, 190), result('ed', 1300, 1390), result('mixed-op', 200, 290), result('op', 300, 390, 1500)] })
     const service = createSkipTimes({ animeMalId, fetcher })
-    expect(await service.read(anime, 1440)).toEqual([{ kind: 'recap', start: 10, end: 30 }, { kind: 'intro', start: 100, end: 190 }])
+    expect(await service.read(anime, 1440)).toEqual([{ kind: 'recap', start: 10, end: 30 }, { kind: 'intro', start: 100, end: 190 }, { kind: 'outro', start: 1300, end: 1390 }])
     expect(animeMalId).toHaveBeenCalledWith(21)
     const url = new URL(String(fetcher.mock.calls[0]?.[0]))
     expect(url.pathname).toBe('/v2/skip-times/100/1')
-    expect(url.searchParams.getAll('types[]')).toEqual(['op', 'recap'])
+    expect(url.searchParams.getAll('types[]')).toEqual(['op', 'ed', 'recap'])
     expect(url.searchParams.get('episodeLength')).toBe('1440')
   })
 

@@ -45,7 +45,7 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
     reply.header('cache-control', 'private, no-store')
     return { recipe: { ...recipe, enabled: false } }
   })
-  app.post('/v1/admin/providers/inspect', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/v1/admin/providers/inspect', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     await deps.authorize(request)
     deps.guard(request)
     // The API's ordinary 15s socket limit would close before the adapter's

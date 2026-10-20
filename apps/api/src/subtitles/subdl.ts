@@ -21,7 +21,7 @@ export function createSubDlProvider(http: SubtitleHttp, apiKey?: string | undefi
     fileHosts: ['subdl.com', '*.subdl.com'],
     supports(query: SubtitleQuery) {
       if (!apiKey) return false
-      if (query.type === 'anime') return !!query.tmdbId
+      if (query.type === 'anime') return !!(query.tmdbId || query.imdbId)
       return (query.type === 'movie' || query.type === 'tv') && !!(query.tmdbId || query.imdbId)
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import { WatchCard } from '@consumit/ui'
 import { OnDemandLink } from './on-demand-link'
+import { TitleCardQuickActions } from './title-card-quick-actions'
 
 export type TitleCardItem = {
   id: number
@@ -40,7 +41,7 @@ export function TitleCard({
   return (
     <li className={className}>
       <WatchCard
-        action={action}
+        action={<div className="flex items-center gap-1.5">{action}<TitleCardQuickActions id={title.id} kind={title.kind} posterUrl={title.posterUrl} title={title.title} /></div>}
         footer={footer}
         artworkSrc={title.posterUrl ?? undefined}
         href={href ?? destination}

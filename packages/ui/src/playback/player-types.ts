@@ -1,9 +1,11 @@
-export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance' | 'cast'
+export type PlayerMenuId = 'quality' | 'server' | 'settings' | 'subtitles' | 'sync' | 'playback' | 'audio' | 'appearance' | 'cast' | 'episodes' | 'shortcuts'
 
 export type PlayerOption = {
   detail?: string | undefined
   label: string
   value: string
+  /** External players are a separate fallback section, outside Consumit servers. */
+  delivery?: 'direct' | 'relay' | 'embed' | undefined
   /** ISO-3166 alpha-2 serving region; rendered as the server flag. */
   region?: string | undefined
   /** Breaker-derived serving state; shown, never blocking. */

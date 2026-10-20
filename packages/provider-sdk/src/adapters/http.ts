@@ -33,6 +33,7 @@ export type ProviderHttp = ((url: string, headers: Record<string, string>, signa
   /** Present only for explicitly configured relay-discovery adapters. */
   mediaScope?: (hosts: readonly string[]) => ProviderHttp
 }
+export type ProviderTitleMetadataResolver = (ref: ProviderInput['ref'], signal: AbortSignal) => Promise<{ title: string; year: number }>
 export const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
 
 export class ProviderFailure extends Error {

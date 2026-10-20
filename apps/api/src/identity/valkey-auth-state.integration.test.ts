@@ -1,6 +1,7 @@
 import { Valkey } from 'iovalkey'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { LOGIN_MAX_ATTEMPTS } from './auth-state.ts'
 import { createValkeyAuthState } from './valkey-auth-state.ts'
 
 const url = process.env.VALKEY_URL
@@ -64,6 +65,22 @@ describe('Valkey authentication state', () => {
       expect(await state.beginChallenge({ code: '123456', email: payload.email, payload, purpose: 'registration' })).toBe('stored')
       expect(await state.beginChallenge({ code: '123456', email: 'second@example.com', payload: { ...payload, email: 'second@example.com' }, purpose: 'registration' })).toBe('username-unavailable')
       expect(await state.isUsernameReserved(payload.username)).toBe(true)
+    } finally {
+      await state.close()
+    }
+  })
+
+  it('counts failed sign-ins per account atomically and clears the budget', async () => {
+    const state = createValkeyAuthState(url, pepper)
+    try {
+      expect(await state.loginLocked('member@example.com')).toBe(false)
+      for (let attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt += 1) {
+        await state.registerFailedLogin('member@example.com')
+      }
+      expect(await state.loginLocked('member@example.com')).toBe(true)
+      expect(await state.loginLocked('other@example.com')).toBe(false)
+      await state.clearFailedLogins('member@example.com')
+      expect(await state.loginLocked('member@example.com')).toBe(false)
     } finally {
       await state.close()
     }

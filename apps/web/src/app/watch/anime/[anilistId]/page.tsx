@@ -50,7 +50,7 @@ export default async function AnimeWatchPage({ params, searchParams }: AnimeWatc
   }
   if (detail.episodes && episodeNumber > detail.episodes) notFound()
 
-  const hasNext = !detail.episodes || episodeNumber < detail.episodes
+  const hasNext = (!detail.episodes || episodeNumber < detail.episodes) && (!detail.nextAiringEpisode || episodeNumber + 1 < detail.nextAiringEpisode.episode)
   const nextHref = hasNext ? watchHref({ kind: 'anime', id }, { episode: episodeNumber + 1, season: 1 }) : undefined
   const prevHref = episodeNumber > 1 ? watchHref({ kind: 'anime', id }, { episode: episodeNumber - 1, season: 1 }) : undefined
 

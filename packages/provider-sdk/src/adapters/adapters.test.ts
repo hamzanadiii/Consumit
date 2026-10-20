@@ -1571,25 +1571,28 @@ function paradiseHttp(overrides: { search?: string; episodes?: string; detail?: 
 }
 
 describe('anime providers', () => {
-  it('resolves Anixo sub streams from the embed initial state with subtitles', async () => {
-    const html = `<html><script>window.__INITIAL_STREAM__ = {"success":true,"streamUrl":"https://cdn.example/ep1.m3u8","fallbackStreams":["https://cdn.example/ep1-fb.m3u8"],"subtitles":[{"url":"https://cdn.example/en.vtt","label":"English"}]};(async()=>{})</script></html>`
+  it('exposes one Anixo server using its primary stream, subtitles, and skip segments', async () => {
+    const html = `<html><script>window.__INITIAL_STREAM__ = {"success":true,"streamUrl":"https://cdn.example/ep1.m3u8","fallbackStreams":["https://cdn.example/ep1-fb.m3u8"],"subtitles":[{"url":"https://cdn.example/en.vtt","label":"English"}],"skip":{"intro":{"start":0,"end":90},"outro":{"start":1300,"end":1380}}};(async()=>{})</script></html>`
     const client = http({ text: html }, { text: html }, { text: html })
     const result = await createAnixoProvider(client, animeTitle, () => now).resolve(animeSub, new AbortController().signal)
     expect(client.mock.calls[0]?.[0]).toBe('https://anixo.buzz/embed/ani/21/1?track=sub&server=1')
-    expect(result).toMatchObject({
-      ok: true,
-      sources: [
-        { key: 'anixo:sora:sub:1', type: 'hls', url: 'https://cdn.example/ep1.m3u8', language: 'original', subtitles: [{ id: 'anixo-sub-0', label: 'English', format: 'vtt' }] },
-        { key: 'anixo:fallback:sub:1:1', type: 'hls', url: 'https://cdn.example/ep1-fb.m3u8', language: 'original' },
-      ],
-    })
+    expect(client).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) expect(result).toMatchObject({ sources: [
+      { key: 'anixo:sub:1', type: 'hls', url: 'https://cdn.example/ep1.m3u8', language: 'original', subtitles: [{ id: 'anixo-sub-0', label: 'English', format: 'vtt' }], skipSegments: [{ kind: 'intro', start: 0, end: 90 }, { kind: 'outro', start: 1300, end: 1380 }] },
+    ] })
   })
   it('requests the Anixo dub track for English audio and rejects non-anime refs', async () => {
     const html = `<html><script>window.__INITIAL_STREAM__ = {"success":true,"streamUrl":"https://cdn.example/ep1-dub.m3u8"};(async()=>{})</script></html>`
     const client = http({ text: html }, { text: html }, { text: html })
     const result = await createAnixoProvider(client, animeTitle, () => now).resolve(animeDub, new AbortController().signal)
     expect(client.mock.calls[0]?.[0]).toContain('track=dub')
-    expect(result).toMatchObject({ ok: true, sources: [{ language: 'en' }] })
+    expect(client).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) {
+      expect(result.sources).toHaveLength(1)
+      expect(result.sources.every((source) => source.language === 'en')).toBe(true)
+    }
     expect(await createAnixoProvider(client, animeTitle, () => now).resolve(input, new AbortController().signal)).toMatchObject({ code: 'empty' })
   })
   it('resolves Kyren streams from the JSON API and falls back across servers', async () => {

@@ -22,10 +22,10 @@ it('opens the saved DUB lane, retains it during background preference changes an
   mocks.audio = 'sub'; view.rerender(<AnimeWatchScreen detail={detail} episode={1} nextHref="/watch/anime/21?episode=2" />)
   expect(screen.getByText('Playback audio: en')).toBeInTheDocument()
   expect(mocks.patch).not.toHaveBeenCalled()
-  expect(screen.getByRole('group', { name: 'Audio language' }).closest('[data-testid=playback-tools]')).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Anime audio language' }).closest('[data-testid=playback-tools]')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('radio', { name: 'SUB' }))
   expect(mocks.patch).toHaveBeenCalledWith({ animeAudio: 'sub' })
-  expect(mocks.push).toHaveBeenCalledWith('/watch/anime/21?episode=1&audio=sub')
+  expect(mocks.push).toHaveBeenCalledWith('/watch/anime/21?episode=1&audio=sub', { scroll: false })
 })
 it('honors an explicit SUB URL for this visit without changing the saved DUB preference', () => {
   render(<AnimeWatchScreen detail={detail} episode={1} nextHref="/watch/anime/21?episode=2" audio="sub" />)

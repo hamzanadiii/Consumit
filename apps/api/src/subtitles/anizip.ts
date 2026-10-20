@@ -1,11 +1,12 @@
 import type { SubtitleHttp } from './http.ts'
 
 // AniZip mapping bridge: canonical anime episodes (AniList ids) resolve to
-// the TMDB / AniDB / TVDB identity that downstream providers query by.
+// TMDB/IMDb/AniDB identities plus TVDB season/episode coordinates. TMDB
+// subtitle providers need a separate TMDB season/episode lookup.
 // Keyless (https://api.ani.zip), bounded in-process cache. This is what lets
 // the TMDB-keyed subtitle fleet (VDRK, Natsuki, RiveSubs, NxshaSubs) serve
-// anime: TMDB lists anime as TV series, and ani.zip carries the TVDB
-// season/episode numbers those providers query by.
+// anime: TMDB lists anime as TV series, while AniZip's season numbers remain
+// TVDB-specific and are not interchangeable with TMDB numbering.
 
 const API = 'https://api.ani.zip'
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
@@ -35,8 +36,8 @@ export function anizipEpisode(mappings: unknown, episode: number): AnizipEpisode
     : typeof tmdbRaw === 'string' && /^\d+$/.test(tmdbRaw) ? Number(tmdbRaw) : undefined
   const imdbId = typeof ids.imdb_id === 'string' && ids.imdb_id ? ids.imdb_id : undefined
   const anidbEid = typeof info.anidbEid === 'number' && info.anidbEid > 0 ? info.anidbEid : undefined
-  // TVDB season/episode (what TMDB-shaped providers query by); fall back to
-  // season 1 plus the canonical number when the episode entry is missing.
+  // TVDB season/episode. These coordinates are not interchangeable with
+  // TMDB season/episode; callers must keep the source identity clear.
   const season = Number(info.seasonNumber || 1)
   const ep = Number(info.episodeNumber || episode)
   if (tmdbId === undefined && anidbEid === undefined) return null
@@ -71,10 +72,10 @@ export function createAnizipClient(http: SubtitleHttp) {
 
 export type AnizipClient = ReturnType<typeof createAnizipClient>
 
-/** Subtitle-service hook: canonical anime episode to TMDB identity.
- *  Optional so fakes and older call sites keep today's behavior. */
+/** Subtitle-service hook: canonical anime episode to external IDs and AniDB
+ *  episode id, retaining TVDB season/episode as TVDB-only metadata. */
 export type AnimeMappingResolver = (
   anilistId: number,
   episode: number,
   signal: AbortSignal,
-) => Promise<{ tmdbId?: number | undefined; season?: number | undefined } | null>
+) => Promise<{ tmdbId?: number | undefined; imdbId?: string | undefined; anidbEid?: number | undefined; season?: number | undefined; episode?: number | undefined } | null>

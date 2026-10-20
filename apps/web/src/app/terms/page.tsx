@@ -13,9 +13,10 @@ export default function TermsPage() {
     <LegalDocument
       intro={<>Welcome to Consumit. These Terms of Service (&ldquo;Terms&rdquo;) govern your use of Consumit: its catalog, your personal library, and the Consumit Player. By creating an account or using the product, you agree to these Terms.</>}
       title="Terms of Service"
+      lastUpdated="October 19, 2026"
     >
       <LegalSection id="terms-service" number={1} title="The service">
-        <p>Consumit is a personal catalog, journal, and player. It organizes movie, series, and anime metadata from TMDB and AniList, keeps your private watch progress, diary, ratings, reviews, and lists, and plays titles through sources configured for this deployment.</p>
+        <p>Consumit is a personal catalog, journal, and player. It organizes movie, series, and anime metadata from TMDB and AniList, keeps your private Watched records, Diary, History, playback progress, and account data, and plays titles through sources configured for this deployment. Profile identity is public; Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are visible by default and can be hidden separately. New lists are public by default, with a Private option when you create or edit them.</p>
         <p>Consumit does not host, upload, or store video files. Media is delivered by third-party sources described in Section 5.</p>
       </LegalSection>
       <LegalSection id="terms-account" number={2} title="Your account">
@@ -32,7 +33,7 @@ export default function TermsPage() {
         </ul>
       </LegalSection>
       <LegalSection id="terms-content" number={4} title="Your content">
-        <p>The reviews, ratings, tags, and lists you create stay yours. You grant Consumit a license to store them and show them inside the product: always to you, and to others only where your visibility settings allow. You can edit or delete your content at any time, and closing your account removes it.</p>
+        <p>The reviews, ratings, tags, lists, and other content you create stay yours. You grant Consumit a license to store them and show them inside the product: always to you, and to others when the relevant profile section and list are public. You can edit or delete your content at any time. Saved Lists are private bookmarks to the original public list; they follow its edits and become unavailable if the curator makes it private or deletes it. Anonymous bookmark totals may rank qualifying public lists in Home without showing bookmarker identities or counts. A separate, optional setting lets recent playback progress contribute anonymously to title-level trends. It does not show your identity, viewer counts, or live status.</p>
       </LegalSection>
       <LegalSection id="terms-sources" number={5} title="Third-party sources and availability">
         <p>Titles play through third-party sources that Consumit does not operate. Availability, quality, and the legality of a source are that source&rsquo;s responsibility. Consumit validates and selects configured sources, but it cannot promise that a title will always play.</p>

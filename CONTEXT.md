@@ -13,7 +13,7 @@ The private access record through which a member authenticates and controls secu
 _Avoid_: Member, profile
 
 **Profile**:
-A member’s expression of taste, private until explicitly published. A public profile shares identity, bio, favorites, all ratings and reviews, and individually public lists; personal activity, location, watched archives, watchlist, likes, tags, history and progress stay private.
+A member’s public identity and selected expression of taste. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are individually visible by default and can be hidden section by section. Watched titles, Diary, History, active playback, resume progress, and account data stay private. Profile location is not collected.
 _Avoid_: Account page
 
 **Username**:
@@ -25,7 +25,7 @@ An archived social-discovery concept for followed members; it is outside the act
 _Avoid_: Friend list, network, chat
 
 **Follow**:
-A one-way relationship to a public member profile. Sign-in is required to follow; becoming private retains the relationship but hides the member from public relationship lists and counts.
+A one-way relationship to an active member identity. Sign-in is required to follow. A member controls whether their Network section and relationship counts appear publicly.
 _Avoid_: Friend request, connection
 
 **Network**:
@@ -33,8 +33,24 @@ The single profile tab that groups a member's Followers and Following collection
 _Avoid_: Friends, Circle feed, mutuals
 
 **Taste**:
-A member's evolving preference profile, expressed through favorites, ratings, reviews, watch history, and personal lists.
+A member's evolving expression through favorites, ratings, reviews, visible lists, and other individually published sections. Watched history and diary remain private records.
 _Avoid_: Profile data, preferences
+
+**List**:
+A member-curated, ordered collection of titles with optional notes and a description. New lists are public; the curator can make each list private. A public list is readable only while its owner’s Lists section is public.
+_Avoid_: Playlist, shared document
+
+**Saved List**:
+A private bookmark to another member’s original public list. It follows edits by the curator; if the source becomes private or is deleted, the bookmark stays as an unavailable reference until the viewer removes it.
+_Avoid_: Copy, collaborative list
+
+**Popular with members**:
+A Home row of public lists ranked by at least five distinct members' private Saved Lists bookmarks, excluding the curator. The row reveals the list and curator but never bookmarker identities or save counts.
+_Avoid_: Popularity score, public save count
+
+**Trending with members**:
+A Home title row ranked from recent playback progress contributed by members who separately opt in to anonymous viewing trends. Results expose titles only, require at least five contributing members per title, and never show member names, viewer counts, or live status.
+_Avoid_: Activity feed, live viewers
 
 **Taste Match**:
 A personalized estimate of how well a title, list, or another member aligns with a member's taste, accompanied by a human-readable reason.
@@ -65,10 +81,6 @@ _Avoid_: Japanese animation, anime series
 **Episode**:
 A single playable installment of a series or anime, identified within a season (series) or by canonical number (anime).
 _Avoid_: Video, chapter
-
-**List**:
-An intentionally ordered collection of titles curated by one or more members, optionally with notes and commentary.
-_Avoid_: Playlist, collection
 
 **Saved Title**:
 A title a member has bookmarked for later without promoting it as part of their identity.
@@ -159,7 +171,7 @@ The first-party playback surface through which a member watches a validated conf
 _Avoid_: Embed frame, provider player
 
 **Consumit Server**:
-The Watch selection group containing currently permitted Direct and Relay providers that use the Consumit Player. Opening it reveals individual numbered provider choices. External players remain separate named choices. This is a presentation group; provider media delivery, personal recovery order and member progress ownership retain their existing boundaries.
+The Watch selection group containing currently permitted Direct and Relay providers that use the Consumit Player. Opening it reveals individual numbered provider choices. External players remain separate named choices. This is a presentation group; provider media delivery, Admin recovery order and member progress ownership retain their existing boundaries.
 
 **Provider Candidate**:
 A reviewed, shipped adapter recipe available in Admin's isolated Provider scout. It is outside the live provider roster until an operator installs its approved base configuration. A successful exact-title test is evidence for that sample, not a guarantee of provider availability or recording compatibility.

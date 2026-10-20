@@ -133,3 +133,22 @@ export function normTrackLang(label: string): string {
   if (code !== 'en' || /english/i.test(clean)) return code
   return detectScriptLang(clean) ?? 'en'
 }
+
+/** Keep provider metadata authoritative, but recover a known language from the
+ *  display label when streaming manifests only say `und` or `zxx`. Unknown
+ *  labels stay unknown instead of inheriting normTrackLang's English fallback. */
+export function normalizeTrackLanguage(language: string | undefined, label: string | undefined): string | null {
+  let declared: string | undefined
+  if (language) {
+    try { declared = Intl.getCanonicalLocales(language.replaceAll('_', '-'))[0]?.toLowerCase() }
+    catch { /* Some providers send display names in the language field. */ }
+  }
+  if (declared && declared !== 'und' && declared !== 'zxx') return declared
+  if (label?.trim()) {
+    const known = knownLang(label.trim().replace(/\s*[-–—]\s*[A-Za-z]+\s*$/, ''))
+    if (known) return known
+    const inferred = normTrackLang(label)
+    if (inferred !== 'en' || /\benglish\b/i.test(label)) return inferred
+  }
+  return declared ?? null
+}

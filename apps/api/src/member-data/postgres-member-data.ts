@@ -29,7 +29,7 @@ import type {
   UpdateMemberReviewRequest,
   WatchHistoryPage,
 } from '@consumit/contracts'
-import { avatarStyleSchema, MAX_MEMBER_FAVORITES, memberRatingCursorSchema } from '@consumit/contracts'
+import { avatarStyleSchema, defaultProfileSectionVisibility, MAX_MEMBER_FAVORITES, memberRatingCursorSchema, profileSectionVisibilitySchema } from '@consumit/contracts'
 
 import { PrismaClient } from '../../generated/prisma/client.js'
 import { requireActiveTrackingMember, syncReleaseTracking } from '../releases/tracking.ts'
@@ -153,7 +153,7 @@ function progressView(row: { catalogKind: StoredKind; completed: boolean; durati
   }
 }
 
-function profileView(profile: { avatarStyle: string; avatarUrl: string | null; bannerUrl: string | null; bio: string | null; displayName: string | null; location: string | null; username: string; usernameChangedAt: Date | null; visibility: string }, createdAt: Date) {
+function profileView(profile: { avatarStyle: string; avatarUrl: string | null; bannerUrl: string | null; bio: string | null; displayName: string | null; sectionVisibility: unknown; username: string; usernameChangedAt: Date | null }, createdAt: Date) {
   const next = profile.usernameChangedAt ? new Date(profile.usernameChangedAt.getTime() + 30 * 24 * 60 * 60 * 1000) : null
   return {
     avatarStyle: avatarStyleSchema.catch('dusk').parse(profile.avatarStyle),
@@ -162,11 +162,10 @@ function profileView(profile: { avatarStyle: string; avatarUrl: string | null; b
     bio: profile.bio,
     createdAt: createdAt.toISOString(),
     displayName: profile.displayName,
-    location: profile.location,
     nextUsernameChangeAt: next && next > new Date() ? next.toISOString() : null,
+    sectionVisibility: profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(profile.sectionVisibility),
     username: profile.username,
     usernameChangedAt: profile.usernameChangedAt?.toISOString() ?? null,
-    visibility: profile.visibility === 'public' ? 'public' as const : 'private' as const,
   }
 }
 
@@ -215,6 +214,8 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         ? await prisma.diaryEntry.findFirst({ select: { id: true }, where: { id: cursor.id, memberId } })
         : collection === 'lists'
           ? await prisma.memberList.findFirst({ select: { id: true }, where: { id: cursor.id, memberId } })
+          : collection === 'savedLists'
+            ? await prisma.savedMemberList.findFirst({ select: { id: true }, where: { id: cursor.id, memberId } })
           : await prisma.savedTitle.findFirst({ select: { id: true }, where: { id: cursor.id, memberId } })
       if (!exists) return empty()
     }
@@ -258,21 +259,58 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       return { collection, items: page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const })), nextCursor: rows.length > limit && last ? libraryCursor(collection, { id: last.id, updatedAt: last.updatedAt.toISOString() }) : null }
     }
 
+    if (collection === 'savedLists') {
+      const createdAt = cursorDate(cursor?.createdAt)
+      if (cursor && !createdAt) return empty()
+      const rows = await prisma.savedMemberList.findMany({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take,
+        where: { memberId, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
+      })
+      const currentLists = rows.length ? await prisma.memberList.findMany({
+        include: { _count: { select: { items: true } }, member: { include: { profile: true } } },
+        where: { id: { in: rows.map((row) => row.listId) } },
+      }) : []
+      const currentById = new Map(currentLists.map((list) => [list.id, list]))
+      const page = rows.slice(0, limit)
+      const last = page.at(-1)
+      const items = page.map((bookmark) => {
+        const list = currentById.get(bookmark.listId)
+        const visible = list?.member.status === 'ACTIVE' && list.member.profile?.sectionVisibility
+          ? profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists
+          : false
+        const available = Boolean(list && list.visibility === 'public' && visible)
+        return {
+          available,
+          itemCount: available ? list!._count.items : null,
+          listId: bookmark.listId,
+          listName: available ? list!.name : bookmark.listName,
+          listSlug: available ? list!.slug : bookmark.listSlug,
+          ownerDisplayName: available ? list!.member.profile!.displayName : bookmark.ownerDisplayName,
+          ownerUsername: available ? list!.member.profile!.username : bookmark.ownerUsername,
+          savedAt: bookmark.createdAt.toISOString(),
+        }
+      })
+      return { collection, items, nextCursor: rows.length > limit && last ? libraryCursor(collection, { createdAt: last.createdAt.toISOString(), id: last.id }) : null }
+    }
+
     return empty()
   }
 
   async function librarySnapshot(memberId: string): Promise<MemberLibrarySnapshot> {
-    const [diary, favorites, lists, saved] = await Promise.all([
+    const [diary, favorites, lists, savedLists, saved] = await Promise.all([
       libraryPage(memberId, 'diary', undefined, 30),
       prisma.favorite.findMany({ orderBy: { position: 'asc' }, take: MAX_MEMBER_FAVORITES, where: { memberId } }),
       libraryPage(memberId, 'lists', undefined, 30),
+      libraryPage(memberId, 'savedLists', undefined, 30),
       libraryPage(memberId, 'saved', undefined, 30),
     ])
-    if (diary.collection !== 'diary' || lists.collection !== 'lists' || saved.collection !== 'saved') throw new Error('LIBRARY_SNAPSHOT_COLLECTION_MISMATCH')
+    if (diary.collection !== 'diary' || lists.collection !== 'lists' || savedLists.collection !== 'savedLists' || saved.collection !== 'saved') throw new Error('LIBRARY_SNAPSHOT_COLLECTION_MISMATCH')
     return {
       diary: { items: diary.items, nextCursor: diary.nextCursor },
       favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
       lists: { items: lists.items, nextCursor: lists.nextCursor },
+      savedLists: { items: savedLists.items, nextCursor: savedLists.nextCursor },
       saved: { items: saved.items, nextCursor: saved.nextCursor },
     }
   }
@@ -287,19 +325,44 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     })
     if (!row || row.member.status !== 'ACTIVE' || !row.member.profile) return null
     const viewerIsOwner = row.memberId === viewerMemberId
-    if (!viewerIsOwner && (row.visibility !== 'public' || row.member.profile.visibility !== 'public')) return null
+    const ownerSections = profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(row.member.profile.sectionVisibility)
+    if (!viewerIsOwner && (row.visibility !== 'public' || !ownerSections.lists)) return null
+    const viewerHasSaved = Boolean(viewerMemberId && !viewerIsOwner && await prisma.savedMemberList.findUnique({ where: { memberId_listId: { memberId: viewerMemberId, listId: row.id } }, select: { id: true } }))
     return {
       items: row.items.map((item) => ({ id: item.tmdbId, kind: kind(item.catalogKind), note: item.note, origin: origin(item.origin), position: item.position, sourceKey: item.sourceKey })),
       list: { description: row.description, id: row.id, itemCount: row.items.length, name: row.name, origin: origin(row.origin), slug: row.slug, visibility: row.visibility === 'public' ? 'public' as const : 'private' as const },
       owner: { displayName: row.member.profile.displayName, username: row.member.profile.username },
 
       viewerIsOwner,
+      viewerHasSaved,
     }
   }
 
   
 
   return {
+
+    async publicMemberTrends(): Promise<CatalogRef[]> {
+      const rows = await prisma.$queryRaw<Array<{ catalogKind: StoredKind; tmdbId: number }>>`
+        WITH distinct_member_titles AS (
+          SELECT progress."memberId", progress."catalogKind", progress."tmdbId", MAX(progress."updatedAt") AS "updatedAt"
+          FROM "PlaybackProgress" progress
+          JOIN "ExperiencePreference" preference ON preference."memberId" = progress."memberId"
+          JOIN "Member" member ON member."id" = progress."memberId" AND member."status" = 'ACTIVE'
+          WHERE preference."preferences" ->> 'shareViewingTrends' = 'true'
+            AND progress."updatedAt" >= NOW() - INTERVAL '7 days'
+            AND progress."positionSeconds" > 0
+          GROUP BY progress."memberId", progress."catalogKind", progress."tmdbId"
+        )
+        SELECT "catalogKind", "tmdbId"
+        FROM distinct_member_titles
+        GROUP BY "catalogKind", "tmdbId"
+        HAVING COUNT(*) >= 5
+        ORDER BY COUNT(*) DESC, MAX("updatedAt") DESC, "catalogKind" ASC, "tmdbId" ASC
+        LIMIT 20
+      `
+      return rows.map((row) => ({ id: row.tmdbId, kind: kind(row.catalogKind) }))
+    },
     
     libraryPage,
     librarySnapshot,
@@ -318,16 +381,46 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       if (!detail) throw new Error('CREATED_LIST_UNAVAILABLE')
       return detail
     },
+    async appendListTitle(memberId, listId, title) {
+      return prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:list:${listId}`}))`
+        const owned = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId, member: { status: 'ACTIVE' } } })
+        if (!owned) return false
+        const catalogKind = storedKind(title.kind)
+        const existing = await tx.listItem.findFirst({ select: { id: true }, where: { listId, catalogKind, tmdbId: title.id } })
+        if (existing) return true
+        const tail = await tx.listItem.aggregate({ _max: { position: true }, where: { listId } })
+        await tx.listItem.create({ data: { catalogKind, listId, position: (tail._max.position ?? 0) + 1, tmdbId: title.id, origin: 'NATIVE' } })
+        return true
+      })
+    },
+    async saveList(memberId, slug) {
+      const list = await prisma.memberList.findFirst({
+        include: { member: { include: { profile: true } } },
+        where: { slug, visibility: 'public', member: { status: 'ACTIVE' } },
+      })
+      if (!list || list.memberId === memberId || !list.member.profile || !profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists) return false
+      await prisma.savedMemberList.upsert({
+        create: { listId: list.id, listName: list.name, listSlug: list.slug, memberId, ownerDisplayName: list.member.profile.displayName, ownerUsername: list.member.profile.username },
+        update: {},
+        where: { memberId_listId: { listId: list.id, memberId } },
+      })
+      return true
+    },
+    async removeSavedList(memberId, listId) {
+      await prisma.savedMemberList.deleteMany({ where: { listId, memberId } })
+      return true
+    },
     async updateListContent(memberId, listId, changes: UpdateMemberListContentRequest) {
       return prisma.$transaction(async (tx) => {
         const owned = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId } })
         if (!owned) return false
         await tx.listItem.deleteMany({ where: { listId } })
         if (changes.items.length) await tx.listItem.createMany({
-          data: changes.items.map((item, index) => ({ catalogKind: storedKind(item.kind), importBatchId: null, listId, note: item.note ?? null, origin: 'NATIVE', position: index + 1, sourceKey: null, tmdbId: item.id })),
+          data: changes.items.map((item, index) => ({ catalogKind: storedKind(item.kind), listId, note: item.note ?? null, origin: 'NATIVE', position: index + 1, sourceKey: null, tmdbId: item.id })),
         })
         await tx.memberList.update({
-          data: { description: changes.description, importBatchId: null, name: changes.name, origin: 'NATIVE', sourceKey: null, visibility: changes.visibility },
+          data: { description: changes.description, name: changes.name, origin: 'NATIVE', sourceKey: null, visibility: changes.visibility },
           where: { id: listId },
         })
         return true
@@ -356,8 +449,8 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
           where: { id: memberId, status: 'ACTIVE' },
         }),
         prisma.rating.groupBy({ by: ['value'], _count: { _all: true }, where: { memberId } }),
-        prisma.follow.count({ where: { followingId: memberId, follower: { status: 'ACTIVE', profile: { is: { visibility: 'public' } } } } }),
-        prisma.follow.count({ where: { followerId: memberId, following: { status: 'ACTIVE', profile: { is: { visibility: 'public' } } } } }),
+        prisma.follow.count({ where: { followingId: memberId, follower: { status: 'ACTIVE' } } }),
+        prisma.follow.count({ where: { followerId: memberId, following: { status: 'ACTIVE' } } }),
       ])
       if (!member?.profile) return null
       return {
@@ -378,12 +471,20 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     },
     async profileArchive(username, collection, viewerMemberId, cursor, limit = 30): Promise<MemberProfileArchivePage | null> {
       const memberId = await activeMemberId(username)
-      if (!memberId || memberId !== viewerMemberId || (cursor && cursor.collection !== collection)) return null
+      if (!memberId || (cursor && cursor.collection !== collection)) return null
       const owner = await prisma.member.findFirst({
-        select: { id: true, profile: { select: { visibility: true } } },
+        select: { id: true, profile: { select: { sectionVisibility: true } } },
         where: { id: memberId, status: 'ACTIVE' },
       })
       if (!owner?.profile) return null
+      const isOwner = memberId === viewerMemberId
+      const visibleSections = profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(owner.profile.sectionVisibility)
+      const publicSection = collection === 'reviews' ? 'reviews'
+        : collection === 'lists' ? 'lists'
+          : collection === 'likes' ? 'likes'
+            : collection === 'tags' ? 'tags'
+              : collection === 'watchlist' ? 'watchlist' : null
+      if (!isOwner && (!publicSection || !visibleSections[publicSection] || (collection === 'tags' && !visibleSections.reviews))) return null
 
       const pageSize = Math.min(50, Math.max(1, limit))
       const take = pageSize + 1
@@ -457,6 +558,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
           take,
           where: {
             memberId,
+            ...(!isOwner ? { visibility: 'public' } : {}),
             ...(cursor && updatedAt ? { OR: [{ updatedAt: { lt: updatedAt } }, { updatedAt, id: { lt: cursor.id } }] } : {}),
           },
         })
@@ -473,8 +575,6 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         const rows = await prisma.$queryRaw<Array<{ count: number; tag: string }>>`
           SELECT "tag", COUNT(*)::int AS "count"
           FROM (
-            SELECT unnest("tags") AS "tag" FROM "DiaryEntry" WHERE "memberId" = ${memberId}
-            UNION ALL
             SELECT unnest("tags") AS "tag" FROM "Review" WHERE "memberId" = ${memberId}
           ) AS "tag_uses"
           WHERE "tag" <> ''
@@ -483,6 +583,18 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
           LIMIT 100
         `
         return { collection, items: rows.map(({ count, tag }) => ({ count: Number(count), tag })), nextCursor: null }
+      }
+
+      if (collection === 'watchlist') {
+        if (cursor && !createdAt) return null
+        const rows = await prisma.savedTitle.findMany({
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take,
+          where: { memberId, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
+        })
+        const page = rows.slice(0, pageSize)
+        const last = page.at(-1)
+        return { collection, items: page.map((row) => ({ id: row.tmdbId, kind: kind(row.catalogKind) })), nextCursor: next(rows.length > pageSize, last ? { createdAt: last.createdAt.toISOString(), id: last.id } : null) }
       }
 
       if (cursor && (!createdAt || (cursor.kind !== 'diary' && cursor.kind !== 'review'))) return null

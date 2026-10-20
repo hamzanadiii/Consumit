@@ -7,15 +7,16 @@ export type SubtitleQuery = {
   imdbId?: string | undefined
   title?: string | undefined
   year?: number | undefined
-  /** TV season / episode (anime: absolute episode in `episode`). */
+  /** TV/TMDB season and episode. Anime-native providers use
+   *  `absoluteEpisode`; TMDB-keyed providers use these coordinates. */
   season?: number | undefined
   episode?: number | undefined
   /** AniList id for anime-only providers (Jimaku). */
   anilistId?: number | undefined
+  /** AniDB episode id carried from the shared AniZip lookup, when available. */
+  anidbEid?: number | undefined
   /** Canonical anime episode number (absolute numbering per the domain
-   *  glossary). Mirrors `episode` today; split-cours and specials keep
-   *  their own canonical numbers here while provider quirks stay behind
-   *  each adapter. */
+   *  glossary), distinct from TMDB season/episode coordinates. */
   absoluteEpisode?: number | undefined
   /** Richer episode fingerprint. Populated when the caller holds episode
    *  detail (air date, duration, title); providers match on what they can
@@ -63,6 +64,11 @@ export type SubtitleSearchProvider = {
    *  the historical self-host-only rule (the URL's own hostname). */
   fileHosts?: readonly string[] | undefined
   fileHostPatterns?: readonly RegExp[] | undefined
+  /** Search fan-out budget override for provably slow hosts (raised above
+   *  the default only for servers that sleep before answering). Keep it
+   *  below the discover route's own 13 s abort so the provider still
+   *  reports a terminal status instead of being cut by the route. */
+  timeoutMs?: number | undefined
   supports(query: SubtitleQuery): boolean
   search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]>
   /** Recheck mutable configuration and signed-source lifetime on reuse. */

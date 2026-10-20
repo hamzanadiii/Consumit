@@ -64,7 +64,12 @@ export function createAnimeToshoProvider(http: SubtitleHttp): SubtitleSearchProv
       // Canonical absolute episode first, plain episode as fallback; the
       // AniList entry owns numbering, provider quirks stay here.
       const episode = Number(query.absoluteEpisode ?? query.episode ?? 1)
-      const mapped = await anizip.episodeFor(Number(query.anilistId), episode, signal)
+      // The shared subtitle query already paid for AniZip's large mappings
+      // payload. Reuse its exact AniDB episode id; only standalone adapter
+      // calls need to fetch the mapping themselves.
+      const mapped = query.anidbEid
+        ? { anidbEid: query.anidbEid }
+        : await anizip.episodeFor(Number(query.anilistId), episode, signal)
       if (!mapped?.anidbEid) return []
       const wantLangs = (query.langs?.length ? query.langs : ['en']).map((lang) => lang.toLowerCase())
       const feed = await getJson(http, `${FEED}/feed/json?eid=${mapped.anidbEid}`, signal)

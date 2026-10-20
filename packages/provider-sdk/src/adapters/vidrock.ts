@@ -75,7 +75,7 @@ export function createVidrockProvider(http: ProviderHttp, now = Date.now, scope:
             const type = mediaType(item.url) || 'hls'
             const res = item.resolution
             sources.push({
-              key: `vidrock:${serverName.toLowerCase()}:${res}p:${pIdx}`,
+              key: `vidrock:${serverName.toLowerCase()}:${res}p:${pIdx}`, serverName: serverName.slice(0, 80),
               url: item.url,
               type,
               qualityHint: `${res}p`,
@@ -95,7 +95,7 @@ export function createVidrockProvider(http: ProviderHttp, now = Date.now, scope:
       const qualityHint = type === 'hls' ? '1080p' : 'Auto'
 
       sources.push({
-        key: `vidrock:${serverName.toLowerCase()}:${sources.length}`,
+        key: `vidrock:${serverName.toLowerCase()}:${sources.length}`, serverName: serverName.slice(0, 80),
         url: decUrl,
         type,
         qualityHint,

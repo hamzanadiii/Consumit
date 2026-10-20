@@ -17,13 +17,14 @@ export async function discoverSubtitles(
   ref: { kind: 'movie' | 'series' | 'anime'; id: number; season?: number; episode?: number },
   signal: AbortSignal,
   onEvent: (event: SubtitleDiscoveryEvent) => void,
+  preferredLanguages: readonly string[] = [],
 ) {
   let cursor: string | undefined
   for (let batch = 0; batch < 128; batch++) {
-    try { cursor = await streamSubtitles(ref, signal, onEvent, false, cursor) }
+    try { cursor = await streamSubtitles(ref, signal, onEvent, false, cursor, preferredLanguages) }
     catch (error) {
       if (signal.aborted || error instanceof DiscoveryRateLimit) throw error
-      cursor = await streamSubtitles(ref, signal, onEvent, true, cursor)
+      cursor = await streamSubtitles(ref, signal, onEvent, true, cursor, preferredLanguages)
     }
     if (!cursor) return
   }
@@ -38,10 +39,12 @@ async function streamSubtitles(
   onEvent: (event: SubtitleDiscoveryEvent) => void,
   json = false,
   cursor?: string,
+  preferredLanguages: readonly string[] = [],
 ) {
   const params = new URLSearchParams({ kind: ref.kind, id: String(ref.id) })
   if (ref.season) params.set('season', String(ref.season))
   if (ref.episode) params.set('episode', String(ref.episode))
+  if (preferredLanguages.length) params.set('langs', preferredLanguages.join(','))
   if (json) params.set('format', 'json')
   if (cursor) params.set('cursor', cursor)
   const response = await fetch(`/v1/subtitles/discover?${params}`, { credentials: 'same-origin', signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) })

@@ -57,6 +57,41 @@ function hasValidMultibyteRun(bytes: Buffer): boolean {
 export function decodeSubtitleText(buf: Buffer): string {
   let bytes: Buffer = buf
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) bytes = bytes.subarray(3)
+  let utf16: 'le' | 'be' | null = null
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    utf16 = 'le'
+    bytes = bytes.subarray(2)
+  } else if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    utf16 = 'be'
+    bytes = bytes.subarray(2)
+  } else if (bytes.length >= 16) {
+    // Some subtitle tools omit the UTF-16 BOM. SRT/VTT punctuation is
+    // ASCII, so a strong alternating-NUL pattern identifies those files
+    // without mistaking ordinary UTF-8 text for UTF-16.
+    const sample = bytes.subarray(0, Math.min(bytes.length, 4096))
+    let evenNuls = 0
+    let oddNuls = 0
+    for (let index = 0; index < sample.length; index++) {
+      if (sample[index] === 0) {
+        if (index % 2 === 0) evenNuls++
+        else oddNuls++
+      }
+    }
+    if (oddNuls > sample.length * 0.2 && evenNuls < sample.length * 0.05) utf16 = 'le'
+    else if (evenNuls > sample.length * 0.2 && oddNuls < sample.length * 0.05) utf16 = 'be'
+  }
+  if (utf16) {
+    const evenLength = bytes.length - (bytes.length % 2)
+    const textBytes = Buffer.from(bytes.subarray(0, evenLength))
+    if (utf16 === 'be') {
+      for (let index = 0; index < textBytes.length; index += 2) {
+        const first = textBytes[index]!
+        textBytes[index] = textBytes[index + 1]!
+        textBytes[index + 1] = first
+      }
+    }
+    return textBytes.toString('utf16le').replace(/^\uFEFF/, '')
+  }
   try {
     return UTF8_STRICT.decode(bytes)
   } catch {
@@ -89,14 +124,32 @@ export function srtToVtt(srt: string): string {
   const text = srt.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
   const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean)
   const out: string[] = ['WEBVTT', '']
+  const normalizeTimestamp = (value: string): string | null => {
+    const parts = value.trim().replace(',', '.').split(':')
+    if (parts.length < 2 || parts.length > 3) return null
+    const seconds = (parts.pop() ?? '').match(/^(\d{1,2})(?:\.(\d{1,3}))?$/)
+    if (!seconds) return null
+    const hours = parts.length === 2 ? Number(parts[0]) : 0
+    const minutes = Number(parts.at(-1))
+    const second = Number(seconds[1])
+    const milliseconds = (seconds[2] ?? '').padEnd(3, '0')
+    if (![hours, minutes, second].every(Number.isInteger) || hours < 0 || minutes < 0 || second < 0) return null
+    if (parts.length === 2 && minutes > 59 || second > 59) return null
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(second).padStart(2, '0')}.${milliseconds || '000'}`
+  }
   for (const block of blocks) {
     const lines = block.split('\n')
     // Strip the leading numeric counter.
     if (/^\d+$/.test(lines[0]!.trim())) lines.shift()
     if (!lines.length) continue
-    // Timestamp line: 00:00:01,000 --> 00:00:04,000
-    lines[0] = lines[0]!.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-    if (!/-->/.test(lines[0]!)) continue
+    // Accept common SRT variants such as single-digit hours and 1–2 digit
+    // fractions, then emit the canonical timestamp shape browsers expect.
+    const timing = lines[0]!.split('-->')
+    if (timing.length !== 2) continue
+    const start = normalizeTimestamp(timing[0]!)
+    const end = normalizeTimestamp(timing[1]!.trim().split(/\s+/)[0] ?? '')
+    if (!start || !end) continue
+    lines[0] = `${start} --> ${end}`
     // Strip simple formatting tags browsers choke on.
     const body = lines.slice(1).map((line) => line.replace(/<\/?[bius][^>]*>/gi, '').replace(/\{[^}]*\}/g, ''))
     out.push(lines[0]!, ...body, '')

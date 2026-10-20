@@ -52,11 +52,10 @@ const profile: MemberProfile = {
   bio: null,
   createdAt: '2026-09-07T12:00:00.000Z',
   displayName: 'Hamza',
-  location: null,
   nextUsernameChangeAt: null,
+  sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true },
   username: 'hamzanadi',
   usernameChangedAt: null,
-  visibility: 'private',
 }
 
 beforeEach(() => {

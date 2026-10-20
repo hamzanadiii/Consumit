@@ -29,8 +29,8 @@ export function createSubSourceProvider(http: SubtitleHttp): SubtitleSearchProvi
     fileHosts: ['subsource.net', '*.subsource.net'],
     supports(query: SubtitleQuery) {
       // Movies/TV need title + year for the slug; anime answers by title
-      // alone (year is absent on anime queries) on the TV slug path with
-      // the mapped season and the absolute episode.
+      // alone (year is absent on anime queries) on the TV slug path with the
+      // mapped TMDB season/episode pair (or canonical fallback).
       return !!query.title && (query.type === 'anime' || !!query.year)
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {

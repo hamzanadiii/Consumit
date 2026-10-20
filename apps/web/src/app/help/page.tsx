@@ -37,11 +37,11 @@ const groups: readonly HelpGroup[] = [
     questions: [
       {
         question: 'Where do my watches, reviews, and lists appear?',
-        answer: <>Your profile brings together saved titles, watch history, reviews, Favorites, and lists. Open Watchlist or History there for your private records. Member records support movies, series, and anime. Reviews and lists keep their own visibility and ownership settings.</>,
+        answer: <>Your profile brings together public taste sections and your private Watched, Diary, and History archives. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are public by default; you can hide each section in <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link>. New lists are public, and you can choose Private when creating or editing one. Saved Lists are private bookmarks that follow the curator&rsquo;s edits; if a list is hidden or deleted, you can remove its unavailable bookmark. Member records support movies, series, and anime.</>,
       },
       {
-        question: 'How do I control who can see my profile?',
-        answer: <>Open <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link> to change your profile visibility. Your public profile details stay separate from your private account credentials.</>,
+        question: 'How do I control what appears on my profile?',
+        answer: <>Your profile identity is public. Open <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link> to hide or show each taste section. Watched titles, Diary, History, active playback, resume progress, and account data stay private. Anonymous viewing trends have a separate off-by-default opt-in.</>,
       },
     ],
   },

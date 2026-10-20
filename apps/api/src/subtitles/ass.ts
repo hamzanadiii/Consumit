@@ -30,9 +30,15 @@ function msToVtt(ms: number): string {
  * (`\b`, `\i`, `\u`, `\fn`, `\fs`, `\c`, `\1c`, `\2c`, `\3c`, `\4c`,
  * `\alpha`, `\1a`, `\2a`, `\3a`, `\4a`, `\bord`, `\shad`, `\pos`,
  * `\move`, `\org`, `\frz`, `\fscx`, `\fscy`, `\clip`, `\drawing`).
+ * Drawing-mode spans (`\p1` … `\p0`) are dropped before brace stripping so
+ * vector path data (`m 0 0 l 45 0 …`) never leaks into readable cues.
  */
 function stripAssTags(text: string): string {
   return text
+    // Drop drawing spans: closed ones first, then an unclosed \p1 swallows
+    // the rest of the line (it is all path data by definition).
+    .replace(/\{[^}]*\\p1[^}]*\}.*?\{[^}]*\\p0[^}]*\}/g, '')
+    .replace(/\{[^}]*\\p1[^}]*\}.*/g, '')
     // Strip override blocks {...}
     .replace(/\{[^}]*\}/g, '')
     // ASS line breaks
@@ -47,13 +53,18 @@ function stripAssTags(text: string): string {
     .trim()
 }
 
+/** Field order assumed when an Events section carries no Format line —
+ *  the layout both SSA v4 (`Marked`) and ASS v4+ (`Layer`) share at the
+ *  Start/End/Text positions. */
+const DEFAULT_EVENT_FIELDS = ['layer', 'start', 'end', 'style', 'name', 'marginl', 'marginr', 'marginv', 'effect', 'text']
+
 
 export function assToVtt(ass: string): string | null {
   const text = ass.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
   const lines = text.split('\n')
 
   let inEvents = false
-  let formatFields: string[] = []
+  let formatFields: string[] = [...DEFAULT_EVENT_FIELDS]
   const dialogues: { start: string; end: string; text: string; style: string }[] = []
 
   for (const line of lines) {

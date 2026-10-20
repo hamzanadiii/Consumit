@@ -11,6 +11,7 @@ export { createWecollegeProvider, type WecollegeMetadata, type WecollegeMetadata
 export { createPersesProvider } from './adapters/perses.ts'
 export { createRivestreamProvider } from './adapters/rivestream.ts'
 export { createEvionProvider } from './adapters/evion.ts'
+export { createMovyProvider } from './adapters/movy.ts'
 export { createVidapiProvider } from './adapters/vidapi.ts'
 
 export { createScreenscapeProvider } from './adapters/screenscape.ts'
@@ -61,7 +62,27 @@ export { createVidukiProvider } from './adapters/viduki.ts'
 export { createCookieBakersProvider } from './adapters/cookiebakers.ts'
 export { createKazoraProvider } from './adapters/kazora.ts'
 export { createKisskhProvider, type KisskhMetadata, type KisskhMetadataResolver } from './adapters/kisskh.ts'
-export type { ProviderHttp } from './adapters/http.ts'
+export { createMiruroProvider } from './adapters/miruro.ts'
+export { createAllAnimeProvider } from './adapters/allanime.ts'
+export { createMeguanimeProvider } from './adapters/meguanime.ts'
+export { createKototvProvider } from './adapters/kototv.ts'
+export { createLuffytvProvider } from './adapters/luffytv.ts'
+export { createAnicloverProvider } from './adapters/aniclover.ts'
+export { createYumezoneProvider, createYumezoneFrameProvider } from './adapters/yumezone.ts'
+export { createBanimeProvider } from './adapters/banime.ts'
+export { createZenbuProvider } from './adapters/zenbu.ts'
+export { createFireanimeProvider } from './adapters/fireanime.ts'
+export { createNekowatchProvider } from './adapters/nekowatch.ts'
+export { createJustanimeProvider } from './adapters/justanime.ts'
+export { createAnimedexProvider } from './adapters/animedex.ts'
+export { createCinecatProvider, type CinecatSign } from './adapters/cinecat.ts'
+export { createAetherProvider } from './adapters/aether.ts'
+export { createFmfauProvider } from './adapters/fmfau.ts'
+export { createAuroraScreenProvider } from './adapters/aurorascreen.ts'
+export { createMovieNightProvider } from './adapters/movienight.ts'
+export { createStreamingUnityProvider, type StreamingUnityMetadata, type StreamingUnityMetadataResolver } from './adapters/streamingunity.ts'
+export { userAgent } from './adapters/http.ts'
+export type { ProviderHttp, ProviderTitleMetadataResolver } from './adapters/http.ts'
 export { assertHlsManifest, isPlausibleManifestDuration, parseHlsAttributeList, parseHlsReferenceEntries, parseHlsReferences, sumMediaPlaylistDuration } from './manifest.ts'
 
 export const skipSegmentSchema = z.object({
@@ -74,6 +95,8 @@ export type SkipSegment = z.infer<typeof skipSegmentSchema>
 export const providerSourceSchema = z.object({
   // This key describes the rendition, never its temporary URL signature.
   key: z.string().min(1).max(100),
+  /** Stable, member-facing name for one upstream server within a provider. */
+  serverName: z.string().min(1).max(80).optional(),
   url: z.url().max(4096), type: z.enum(['hls', 'dash', 'native', 'iframe']),
   /** Frame-only sandbox policy declared by the adapter. Absent keeps
    *  Consumit's standard frame sandbox (ADR 0006). */
@@ -86,7 +109,7 @@ export const providerSourceSchema = z.object({
   qualityHint: z.string().min(1).max(24).optional(),
   hlsSubtitlePlaylistFormat: z.literal('vtt').optional(),
   qualityGroup: z.string().min(1).max(64).regex(/^[a-z0-9-]+$/).optional(),
-  relayRecipe: z.enum(['storm-boron-v1', 'wecollege-city-v1', 'lookmovie-v1']).optional(),
+  relayRecipe: z.enum(['storm-boron-v1', 'wecollege-city-v1', 'lookmovie-v1', 'aether-v1']).optional(),
   relayHosts: z.array(z.string().max(253).regex(/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/)).min(1).max(8).optional(),
   segmentTransform: z.literal('mpegts-image-prefix').optional(),
   subtitles: z.array(playbackTrackSchema).max(32).default([]),
@@ -103,6 +126,8 @@ export type ProviderInput = { ref: PlaybackRef; region: string; audioLanguage: s
 export type ProviderIdentityResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<{ imdbId?: string | undefined }>
 export interface ProviderAdapter {
   readonly id: string
+  /** Human-readable name; identity and saved settings continue to use id. */
+  readonly label?: string
   /** Optional friendly label for discovered audio tracks. Role assignment
    *  (Audio source/Both) opts a row into discovery; this is not a
    *  recording compatibility claim. */
@@ -120,7 +145,7 @@ export type ProviderRegistration = {
   role?: ProviderRole
   /** Explicit delivery tier. Existing providers default to browser-direct. */
   deliveryMode?: ProviderDeliveryMode
-  relayHostDiscovery?: 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1' | undefined
+  relayHostDiscovery?: 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1' | 'aether-v1' | undefined
   approvedRegions: readonly string[]
   mediaHosts: readonly string[]
   upstreamGroup: string
@@ -250,5 +275,5 @@ export function createStaticProvider(id: string, entries: readonly { ref: Playba
   }
 }
 
-export { createFrameProvider, isFrameProviderId, MOVIE_FRAME_HOSTS, FRAME_IDS, type FrameId } from './adapters/frames.ts'
+export { createFrameProvider, isFrameProviderId, MOVIE_FRAME_HOSTS, FRAME_HOSTS, FRAME_IDS, type FrameId } from './adapters/frames.ts'
 export { createRigelProvider } from './adapters/rigel.ts'

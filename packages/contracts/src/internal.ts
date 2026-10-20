@@ -4,8 +4,10 @@ import { playbackRefSchema, providerRoleSchema, providerDeliveryModeSchema, anim
 
 const providerId = z.string().regex(/^[a-z0-9-]{1,64}$/)
 export const providerOverrideSchema = z.strictObject({ removed: z.boolean().optional(), enabled: z.boolean().optional(), role: providerRoleSchema.optional(), deliveryMode: providerDeliveryModeSchema.optional(), priority: z.int().min(0).max(100).optional(), order: z.strictObject({ movie: z.int().min(0).max(63).optional(), series: z.int().min(0).max(63).optional(), anime: z.int().min(0).max(63).optional() }).optional(), regions: z.array(z.string().regex(/^[A-Z]{2}$/)).max(16).optional(), requestsPerMinute: z.int().min(1).max(120).optional(), concurrency: z.int().min(1).max(4).optional() })
-export const providerStateSchema = z.strictObject({ revision: z.int().nonnegative(), overrides: z.record(providerId, providerOverrideSchema).refine(rows => Object.keys(rows).length <= 64) })
+export const providerStateSchema = z.strictObject({ revision: z.int().nonnegative(), overrides: z.record(providerId, providerOverrideSchema).refine(rows => Object.keys(rows).length <= 96) })
 export const catalogContextRequestSchema = z.strictObject({ mode: z.enum(['worker', 'anime', 'tmdb']), ref: playbackRefSchema, providerId: providerId.optional() })
+export const tmdbEpisodeMappingRequestSchema = z.strictObject({ tmdbId: z.int().positive(), absoluteEpisode: z.int().positive().max(10000) })
+export const tmdbEpisodeMappingSchema = z.strictObject({ season: z.int().positive(), episode: z.int().positive() }).nullable()
 export const resolverMetadataSchema = z.strictObject({ title: z.string().max(300).optional(), year: z.int().min(1900).max(2100).optional(), imdbId: z.string().regex(/^tt\d{5,12}$/).optional(), runtimeSec: z.number().positive().optional(), animeTitle: z.string().max(500).optional(), animeTitles: z.array(z.string().max(500)).max(32).optional(), malId: z.number().int().positive().nullable().optional() })
 export const animeContextSchema = animeTitleDetailSchema
 export const subtitleCatalogRequestSchema = z.discriminatedUnion('operation', [

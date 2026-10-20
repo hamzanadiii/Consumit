@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { WecollegeMetadataResolver } from './wecollege.ts'
+import { allowedMediaUrl } from '../index.ts'
 import { sourceAccess, adapter, document, ProviderFailure, type ProviderHttp } from './http.ts'
 
 const origin = 'https://bingebang.st'
@@ -25,9 +26,14 @@ export function decodeBingeResponse(enc: string, ticket: string): unknown {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plain))
 }
 
+/** BingeBang's media edge rotates hosts (os.bingebangstream.online, wowstreamingsofast.lol,
+ * reliablephonerepairs.website, ...); the roster's mediaHosts are the single source of
+ * approved delivery hosts instead of a fixed hostname. */
+export type BingeBangOptions = { mediaHosts: readonly string[] }
+
 /** Search by exact catalog title/year: BingeBang's internal IDs are not TMDB IDs.
  * Only YMovies is selected. Page byte arrays are decoded as data, never executed. */
-export function createBingeBangYMoviesProvider(http: ProviderHttp, metadata: WecollegeMetadataResolver, now = Date.now) {
+export function createBingeBangYMoviesProvider(http: ProviderHttp, metadata: WecollegeMetadataResolver, now = Date.now, options: BingeBangOptions) {
   return adapter('bingebangymovies', async ({ ref }, signal) => {
     if (ref.kind !== 'movie' && ref.kind !== 'series') throw new ProviderFailure('empty')
     const meta = await metadata(ref, signal)
@@ -58,7 +64,7 @@ export function createBingeBangYMoviesProvider(http: ProviderHttp, metadata: Wec
     const result = resolvedSchema.parse(await api(`/api/player/resolve?src=${encodeURIComponent(servers[0]!.source_url)}`))
     if (!result.ok || !result.url) throw new ProviderFailure('empty')
     const url = new URL(result.url)
-    if (url.protocol !== 'https:' || url.hostname !== 'os.bingebangstream.online' || result.type !== 'hls') throw new ProviderFailure('malformed')
+    if (url.protocol !== 'https:' || result.type !== 'hls' || !allowedMediaUrl(url.href, options.mediaHosts)) throw new ProviderFailure('malformed')
     const height = /2160|4k/i.test(result.quality ?? '') ? 2160 : Number(result.quality?.match(/\d{3,4}/)?.[0]) || undefined
     return [{ key: 'bingebangymovies:ymovies', url: url.href, type: 'hls', language: 'original',
       headers: { referer: `${origin}/` }, ...sourceAccess(url.href, now()), qualityHint: height ? `${height}p` : 'Auto', ...(height ? { height } : {}),

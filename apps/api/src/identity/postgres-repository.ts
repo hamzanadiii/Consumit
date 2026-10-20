@@ -1,6 +1,6 @@
 import { PrismaClient, type Prisma } from '../../generated/prisma/client.js'
 import { episodeView } from '../releases/repository.ts'
-import { avatarStyleSchema, MAX_MEMBER_FAVORITES, experiencePreferencesSchema } from '@consumit/contracts'
+import { avatarStyleSchema, defaultProfileSectionVisibility, MAX_MEMBER_FAVORITES, experiencePreferencesSchema, profileSectionVisibilitySchema } from '@consumit/contracts'
 
 import type { IdentityRepository, IdentityRecord } from './repository.ts'
 
@@ -31,10 +31,9 @@ function toRecord(row: IdentityRow): IdentityRecord {
       bannerUrl: row.profile.bannerUrl,
       bio: row.profile.bio,
       displayName: row.profile.displayName,
-      location: row.profile.location,
+      sectionVisibility: profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(row.profile.sectionVisibility),
       username: row.profile.username,
       usernameChangedAt: row.profile.usernameChangedAt,
-      visibility: row.profile.visibility === 'public' ? 'public' : 'private',
     },
     role: row.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
     status: row.status,
@@ -94,13 +93,14 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         prisma.releaseNotification.findMany({ where: { memberId }, include: { episode: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
         prisma.$queryRaw<{ preferences: unknown }[]>`SELECT "preferences" FROM "ExperiencePreference" WHERE "memberId"=${memberId}`,
       ])
-      const [row, watched, diary, saved, favorites, lists, ratings, reviews, watchHistory, hiddenContinue, recommendationDismissals] = await Promise.all([
+      const [row, watched, diary, saved, favorites, lists, savedLists, ratings, reviews, watchHistory, hiddenContinue, recommendationDismissals] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
         prisma.watchedTitle.findMany({ where: { memberId } }),
         prisma.diaryEntry.findMany({ orderBy: { watchedOn: 'desc' }, where: { memberId } }),
         prisma.savedTitle.findMany({ where: { memberId } }),
         prisma.favorite.findMany({ orderBy: { position: 'asc' }, take: MAX_MEMBER_FAVORITES, where: { memberId } }),
         prisma.memberList.findMany({ include: { _count: { select: { items: true } } }, where: { memberId } }),
+        prisma.savedMemberList.findMany({ where: { memberId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
         prisma.rating.findMany({ where: { memberId } }),
         prisma.review.findMany({ orderBy: { reviewedOn: 'desc' }, where: { memberId } }),
         prisma.watchHistoryEntry.findMany({ orderBy: [{ completedAt: 'desc' }, { id: 'desc' }], where: { memberId } }),
@@ -109,6 +109,12 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       ])
       if (!row) return null
       const member = toRecord(row)
+      const savedListIds = savedLists.map(item => item.listId)
+      const savedListRows = savedListIds.length ? await prisma.memberList.findMany({
+        include: { _count: { select: { items: true } }, member: { include: { profile: true } } },
+        where: { id: { in: savedListIds } },
+      }) : []
+      const listsById = new Map(savedListRows.map(item => [item.id, item]))
       return {
         exportedAt: exportedAt.toISOString(),
         continueWatchingDismissals: hiddenContinue.map(item => ({ kind: catalogKind(item.catalogKind), id: item.tmdbId, hiddenAt: item.hiddenFromContinueAt!.toISOString() })),
@@ -120,6 +126,23 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
           diary: diary.map((item) => ({ ...(item.episode > 0 ? { ...(item.catalogKind === 'SERIES' || item.season > 0 ? { season: item.season } : {}), episode: item.episode } : {}), entryId: item.id, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: calendarDay(item.watchedOn) })),
           favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
           lists: lists.map((item) => ({ description: item.description, id: item.id, itemCount: item._count.items, name: item.name, origin: dataOrigin(item.origin), slug: item.slug, visibility: item.visibility === 'public' ? 'public' as const : 'private' as const })),
+          savedLists: savedLists.map(item => {
+            const list = listsById.get(item.listId)
+            const visible = list?.member.status === 'ACTIVE' && list.member.profile
+              ? profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists
+              : false
+            const available = Boolean(list && list.visibility === 'public' && visible)
+            return {
+              available,
+              itemCount: available ? list!._count.items : null,
+              listId: item.listId,
+              listName: available ? list!.name : item.listName,
+              listSlug: available ? list!.slug : item.listSlug,
+              ownerDisplayName: available ? list!.member.profile!.displayName : item.ownerDisplayName,
+              ownerUsername: available ? list!.member.profile!.username : item.ownerUsername,
+              savedAt: item.createdAt.toISOString(),
+            }
+          }),
           saved: saved.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
           watched: watched.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey })),
         },
@@ -148,10 +171,9 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
           bannerUrl: member.profile.bannerUrl,
           bio: member.profile.bio,
           displayName: member.profile.displayName,
-          location: member.profile.location,
+          sectionVisibility: profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(member.profile.sectionVisibility),
           username: member.profile.username,
           usernameChangedAt: member.profile.usernameChangedAt?.toISOString() ?? null,
-          visibility: member.profile.visibility,
         },
         ratings: ratings.map((item) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), sourceKey: item.sourceKey, value: item.value })),
         reviews: reviews.map((item) => ({ body: item.body, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), reviewedOn: item.reviewedOn ? calendarDay(item.reviewedOn) : null, reviewId: item.id, sourceKey: item.sourceKey, tags: item.tags })),
@@ -252,6 +274,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         return await prisma.$transaction(async (tx) => {
           const current = await tx.profile.findUnique({ where: { memberId } })
           if (!current) return null
+          const currentSections = profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(current.sectionVisibility)
           if (input.username && input.username !== current.username) {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:username:${input.username}`}))`
             const [profile, alias] = await Promise.all([
@@ -270,9 +293,8 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
                   ...(input.bannerUrl !== undefined ? { bannerUrl: input.bannerUrl } : {}),
                   ...(input.bio !== undefined ? { bio: input.bio, bioOrigin: 'NATIVE' as const } : {}),
                   ...(input.displayName !== undefined ? { displayName: input.displayName, displayNameOrigin: 'NATIVE' as const } : {}),
-                  ...(input.location !== undefined ? { location: input.location, locationOrigin: 'NATIVE' as const } : {}),
+                  ...(input.sectionVisibility !== undefined ? { sectionVisibility: { ...currentSections, ...input.sectionVisibility } } : {}),
                   ...(input.username && input.username !== current.username ? { username: input.username, usernameChangedAt: changedAt } : {}),
-                  ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
                 },
               },
             },

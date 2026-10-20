@@ -1,7 +1,7 @@
 import type { CatalogRef, CatalogTitleSummary } from '@consumit/contracts'
 
 import { getCatalogBatchForRefs, MAX_PAGE_CATALOG_ENRICHMENT } from '@/lib/catalog-api'
-import { getMemberLibrarySnapshot, getMemberList } from '@/lib/member-server'
+import { getListRead, getMemberLibrarySnapshot, getMemberList } from '@/lib/member-server'
 
 import type { ListCollectionItem, ListsCollectionProps } from './lists-collection'
 
@@ -13,6 +13,7 @@ const COLLAGE_SIZE = 5
 export async function loadListsCollection(username: string): Promise<ListsCollectionProps> {
   const library = await getMemberLibrarySnapshot()
   const itemsBySlug = new Map<string, CatalogRef[]>()
+  const savedItemsBySlug = new Map<string, CatalogRef[]>()
   await Promise.all(library.lists.items.slice(0, ENRICHED_LIST_LIMIT).map(async (list) => {
     try {
       const detail = await getMemberList(list.slug)
@@ -21,7 +22,13 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
       // A single unreadable list never sinks the page; its card renders artless.
     }
   }))
-  const refs = [...itemsBySlug.values()].flat()
+  await Promise.all(library.savedLists.items.filter((list) => list.available).slice(0, ENRICHED_LIST_LIMIT).map(async (list) => {
+    try {
+      const detail = await getListRead(list.listSlug)
+      savedItemsBySlug.set(list.listId, detail.items.slice(0, COLLAGE_SIZE))
+    } catch { /* A bookmark can become unavailable between its read and detail request. */ }
+  }))
+  const refs = [...itemsBySlug.values(), ...savedItemsBySlug.values()].flat()
   let posters = new Map<string, CatalogTitleSummary>()
   let catalogUnavailable = false
   const catalogDetailsLimited = new Set(refs.map((ref) => `${ref.kind}:${ref.id}`)).size > MAX_PAGE_CATALOG_ENRICHMENT
@@ -45,5 +52,9 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
     savedByViewer: false,
     isOwner: true,
   }))
-  return { catalogDetailsLimited, catalogUnavailable, listNextCursor: library.lists.nextCursor, lists }
+  const savedLists = library.savedLists.items.map((saved) => ({
+    ...saved,
+    posters: (savedItemsBySlug.get(saved.listId) ?? []).map((ref) => posters.get(`${ref.kind}:${ref.id}`)?.posterUrl ?? undefined),
+  }))
+  return { catalogDetailsLimited, catalogUnavailable, listNextCursor: library.lists.nextCursor, lists, savedLists, savedListNextCursor: library.savedLists.nextCursor }
 }

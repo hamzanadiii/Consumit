@@ -6,4 +6,4 @@ After=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/consumit
-ExecStart=/usr/bin/node /opt/consumit/scripts/production.mjs physical-backup
+ExecStart=/usr/local/bin/node /opt/consumit/scripts/production.mjs physical-backup

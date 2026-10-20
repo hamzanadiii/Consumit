@@ -1,8 +1,10 @@
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
+import rateLimit from '@fastify/rate-limit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStaticProvider, type ProviderRegistration } from '@consumit/provider-sdk'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
+import { sessionCookieName } from '../identity/session.ts'
 import { loadEnv } from '../config/env.ts'
 import { registerErrorHandlers } from '../http/errors.ts'
 import { createMemoryPlaybackStore } from '../playback/state.ts'
@@ -14,20 +16,25 @@ const source = { key: 'main', url: 'https://media.example/master.m3u8?token=priv
 const registration = (id: string): ProviderRegistration => ({ adapter: createStaticProvider(id, [{ ref, sources: [source] }]), enabled: false, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'shared', concurrency: 1, requestsPerMinute: 10, mediaKinds: ['movie'] })
 const apps: ReturnType<typeof Fastify>[] = []
 afterEach(async () => { vi.useRealTimers(); vi.unstubAllGlobals(); await Promise.all(apps.splice(0).map(app => app.close())) })
-async function setup(metricsUrl?: string, relayEnabled = false) {
+async function setup(metricsUrl?: string, relayEnabled = false, extraProviderCount = 0, nodeEnv = 'test') {
   const app = Fastify(); apps.push(app)
   await app.register(cookie)
+  await app.register(rateLimit, { global: false })
   registerErrorHandlers(app)
   const identity = createFakeIdentity()
   const configured = registration('configured')
   const candidate = registration('candidate')
-  registerAdminRoutes(app, { env: loadEnv({ NODE_ENV: 'test', ...(metricsUrl ? { ADMIN_METRICS_URL: metricsUrl } : {}), ...(relayEnabled ? { PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'fixture.json', PLAYBACK_RELAY_ENABLED: 'true', PLAYBACK_RELAY_ORIGIN: 'https://edge.example', PLAYBACK_RELAY_SECRET: 'fixture-relay-secret-at-least-32-characters', PLAYBACK_RELAY_PROVIDERS: '{"configured":["media.example"]}' } : {}) }), identity, providers: [configured], scoutCatalog: () => [candidate], scoutRecipes: [{ id: 'candidate' }], playbackStore: createMemoryPlaybackStore() })
+  const extras = Array.from({ length: extraProviderCount }, (_, index) => registration(`extra-${index + 1}`))
+  const appOrigin = nodeEnv === 'production' ? 'https://localhost:3000' : 'http://localhost:3000'
+  const productionEnv = nodeEnv === 'production' ? { APP_ORIGIN: appOrigin, AUTH_CODE_PEPPER: 'fixture-production-auth-code-pepper-which-is-long-enough', AUTH_EMAIL_FROM: 'admin@example.com', DATABASE_URL: 'postgresql://fixture:fixture@database.example/consumit', DATABASE_DEPLOYMENT: 'managed', DATABASE_SSL_MODE: 'require', RESEND_API_KEY: 'fixture-resend-key', TMDB_API_READ_TOKEN: 'fixture-tmdb-token', VALKEY_URL: 'redis://valkey.example:6379' } : {}
+  const env = loadEnv({ NODE_ENV: nodeEnv, ...productionEnv, ...(metricsUrl ? { ADMIN_METRICS_URL: metricsUrl } : {}), ...(relayEnabled ? { PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'fixture.json', PLAYBACK_RELAY_ENABLED: 'true', PLAYBACK_RELAY_ORIGIN: 'https://edge.example', PLAYBACK_RELAY_SECRET: 'fixture-relay-secret-at-least-32-characters', PLAYBACK_RELAY_PROVIDERS: '{"configured":["media.example"]}' } : {}) })
+  registerAdminRoutes(app, { env, identity, providers: [configured, ...extras], scoutCatalog: () => [candidate], scoutRecipes: [{ id: 'candidate' }], playbackStore: createMemoryPlaybackStore() })
   await identity.register({ email: 'operator@example.com', username: 'operator', password: 'password12345' })
   const delivery = identity.notifier.deliveries.findLast(d => d.kind === 'verification')!
   if (!('code' in delivery)) throw new Error('Missing verification')
   const session = await identity.verifyEmail({ email: 'operator@example.com', code: delivery.code })
-  const cookies = { consumit_session: session.sessionToken }
-  const call = (body: Record<string, unknown>, origin = 'http://localhost:3000') => app.inject({ method: 'POST', url: '/v1/admin/providers/inspect', cookies, headers: { origin }, payload: body })
+  const cookies = { [sessionCookieName(env)]: session.sessionToken }
+  const call = (body: Record<string, unknown>, origin = appOrigin) => app.inject({ method: 'POST', url: '/v1/admin/providers/inspect', cookies, headers: { origin }, payload: body })
   return { app, identity, configured, candidate, cookies, call, promote: () => identity.repository.setRole(session.member.id, 'ADMIN') }
 }
 
@@ -68,6 +75,30 @@ describe('provider inspection bench', () => {
     expect((await s.call({ providerId: 'candidate', ref, scope: 'scout' }, 'https://foreign.example')).statusCode).toBe(403)
     expect((await s.call({ providerId: 'candidate', ref, scope: 'scout', url: 'https://evil.example' })).statusCode).toBe(400)
     expect((await s.call({ providerId: 'unknown', ref, scope: 'scout' })).statusCode).toBe(400)
+  })
+  it('allows a full sequential provider run instead of stopping at six checks per minute', async () => {
+    const s = await setup(undefined, false, 8); await s.promote()
+    const replies = []
+    for (let index = 1; index <= 8; index++) replies.push(await s.call({ providerId: `extra-${index}`, ref }))
+    expect(replies.map(reply => reply.statusCode)).toEqual(Array(8).fill(200))
+  })
+  it('enforces the inspection route request limit', async () => {
+    const s = await setup(undefined, false, 61); await s.promote()
+    const replies = []
+    for (let index = 1; index <= 61; index++) replies.push(await s.call({ providerId: `extra-${index}`, ref }))
+    expect(replies.slice(0, 60).map(reply => reply.statusCode)).toEqual(Array(60).fill(200))
+    expect(replies[60]?.statusCode).toBe(429)
+  })
+  it('allows authorized provider inspection in production deployments', async () => {
+    const s = await setup(undefined, false, 0, 'production'); await s.promote()
+    const inspected = await s.call({ providerId: 'candidate', ref, scope: 'scout' })
+    expect(inspected.statusCode).toBe(200)
+    expect(inspected.json()).toMatchObject({ ok: true, providerId: 'candidate' })
+    const roster = await s.app.inject({ url: '/v1/admin/providers/scout', cookies: s.cookies })
+    expect(roster.statusCode).toBe(200)
+    expect(roster.json()).toMatchObject({ candidates: [{ id: 'candidate' }] })
+    expect(roster.json()).not.toHaveProperty('inspectEnabled')
+    expect((await s.app.inject({ url: '/v1/admin/providers', cookies: s.cookies })).json()).not.toHaveProperty('inspectEnabled')
   })
   it('tests a disabled candidate privately without installing or enabling it', async () => {
     const s = await setup(); await s.promote()
@@ -117,15 +148,15 @@ describe('provider inspection bench', () => {
     const replies = await Promise.all([read('/v1/admin/providers/health'), read('/v1/admin/providers/metrics')])
     expect(replies.every(reply => reply.statusCode === 200)).toBe(true)
     expect(replies[1]!.json().available).toBe(true)
-    expect(fetcher).toHaveBeenCalledTimes(9)
+    expect(fetcher).toHaveBeenCalledTimes(13)
     await read('/v1/admin/providers/metrics')
-    expect(fetcher).toHaveBeenCalledTimes(9)
+    expect(fetcher).toHaveBeenCalledTimes(13)
     vi.useFakeTimers({ toFake: ['Date'] }); vi.advanceTimersByTime(15001)
     fetcher.mockImplementation(async () => new Response('', { status: 503 }))
     const offline = await Promise.all([read('/v1/admin/providers/health'), read('/v1/admin/providers/metrics')])
     expect(offline[1]!.json().available).toBe(false)
-    expect(fetcher).toHaveBeenCalledTimes(18)
+    expect(fetcher).toHaveBeenCalledTimes(26)
     await read('/v1/admin/providers/metrics')
-    expect(fetcher).toHaveBeenCalledTimes(18)
+    expect(fetcher).toHaveBeenCalledTimes(26)
   })
 })

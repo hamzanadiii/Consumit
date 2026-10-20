@@ -22,7 +22,9 @@ describe('subtitle routes', () => {
     const store = createMemoryPlaybackStore()
     const discovery = createSubtitleDiscovery({ providers: [], store, files: createStoreFileStore(store), origin: 'https://consumit.example', query: async () => ({ type: 'movie', tmdbId: 550 }) })
     const cancelled = vi.fn()
-    vi.spyOn(discovery, 'discover').mockImplementation(async function* (_ref, signal) {
+    let preferredLanguages: readonly string[] | undefined
+    vi.spyOn(discovery, 'discover').mockImplementation(async function* (_ref, signal, _cursor, languages) {
+      preferredLanguages = languages
       yield { type: 'snapshot', searchId: '7cd198d8-5eab-4a80-b4e1-73b435fcd520', languages: [] }
       await new Promise<void>((resolve) => {
         const abort = () => { cancelled(); resolve() }
@@ -33,11 +35,12 @@ describe('subtitle routes', () => {
     const app = await buildApp({ subtitles: { ...createFakeSubtitleService(), discovery } })
     try {
       const origin = await app.listen({ host: '127.0.0.1', port: 0 })
-      const response = await fetch(`${origin}/v1/subtitles/discover?kind=movie&id=550`)
+      const response = await fetch(`${origin}/v1/subtitles/discover?kind=movie&id=550&langs=ar,en`)
       const reader = response.body!.getReader()
       expect((await reader.read()).value).toBeDefined()
       await reader.cancel()
       await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce())
+      expect(preferredLanguages).toEqual(['ar', 'en'])
     } finally { await app.close() }
   })
   it('aggregates tracks for a title independently of streaming providers', async () => {

@@ -22,27 +22,27 @@ async function setup() {
   return app
 }
 describe('playback session API', () => {
-  it('honors a personal Embed-first order but rejects unsandboxed frames with ads off', async () => {
+  it('honors Admin Embed-first order regardless of Consumit ad status or personal order', async () => {
     const store = createMemoryPlaybackStore()
     const providers: ProviderRegistration[] = ['primary', 'external'].map(id => ({ adapter: createStaticProvider(id, [{ ref, sources: [id === 'primary' ? source : { ...source, key: 'frame', type: 'iframe', frameSandbox: 'none', subtitles: [] }] }]), deliveryMode: id === 'external' ? 'embed' : 'direct', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30, mediaKinds: ['movie'] }))
-    const playback = createPlayback({ providers, store, region: 'US' }), signal = new AbortController().signal
-    const input = { ...body, preferences: { providerOrder: ['external', 'primary'], adsEnabled: true } }
+    const playback = createPlayback({ providers, store, region: 'US', providerOrders: { movie: ['external', 'primary'], series: [], anime: [] } }), signal = new AbortController().signal
+    const input = { ...body, preferences: { providerOrder: ['primary', 'external'], adsEnabled: true } }
     expect(await playback.beginAttempt!('ads-on', input, signal)).toMatchObject({ status: 'ready', session: { source: { providerId: 'external', delivery: 'embed' } } })
-    const pending = await playback.beginAttempt!('ads-off', { ...input, preferences: { ...input.preferences, adsEnabled: false } }, signal)
-    expect(pending.status).toBe('pending')
-    expect(await playback.continueAttempt!('ads-off', pending.attemptId, signal)).toMatchObject({ status: 'ready', session: { source: { providerId: 'primary', delivery: 'direct' } } })
+    const adsOff = { ...input, preferences: { ...input.preferences, adsEnabled: false } }
+    expect(await playback.beginAttempt!('ads-off', adsOff, signal)).toMatchObject({ status: 'ready', session: { source: { providerId: 'external', delivery: 'embed', frameSandbox: 'none' } } })
+    expect((await playback.resolve('legacy-ads-off', adsOff, signal)).source).toMatchObject({ providerId: 'external', frameSandbox: 'none' })
     await store.close()
   })
-  it('owns attempt continuations and exhausts a fixed personal order exactly once', async () => {
+  it('owns attempt continuations and exhausts Admin order exactly once despite personal preferences', async () => {
     const app = await setup(), headers = { origin: 'http://localhost:3000' }
     const first = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers, payload: { input: { ...body, preferences: { providerOrder: ['backup', 'disabled', 'primary'] } } } })
     expect(first.statusCode).toBe(200)
     const selected = first.json(), cookie = first.cookies.map(row => `${row.name}=${row.value}`).join('; ')
-    expect(selected).toMatchObject({ status: 'ready', tried: 1, total: 2, session: { source: { providerId: 'backup' } } })
+    expect(selected).toMatchObject({ status: 'ready', tried: 1, total: 2, session: { source: { providerId: 'primary' } } })
     const forbidden = await app.inject({ method: 'POST', url: `/v1/playback/attempts/${selected.attemptId}/continue`, headers })
     expect(forbidden.statusCode).toBe(401)
     const next = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers: { ...headers, cookie }, payload: { input: body, sessionId: selected.session.id, failure: { sourceId: selected.session.source.id, reason: 'media' } } })
-    expect(next.json()).toMatchObject({ status: 'ready', tried: 2, total: 2, session: { source: { providerId: 'primary' } } })
+    expect(next.json()).toMatchObject({ status: 'ready', tried: 2, total: 2, session: { source: { providerId: 'backup' } } })
     const exhausted = await app.inject({ method: 'POST', url: '/v1/playback/attempts', headers: { ...headers, cookie }, payload: { input: body, sessionId: selected.session.id, failure: { sourceId: next.json().session.source.id, reason: 'media' } } })
     expect(exhausted.json()).toMatchObject({ status: 'exhausted', tried: 2, total: 2 })
     expect((await app.inject({ method: 'DELETE', url: `/v1/playback/attempts/${selected.attemptId}`, headers: { ...headers, cookie } })).statusCode).toBe(204)

@@ -22,6 +22,10 @@ vi.mock('@/lib/identity-browser', () => ({
   logoutMember: mocks.logoutMember,
 }))
 
+vi.mock('../shared/popunder-ad', () => ({
+  PopunderAd: () => <div data-testid="popunder-ad" />,
+}))
+
 const member = {
   avatarStyle: 'dusk',
   avatarUrl: null,
@@ -49,6 +53,17 @@ describe('FilScreenShell', () => {
     renderShell()
     expect(screen.queryByRole('link', { name: /friends|circle|network/i })).not.toBeInTheDocument()
   })
+  it('mounts pop-under ads on public browse pages only', () => {
+    const { unmount } = renderShell(<p>Content</p>, '/anime')
+    expect(screen.getByTestId('popunder-ad')).toBeInTheDocument()
+    unmount()
+
+    for (const pathname of ['/watch/movie/550', '/settings', '/admin', '/sign-in', '/onboarding']) {
+      const view = renderShell(<p>Content</p>, pathname)
+      expect(screen.queryByTestId('popunder-ad')).not.toBeInTheDocument()
+      view.unmount()
+    }
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
@@ -68,6 +83,18 @@ describe('FilScreenShell', () => {
       </SessionProvider>,
     )
     expect(screen.getByRole('heading', { level: 1, name: 'Consumit home' })).toHaveClass('sr-only')
+  })
+
+  it('uses the active route rather than a stale category hint for the selected catalog tab', () => {
+    render(
+      <SessionProvider initialStatus="anonymous">
+        <FilScreenShell activeKindTab="series" currentPathname="/movies" pageHeading={undefined}><p>Content</p></FilScreenShell>
+      </SessionProvider>,
+    )
+    const kinds = screen.getByRole('navigation', { name: 'Catalog kinds' })
+    expect(within(kinds).getByRole('link', { name: 'Movies' })).toHaveAttribute('aria-current', 'page')
+    expect(within(kinds).getByRole('link', { name: 'Series' })).not.toHaveAttribute('aria-current')
+    expect(within(kinds).getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1)
   })
 
   it('links directly to personal archives and keeps profile access through the avatar', () => {

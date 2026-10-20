@@ -1,0 +1,9 @@
+services:
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+
+  api:
+    environment:
+      DATABASE_URL: postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit
+      DATABASE_SSL_MODE: disable

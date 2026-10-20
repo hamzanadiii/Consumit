@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { buildApp } from '../../apps/api/src/app'
 import { loadEnv } from '../../apps/api/src/config/env'
+import type { AnimeCatalog } from '../../apps/api/src/catalog/anilist/adapter'
 import { createFakeCatalog } from '../../apps/api/src/catalog/fake-catalog'
 import { createPlayback } from '../../apps/api/src/playback/playback'
 import { createMemoryPlaybackStore } from '../../apps/api/src/playback/state'
@@ -11,7 +12,7 @@ import { createStoreFileStore } from '../../apps/api/src/subtitles/storage'
 import { configuredProviders } from '../../apps/api/src/playback/configured-providers'
 import type { MediaTransport } from '../../apps/api/src/playback/transport'
 import { createStaticProvider, type ProviderRegistration, type ProviderSource } from '../../packages/provider-sdk/src/index'
-import type { CatalogMovieDetail } from '../../packages/contracts/src/index'
+import type { CatalogMovieDetail, CatalogSeriesDetail, CatalogSeason, AnimeTitleDetail } from '../../packages/contracts/src/index'
 
 process.env.NODE_ENV = 'test'
 const fixtureHost = '127-0-0-1.nip.io'
@@ -43,6 +44,34 @@ const titles: CatalogMovieDetail[] = [1, 2, 3, 4, 5, 6].map((id) => ({
   tmdbRating: null, tmdbVoteCount: 0, year: 2026, cast: [], certification: null, countries: [],
   creators: [], heroBackdropUrl: null, homepageUrl: null, languages: ['English'], recommendations: [], runtimeMinutes: 1, status: 'Released', tagline: null,
 }))
+const series: CatalogSeriesDetail = {
+  ...titles[0]!, id: 7, kind: 'series', title: 'The midnight archive', originalTitle: 'The midnight archive',
+  contentRating: 'TV-14', episodeRuntimeMinutes: 1,
+  seasons: [1, 2].map(number => ({ number, name: `Season ${number}`, episodeCount: number === 1 ? 27 : 2, airDate: '2026-01-01', posterUrl: null })),
+}
+const seasons: CatalogSeason[] = series.seasons.map(season => ({
+  seriesId: 7, seasonNumber: season.number, name: season.name, overview: 'Controlled episode fixtures.', posterUrl: null,
+  episodes: Array.from({ length: season.episodeCount }, (_, index) => ({
+    id: season.number * 100 + index + 1, seasonNumber: season.number, episodeNumber: index + 1,
+    title: index === 0 ? 'A very long opening chapter in the midnight archive' : `Chapter ${index + 1}`,
+    overview: 'Controlled color bars for episode continuity verification.', runtimeMinutes: 1, stillUrl: null,
+    airDate: season.number === 1 && index === 26 ? '2099-01-01' : '2026-01-01',
+  })),
+}))
+const anime: AnimeTitleDetail = {
+  anilistId: 8, kind: 'anime', titles: { preferred: 'Evening stories', english: null, romaji: null, native: null },
+  format: 'TV', status: 'RELEASING', season: null, seasonYear: 2026, episodes: 10, episodeDuration: 1,
+  genres: [], coverImage: { url: 'https://image.tmdb.org/t/p/w500/anime-cover.jpg', color: null }, bannerImage: 'https://image.tmdb.org/t/p/w1280/anime-banner.jpg', averageScore: null, popularity: 0,
+  description: 'Controlled anime episodes for player verification.', nextAiringEpisode: { episode: 10, airingAt: '2099-01-01T00:00:00.000Z', timeUntilAiring: 1000000 },
+  malId: null, logoUrl: null, source: null, countryOfOrigin: 'JP', trailer: null,
+  characters: [], staff: [], streamingEpisodes: [], externalLinks: [], recommendations: [],
+}
+const unsupportedAnimeFixture = async (): Promise<never> => { throw new Error('This endpoint is outside the playback fixture.') }
+const animeCatalog: AnimeCatalog = {
+  title: async () => anime, search: unsupportedAnimeFixture, trending: unsupportedAnimeFixture,
+  seasonal: unsupportedAnimeFixture, browse: unsupportedAnimeFixture, relations: unsupportedAnimeFixture,
+  airingSchedule: unsupportedAnimeFixture, batch: unsupportedAnimeFixture,
+}
 const store = createMemoryPlaybackStore()
 const transport: MediaTransport = async (url, _hosts, headers) => {
   const pathname = new URL(url).pathname
@@ -67,12 +96,18 @@ const transport: MediaTransport = async (url, _hosts, headers) => {
   }), body: Readable.from([file.subarray(start, end + 1)]) }
 }
 const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => {
-  const staticAdapter = createStaticProvider(id, titles.filter((title) => title.id !== 4).map((title) => ({ ref: { kind: title.kind, id: title.id }, sources: [{
+  const staticAdapter = createStaticProvider(id, [...titles.filter((title) => title.id !== 4).map((title) => ({ ref: { kind: title.kind, id: title.id }, sources: [{
     key: 'main', url: `${fixtureOrigin}/${title.id === 3 && id === 'primary' ? 'missing.mp4' : title.id === 2 ? 'master.m3u8' : 'reference.mp4'}?provider=${id}`,
     type: title.id === 2 ? 'hls' : 'native', language: 'original',
     expiresAt: '2099-01-01T00:00:00.000Z', headers: {},
     subtitles: [{ id: 'en', label: 'English', language: 'en', format: 'vtt', url: 'https://fixture.example/english.vtt' }],
-  } satisfies ProviderSource] })))
+  } satisfies ProviderSource] })), ...seasons.flatMap(season => season.episodes.filter(episode => episode.episodeNumber !== 4).map(episode => ({
+    ref: { kind: 'series' as const, id: 7, season: season.seasonNumber, episode: episode.episodeNumber },
+    sources: [{ key: 'main', url: `${fixtureOrigin}/reference.mp4?provider=${id}&season=${season.seasonNumber}&episode=${episode.episodeNumber}`, type: 'native' as const, language: 'original', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }],
+  }))), ...Array.from({ length: 9 }, (_, index) => ({
+    ref: { kind: 'anime' as const, id: 8, episode: index + 1 },
+    sources: [{ key: 'main', url: `${fixtureOrigin}/reference.mp4?provider=${id}&anime=8&episode=${index + 1}`, type: 'native' as const, language: 'ja', expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }],
+  }))])
   let lease = 0
   return {
   adapter: { ...staticAdapter, async resolve(input, signal) {
@@ -87,7 +122,7 @@ const providers: ProviderRegistration[] = ['primary', 'backup'].map((id) => {
     })) }
   } },
   enabled: true, approvedRegions: ['US'], mediaHosts: [fixtureHost, 'fixture.example'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30,
-  mediaKinds: ['movie'],
+  mediaKinds: ['movie', 'series', 'anime'],
   }
 })
 providers.push(...configuredProviders([{
@@ -112,9 +147,14 @@ const subtitles = createSubtitleService({
 })
 const app = await buildApp({
   env: loadEnv({ NODE_ENV: 'test', APP_ORIGIN: 'http://127.0.0.1:27911' }),
-  catalog: createFakeCatalog({ titles }),
+  catalog: createFakeCatalog({ titles: [...titles, series], seasons }),
   subtitles,
+  animeCatalog,
+  animeCanonicalEpisodeArt: { episodeByAnilistId: async (_id, episode) => ({ title: `Evening ${episode}`, synopsis: 'A controlled episode.', stillUrl: 'https://image.tmdb.org/t/p/w1280/anime-episode-still.jpg', airDate: '2026-01-01' }) },
   playback: {
+    beginAttempt: (...args) => playback.beginAttempt!(...args),
+    continueAttempt: (...args) => playback.continueAttempt!(...args),
+    cancelAttempt: (...args) => playback.cancelAttempt!(...args),
     resolve: (...args) => playback.resolve(...args),
     recover: (...args) => playback.recover(...args),
     listProviders: (...args) => playback.listProviders(...args),

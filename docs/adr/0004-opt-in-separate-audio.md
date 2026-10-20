@@ -1,5 +1,9 @@
 # Offer optional separate audio in the Consumit Player
 
+## 2026-10-20: production Apogee delivery follow-up
+
+Production Admin currently exposes one disabled `riveapogee` Audio source row, but no `riveapogee-audio` registration. The deployed relay Worker has exact-host policy for adapter id `riveapogee` and hosts `img.rousav.tech` and `img.animecurx.tech` (version `40d08338-8b50-46f1-8bb1-608eddf353a4`). Admin reports relay approval pending because the production API host map lacks `riveapogee`. Add the separate audio-only registration to the production provider config and add the same host pair to `PLAYBACK_RELAY_PROVIDERS`, then restart the API and verify French playback on Swapped. Leave the existing `riveapogee` row untouched so its video settings remain intact. Media bytes stay on the Worker. The relay map is keyed by adapter id even when the registration id is a separate audio-only alias.
+
 ## 2026-10-15: reliable language activation
 
 The owner authorized trying remaining compatible recordings of a deliberately selected language. A failed preparation or start can advance to another recording without committing that language. Pending and active audio channels preserve the previous audible output until the new recording decodes and starts. Failure restores the previous selection/preference; selecting a stream track also requires engine/clock confirmation before its language is saved. Browser audio capabilities resume within the selection gesture, with a fresh Enable audio action after policy denial. Duration checks, manual sync, hostile playlist validation and per-provider budgets remain mandatory.

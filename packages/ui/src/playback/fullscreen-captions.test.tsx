@@ -22,8 +22,8 @@ it('uses true iOS video fullscreen for uploaded subtitles instead of leaving Saf
   const view = render(<ConsumitPlayer title="iPhone captions" source={{ type: 'native', src: 'https://media.example/movie.mp4' }} />)
   const video = view.container.querySelector('video')!
   const file = new File([], 'captions.srt')
-  Object.defineProperty(file, 'text', { value: async () => '1\n00:00:01,000 --> 00:00:04,000\nVisible on iPhone\n' })
-  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => new TextEncoder().encode('1\n00:00:01,000 --> 00:00:04,000\nVisible on iPhone\n').buffer })
+  fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
   fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [file] } })
   await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledOnce())
   video.currentTime = 2

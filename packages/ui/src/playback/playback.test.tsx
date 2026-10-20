@@ -75,18 +75,18 @@ it('prefers the source exact intro and offers its button while paused even with 
 
 it('groups ISO aliases into one subtitle language while retaining both tracks', () => {
   render(<ConsumitPlayer title="Aliases" src="/fixture.mp4" subtitleOptions={[{ value: 'one', label: 'English', language: 'en' }, { value: 'two', label: 'English', language: 'eng' }, { value: 'off', label: 'Off' }]} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-  const menu = screen.getByRole('menu', { name: 'Subtitles' })
+  fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+  const menu = screen.getByRole('dialog', { name: 'Captions' })
   expect(within(menu).getAllByRole('button', { name: /English.*\d/ })).toHaveLength(1)
   fireEvent.click(within(menu).getByRole('button', { name: /English.*2/ }))
-  expect(within(menu).getAllByRole('menuitemradio', { name: 'English' })).toHaveLength(2)
+  expect(within(menu).getAllByRole('radio', { name: 'English' })).toHaveLength(2)
 })
 
 it('pages original subtitle alias codes under one group while keeping regional variants distinct', async () => {
   const page = vi.fn(async (code: string, cursor: number) => ({ tracks: [{ id: `${code}:${cursor}`, label: 'English', language: code, provider: `provider-${code}-${cursor}` }], total: 3, nextCursor: code === 'eng' && cursor === 0 ? 1 : null }))
   render(<ConsumitPlayer title="Paged aliases" src="/fixture.mp4" subtitleDiscovery={{ languages: [{ code: 'en', count: 1 }, { code: 'eng', count: 2 }, { code: 'en-US', count: 1 }], providers: [], loading: false, error: null }} onSubtitlePage={page} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-  const menu = screen.getByRole('menu', { name: 'Subtitles' })
+  fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+  const menu = screen.getByRole('dialog', { name: 'Captions' })
   fireEvent.click(within(menu).getByRole('button', { name: /^English\s*3$/ }))
   await waitFor(() => expect(page).toHaveBeenCalledTimes(2))
   expect(page).toHaveBeenCalledWith('en', 0)
@@ -109,6 +109,17 @@ it('shows standard quality in settings for a cropped 1080p recording', () => {
   expect(screen.getByRole('button', { name: /Quality/ })).not.toHaveTextContent('802p')
 })
 
+it('surfaces the route-owned SUB/DUB selector at the top of Playback settings', () => {
+  render(<ConsumitPlayer title="Anime fixture" src="/fixture.mp4" animeAudioControl={<div aria-label="Anime audio language" role="group"><button>SUB</button><button>DUB</button></div>} />)
+  fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+  const settings = screen.getByRole('dialog', { name: 'Settings options' })
+  const playback = within(settings).getByRole('region', { name: 'Playback' })
+  const preference = within(playback).getByText('Anime audio').closest('.consumit-player-anime-audio')
+  expect(preference).toContainElement(within(playback).getByRole('group', { name: 'Anime audio language' }))
+  expect(preference).toHaveTextContent('Original audio or English dub')
+  expect(within(settings).getByRole('region', { name: 'Watch preferences' })).not.toHaveTextContent('Anime audio')
+})
+
 it('keeps focused transport controls visible across playback start and pointer movement', () => {
   vi.useFakeTimers()
   try {
@@ -117,6 +128,7 @@ it('keeps focused transport controls visible across playback start and pointer m
     fireEvent.keyDown(document, { key: 'Tab' })
     act(() => play.focus())
     fireEvent.play(view.container.querySelector('video')!)
+    fireEvent.playing(view.container.querySelector('video')!)
     fireEvent.mouseMove(screen.getByLabelText('Focus fixture player controls'))
     act(() => vi.advanceTimersByTime(150))
     expect(screen.getByRole('button', { name: 'Pause' })).toHaveFocus()
@@ -127,23 +139,22 @@ it('keeps focused transport controls visible across playback start and pointer m
   } finally { vi.useRealTimers() }
 })
 
-it('opens Auto server selection from Settings, shows the playing server, and restores focus', () => {
+it('opens Auto server selection from Sources, shows the playing server, and restores focus', () => {
   const request = vi.fn(), auto = vi.fn(), change = vi.fn()
   render(<ConsumitPlayer title="Fixture" src="/fixture.mp4" serverOptions={[{ value: 'primary', label: 'Primary' }, { value: 'backup', label: 'Backup' }]} selectedServer="primary" serverAuto onServerAuto={auto} onServerRequest={request} onServerChange={change} />)
-  expect(screen.queryByRole('button', { name: 'Change server' })).not.toBeInTheDocument()
-  const trigger = screen.getByRole('button', { name: /Settings:/ })
+  expect(screen.getByRole('button', { name: 'Sources' })).toBeInTheDocument()
+  const trigger = screen.getByRole('button', { name: 'Sources' })
   trigger.focus(); fireEvent.click(trigger)
-  fireEvent.click(screen.getByRole('button', { name: /^Server/ }))
-  const panel = screen.getByRole('menu', { name: 'Server' })
+  const panel = screen.getByRole('dialog', { name: 'Sources' })
   expect(request).toHaveBeenCalledTimes(1)
-  expect(within(panel).getByRole('menuitemradio', { name: /Auto/ })).toHaveAttribute('aria-checked', 'true')
-  expect(within(panel).getByRole('menuitemradio', { name: 'Primary' })).toHaveAttribute('aria-checked', 'false')
+  expect(within(panel).getByRole('button', { name: /Auto/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(panel).getByRole('button', { name: 'Primary' })).toHaveAttribute('aria-pressed', 'false')
   expect(within(panel).getByText('Playing from Primary')).toBeInTheDocument()
-  fireEvent.click(within(panel).getByRole('menuitemradio', { name: 'Backup' }))
+  fireEvent.click(within(panel).getByRole('button', { name: 'Backup' }))
   expect(change).toHaveBeenCalledWith('backup')
   expect(trigger).toHaveFocus()
-  fireEvent.click(trigger); fireEvent.click(screen.getByRole('button', { name: /^Server/ }))
-  fireEvent.click(screen.getByRole('menuitemradio', { name: /Auto/ }))
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByRole('button', { name: /Auto/ }))
   expect(auto).toHaveBeenCalledTimes(1)
   expect(change).toHaveBeenCalledTimes(1)
 })
@@ -152,18 +163,18 @@ it('keeps server loading, retry, empty and switching states inside the existing 
   const request = vi.fn(), auto = vi.fn()
   const props = { title: 'Fixture', src: '/fixture.mp4', serverOptions: [{ value: 'primary', label: 'Primary' }], selectedServer: 'primary', serverAuto: true, onServerAuto: auto, onServerRequest: request }
   const view = render(<ConsumitPlayer {...props} serverLoading />)
-  fireEvent.click(screen.getByRole('button', { name: /Settings:/ })); fireEvent.click(screen.getByRole('button', { name: /^Server/ }))
-  expect(screen.getByText('Finding servers…')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+  expect(screen.getByText('Finding sources…')).toBeInTheDocument()
   expect(screen.queryByText('No other servers are available for this title.')).not.toBeInTheDocument()
   view.rerender(<ConsumitPlayer {...props} serverError="Servers are unavailable right now. Playback can continue." />)
-  fireEvent.click(within(screen.getByRole('menu', { name: 'Server' })).getByRole('button', { name: 'Try again' }))
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Sources' })).getByRole('button', { name: 'Try again' }))
   expect(request).toHaveBeenCalledTimes(2)
   view.rerender(<ConsumitPlayer {...props} />)
   expect(screen.getByText('No other servers are available for this title.')).toBeInTheDocument()
   view.rerender(<ConsumitPlayer {...props} serverBusy />)
-  expect(screen.getByRole('menuitemradio', { name: /Auto/ })).toBeDisabled()
-  expect(screen.getByRole('menuitemradio', { name: 'Primary' })).toBeDisabled()
-  expect(screen.getByText('Switching server…')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Auto/ })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Primary' })).toBeDisabled()
+  expect(screen.getByText('Switching source…')).toBeInTheDocument()
 })
 
 it('shows fixed source qualities in one player and delegates their selection to its owner', () => {
@@ -171,9 +182,9 @@ it('shows fixed source qualities in one player and delegates their selection to 
   render(<ConsumitPlayer title="Miami" src="/fixture.mp4" qualityOptions={[2160, 1080, 720, 480].map(height => ({ value: String(height), label: `${height}p` }))} selectedQuality="1080" onQualityChange={change} />)
   fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
   fireEvent.click(screen.getByRole('button', { name: /Quality/ }))
-  const panel = screen.getByRole('menu', { name: 'Quality' })
-  expect(within(panel).getAllByRole('menuitemradio').map(row => row.textContent)).toEqual(['2160p', '1080p', '720p', '480p'])
-  fireEvent.click(within(panel).getByRole('menuitemradio', { name: '720p' }))
+  const panel = screen.getByRole('dialog', { name: 'Quality' })
+  expect(within(panel).getAllByRole('radio').map(row => row.closest('label')?.textContent)).toEqual(['2160p', '1080p', '720p', '480p'])
+  fireEvent.click(within(panel).getByRole('radio', { name: '720p' }))
   expect(change).toHaveBeenCalledWith('720')
 })
 
@@ -185,17 +196,18 @@ it('merges stream and separate languages without provider labels and retains vid
   fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
   fireEvent.click(screen.getByRole('button', { name: /Audio/ }))
   expect(request).toHaveBeenCalledOnce()
-  const panel = screen.getByRole('menu', { name: 'Audio' })
-  expect(within(panel).getAllByRole('menuitemradio').map(row => row.textContent)).toEqual(['English', 'Hindi'])
+  const panel = screen.getByRole('dialog', { name: 'Audio' })
+  expect(within(panel).getAllByRole('radio').map(row => row.closest('label')?.textContent)).toEqual(['English', 'Hindi'])
   expect(within(panel).queryByText(/Apogee|Another provider|Added audio/)).not.toBeInTheDocument()
-  expect(within(panel).getByRole('menuitemradio', { name: 'English' })).toHaveAttribute('aria-checked', 'true')
-  fireEvent.click(within(panel).getByRole('menuitemradio', { name: 'Hindi' }))
+  expect(within(panel).getByRole('radio', { name: 'English' })).toHaveAttribute('aria-checked', 'true')
+  fireEvent.click(within(panel).getByRole('radio', { name: 'Hindi' }))
   await waitFor(() => expect(screen.getByText(/No compatible recording of this language could start/)).toBeVisible())
   expect(select).toHaveBeenCalledWith('hi')
   expect(container.querySelector('video')).toBe(video)
   expect(video.getAttribute('src')).toBe('/episode.mp4')
-  fireEvent.click(within(panel).getByRole('menuitemradio', { name: 'English' }))
-  expect(change).toHaveBeenCalledWith('main-en')
+  fireEvent.click(within(panel).getByRole('radio', { name: 'English' }))
+  expect(change).not.toHaveBeenCalled()
+  expect(within(panel).getByRole('radio', { name: 'English' })).toBeChecked()
   expect(select).toHaveBeenCalledWith('hi-duplicate')
   expect(select).toHaveBeenCalledTimes(2)
 })
@@ -262,6 +274,7 @@ describe('playback shell components', () => {
     const { container, rerender } = render(<ConsumitPlayer preparing posterSrc="/poster.jpg" title="Sea of Names" topMeta="S1 · E2 — The crossing" backHref="/title/1" />)
     expect(screen.getByRole('status')).toHaveTextContent('Finding your stream…')
     expect(container.querySelector('[data-player-title]')).toHaveTextContent('S1 · E2 — The crossing')
+    expect(container.querySelector('.consumit-player-preparation-title')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/title/1')
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
     rerender(<ConsumitPlayer title="Sea of Names" status="No source available" statusTone="unavailable" />)
@@ -283,14 +296,17 @@ describe('playback shell components', () => {
     expect(screen.getByText('Buffering video')).toBeInTheDocument()
   })
 
-  it('shows neighboring episode controls only in fullscreen and delegates them to Watch', () => {
+  it('keeps neighboring episode controls available inline and fullscreen and delegates them to Watch', () => {
     const previous = vi.fn()
     const next = vi.fn()
     const { container } = render(<ConsumitPlayer src="/movie.mp4" title="Sea of Names" backHref="/title/1" onPreviousEpisode={previous} onNextEpisode={next} />)
     const original = Object.getOwnPropertyDescriptor(document, 'fullscreenElement')
     try {
-      expect(screen.queryByRole('button', { name: 'Previous episode' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Next episode' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Previous episode' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Next episode' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Previous episode' })).not.toHaveTextContent(/Previous/)
+      expect(screen.getByRole('button', { name: 'Next episode' })).not.toHaveTextContent(/Next/)
+      expect(container.querySelector('[data-player-wide-label]')).not.toBeInTheDocument()
       Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: container.querySelector('[data-consumit-player]') })
       fireEvent(document, new Event('fullscreenchange'))
       fireEvent.click(screen.getByRole('button', { name: 'Previous episode' }))
@@ -299,8 +315,8 @@ describe('playback shell components', () => {
       expect(next).toHaveBeenCalledTimes(1)
       Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
       fireEvent(document, new Event('fullscreenchange'))
-      expect(screen.queryByRole('button', { name: 'Previous episode' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Next episode' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Previous episode' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Next episode' })).toBeInTheDocument()
     } finally {
       if (original) Object.defineProperty(document, 'fullscreenElement', original)
       else Reflect.deleteProperty(document, 'fullscreenElement')
@@ -437,13 +453,13 @@ describe('playback shell components', () => {
     expect(screen.getByRole('button', { name: 'Forward 10 seconds' })).toBeEnabled()
     expect(screen.getByRole('slider', { name: 'Volume' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Change quality/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Subtitles' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Captions' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Settings/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Change server' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Enter picture in picture' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Enter picture in picture' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Enter fullscreen' })).toBeInTheDocument()
     expect(screen.getByText('Some places disappear long before anyone leaves them.')).toBeInTheDocument()
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('opens quality from the settings panel', () => {
@@ -461,10 +477,10 @@ describe('playback shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Quality/ }))
-    const menu = screen.getByRole('menu', { name: 'Quality' })
+    const menu = screen.getByRole('dialog', { name: 'Quality' })
     expect(screen.getByRole('button', { name: 'Back to settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Close quality' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitemradio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true')
+    expect(within(menu).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true')
     expect(within(menu).queryByRole('group', { name: 'Server' })).not.toBeInTheDocument()
     expect(within(menu).queryByRole('group', { name: 'Playback speed' })).not.toBeInTheDocument()
   })
@@ -483,13 +499,13 @@ describe('playback shell components', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
-    const menu = screen.getByRole('menu', { name: 'Settings options' })
+    const menu = screen.getByRole('dialog', { name: 'Settings options' })
     expect(within(menu).queryByRole('group', { name: 'Quality' })).not.toBeInTheDocument()
     expect(within(menu).queryByRole('group', { name: 'Server' })).not.toBeInTheDocument()
-    expect(within(menu).queryByRole('group', { name: 'Subtitles' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('group', { name: 'Captions' })).not.toBeInTheDocument()
     expect(within(menu).queryByRole('slider')).not.toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: /Playback settings/ }))
-    const playback = screen.getByRole('menu', { name: 'Playback settings' })
+    const playback = screen.getByRole('dialog', { name: 'Playback settings' })
     expect(within(playback).getByRole('slider', { name: 'Playback speed' })).toHaveAttribute('aria-valuetext', 'Normal')
     expect(within(playback).getByRole('slider', { name: 'Volume boost' })).toHaveValue('1')
     expect(within(playback).getByRole('slider', { name: 'Brightness' })).toBeInTheDocument()
@@ -505,13 +521,13 @@ describe('playback shell components', () => {
     fireEvent.click(screen.getByRole('button', { name: /Playback settings/ }))
     fireEvent.change(screen.getByRole('slider', { name: 'Playback speed' }), { target: { value: '4' } })
     expect(rate).toHaveBeenCalledWith(1.5)
-    expect(screen.getByRole('menu', { name: 'Playback settings' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Playback settings' })).toBeInTheDocument()
     fireEvent.change(screen.getByRole('slider', { name: 'Brightness' }), { target: { value: '1.2' } })
     expect(container.querySelector('video')).toHaveStyle({ filter: 'brightness(1.2)' })
     fireEvent.click(screen.getByRole('button', { name: 'Back to settings' }))
-    expect(screen.getByRole('menu', { name: 'Settings options' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Settings options' })).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
     window.localStorage.clear()
   })
@@ -535,12 +551,12 @@ describe('playback shell components', () => {
   it('opens the standalone subtitles panel and switches captions off', () => {
     prototypePlayer()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-    const menu = screen.getByRole('menu', { name: 'Subtitles' })
-    expect(within(menu).getByRole('button', { name: 'Close subtitles' })).toBeInTheDocument()
-    fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'Off' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    const menu = screen.getByRole('dialog', { name: 'Captions' })
+    expect(within(menu).getByRole('button', { name: 'Close captions' })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('radio', { name: 'Off' }))
 
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.queryByText('Some places disappear long before anyone leaves them.')).not.toBeInTheDocument()
   })
 
@@ -548,19 +564,20 @@ describe('playback shell components', () => {
     const request = vi.fn()
     render(<ConsumitPlayer src="/movie.mp4" title="Fixture" onSubtitleRequest={request} />)
     expect(request).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     expect(request).toHaveBeenCalledTimes(1)
   })
 
   it('opens the visual sync panel from the wand button and closes it', () => {
     prototypePlayer()
 
-    fireEvent.click(screen.getByRole('button', { name: /Subtitle sync offset/ }))
-    const menu = screen.getByRole('menu', { name: 'Subtitle sync' })
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sync subtitle to audio' }))
+    const menu = screen.getByRole('dialog', { name: 'Subtitle sync' })
     expect(within(menu).getByText('Select a line when you hear it spoken.')).toBeInTheDocument()
     expect(within(menu).getByText('0ms')).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: 'Close subtitle sync' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('renders delay-shifted cues from the parsed subtitle file', async () => {
@@ -654,6 +671,8 @@ describe('playback shell components', () => {
         // resolves its own direction; dir remains the legacy fallback.
         expect(cue.getAttribute('dir')).toBe('auto')
         expect(cue.className).toContain('[unicode-bidi:plaintext]')
+        expect(cue.className).toContain('font-bold')
+        expect((cue as HTMLElement).style.color).toBe('rgb(255, 250, 240)')
         expect(cue.className).not.toContain('text-balance')
       }
     } finally {
@@ -703,22 +722,22 @@ describe('playback shell components', () => {
 
   it('searches available subtitle tracks without needing a discovery provider', () => {
     render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'ar', label: 'Arabic', language: 'ar' }, { value: 'off', label: 'Off' }]} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-    const menu = screen.getByRole('menu', { name: 'Subtitles' })
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    const menu = screen.getByRole('dialog', { name: 'Captions' })
     fireEvent.change(within(menu).getByRole('searchbox'), { target: { value: 'English' } })
-    expect(within(menu).getByRole('menuitemradio', { name: 'English' })).toBeInTheDocument()
+    expect(within(menu).getByRole('radio', { name: 'English' })).toBeInTheDocument()
     expect(within(menu).queryByText('Searching tracks…')).not.toBeInTheDocument()
-    expect(within(menu).queryByRole('menuitemradio', { name: 'العربية' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('radio', { name: 'العربية' })).not.toBeInTheDocument()
   })
 
   it('keeps local subtitles usable when language discovery fails and offers a direct retry', async () => {
     const page = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ tracks: [], total: 0, nextCursor: null })
     render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'off', label: 'Off' }]} onSubtitlePage={page} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-    const menu = screen.getByRole('menu', { name: 'Subtitles' })
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    const menu = screen.getByRole('dialog', { name: 'Captions' })
     fireEvent.click(within(menu).getByRole('button', { name: /English.*1/ }))
     expect(await within(menu).findByText('These tracks could not load.')).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitemradio', { name: 'English' })).toBeEnabled()
+    expect(within(menu).getByRole('radio', { name: 'English' })).toBeEnabled()
     fireEvent.click(within(menu).getByRole('button', { name: 'Try this language again' }))
     await waitFor(() => expect(within(menu).queryByText('These tracks could not load.')).not.toBeInTheDocument())
     expect(page).toHaveBeenCalledTimes(2)
@@ -742,14 +761,14 @@ describe('playback shell components', () => {
     // header (Off excluded).
     expect(container.querySelector('span.relative > span[aria-hidden="true"]')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-    const menu = screen.getByRole('menu', { name: 'Subtitles' })
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    const menu = screen.getByRole('dialog', { name: 'Captions' })
     expect(within(menu).getByText('2 tracks')).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitemradio', { name: 'Off' })).toBeInTheDocument()
+    expect(within(menu).getByRole('radio', { name: 'Off' })).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: /العربية1/ }))
-    expect(within(menu).getByRole('menuitemradio', { name: 'العربية' })).toBeInTheDocument()
-    fireEvent.click(within(menu).getByRole('menuitemradio', { name: 'العربية' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(within(menu).getByRole('radio', { name: 'العربية' })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('radio', { name: 'العربية' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('keeps every subtitle in the menu when the server switches', async () => {
@@ -765,14 +784,14 @@ describe('playback shell components', () => {
         { id: 'y', label: 'English (yify)', language: 'en', url: 'https://subs.example/y.vtt' },
       ]
       const { rerender } = render(<ConsumitPlayer title="X" source={first} extraSubtitles={shared} />)
-      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-      const menu = screen.getByRole('menu', { name: 'Subtitles' })
+      fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+      const menu = screen.getByRole('dialog', { name: 'Captions' })
       fireEvent.click(within(menu).getByRole('button', { name: /English.*3/ }))
       await waitFor(() => expect(within(menu).getByText('English (A)')).toBeInTheDocument())
       expect(within(menu).getByText('3 tracks')).toBeInTheDocument()
 
       rerender(<ConsumitPlayer title="X" source={second} extraSubtitles={shared} />)
-      const kept = await screen.findByRole('menu', { name: 'Subtitles' })
+      const kept = await screen.findByRole('dialog', { name: 'Captions' })
       // Server A's track survives next to server B's and the engine track.
       await waitFor(() => expect(within(kept).getByText('English (B)')).toBeInTheDocument())
       expect(within(kept).getByText('English (A)')).toBeInTheDocument()
@@ -803,8 +822,8 @@ describe('playback shell components', () => {
           onSubtitleCandidateSelect={prepare}
         />,
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-      const menu = await screen.findByRole('menu', { name: 'Subtitles' })
+      fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+      const menu = await screen.findByRole('dialog', { name: 'Captions' })
       const languageRow = within(menu).getAllByRole('button', { name: /العربية/ }).find((entry) => entry.hasAttribute('aria-expanded'))!
       fireEvent.click(languageRow)
       expect(await within(menu).findByRole('button', { name: /^العربية\s*vdrkv2$/ })).toBeInTheDocument()
@@ -812,11 +831,11 @@ describe('playback shell components', () => {
 
       fireEvent.click(within(menu).getByRole('button', { name: /^العربية\s*vdrkv2$/ }))
       await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1))
-      await waitFor(() => expect(screen.queryByRole('menu', { name: 'Subtitles' })).not.toBeInTheDocument())
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Captions' })).not.toBeInTheDocument())
 
-      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-      const reopened = await screen.findByRole('menu', { name: 'Subtitles' })
-      expect(await within(reopened).findByRole('menuitemradio', { name: /العربية.*Arabic \(vdrkv2\)/ })).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+      const reopened = await screen.findByRole('dialog', { name: 'Captions' })
+      expect(await within(reopened).findByRole('radio', { name: /العربية.*Arabic \(vdrkv2\)/ })).toHaveAttribute('aria-checked', 'true')
       expect(within(reopened).queryByRole('button', { name: /^العربية\s*vdrkv2$/ })).not.toBeInTheDocument()
       expect(within(reopened).getByRole('button', { name: /^العربية\s*vdrk$/ })).toBeInTheDocument()
     } finally {
@@ -839,11 +858,11 @@ describe('playback shell components', () => {
           })}
         />,
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-      const menu = await screen.findByRole('menu', { name: 'Subtitles' })
+      fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+      const menu = await screen.findByRole('dialog', { name: 'Captions' })
       const languageRow = within(menu).getAllByRole('button', { name: /العربية/ }).find((entry) => entry.hasAttribute('aria-expanded'))!
       fireEvent.click(languageRow)
-      expect(await within(menu).findByRole('menuitemradio', { name: /العربية.*Arabic \(vdrkv2\)/ })).toHaveAttribute('aria-checked', 'true')
+      expect(await within(menu).findByRole('radio', { name: /العربية.*Arabic \(vdrkv2\)/ })).toHaveAttribute('aria-checked', 'true')
       expect(within(menu).queryByRole('button', { name: /^العربية\s*vdrkv2$/ })).not.toBeInTheDocument()
     } finally {
       load.mockRestore()
@@ -854,30 +873,35 @@ describe('playback shell components', () => {
     window.localStorage.clear()
     try {
       prototypePlayer()
-      const trigger = screen.getByRole('button', { name: 'Subtitles' })
+      const trigger = screen.getByRole('button', { name: 'Captions' })
       trigger.focus()
       fireEvent.click(trigger)
-      const subtitles = screen.getByRole('menu', { name: 'Subtitles' })
+      const subtitles = screen.getByRole('dialog', { name: 'Captions' })
       expect(within(subtitles).queryByRole('group', { name: 'Caption size' })).not.toBeInTheDocument()
       expect(within(subtitles).queryByRole('group', { name: 'Caption style' })).not.toBeInTheDocument()
       fireEvent.click(within(subtitles).getByRole('button', { name: 'Subtitle appearance' }))
-      const appearance = screen.getByRole('menu', { name: 'Subtitle appearance' })
-      expect(screen.queryByRole('menu', { name: 'Subtitles' })).not.toBeInTheDocument()
+      const appearance = screen.getByRole('dialog', { name: 'Subtitle appearance' })
+      expect(screen.queryByRole('dialog', { name: 'Captions' })).not.toBeInTheDocument()
       expect(trigger).toHaveAttribute('aria-controls', 'consumit-player-menu-appearance')
       fireEvent.click(within(appearance).getByRole('button', { name: 'Large' }))
       fireEvent.click(within(appearance).getByRole('button', { name: 'Boxed' }))
       fireEvent.click(within(appearance).getByRole('button', { name: 'Top' }))
-      fireEvent.click(within(appearance).getByRole('button', { name: 'Sans' }))
+      fireEvent.click(within(appearance).getByRole('button', { name: 'DejaVu' }))
+      fireEvent.click(within(appearance).getByRole('button', { name: 'Inter' }))
+      fireEvent.click(within(appearance).getByRole('button', { name: 'Warm yellow' }))
       expect(window.localStorage.getItem('consumit.player.caption-size')).toBe('large')
       expect(window.localStorage.getItem('consumit.player.caption-background')).toBe('boxed')
       expect(window.localStorage.getItem('consumit.player.caption-position')).toBe('top')
-      expect(window.localStorage.getItem('consumit.player.caption-font')).toBe('sans')
-      expect(screen.getByRole('menu', { name: 'Subtitle appearance' })).toBeInTheDocument()
+      expect(window.localStorage.getItem('consumit.player.caption-font')).toBe('inter')
+      expect(window.localStorage.getItem('consumit.player.caption-color')).toBe('warm')
+      expect(screen.getByRole('dialog', { name: 'Subtitle appearance' })).toBeInTheDocument()
       fireEvent.click(within(appearance).getByRole('button', { name: 'Back to subtitles' }))
       fireEvent.click(screen.getByRole('button', { name: 'Subtitle appearance' }))
       expect(screen.getByRole('button', { name: 'Large' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Inter' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Warm yellow' })).toHaveAttribute('aria-pressed', 'true')
       fireEvent.click(screen.getByRole('button', { name: 'Close subtitle appearance' }))
-      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(trigger).toHaveFocus()
     } finally {
       window.localStorage.clear()
@@ -887,7 +911,7 @@ describe('playback shell components', () => {
   it('does not rediscover subtitle tracks when returning from appearance', () => {
     const request = vi.fn()
     render(<ConsumitPlayer title="Fixture" src="/movie.mp4" onSubtitleRequest={request} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Subtitle appearance' }))
     fireEvent.click(screen.getByRole('button', { name: 'Back to subtitles' }))
     expect(request).toHaveBeenCalledTimes(1)
@@ -897,9 +921,9 @@ describe('playback shell components', () => {
     prototypePlayer()
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
-    expect(screen.getByRole('menu', { name: 'Settings options' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Settings options' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('closes the quality rail from its close control', () => {
@@ -907,9 +931,9 @@ describe('playback shell components', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Quality/ }))
-    expect(screen.getByRole('menu', { name: 'Quality' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Quality' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Close quality' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('closes the server rail from its close control', () => {
@@ -925,19 +949,19 @@ describe('playback shell components', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
-    expect(screen.getByRole('menu', { name: 'Server' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close server' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close sources' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('closes the subtitles panel from its close control', () => {
     prototypePlayer()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-    expect(screen.getByRole('menu', { name: 'Subtitles' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close subtitles' }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+    expect(screen.getByRole('dialog', { name: 'Captions' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close captions' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows title facts and overview while paused and hides them without pause context', () => {
@@ -991,18 +1015,20 @@ describe('playback shell components', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
     const onCastClick = vi.fn()
     const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
-    const button = screen.getByRole('button', { name: 'Cast to TV' })
+    fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+    const button = screen.getByRole('button', { name: /TV connection/ })
     expect(button).toBeEnabled()
     fireEvent.click(button)
-    expect(screen.getByRole('menu', { name: 'Cast to TV' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Cast to TV' })).toBeInTheDocument()
     expect(screen.getByText(/TV casting is being set up/)).toBeInTheDocument()
     rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
     expect(onCastClick).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Choose TV' }))
     expect(onCastClick).toHaveBeenCalledOnce()
-    expect(screen.queryByRole('menu', { name: 'Cast to TV' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Cast to TV' })).not.toBeInTheDocument()
     rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect from TV' }))
+    fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+    fireEvent.click(screen.getByRole('button', { name: /TV connection/ }))
     expect(onCastClick).toHaveBeenCalledTimes(2)
   })
   it('lists servers and switches on selection', () => {
@@ -1019,12 +1045,12 @@ describe('playback shell components', () => {
         onServerChange={onServerChange}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
-    const menu = screen.getByRole('menu', { name: 'Server' })
-    expect(within(menu).getByRole('menuitemradio', { name: /vidlink/ })).toHaveAttribute('aria-checked', 'false')
-    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /vidlink/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+    const menu = screen.getByRole('dialog', { name: 'Sources' })
+    expect(within(menu).getByRole('button', { name: 'vidlink' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(within(menu).getByRole('button', { name: 'vidlink' }))
     expect(onServerChange).toHaveBeenCalledWith('vidlink')
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
   it('groups mirror servers by family with their qualities', () => {
     const onServerChange = vi.fn()
@@ -1041,13 +1067,13 @@ describe('playback shell components', () => {
         onServerChange={onServerChange}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
-    const menu = screen.getByRole('menu', { name: 'Server' })
-    // Families headline their mirrors; the aggregate row reads Auto.
-    expect(within(menu).getByRole('group', { name: 'Vidcore' })).toBeInTheDocument()
-    expect(within(menu).getByRole('group', { name: 'Rivestream' })).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitemradio', { name: /Nova/ })).toHaveAttribute('aria-checked', 'false')
-    fireEvent.click(within(menu).getByRole('menuitemradio', { name: /Nova/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+    const menu = screen.getByRole('dialog', { name: 'Sources' })
+    // The flat list preserves each provider/mirror without nested family sections.
+    expect(within(menu).getByRole('button', { name: 'vidcore' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'rivestream' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Nova' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(within(menu).getByRole('button', { name: 'Nova' }))
     expect(onServerChange).toHaveBeenCalledWith('vidcore-nova')
   })
   it('offers another server from the error overlay when options exist', () => {
@@ -1066,18 +1092,34 @@ describe('playback shell components', () => {
     fireEvent.error(container.querySelector('video')!)
     expect(screen.getByRole('alert')).toHaveTextContent('Playback failed')
     fireEvent.click(screen.getByRole('button', { name: 'Try another server' }))
-    expect(screen.getByRole('menu', { name: 'Server' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument()
   })
   it('auto-skips the intro while playing when auto-skip is on', () => {
     window.localStorage.clear()
     const source = { src: 'https://cdn.example/ep.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'intro' as const, start: 0, end: 85 }] }
-    const { container } = render(<ConsumitPlayer source={source} title="Skip intro" />)
+    const { container } = render(<ConsumitPlayer source={source} title="Skip intro" autoSkip />)
     const video = container.querySelector('video')!
     Object.defineProperty(video, 'paused', { configurable: true, value: false })
     setClock(video, 10, 1500)
     fireEvent.timeUpdate(video)
     fireEvent.play(video)
     expect(video.currentTime).toBe(85)
+    window.localStorage.clear()
+  })
+  it('keeps auto-skip off by default and shows the exact manual action', () => {
+    window.localStorage.clear()
+    const source = { src: 'https://cdn.example/ep.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'intro' as const, start: 0, end: 85 }] }
+    const { container } = render(<ConsumitPlayer source={source} title="Skip intro default" />)
+    const video = container.querySelector('video')!
+    Object.defineProperty(video, 'paused', { configurable: true, value: false })
+    setClock(video, 10, 1500)
+    fireEvent.timeUpdate(video)
+    fireEvent.play(video)
+    expect(video.currentTime).toBe(10)
+    expect(screen.getByRole('button', { name: 'Skip intro' })).toBeVisible()
+    const introMarker = container.querySelector<HTMLElement>('[data-player-skip-segment="intro"]')!
+    expect(introMarker.style.left).toBe('0%')
+    expect(Number.parseFloat(introMarker.style.width)).toBeGreaterThan(0)
     window.localStorage.clear()
   })
   it('offers a manual skip button when auto-skip is off', () => {
@@ -1109,16 +1151,16 @@ describe('playback shell components', () => {
         onServerChange={() => {}}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
-    const menu = screen.getByRole('menu', { name: 'Server' })
+    fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+    const menu = screen.getByRole('dialog', { name: 'Sources' })
     expect(within(menu).getByText('Unavailable for this title')).toBeInTheDocument()
-    expect(within(menu).getByRole('menuitemradio', { name: /Nova/ })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Nova' })).toBeInTheDocument()
   })
   it('hides the server switcher when there is nothing to switch to', () => {
     render(<ConsumitPlayer title="The Last City After Rain" src="/movie.mp4" serverOptions={[{ label: 'vixsrc', value: 'vixsrc' }]} />)
-    expect(screen.queryByRole('button', { name: 'Change server' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
-    expect(screen.getByRole('menu', { name: 'Settings options' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Settings options' })).toBeInTheDocument()
   })
 
   it('toggles mute from the keyboard without a playable engine', () => {
@@ -1167,9 +1209,9 @@ describe('playback shell components', () => {
       expect(html).toContain('Settings: audio, speed, brightness')
       // The stored preference applies in an effect after mount.
       render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" backHref="/title" />)
-      fireEvent.click(screen.getByRole('button', { name: 'Subtitles' }))
-      const menu = screen.getByRole('menu', { name: 'Subtitles' })
-      expect(within(menu).getByRole('menuitemradio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
+      const menu = screen.getByRole('dialog', { name: 'Captions' })
+      expect(within(menu).getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true')
     } finally {
       window.localStorage.clear()
     }
@@ -1177,14 +1219,11 @@ describe('playback shell components', () => {
 
   it('keeps PiP support out of the first paint so SSR matches hydration', async () => {
     const html = renderToString(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
-    // SSR has no window/document: PiP reports unsupported (disabled).
-    expect(html).toContain('Enter picture in picture')
-    const ssrDisabled = /disabled=""/.test(html.slice(html.indexOf('Enter picture in picture') - 200, html.indexOf('Enter picture in picture')))
-    expect(ssrDisabled || html.includes('disabled')).toBe(true)
-
+    // Advanced viewing choices do not occupy the initial transport deck.
+    expect(html).not.toContain('Enter picture in picture')
     render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
-    const button = screen.getByRole('button', { name: 'Enter picture in picture' })
-    // First client paint still matches SSR (disabled); capability applies in an effect.
+    fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+    const button = screen.getByRole('button', { name: /Picture in picture/ })
     expect(button).toBeDisabled()
     await waitFor(() => {
       // jsdom has no picture-in-picture: stays disabled after mount too.
@@ -1207,10 +1246,10 @@ describe('playback shell components', () => {
           onServerChange={() => {}}
         />,
       )
-      fireEvent.click(screen.getByRole('button', { name: 'Change server' }))
-      const menu = screen.getByRole('menu', { name: 'Server' })
-      expect(within(menu).getByText('🇺🇸')).toBeInTheDocument()
-      expect(within(menu).getByText('🇩🇪')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
+      const menu = screen.getByRole('dialog', { name: 'Sources' })
+      expect(within(menu).getByText('US')).toBeInTheDocument()
+      expect(within(menu).getByText('DE')).toBeInTheDocument()
       expect(within(menu).getByText('Server degraded')).toBeInTheDocument()
       const heart = within(menu).getByRole('button', { name: 'Favorite rivestream server' })
       expect(heart).toHaveAttribute('aria-pressed', 'false')
@@ -1218,7 +1257,7 @@ describe('playback shell components', () => {
       expect(heart).toHaveAttribute('aria-pressed', 'true')
       expect(JSON.parse(window.localStorage.getItem('consumit.favorite-servers') ?? '[]')).toEqual(['rivestream'])
       // Favorites pin to the top of the list.
-      const rows = within(menu).getAllByRole('menuitemradio')
+      const rows = within(menu).getAllByRole('button').filter(row => row.classList.contains('consumit-source-choice'))
       expect(rows[0]).toHaveAccessibleName(/rivestream/)
       fireEvent.click(within(menu).getByRole('button', { name: 'Unfavorite rivestream server' }))
       expect(JSON.parse(window.localStorage.getItem('consumit.favorite-servers') ?? '[]')).toEqual([])

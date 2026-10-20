@@ -38,7 +38,7 @@ describe('identity profile routes', () => {
 
     const profile = await app.inject({ cookies: { [sessionCookieName(env)]: cookie!.value }, method: 'GET', url: '/v1/me/profile' })
     expect(profile.statusCode).toBe(200)
-    expect(profile.json()).toMatchObject({ bio: null, username: 'cinema_fan', visibility: 'private' })
+    expect(profile.json()).toMatchObject({ bio: null, username: 'cinema_fan', sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } })
   })
 
   it('rejects profile mutations without the same-origin header', async () => {

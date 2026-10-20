@@ -39,7 +39,7 @@ export function RatingWidget({ id, kind, title }: RatingWidgetProps) {
 
   if (!session.member) {
     return (
-      <p className="text-sm leading-6 text-white/70">
+      <p className="text-sm leading-6 text-[var(--fs-secondary)]">
         <Link className="inline-flex min-h-11 items-center font-bold text-ink underline decoration-control-outline underline-offset-4 outline-none transition-colors hover:text-orange hover:decoration-orange focus-visible:ring-2 focus-visible:ring-orange" href="/sign-in">Sign in</Link> to rate {title}.
       </p>
     )

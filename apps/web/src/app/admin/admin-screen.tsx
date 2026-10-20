@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, CheckCircle, Compass, FlaskConical, Globe, LayoutDashboard, Users, XCircle } from 'lucide-react'
+import { Activity, CheckCircle, FlaskConical, Globe, LayoutDashboard, Users, XCircle } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -15,7 +15,8 @@ import { OperationsDashboard } from './operations-dashboard'
 
 const ProviderBench = dynamic(() => import('./provider-bench').then(module => module.ProviderBench), { loading: () => <LoadingState title="Opening provider bench" rows={3} /> })
 
-type Tab = 'overview' | 'operations' | 'providers' | 'lab' | 'scout' | 'members'
+type Tab = 'overview' | 'operations' | 'providers' | 'test-lab' | 'members'
+type TestMode = 'configured' | 'scout'
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-card border border-border bg-surface p-4 ${className}`}>{children}</div>
@@ -126,7 +127,7 @@ function OperationsTab() {
 
 // --- Providers Tab ---
 
-export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] }) {
+export function ProviderOrderEditor({ providers, onDisableEmbed, disablingEmbedId = null }: { providers: AdminProvider[]; onDisableEmbed?(provider: AdminProvider): void; disablingEmbedId?: string | null }) {
   const [kind, setKind] = useState<ProviderKind>('movie')
   const [ids, setIds] = useState<string[]>([])
   const [saved, setSaved] = useState<string[]>([])
@@ -164,8 +165,9 @@ export function ProviderOrderEditor({ providers }: { providers: AdminProvider[] 
         const fullIndex = ids.indexOf(id)
         return <li key={id} draggable={!busy} onDragStart={(event) => event.dataTransfer.setData('text/plain', String(fullIndex))} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData('text/plain')); if (Number.isInteger(from)) move(from, fullIndex) }} className="flex items-center gap-2 rounded-control border border-border bg-field px-3 py-2 text-xs">
           <span className="w-5 tabular-nums text-muted">{visibleIndex + 1}</span><span className="min-w-0 flex-1 truncate font-mono text-ink">{id}</span><span className="text-muted">{provider?.enabled ? provider.deliveryMode === 'relay' ? 'Proxy' : provider.deliveryMode === 'embed' ? 'Embed' : 'Direct' : 'Disabled'}</span>
-          <button type="button" aria-label={`Move ${id} up`} disabled={busy || visibleIndex === 0} onClick={() => move(fullIndex, fullIndex - 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↑</button>
-          <button type="button" aria-label={`Move ${id} down`} disabled={busy || visibleIndex === visibleIds.length - 1} onClick={() => move(fullIndex, fullIndex + 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↓</button>
+          {provider?.deliveryMode === 'embed' && provider.enabled && onDisableEmbed && <Button size="sm" variant="ghost" disabled={busy || disablingEmbedId !== null} loading={disablingEmbedId === id} onClick={() => onDisableEmbed(provider)}>Disable</Button>}
+          <button type="button" aria-label={`Move ${id} up`} disabled={busy || disablingEmbedId !== null || visibleIndex === 0} onClick={() => move(fullIndex, fullIndex - 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↑</button>
+          <button type="button" aria-label={`Move ${id} down`} disabled={busy || disablingEmbedId !== null || visibleIndex === visibleIds.length - 1} onClick={() => move(fullIndex, fullIndex + 1)} className="min-h-9 min-w-9 rounded border border-border disabled:opacity-40">↓</button>
         </li>
       })}
     </ol>
@@ -258,22 +260,44 @@ function MembersTab() {
 const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'overview', label: 'Dashboard', icon: <LayoutDashboard className="size-4" /> },
   { key: 'providers', label: 'Providers', icon: <Globe className="size-4" /> },
-  { key: 'lab', label: 'Playback debug', icon: <FlaskConical className="size-4" /> },
-  { key: 'scout', label: 'Provider scout', icon: <Compass className="size-4" /> },
+  { key: 'test-lab', label: 'Test Lab', icon: <FlaskConical className="size-4" /> },
   { key: 'operations', label: 'Diagnostics', icon: <Activity className="size-4" /> },
   { key: 'members', label: 'Access', icon: <Users className="size-4" /> },
 ]
 
+function TestLab({ active, target, onManage, mode, onModeChange }: { active: boolean; target?: { id: string; kind: ProviderKind; version: number } | undefined; onManage: () => void; mode: TestMode; onModeChange: (mode: TestMode) => void }) {
+  const [visitedModes, setVisitedModes] = useState<TestMode[]>(['configured'])
+  function selectMode(next: TestMode) {
+    onModeChange(next)
+    setVisitedModes(current => current.includes(next) ? current : [...current, next])
+  }
+  return <section aria-labelledby="test-lab-heading" className="space-y-5">
+    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+      <div><h2 id="test-lab-heading" className="font-display text-3xl tracking-[-0.02em] text-ink">Test Lab<span className="text-orange">.</span></h2><p className="mt-2 max-w-[68ch] text-sm leading-6 text-muted">Resolve an exact title with one provider or compare a sequential run. Source validation and browser playback are reported separately.</p></div>
+      <SegmentedControl legend="Test mode" name="admin-test-mode" value={mode} onValueChange={value => selectMode(value as TestMode)} options={[{ value: 'configured', label: 'Configured providers' }, { value: 'scout', label: 'Scout candidates' }]} />
+    </header>
+    {visitedModes.includes('configured') && <div hidden={mode !== 'configured'}><ProviderBench mode="configured" active={active && mode === 'configured'} target={target} onManage={onManage} /></div>}
+    {visitedModes.includes('scout') && <div hidden={mode !== 'scout'}><ProviderBench mode="scout" active={active && mode === 'scout'} onManage={onManage} /></div>}
+  </section>
+}
+
 export function AdminScreen() {
   const [tab, setTab] = useState<Tab>('overview')
   const [visited, setVisited] = useState<Tab[]>(['overview'])
+  const [testMode, setTestMode] = useState<TestMode>('configured')
   const [debugTarget, setDebugTarget] = useState<{ id: string; kind: ProviderKind; version: number } | undefined>(undefined)
   const navigate = useCallback((next: Tab) => {
     setTab(next); setVisited(current => current.includes(next) ? current : [...current, next])
     window.history.replaceState(window.history.state, '', `#${next}`)
   }, [])
   useEffect(() => {
-    const open = () => { const hash = window.location.hash.slice(1); if (tabs.some(entry => entry.key === hash)) navigate(hash as Tab) }
+    const open = () => {
+      const hash = window.location.hash.slice(1)
+      if (hash === 'lab' || hash === 'scout') {
+        setTestMode(hash === 'scout' ? 'scout' : 'configured')
+        navigate('test-lab')
+      } else if (tabs.some(entry => entry.key === hash)) navigate(hash as Tab)
+    }
     const initial = setTimeout(open, 0); window.addEventListener('hashchange', open)
     return () => { clearTimeout(initial); window.removeEventListener('hashchange', open) }
   }, [navigate])
@@ -283,16 +307,17 @@ export function AdminScreen() {
       <main className="mx-auto w-full min-w-0 max-w-[1600px]">
         <div className="mb-6 border-b border-border pb-6">
           <h1 className="font-display text-4xl tracking-[-0.02em] text-ink">Control room<span className="text-orange">.</span></h1>
-          <p className="mt-2 max-w-[70ch] text-sm leading-6 text-muted">Playback evidence, provider controls, and the next reliable source.</p>
+          <p className="mt-2 max-w-[70ch] text-sm leading-6 text-muted">One place to manage playback providers, verify sources, and review service health.</p>
         </div>
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[172px_minmax(0,1fr)]">
-        <nav className="flex content-start gap-1 overflow-x-auto border-b border-border xl:block xl:border-b-0 xl:border-r xl:pr-4" aria-label="Admin sections">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[196px_minmax(0,1fr)]">
+        <nav className="min-w-0 overflow-x-auto border-b border-border pb-2 xl:overflow-visible xl:border-b-0 xl:border-r xl:pr-4" aria-label="Admin sections">
+          <p className="mb-2 hidden px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-faint xl:block">Workspace</p>
           {tabs.map((t) => (
             <button
               aria-current={tab === t.key ? 'page' : undefined}
               key={t.key}
-              className={`flex shrink-0 items-center gap-2 rounded-control px-3 py-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange xl:mb-1 xl:w-full ${
+              className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control px-3 py-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange xl:mb-1 xl:flex xl:w-full ${
                 tab === t.key
                   ? 'bg-orange/10 text-orange'
                   : 'text-muted hover:bg-surface hover:text-ink'
@@ -307,11 +332,13 @@ export function AdminScreen() {
         </nav>
 
         <div className="min-w-0">
-        <div hidden={tab !== 'overview'}><OperationsDashboard active={tab === 'overview'} onNavigate={navigate} onDebug={(id, kind) => { setDebugTarget({ id, kind, version: Date.now() }); navigate('lab') }} /></div>
+        <div hidden={tab !== 'overview'}><OperationsDashboard active={tab === 'overview'} onNavigate={section => {
+          if (section === 'scout') { setTestMode('scout'); navigate('test-lab') }
+          else navigate(section)
+        }} onTest={(id, kind) => { setDebugTarget({ id, kind, version: Date.now() }); setTestMode('configured'); navigate('test-lab') }} /></div>
         {tab === 'operations' && <OperationsTab />}
-        {visited.includes('providers') && <div hidden={tab !== 'providers'}><ProvidersTab /></div>}
-        {visited.includes('lab') && <div hidden={tab !== 'lab'}><ProviderBench mode="configured" active={tab === 'lab'} target={debugTarget} onManage={() => navigate('providers')} /></div>}
-        {visited.includes('scout') && <div hidden={tab !== 'scout'}><ProviderBench mode="scout" active={tab === 'scout'} onManage={() => navigate('providers')} /></div>}
+        {visited.includes('providers') && <div hidden={tab !== 'providers'}><ProvidersTab onTest={(id, kind) => { setDebugTarget({ id, kind, version: Date.now() }); setTestMode('configured'); navigate('test-lab') }} /></div>}
+        {visited.includes('test-lab') && <div hidden={tab !== 'test-lab'}><TestLab active={tab === 'test-lab'} target={debugTarget} onManage={() => navigate('providers')} mode={testMode} onModeChange={setTestMode} /></div>}
         {tab === 'members' && <MembersTab />}
         </div>
         </div>

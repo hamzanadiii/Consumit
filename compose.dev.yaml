@@ -38,7 +38,7 @@ services:
       - "5434:5432"
 
   # Dev migrations target the local Postgres too, so `up` never touches
-  # Neon. Production (base file only) keeps migrating Neon via .env.
+  # an external database. Production keeps its own DATABASE_URL via .env.
   migrate:
     environment:
       DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
@@ -63,8 +63,8 @@ services:
     command: ["bun", "--filter", "@consumit/api", "dev"]
     environment:
       GENERATE_PRISMA: "1"
-      # Development runs against the local Docker Postgres (Neon stays
-      # production-only via the base file + root .env). Internal hostname.
+      # Development runs against the local Docker Postgres via its
+      # internal hostname.
       DATABASE_URL: postgresql://consumit:consumit-local@postgres:5432/consumit
       DATABASE_SSL_MODE: disable
       # The host .env points PLAYBACK_MEDIA_CONFIG at a Windows path for

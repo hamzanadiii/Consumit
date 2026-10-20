@@ -7,7 +7,7 @@ import { SearchScreen } from './search-screen'
 
 import { CatalogUnavailableScreen } from '../catalog/catalog-ui'
 
-import { getAnimeTrending, searchAnime } from '@/lib/anime-api'
+import { AnimeApiError, getAnimeTrending, searchAnime } from '@/lib/anime-api'
 import { getCatalogDiscovery, searchCatalog } from '@/lib/catalog-api'
 import { dedupeTwinSeries } from '@/lib/search-dedupe'
 
@@ -33,12 +33,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   // rejects `anime`), so search AniList alongside TMDB. Best-effort — an
   // anime outage must not take down movie/series results.
   let animeItems: AnimeTitleSummary[] = []
+  let animeSignInRequired = false
   try {
     const anime = initialQuery.length >= 2
       ? await searchAnime(initialQuery)
       : await getAnimeTrending(1)
     animeItems = anime.items
-  } catch {
+  } catch (error) {
+    // Anime search is member-only; say so instead of reporting zero matches.
+    animeSignInRequired = error instanceof AnimeApiError && error.status === 401
     animeItems = []
   }
   let page
@@ -53,5 +56,5 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   // (the anime page owns playback). Movies and year-less records never match.
   const deduped = { ...page, items: dedupeTwinSeries(page.items, animeItems) }
 
-  return <SearchScreen initialKind={type === 'movie' || type === 'series' || type === 'anime' ? type : 'all'} animeResults={animeItems} initialQuery={initialQuery} page={deduped} queryTooShort={queryTooShort} />
+  return <SearchScreen initialKind={type === 'movie' || type === 'series' || type === 'anime' ? type : 'all'} animeResults={animeItems} animeSignInRequired={animeSignInRequired} initialQuery={initialQuery} page={deduped} queryTooShort={queryTooShort} />
 }

@@ -1,10 +1,24 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProviderOrderEditor, ProviderControlSummary } from './admin-screen'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('admin provider order', () => {
+  it('offers an Admin disable action for enabled embeds and hides them after disable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kind: 'movie', providerIds: ['external-frame'], revision: 1 }))))
+    const onDisableEmbed = vi.fn()
+    const provider = { id: 'external-frame', deliveryMode: 'embed' as const, enabled: true, regions: ['US'], mediaHosts: [], upstreamGroup: 'external-frame', concurrency: 1, requestsPerMinute: 30, priority: 0, mediaKinds: ['movie'] }
+    const view = render(<ProviderOrderEditor providers={[provider]} onDisableEmbed={onDisableEmbed} />)
+    const order = await screen.findByRole('list', { name: 'movie provider order' })
+    await waitFor(() => expect(order).toHaveTextContent('external-frame'))
+    expect(order).toHaveTextContent('Embed')
+    fireEvent.click(within(order).getByRole('button', { name: 'Disable' }))
+    expect(onDisableEmbed).toHaveBeenCalledWith(provider)
+    view.rerender(<ProviderOrderEditor providers={[{ ...provider, enabled: false }]} onDisableEmbed={onDisableEmbed} />)
+    await waitFor(() => expect(order).not.toHaveTextContent('external-frame'))
+  })
+
   it('shows the saved delivery mode and hides the row when the provider is disabled', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ kind: 'movie', providerIds: ['relay-provider'], revision: 1 }))))
     const provider = { id: 'relay-provider', deliveryMode: 'relay' as const, enabled: true, regions: ['US'], mediaHosts: [], upstreamGroup: 'relay-provider', concurrency: 1, requestsPerMinute: 30, priority: 0, mediaKinds: ['movie'] }

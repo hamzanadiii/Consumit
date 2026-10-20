@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { ConsumitPlayer, WatchHeader, buttonVariants, type ChapterCue, type DirectMediaSource } from '@consumit/ui'
 import { WatchPlayback } from './watch-playback'
 import { watchPoster } from './watch-poster'
-import { WatchDetails, WatchSurface } from './watch-surface'
+import { WatchPlayerSurface } from './watch-surface'
 
 /** Minimal title surface the Watch screens need. Movie/series catalog
  *  details and anime details both satisfy it; anime titles map their
@@ -73,15 +73,9 @@ type WatchScreenProps = {
  */
 export function WatchScreen({ audioLanguage, demo, episode, title, interactive = false, nextHref, prevHref, pinnedProvider }: WatchScreenProps) {
   if (interactive && !demo) return (
-    <WatchSurface backHref={titleHref(title)}>
-      <WatchPlayback key={`${title.kind}:${title.id}:${episode?.seasonNumber ?? 0}:${episode?.episodeNumber}`} layout="embedded" title={title} episode={episode} nextHref={nextHref} prevHref={prevHref} {...(audioLanguage ? { audioLanguage } : {})} {...(pinnedProvider ? { pinnedProvider } : {})} />
-      <WatchDetails
-        episode={episode ? `Episode ${episode.episodeNumber} · ${episode.title}` : undefined}
-        meta={[title.year, title.runtimeMinutes ? `${title.runtimeMinutes} min` : null, title.certification ?? title.contentRating].filter(Boolean).join(' · ')}
-        overview={episode?.overview || title.overview}
-        title={title.title}
-      />
-    </WatchSurface>
+    <WatchPlayerSurface>
+      <WatchPlayback key={`${title.kind}:${title.id}:${episode?.seasonNumber ?? 0}:${episode?.episodeNumber}`} layout="fullscreen" title={title} episode={episode} nextHref={nextHref} prevHref={prevHref} {...(audioLanguage ? { audioLanguage } : {})} {...(pinnedProvider ? { pinnedProvider } : {})} />
+    </WatchPlayerSurface>
   )
   const displayTitle = episode ? `${title.title} · ${episode.title}` : title.title
   const meta = episode

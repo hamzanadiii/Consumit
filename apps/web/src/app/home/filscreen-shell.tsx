@@ -33,6 +33,10 @@ import { logoutMember } from '@/lib/identity-browser'
 import { dicebearAvatarUrl, memberAvatarSrc } from '@/lib/avatar'
 import { useSession } from '../session/session'
 import { OnDemandLink as Link } from '../shared/on-demand-link'
+import { PopunderAd } from '../shared/popunder-ad'
+
+/** Keep automatic advertising off private, playback and account-management routes. */
+const POPUNDER_EXCLUDED_PATHS = ['/watch', '/settings', '/admin', '/sign-in', '/sign-up', '/onboarding']
 
 export { SIDEBAR_STORAGE_KEY, THEME_INIT_SCRIPT, THEME_STORAGE_KEY, THEME_STYLE, stampDocumentTheme, type FilScreenTheme } from './filscreen-theme'
 import { THEME_STYLE } from './filscreen-theme'
@@ -212,10 +216,11 @@ export function FilScreenShell({
   }, [searchOpen])
 
   const isHome = pathname === '/'
-  const isSeries = activeKindTab === 'series' || pathname.startsWith('/series')
-  const isMovies = activeKindTab === 'movies' || pathname.startsWith('/movies') || pathname.startsWith('/title')
-  const isAnime = activeKindTab === 'anime' || pathname.startsWith('/anime')
-  const isNew = activeKindTab === 'new' || (isHome && !isSeries && !isMovies && !isAnime)
+  const isSeries = pathname.startsWith('/series') || (isHome && activeKindTab === 'series')
+  const isMovies = pathname.startsWith('/movies') || pathname.startsWith('/title') || (isHome && activeKindTab === 'movies')
+  const isAnime = pathname.startsWith('/anime') || (isHome && activeKindTab === 'anime')
+  const isNew = isHome && (activeKindTab === 'new' || !isSeries && !isMovies && !isAnime)
+  const allowPopunder = !POPUNDER_EXCLUDED_PATHS.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
   const memberProfileRoot = member ? `/profile/${encodeURIComponent(member.username)}` : null
 
   function navigation(iconOnly: boolean) {
@@ -268,6 +273,7 @@ export function FilScreenShell({
   return (
     <div className="min-h-screen bg-[var(--fs-shell)] text-[var(--fs-ink)]" data-filscreen-home data-theme={theme} style={{ colorScheme: theme }}>
       <WelcomeDialog pathname={pathname ?? '/'} />
+      {allowPopunder ? <PopunderAd /> : null}
       {pendingHref ? (
         <div aria-label="Loading page" className="fixed inset-x-0 top-0 z-[100] h-0.5 overflow-hidden" role="status">
           <div aria-hidden="true" className="fs-route-progress h-full w-1/4 bg-[var(--fs-accent)]" />

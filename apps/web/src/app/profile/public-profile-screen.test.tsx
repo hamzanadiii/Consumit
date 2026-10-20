@@ -47,7 +47,7 @@ beforeEach(() => {
   mocks.saveMemberFavorites.mockResolvedValue({})
 })
 const profile: MemberProfileData = {
-  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', location: null, nextUsernameChangeAt: null, username: 'alex_sample', usernameChangedAt: null, visibility: 'private' },
+  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'alex_sample', usernameChangedAt: null },
   diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 0, reviews: 0, watched: 0 },
 }
 
@@ -103,7 +103,7 @@ describe('profile as a personal cinema', () => {
     expect(screen.getByRole('link', { name: 'Network' })).toHaveAttribute('href', '/profile/alex_sample/network')
     expect(screen.queryByRole('link', { name: 'Followers' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Following' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /share/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Share profile' })).toBeInTheDocument()
   })
   it('renders profile stats, collection links, and recent activity', () => {
     render(

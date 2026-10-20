@@ -158,7 +158,7 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
             continue
           }
           sources.push({
-            key: `kyren:${server}:${lang}:${ref.episode}:${index}`,
+            key: `kyren:${server}:${lang}:${ref.episode}:${index}`, serverName: server.slice(0, 80),
             url: item.url,
             type,
             headers: { referer: `${siteOrigin}/` },
@@ -176,17 +176,17 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
       }
     }
 
+    const discovered: ProviderSource[] = []
     const raceControllers = raceServers.map(() => new AbortController())
     const abortRaces = () => raceControllers.forEach((controller) => controller.abort(signal.reason))
     signal.addEventListener('abort', abortRaces, { once: true })
     if (signal.aborted) abortRaces()
     try {
-      const raced = raceServers.map((server, index) => tryServer(server, raceControllers[index]!.signal))
-      for (const pending of raced) {
-        const sources = await pending
+      const raced = await Promise.all(raceServers.map((server, index) => tryServer(server, raceControllers[index]!.signal)))
+      for (const sources of raced) {
         if (!sources.length) continue
         signal.throwIfAborted()
-        if (await segmentsServe(sources, signal)) return sources.slice(0, 3)
+        if (await segmentsServe(sources, signal)) discovered.push(...sources)
       }
     } finally {
       signal.removeEventListener('abort', abortRaces)
@@ -197,8 +197,9 @@ export function createKyrenProvider(http: ProviderHttp, resolveTitle: AnimeTitle
       const sources = await tryServer(server)
       if (!sources.length) continue
       signal.throwIfAborted()
-      if (await segmentsServe(sources, signal)) return sources.slice(0, 3)
+      if (await segmentsServe(sources, signal)) discovered.push(...sources)
     }
+    if (discovered.length) return discovered.slice(0, 12)
     throw new ProviderFailure('empty')
   }), { id, audioLanguages: ['ja', 'en'] as const })
 }

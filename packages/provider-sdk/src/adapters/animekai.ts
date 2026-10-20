@@ -1,4 +1,3 @@
-import { createDecipheriv, generateKeyPairSync, sign } from 'node:crypto'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { accessDeadline, adapter, document, ProviderFailure, userAgent, type ProviderHttp } from './http.ts'
@@ -224,7 +223,26 @@ function b64urlToBuffer(value: string): Buffer {
   return Buffer.from(normalized, 'base64')
 }
 
-function decryptPlayback(payload: z.infer<typeof playbackPayloadSchema>): unknown {
+/** Web Crypto keeps P-256 work in the runtime's native implementation rather
+ * than the Worker's synchronous Node compatibility layer. The provider expects
+ * DER ECDSA; subtle.sign returns the fixed-width r/s representation. */
+export async function createAnimeKaiAttestation(nonce: string) {
+  const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+  const publicKey = await crypto.subtle.exportKey('jwk', keys.publicKey)
+  const raw = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, new TextEncoder().encode(nonce)))
+  if (raw.length !== 64 || !publicKey.x || !publicKey.y) throw new ProviderFailure('unavailable')
+  const integer = (part: Uint8Array) => {
+    let start = 0
+    while (start < part.length - 1 && part[start] === 0) start++
+    const value = part.slice(start)
+    return value[0]! & 0x80 ? Buffer.concat([Buffer.from([0]), value]) : Buffer.from(value)
+  }
+  const r = integer(raw.subarray(0, 32)), s = integer(raw.subarray(32))
+  const signature = Buffer.concat([Buffer.from([0x30, 4 + r.length + s.length, 0x02, r.length]), r, Buffer.from([0x02, s.length]), s]).toString('base64url')
+  return { publicKey: { kty: 'EC' as const, crv: 'P-256' as const, x: publicKey.x, y: publicKey.y }, signature }
+}
+
+async function decryptPlayback(payload: z.infer<typeof playbackPayloadSchema>): Promise<unknown> {
   const version = payload.version?.trim() ?? ''
   const parsedVersion = Number(version)
   let order: number[] = []
@@ -237,10 +255,9 @@ function decryptPlayback(payload: z.infer<typeof playbackPayloadSchema>): unknow
   const data = b64urlToBuffer(payload.payload)
   if (iv.length === 0 || data.length <= 16) throw new ProviderFailure('malformed')
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key, iv)
-    decipher.setAuthTag(data.subarray(data.length - 16))
-    const plaintext = Buffer.concat([decipher.update(data.subarray(0, data.length - 16)), decipher.final()])
-    return JSON.parse(plaintext.toString('utf8'))
+    const aesKey = await crypto.subtle.importKey('raw', new Uint8Array(key), { name: 'AES-GCM' }, false, ['decrypt'])
+    const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(iv), tagLength: 128 }, aesKey, new Uint8Array(data))
+    return JSON.parse(new TextDecoder().decode(plaintext))
   } catch (error) {
     if (error instanceof SyntaxError) throw error
     throw new ProviderFailure('malformed')
@@ -330,17 +347,15 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
       const op = bounded(signal, CHAIN_MS)
       try {
         const challenge = challengeSchema.parse(await postJson(http, '/api/videos/access/challenge', {}, referer, op.signal))
-        const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
-        const jwk = publicKey.export({ format: 'jwk' }) as { x?: string; y?: string }
-        if (!jwk.x || !jwk.y) throw new ProviderFailure('unavailable')
-        const signature = sign('sha256', Buffer.from(String(challenge.nonce), 'utf8'), privateKey).toString('base64url')
+        const attested = await createAnimeKaiAttestation(String(challenge.nonce))
+        op.signal.throwIfAborted()
         const attestation = attestSchema.parse(await postJson(http, '/api/videos/access/attest', {
           viewer_id: '',
           device_id: '',
           challenge_id: challenge.challenge_id,
           nonce: challenge.nonce,
-          signature,
-          public_key: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y },
+          signature: attested.signature,
+          public_key: attested.publicKey,
           client: { user_agent: userAgent, extra: { vendor: '', appVersion: '' } },
           storage: {},
           attributes: { entropy: 'low' },
@@ -357,7 +372,7 @@ export function createAnimeKaiProvider(http: ProviderHttp, resolveTitle: AnimeTi
         const playback = z.object({ playback: playbackPayloadSchema }).parse(await postJson(http, `/api/videos/${pick.code}/embed/playback`, { fingerprint }, referer, op.signal, {
           'x-captcha-token': verification.token,
         }))
-        const decrypted = decryptPlayback(playback.playback)
+        const decrypted = await decryptPlayback(playback.playback)
         config = playbackConfigSchema.parse(decrypted)
       } finally {
         op.cleanup()

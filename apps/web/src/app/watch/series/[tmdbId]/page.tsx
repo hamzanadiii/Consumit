@@ -35,9 +35,11 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
   try { titleResponse = await getCatalogTitle('series', id) } catch (error) { if (error instanceof CatalogApiError && error.status === 404) notFound(); return <CatalogUnavailableScreen error={error} /> }
   if (titleResponse.item.kind !== 'series') notFound()
   const season = await getCatalogSeason(id, seasonNumber).catch(() => null)
+  const now = serverRenderTime()
   const next = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber + 1)
   const nextSeason = titleResponse.item.seasons.find((item) => item.number === seasonNumber + 1 && item.episodeCount > 0)
-  const nextHref = next ? `/watch/series/${id}?season=${seasonNumber}&episode=${next.episodeNumber}` : nextSeason ? `/watch/series/${id}?season=${nextSeason.number}&episode=1` : undefined
+  const aired = (date: string | null | undefined) => !date || Date.parse(date) <= now
+  const nextHref = next && aired(next.airDate) ? `/watch/series/${id}?season=${seasonNumber}&episode=${next.episodeNumber}` : !next && nextSeason && aired(nextSeason.airDate) ? `/watch/series/${id}?season=${nextSeason.number}&episode=1` : undefined
   const prev = season?.item.episodes.find((item) => item.episodeNumber === episodeNumber - 1)
   const prevSeason = episodeNumber === 1 ? titleResponse.item.seasons.find((item) => item.number === seasonNumber - 1 && item.episodeCount > 0) : undefined
   const prevHref = prev ? `/watch/series/${id}?season=${seasonNumber}&episode=${prev.episodeNumber}` : prevSeason ? `/watch/series/${id}?season=${prevSeason.number}&episode=${prevSeason.episodeCount}` : undefined
@@ -50,7 +52,7 @@ export default async function SeriesWatchPage({ params, searchParams }: SeriesWa
         episodeNumber={episodeNumber}
         episodes={season?.item.episodes ?? []}
         nextHref={nextHref}
-        now={serverRenderTime()}
+        now={now}
         prevHref={prevHref}
         seasonNumber={seasonNumber}
         seasons={titleResponse.item.seasons}

@@ -32,6 +32,15 @@ describe('separate audio without replacing video', () => {
     expect(await relay.accepts(prepared.src, 'audio-relay')).toBe(true)
     await store.close()
   })
+  it('keeps an adapter-pinned playback origin for media edges that reject the app origin', async () => {
+    const movie = { kind: 'movie' as const, id: 550 }
+    const pinned = { ...source, headers: { origin: 'https://cdn.partner.example' } }
+    const p: ProviderRegistration = { adapter: createStaticProvider('pinnedcdn', [{ ref: movie, sources: [pinned] }]), role: 'audio', deliveryMode: 'direct', enabled: true, approvedRegions: ['US'], mediaHosts: ['media.example'], upstreamGroup: 'pinnedcdn', concurrency: 1, requestsPerMinute: 30, mediaKinds: ['movie'] }
+    const http = vi.fn(async (url: string, headers: Record<string, string>) => ({ status: headers.origin === 'https://cdn.partner.example' ? 200 : 403, url, text: url.endsWith('master.m3u8') ? master : media, headers: new Headers() }))
+    const tracks = await createSeparateAudio([p], 'US', http, 'https://consumit.example').list({ ...body, ref: movie }, new AbortController().signal)
+    expect(tracks).toEqual([expect.objectContaining({ label: 'Hindi', language: 'hi' })])
+    for (const call of http.mock.calls) expect((call[1] as Record<string, string>).origin).toBe('https://cdn.partner.example')
+  })
   it('finds movie audio behind a wrapper master and bounds unsafe or cyclic wrappers', async () => {
     const movie = { kind: 'movie' as const, id: 1007757 }
     const p: ProviderRegistration = {

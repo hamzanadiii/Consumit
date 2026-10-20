@@ -1,6 +1,7 @@
 'use client'
 
 import { Tabs, type TabItem } from '@consumit/ui'
+import type { ProfileSectionVisibility } from '@consumit/contracts'
 import { useEffect, useRef } from 'react'
 
 export type ProfileSectionId = 'overview' | 'activity' | 'films' | 'diary' | 'history' | 'reviews' | 'watchlist' | 'lists' | 'likes' | 'tags' | 'ratings' | 'followers' | 'following' | 'network'
@@ -9,11 +10,12 @@ export type ProfileSectionId = 'overview' | 'activity' | 'films' | 'diary' | 'hi
  * Profile tabs link to focused personal archives. Saved titles remain private
  * and appear only in the owner's Watchlist destination.
  */
-export function ProfileSectionNavigation({ active = 'overview', counts, name, owner = false, username }: {
+export function ProfileSectionNavigation({ active = 'overview', counts, name, owner = false, username, visibility }: {
   active?: ProfileSectionId
   counts: Partial<Record<ProfileSectionId, number>>
   name: string
   owner?: boolean
+  visibility?: ProfileSectionVisibility
   username: string
 }) {
   const root = `/profile/${encodeURIComponent(username)}`
@@ -39,14 +41,17 @@ export function ProfileSectionNavigation({ active = 'overview', counts, name, ow
     ...(owner ? [{ href: `${root}/activity`, label: 'Activity', value: 'activity' },
     { href: `${root}/films`, label: 'Watched', value: 'films', ...(counts.films === undefined ? {} : { count: counts.films }) },
     { href: `${root}/diary`, label: 'Diary', value: 'diary', ...(counts.diary === undefined ? {} : { count: counts.diary }) }] : []),
-    { href: `${root}/ratings`, label: 'Ratings', value: 'ratings', ...(counts.ratings === undefined ? {} : { count: counts.ratings }) },
+    ...(owner || visibility?.ratings !== false ? [{ href: `${root}/ratings`, label: 'Ratings', value: 'ratings', ...(counts.ratings === undefined ? {} : { count: counts.ratings }) }] : []),
     ...(owner ? [{ href: `${root}/history`, label: 'History', value: 'history' }] : []),
-    { href: `${root}/reviews`, label: 'Reviews', value: 'reviews', ...(counts.reviews === undefined ? {} : { count: counts.reviews }) },
-    ...(owner ? [{ href: `${root}/watchlist`, label: 'Watchlist', value: 'watchlist' }] : []),
-    { href: `${root}/lists`, label: 'Lists', value: 'lists', ...(counts.lists === undefined ? {} : { count: counts.lists }) },
+    ...(owner || visibility?.reviews !== false ? [{ href: `${root}/reviews`, label: 'Reviews', value: 'reviews', ...(counts.reviews === undefined ? {} : { count: counts.reviews }) }] : []),
+    ...(owner || visibility?.watchlist !== false ? [{ href: `${root}/watchlist`, label: 'Watchlist', value: 'watchlist' }] : []),
+    ...(owner || visibility?.lists !== false ? [{ href: `${root}/lists`, label: 'Lists', value: 'lists', ...(counts.lists === undefined ? {} : { count: counts.lists }) }] : []),
     ...(owner ? [{ href: `${root}/likes`, label: 'Likes', value: 'likes', ...(counts.likes === undefined ? {} : { count: counts.likes }) },
-    { href: `${root}/tags`, label: 'Tags', value: 'tags', ...(counts.tags === undefined ? {} : { count: counts.tags }) }] : []),
-    { href: `${root}/network`, label: 'Network', value: 'network' },
+      { href: `${root}/tags`, label: 'Tags', value: 'tags', ...(counts.tags === undefined ? {} : { count: counts.tags }) }] : [
+      ...(visibility?.likes ? [{ href: `${root}/likes`, label: 'Likes', value: 'likes' }] : []),
+      ...(visibility?.tags ? [{ href: `${root}/tags`, label: 'Tags', value: 'tags' }] : []),
+    ]),
+    ...(owner || visibility?.network !== false ? [{ href: `${root}/network`, label: 'Network', value: 'network' }] : []),
   ]
 
   return (

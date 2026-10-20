@@ -1,4 +1,4 @@
-import type { AvatarStyle, MemberExport, UpdateProfileRequest } from '@consumit/contracts'
+import type { AvatarStyle, MemberExport, ProfileSectionVisibility, UpdateProfileRequest } from '@consumit/contracts'
 
 export type IdentityRecord = {
   authVersion: number
@@ -13,10 +13,9 @@ export type IdentityRecord = {
     bannerUrl: string | null
     bio: string | null
     displayName: string | null
-    location: string | null
+    sectionVisibility: ProfileSectionVisibility
     username: string
     usernameChangedAt: Date | null
-    visibility: 'private' | 'public'
   }
   role: 'MEMBER' | 'ADMIN'
   status: 'ACTIVE' | 'DELETED'

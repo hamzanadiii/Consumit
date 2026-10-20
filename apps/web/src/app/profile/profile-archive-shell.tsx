@@ -21,10 +21,11 @@ export function ProfileArchiveShell({ children, data, heading, owner = false, se
       : {}),
     ...(ratings === undefined ? {} : { ratings }),
   }
+  const visibility = 'viewerIsOwner' in data ? data.sectionVisibility : data.profile.sectionVisibility
   return <FilScreenShell pageHeading={undefined}>
     <main className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-profile-archive>
       <ProfileArchiveHeader data={data} heading={heading} owner={owner} />
-      <ProfileSectionNavigation active={section} counts={counts} name={data.profile.displayName ?? data.profile.username} owner={owner} username={data.profile.username} />
+      <ProfileSectionNavigation active={section} counts={counts} name={data.profile.displayName ?? data.profile.username} owner={owner} username={data.profile.username} visibility={visibility} />
       {children}
     </main>
   </FilScreenShell>

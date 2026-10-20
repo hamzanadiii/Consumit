@@ -122,4 +122,59 @@ Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Line one\\nLine two
     const vtt = assToVtt(input)!
     expect(vtt).toContain('Line one\nLine two')
   })
+
+  it('parses Events with no Format line using the standard field order', () => {
+    const input = `[Script Info]
+Title: Test
+
+[Events]
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,No format line here
+`
+    const vtt = assToVtt(input)!
+    expect(vtt).toContain('00:00:01.000 --> 00:00:04.000')
+    expect(vtt).toContain('No format line here')
+  })
+
+  it('drops drawing-mode spans instead of leaking path data', () => {
+    const input = `[Script Info]
+Title: Test
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,{\\p1}m 0 0 l 45 0 45 30 0 30{\\p0}Visible text
+Dialogue: 0,0:00:05.00,0:00:08.00,Default,,0,0,0,,{\\p1}m 0 0 l 100 0 100 100
+`
+    const vtt = assToVtt(input)!
+    expect(vtt).toContain('Visible text')
+    expect(vtt).not.toContain('m 0 0')
+    expect(vtt).not.toContain('l 45 0')
+    expect(vtt).not.toContain('l 100 0')
+  })
+
+  it('keeps readable text when a drawing span is the whole line', () => {
+    const input = `[Script Info]
+Title: Test
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,{\\p1}m 0 0 l 45 0{\\p0}
+Dialogue: 0,0:00:05.00,0:00:07.00,Default,,0,0,0,,Real caption
+`
+    const vtt = assToVtt(input)!
+    expect(vtt).toContain('Real caption')
+    expect(vtt).not.toContain('m 0 0')
+  })
+
+  it('strips karaoke tags outside override blocks', () => {
+    const input = `[Script Info]
+Title: Test
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\k20}Ka{\\k15}ra{\\k10}o{\\k5}ke
+`
+    const vtt = assToVtt(input)!
+    expect(vtt).toContain('Karaoke')
+    expect(vtt).not.toContain('\\k')
+  })
 })

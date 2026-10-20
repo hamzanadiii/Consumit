@@ -6,14 +6,127 @@ const EMPTY = (): ProviderMetrics => ({ starts: 0, playbackFailures: 0, buffers:
 type Sample = { metric: Record<string, string>; value: [number, string] }
 const BROWSERS = new Set(['chrome', 'edge', 'firefox', 'safari', 'other', 'unknown'])
 
-async function query(baseUrl: string, expression: string, fetcher: typeof fetch): Promise<Sample[]> {
+async function query(baseUrl: string, expression: string, fetcher: typeof fetch, limit = 1000): Promise<Sample[]> {
   const endpoint = new URL('/api/v1/query', baseUrl)
   endpoint.searchParams.set('query', expression)
   const response = await fetcher(endpoint, { signal: AbortSignal.timeout(2500) })
   if (!response.ok) throw new Error('Metrics backend unavailable.')
   const body = await response.json() as { status?: string; data?: { resultType?: string; result?: Sample[] } }
-  if (body.status !== 'success' || body.data?.resultType !== 'vector' || !Array.isArray(body.data.result) || body.data.result.length > 1000) throw new Error('Invalid metrics response.')
+  if (body.status !== 'success' || body.data?.resultType !== 'vector' || !Array.isArray(body.data.result) || body.data.result.length > limit) throw new Error('Invalid metrics response.')
   return body.data.result
+}
+
+export type ProviderComparisonRow = {
+  provider: string; kind: 'movie' | 'series' | 'anime'; region: string
+  browser: string; delivery: 'all' | 'direct' | 'relay' | 'embed' | 'unattributed'
+  evidence: 'native' | 'resolution' | 'provider-reported'
+  starts?: number; playbackFailures?: number; buffers?: number
+  startupSamples?: number; stallSamples?: number
+  startupP50Ms?: number; startupP95Ms?: number; stallP50Ms?: number; stallP95Ms?: number
+  resolveSuccess?: number; resolveFailures?: number; resolveCancelled?: number
+  failureReasons?: Record<string, number>; reportedEvents?: Record<string, number>
+}
+
+/** Interpolate within pooled cumulative buckets, as histogram_quantile does.
+ * Summing bucket observations before this calculation keeps browser/delivery
+ * comparisons weighted by actual samples instead of averaging percentiles. */
+function percentile(buckets: Map<number, number>, quantile: number): number | undefined {
+  const total = buckets.get(Infinity)
+  if (!total || total <= 0) return undefined
+  const ordered = [...buckets].sort(([a], [b]) => a - b)
+  if (ordered.length < 2) return undefined
+  const target = total * quantile
+  let lower = 0; let previous = 0
+  for (const [upper, rawCount] of ordered) {
+    const count = Math.max(previous, rawCount)
+    if (count >= target) {
+      if (!Number.isFinite(upper)) return lower
+      return count === previous ? upper : lower + (upper - lower) * (target - previous) / (count - previous)
+    }
+    lower = upper; previous = count
+  }
+  return undefined
+}
+
+/** Fixed aggregate queries only. Resolver counters predate browser/delivery
+ * attribution, so their rows deliberately retain that missing attribution.
+ * Frame reports never contribute native starts, durations, or viewing. */
+export async function readProviderComparisons(baseUrl: string, fetcher: typeof fetch = fetch): Promise<ProviderComparisonRow[]> {
+  const [events, attempts, timings, reports] = await Promise.all([
+    query(baseUrl, 'sum by (provider,kind,region,browser,delivery,event) (increase(consumit_playback_events_total[15m]))', fetcher, 10_000),
+    query(baseUrl, 'sum by (provider,kind,region,outcome) (increase(consumit_provider_attempts_total[15m]))', fetcher, 10_000),
+    query(baseUrl, 'sum by (provider,kind,region,browser,delivery,event,le) (increase(consumit_playback_client_duration_milliseconds_bucket{event=~"started|buffer-end"}[15m]))', fetcher, 20_000),
+    query(baseUrl, 'sum by (provider,kind,region,browser,delivery,event) (increase(consumit_playback_frame_reported_total[15m]))', fetcher, 10_000),
+  ])
+  const rows = new Map<string, ProviderComparisonRow>()
+  const histograms = new Map<ProviderComparisonRow, Map<string, Map<string, Map<number, number>>>>()
+  function identity(sample: Sample) {
+    const { provider, kind, region } = sample.metric ?? {}
+    const value = Number(sample.value?.[1])
+    if (!provider || !/^[a-z0-9-]{1,64}$/.test(provider) || !['movie', 'series', 'anime'].includes(kind ?? '') || !/^[A-Z]{2}$/.test(region ?? '') || !Number.isFinite(value) || value < 0) return null
+    return { provider, kind: kind as ProviderComparisonRow['kind'], region: region!, value }
+  }
+  function row(sample: Sample, evidence: ProviderComparisonRow['evidence'], browser: string, delivery: ProviderComparisonRow['delivery']) {
+    const id = identity(sample)
+    if (!id) return null
+    const key = `${id.provider}:${id.kind}:${id.region}:${browser}:${delivery}:${evidence}`
+    let value = rows.get(key)
+    if (!value) { value = { provider: id.provider, kind: id.kind, region: id.region, browser, delivery, evidence }; rows.set(key, value) }
+    return { row: value, count: id.value }
+  }
+  function dimensions(sample: Sample, evidence: 'native' | 'provider-reported') {
+    const delivery = sample.metric.delivery
+    if (evidence === 'native' ? delivery !== 'direct' && delivery !== 'relay' : delivery !== 'embed') return []
+    const browser = BROWSERS.has(sample.metric.browser ?? '') ? sample.metric.browser! : 'unknown'
+    return [browser, 'all'].flatMap(family => [delivery, 'all'].map(mode => row(sample, evidence, family, mode as ProviderComparisonRow['delivery']))).filter(value => value !== null)
+  }
+  for (const sample of events) {
+    const field = sample.metric.event === 'started' ? 'starts' : sample.metric.event === 'error' ? 'playbackFailures' : sample.metric.event === 'buffer-start' ? 'buffers' : null
+    if (!field) continue
+    for (const match of dimensions(sample, 'native')) match.row[field] = (match.row[field] ?? 0) + match.count
+  }
+  for (const sample of timings) {
+    if (sample.metric.event !== 'started' && sample.metric.event !== 'buffer-end') continue
+    const boundary = sample.metric.le === '+Inf' ? Infinity : Number(sample.metric.le)
+    if (!(Number.isFinite(boundary) && boundary >= 0 || boundary === Infinity)) continue
+    for (const match of dimensions(sample, 'native')) {
+      let groups = histograms.get(match.row)
+      if (!groups) { groups = new Map(); histograms.set(match.row, groups) }
+      let series = groups.get(sample.metric.event)
+      if (!series) { series = new Map(); groups.set(sample.metric.event, series) }
+      const source = `${sample.metric.browser ?? 'unknown'}:${sample.metric.delivery}`
+      let buckets = series.get(source)
+      if (!buckets) { buckets = new Map(); series.set(source, buckets) }
+      buckets.set(boundary, (buckets.get(boundary) ?? 0) + match.count)
+    }
+  }
+  for (const [value, groups] of histograms) for (const [event, series] of groups) {
+    // During a collector histogram-schema rollout, only shared boundaries are
+    // comparable. A missing bucket must never be interpreted as zero samples.
+    const sources = [...series.values()]
+    const buckets = new Map([...sources[0]!.keys()].filter(boundary => sources.every(source => source.has(boundary))).map(boundary => [boundary, sources.reduce((sum, source) => sum + source.get(boundary)!, 0)]))
+    const prefix = event === 'started' ? 'startup' : 'stall'
+    if (buckets.has(Infinity)) value[`${prefix}Samples`] = buckets.get(Infinity)!
+    for (const quantile of [0.5, 0.95]) {
+      const timing = percentile(buckets, quantile)
+      if (timing !== undefined) value[`${prefix}${quantile === 0.5 ? 'P50Ms' : 'P95Ms'}`] = timing
+    }
+  }
+  for (const sample of attempts) {
+    if (!['success', 'error', 'empty', 'cancelled'].includes(sample.metric.outcome ?? '')) continue
+    const match = row(sample, 'resolution', 'all', 'unattributed')
+    if (!match) continue
+    const field = sample.metric.outcome === 'success' ? 'resolveSuccess' : sample.metric.outcome === 'cancelled' ? 'resolveCancelled' : 'resolveFailures'
+    match.row[field] = (match.row[field] ?? 0) + match.count
+    if (field === 'resolveFailures') { match.row.failureReasons ??= {}; match.row.failureReasons[sample.metric.outcome!] = (match.row.failureReasons[sample.metric.outcome!] ?? 0) + match.count }
+  }
+  const reportedEvents = new Set(['playing', 'paused', 'progress', 'ended', 'unavailable', 'error'])
+  for (const sample of reports) {
+    if (!reportedEvents.has(sample.metric.event ?? '')) continue
+    for (const match of dimensions(sample, 'provider-reported')) { match.row.reportedEvents ??= {}; match.row.reportedEvents[sample.metric.event!] = (match.row.reportedEvents[sample.metric.event!] ?? 0) + match.count }
+  }
+  if (rows.size > 5000) throw new Error('Invalid metrics response.')
+  return [...rows.values()]
 }
 
 /** Only aggregate, fixed PromQL expressions cross this interface. No member

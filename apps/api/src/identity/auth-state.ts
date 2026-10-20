@@ -15,6 +15,12 @@ export const ACCOUNT_CONFIRM_WINDOW_MS = 60 * 60 * 1000
  *  challenge state, so expired or deleted challenges cannot uncap sends. */
 export const ACCOUNT_SEND_MAX = 5
 export const ACCOUNT_SEND_WINDOW_MS = 60 * 60 * 1000
+/** Wrong passwords are counted per account so a distributed spray cannot
+ *  outpace the per-address credential limit. Counting starts only once the
+ *  account is known to exist, which keeps unknown addresses from minting
+ *  unlimited counters. */
+export const LOGIN_MAX_ATTEMPTS = 10
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000
 export const MAX_MEMBER_SESSIONS = 20
 
 export type RegistrationChallenge = {
@@ -47,13 +53,16 @@ export interface AuthStateStore {
     payload: AuthChallenge
     purpose: AuthChallenge['kind']
   }): Promise<'cooldown' | 'stored' | 'username-unavailable'>
+  clearFailedLogins(email: string): Promise<void>
   close(): Promise<void>
   consumeChallenge(input: { code: string; email: string; purpose: AuthChallenge['kind'] }): Promise<AuthChallenge | 'locked' | null>
   health(): Promise<boolean>
   issueSession(input: { authVersion: number; memberId: string }): Promise<{ record: SessionRecord; token: string }>
   isUsernameReserved(username: string): Promise<boolean>
+  loginLocked(email: string): Promise<boolean>
   pendingRegistration(email: string): Promise<RegistrationChallenge | null>
   readSession(token: string): Promise<SessionRecord | null>
+  registerFailedLogin(email: string): Promise<void>
   revokeMemberSessions(memberId: string): Promise<void>
   revokeSession(token: string): Promise<void>
 }
@@ -64,4 +73,8 @@ export function challengeLookup(pepper: string, purpose: AuthChallenge['kind'], 
 
 export function challengeCodeHash(pepper: string, purpose: AuthChallenge['kind'], email: string, code: string): string {
   return createHmac('sha256', pepper).update(`${purpose}:${email}:${code}`).digest('hex')
+}
+
+export function loginLookup(pepper: string, email: string): string {
+  return createHmac('sha256', pepper).update(`login:${email}`).digest('hex')
 }

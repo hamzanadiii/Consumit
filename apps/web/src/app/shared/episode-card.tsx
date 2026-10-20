@@ -23,6 +23,7 @@ export function EpisodeCard({ actionLabel = 'Play episode', linkLabel, status, a
   const artwork = <ArtworkFrame
     alt={stillUrl ? title ? `${title} still` : `Episode ${episode} still` : `Episode ${episode} title artwork`}
     className="rounded-none border-0"
+    fallbackSrc={stillUrl && fallbackArt !== stillUrl ? fallbackArt ?? undefined : undefined}
     ratio="landscape"
     src={stillUrl ?? fallbackArt ?? undefined}
   />

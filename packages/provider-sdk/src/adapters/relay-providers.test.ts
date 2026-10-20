@@ -34,14 +34,14 @@ describe('PROVE relay provider routes', () => {
     const provider = createAnimeRelayProvider(http, '9anime', () => now)
     expect(await provider.resolve({ ...anime, audioLanguage: 'en' }, signal())).toMatchObject({ ok: true, sources: [{ language: 'en', skipSegments: [{ kind: 'intro', start: 5, end: 90 }] }] })
     expect(http).toHaveBeenCalledTimes(1)
-    expect(http.mock.calls[0]?.[0]).toBe('https://new.vidnest.fun/hianime/anime/21/7/dub/hd-2')
+    expect(http.mock.calls[0]?.[0]).toMatch(/^https:\/\/new\.vidnest\.fun\/hianime\/anime\/21\/7\/dub\/hd-2\?_n=[A-Za-z0-9_-]+$/)
     expect(http.mock.calls.some(call => call[0].includes('aniwave_hls'))).toBe(false)
   })
   it('keeps AniWave in its own route and refuses another media namespace', async () => {
     const http = client({ sources: [{ url: 'https://ru-ri-cdn3.echovideo.to/a.m3u8' }] })
     const provider = createAnimeRelayProvider(http, 'aniwave', () => now)
     expect(await provider.resolve(anime, signal())).toMatchObject({ ok: true, sources: [{ language: 'original' }] })
-    expect(http.mock.calls[0]?.[0]).toBe('https://new.vidnest.fun/aniwave_hls/21/7/sub')
+    expect(http.mock.calls[0]?.[0]).toMatch(/^https:\/\/new\.vidnest\.fun\/aniwave_hls\/21\/7\/sub\?_n=[A-Za-z0-9_-]+$/)
     expect(await provider.resolve(movie, signal())).toMatchObject({ ok: false, code: 'empty' })
     expect(http).toHaveBeenCalledTimes(1)
   })
@@ -94,7 +94,7 @@ describe('PROVE relay provider routes', () => {
     const http = client({ results: [{ title: 'Breaking Bad', year: 2008, play_url: '/tv/play/breaking-bad/1/1' }] }, page(),
       encrypt({ servers: [{ id: 'premium-cinejoy-1', source_url: 'wrong' }, { id: 'premium-ymovies-2', source_url: 'right' }] }, 'test-ticket'),
       encrypt({ ok: true, url: 'https://os.bingebangstream.online/title.m3u8', type: 'hls', quality: '2160p' }, 'test-ticket'))
-    expect(await createBingeBangYMoviesProvider(http, async () => ({ title: 'Breaking Bad', year: 2008 }), () => now).resolve(series, signal())).toMatchObject({ ok: true, sources: [{ type: 'hls', height: 2160 }] })
+    expect(await createBingeBangYMoviesProvider(http, async () => ({ title: 'Breaking Bad', year: 2008 }), () => now, { mediaHosts: ['os.bingebangstream.online'] }).resolve(series, signal())).toMatchObject({ ok: true, sources: [{ type: 'hls', height: 2160 }] })
     expect(http.mock.calls[1]?.[0]).toBe('https://bingebang.st/tv/play/breaking-bad/3/4')
     expect(http.mock.calls[3]?.[0]).toBe('https://bingebang.st/api/player/resolve?src=right')
   })
@@ -105,8 +105,19 @@ describe('PROVE relay provider routes', () => {
       { title: 'Fight Club', year: 1999, play_url: 'https://evil.example/movie/play/wrong' },
     ]) {
       const http = client({ results: [result] })
-      expect((await createBingeBangYMoviesProvider(http, async () => ({ title: 'Fight Club', year: 1999 })).resolve(movie, signal())).ok).toBe(false)
+      expect((await createBingeBangYMoviesProvider(http, async () => ({ title: 'Fight Club', year: 1999 }), () => now, { mediaHosts: ['os.bingebangstream.online'] }).resolve(movie, signal())).ok).toBe(false)
       expect(http).toHaveBeenCalledTimes(1)
     }
+  })
+  it('accepts only roster-approved BingeBang media hosts as its edge rotates', async () => {
+    const run = async (host: string, mediaHosts: string[]) => {
+      const http = client({ results: [{ title: 'Fight Club', year: 1999, play_url: '/movie/play/fight-club' }] }, page(),
+        encrypt({ servers: [{ id: 'premium-ymovies-1', source_url: 'right' }] }, 'test-ticket'),
+        encrypt({ ok: true, url: `https://${host}/title.m3u8`, type: 'hls', quality: '2160p' }, 'test-ticket'))
+      return createBingeBangYMoviesProvider(http, async () => ({ title: 'Fight Club', year: 1999 }), () => now, { mediaHosts }).resolve(movie, signal())
+    }
+    expect(await run('reliablephonerepairs.website', ['reliablephonerepairs.website'])).toMatchObject({ ok: true, sources: [{ url: 'https://reliablephonerepairs.website/title.m3u8', height: 2160 }] })
+    expect(await run('wowstreamingsofast.lol', ['reliablephonerepairs.website'])).toMatchObject({ ok: false, code: 'malformed' })
+    expect(await run('reliablephonerepairs.website.evil.example', ['reliablephonerepairs.website'])).toMatchObject({ ok: false, code: 'malformed' })
   })
 })

@@ -5,6 +5,7 @@ import { acquireProviderBudget } from '../playback/provider-budget.ts'
 import { collectSubtitleCandidates } from '../playback/resolver.ts'
 import { createProviderHttp } from '../playback/provider-http.ts'
 import { downloadStreamingSubtitle } from './hls.ts'
+import { normalizeTrackLanguage } from './lang.ts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
 
@@ -106,8 +107,8 @@ export function createStreamingSubtitleProviders(providers: readonly ProviderReg
             } catch { /* Declared files remain available if master inspection fails. */ }
           }
           for (const { track, headers, expiresAt, hls } of candidates) {
-            let lang: string
-            try { lang = Intl.getCanonicalLocales(track.language.replaceAll('_', '-'))[0]!.toLowerCase() } catch { continue }
+            const lang = normalizeTrackLanguage(track.language, track.label)
+            if (!lang) continue
             if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(lang) || lang.length > 32 || seen.has(track.url)) continue
             seen.add(track.url)
             tracks.push({ url: track.url, lang, label: track.label, provider: id, providerName: registration.adapter.separateAudio?.label ?? registration.adapter.id, format: hls ? 'vtt' : 'other', hls, headers, authority: scope, expiresAt: new Date(expiresAt).toISOString() })

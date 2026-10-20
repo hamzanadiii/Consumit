@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { authorizedInternal } from '@consumit/server'
-import { providerStateSchema, catalogContextRequestSchema, subtitleCatalogRequestSchema, resolverMetadataSchema, animeContextSchema, backgroundOperationSchema } from '@consumit/contracts/internal'
+import { providerStateSchema, catalogContextRequestSchema, subtitleCatalogRequestSchema, resolverMetadataSchema, animeContextSchema, backgroundOperationSchema, tmdbEpisodeMappingRequestSchema, tmdbEpisodeMappingSchema } from '@consumit/contracts/internal'
 import type { ApiEnv } from '../config/env.ts'
 import type { ProviderConfigStore } from '../admin/provider-config.ts'
 import type { AnimeCatalog } from '../catalog/anilist/adapter.ts'
@@ -9,7 +9,7 @@ import type { TitleMetadataResolver } from '../playback/tmdb-metadata.ts'
 import type { SubtitleCatalog } from '../subtitles/catalog.ts'
 import { ApiError } from '../http/errors.ts'
 
-export function registerProductInternal(app: FastifyInstance, deps: { env: ApiEnv; config?: ProviderConfigStore | undefined; anime: Pick<AnimeCatalog, 'title'>; metadata: CloudflareResolverOptions['metadata']; tmdb?: TitleMetadataResolver | undefined; subtitles?: SubtitleCatalog | undefined; releaseRefresh: () => Promise<void>; catalogCleanup: () => Promise<void> }) {
+export function registerProductInternal(app: FastifyInstance, deps: { env: ApiEnv; config?: ProviderConfigStore | undefined; anime: Pick<AnimeCatalog, 'title'>; metadata: CloudflareResolverOptions['metadata']; tmdb?: TitleMetadataResolver | undefined; tmdbEpisode?: ((tmdbId: number, absoluteEpisode: number) => Promise<{ season: number; episode: number } | null>) | undefined; subtitles?: SubtitleCatalog | undefined; releaseRefresh: () => Promise<void>; catalogCleanup: () => Promise<void> }) {
   if (!deps.env.internal) return
   const options = { config: { rateLimit: false as const }, preHandler: async (request: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) => {
     reply.header('cache-control', 'private, no-store')
@@ -31,6 +31,11 @@ export function registerProductInternal(app: FastifyInstance, deps: { env: ApiEn
     if (mode === 'tmdb' && ref.kind !== 'anime' && deps.tmdb) return resolverMetadataSchema.parse(await deps.tmdb(ref, AbortSignal.timeout(5000)))
     if (mode === 'worker' && providerId) return resolverMetadataSchema.parse(await deps.metadata(providerId, ref, AbortSignal.timeout(5000)))
     throw new ApiError('BAD_REQUEST', 'Use a compatible metadata operation.')
+  })
+  app.post('/v1/internal/playback/tmdb-episode', options, async request => {
+    const parsed = tmdbEpisodeMappingRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a TMDB series and canonical anime episode.')
+    return tmdbEpisodeMappingSchema.parse(await deps.tmdbEpisode?.(parsed.data.tmdbId, parsed.data.absoluteEpisode) ?? null)
   })
   app.post('/v1/internal/playback/subtitles', options, async request => {
     const parsed = subtitleCatalogRequestSchema.safeParse(request.body)

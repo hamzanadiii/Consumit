@@ -8,6 +8,7 @@ const introDbSchema = z.object({
   tmdb_id: z.number().int().positive(), type: z.enum(['movie', 'tv']), season: z.number().optional(), episode: z.number().optional(),
   intro: z.array(z.object({ start_ms: time.nullable(), end_ms: time })).max(8).optional(),
   recap: z.array(z.object({ start_ms: time.nullable(), end_ms: time })).max(8).optional(),
+  credits: z.array(z.object({ start_ms: time, end_ms: time.nullable() })).max(8).optional(),
 })
 const aniSkipSchema = z.object({ found: z.boolean(), results: z.array(z.object({
   skipType: z.string(), interval: z.object({ startTime: time, endTime: time }), episodeLength: time,
@@ -44,12 +45,12 @@ export function createSkipTimes({ animeMalId, fetcher = fetch }: {
       signal.throwIfAborted()
       if (!malId) return []
       const url = new URL(`https://api.aniskip.com/v2/skip-times/${malId}/${ref.episode}`)
-      url.searchParams.append('types[]', 'op'); url.searchParams.append('types[]', 'recap')
+      url.searchParams.append('types[]', 'op'); url.searchParams.append('types[]', 'ed'); url.searchParams.append('types[]', 'recap')
       url.searchParams.set('episodeLength', String(duration))
       const parsed = aniSkipSchema.safeParse(await readJson(url, fetcher, signal))
       if (!parsed.success || !parsed.data.found) return []
       segments = (parsed.data.results ?? []).flatMap((item) => {
-        const kind = item.skipType === 'op' ? 'intro' : item.skipType === 'recap' ? 'recap' : null
+        const kind = item.skipType === 'op' ? 'intro' : item.skipType === 'ed' ? 'outro' : item.skipType === 'recap' ? 'recap' : null
         return kind && Math.abs(item.episodeLength - duration) <= 5 ? [{ kind, start: item.interval.startTime, end: item.interval.endTime }] : []
       })
     } else {
@@ -62,9 +63,13 @@ export function createSkipTimes({ animeMalId, fetcher = fetch }: {
         // TheIntroDB explicitly defines null starts as the beginning, not unknown.
         for (const item of parsed.data[kind] ?? []) segments.push({ kind, start: (item.start_ms ?? 0) / 1000, end: item.end_ms / 1000 })
       }
+      // Credits end null means end of media per TheIntroDB v3 spec.
+      for (const item of parsed.data.credits ?? []) segments.push({ kind: 'outro', start: item.start_ms / 1000, end: item.end_ms != null ? item.end_ms / 1000 : duration })
     }
     // Conflicting overlapping submissions are not safe for automatic jumps.
-    const ordered = segments.filter((segment) => skipSegmentSchema.safeParse(segment).success && segment.end > segment.start && segment.end <= duration && segment.end - segment.start <= 600).sort((a, b) => a.start - b.start)
+    // Outro/credits ranges run up to 30 minutes per TheIntroDB; intros/recaps cap at 10.
+    const maxSpan = (kind: string) => kind === 'outro' ? 1800 : 600
+    const ordered = segments.filter((segment) => skipSegmentSchema.safeParse(segment).success && segment.end > segment.start && segment.end <= duration && segment.end - segment.start <= maxSpan(segment.kind)).sort((a, b) => a.start - b.start)
     const unique = [...new Map(ordered.map((segment) => [`${segment.kind}:${segment.start}:${segment.end}`, segment])).values()]
     return unique.filter((segment, index) => !unique.some((other, otherIndex) => index !== otherIndex && segment.start < other.end && other.start < segment.end)).slice(0, 8)
   }

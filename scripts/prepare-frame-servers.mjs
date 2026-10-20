@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url'
 
 // Prepare a private proposal; installing it and enabling providers are separate
 // operator actions. Existing Direct rows, overrides and ordering are retained.
-const ids=['vidapiframe','vidfastframe','vidcoreioframe','vidriftframe','moviesapiframe','vidlinkframe','vidnestframe']
+const ids=['vidapiframe','vidfastframe','vidcoreioframe','vidriftframe','moviesapiframe','vidlinkframe','vidnestframe','vidrockframe','vidboltframe']
 const args=process.argv.slice(2),values={}
 if(args.includes('--help')){
  console.log('node scripts/prepare-frame-servers.mjs --input PATH --output NEW_PATH --region US\nAppends missing disabled frame recipes. Existing rows are preserved. Does not deploy or enable providers.')
@@ -34,7 +34,7 @@ for(const id of ids){
  }
  rows.push({...recipe,enabled:false,regions:[values['--region']]});added.push(id)
 }
-if(rows.length>64)throw Error('Proposal exceeds the current 64-row configuration limit; review the roster before installation')
+if(rows.length>96)throw Error('Proposal exceeds the current 96-row configuration limit; review the roster before installation')
 const proposal=JSON.stringify(rows,null,2)+'\n'
 if(proposal.length>2_000_000)throw Error('Proposal exceeds the provider configuration size limit')
 writeFileSync(output,proposal,{mode:0o600,flag:'wx'})

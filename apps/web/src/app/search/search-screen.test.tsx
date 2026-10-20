@@ -66,4 +66,12 @@ describe('search screen', () => {
     expect(screen.getByText(/Anime metadata by AniList/)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Severance' })).not.toBeInTheDocument()
   })
+
+  it('asks signed-out visitors to sign in instead of reporting no anime matches', () => {
+    render(<SearchScreen animeSignInRequired initialQuery="one piece" page={page} queryTooShort={false} />)
+
+    expect(screen.getByRole('heading', { name: 'Sign in to search anime' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'No anime found' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'One Piece' })).not.toBeInTheDocument()
+  })
 })

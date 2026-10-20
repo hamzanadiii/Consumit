@@ -20,7 +20,7 @@ export function createLookmovieWorkerProvider(
 ): ProviderAdapter {
   const origin = new URL(config.origin)
   if (origin.protocol !== 'https:' || origin.origin !== config.origin || config.secret.length < 32) throw new Error('Invalid LookMovie Worker configuration.')
-  return adapter('lookmovie-relay', async (input: ProviderInput, signal: AbortSignal): Promise<ProviderSource[]> => {
+  return adapter('lookmovie', async (input: ProviderInput, signal: AbortSignal): Promise<ProviderSource[]> => {
     if (input.ref.kind !== 'movie') throw new ProviderFailure('empty')
     const identity = await metadata(input.ref as PlaybackRef, signal)
     const response = await fetcher(new URL('/v1/lookmovie/resolve', origin), {

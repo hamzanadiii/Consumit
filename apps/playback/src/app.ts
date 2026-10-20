@@ -43,7 +43,7 @@ export async function buildPlaybackApp(env: ApiEnv, fetcher: InternalFetch = fet
     tmdbMetadataResolver: client.tmdb,
     tmdbIdentityResolver: async (ref: Parameters<typeof client.tmdb>[0], signal: AbortSignal) => ({ imdbId: (await client.metadata('vaplayer', ref, signal)).imdbId }),
     animeTitleResolver: createAnimeTitleResolver(client.anime), animeTitleVariantsResolver: createAnimeTitleVariantsResolver(client.anime), animeMetaResolver: createAnimeMetaResolver(client.anime),
-    ...(env.playback?.relay?.discovery?.['lookmovie-relay'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
+    ...(env.playback?.relay?.discovery?.['lookmovie'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
   }
   let remoteFiles: ReturnType<typeof createS3FileStore> | undefined
   let objectClient: S3Client | undefined
@@ -58,7 +58,7 @@ export async function buildPlaybackApp(env: ApiEnv, fetcher: InternalFetch = fet
     remoteFiles = createS3FileStore(objectClient, storage.data.SUBTITLES_S3_BUCKET)
     app.addHook('onClose', async () => { objectClient?.destroy() })
   }
-  const runtime = await createPlaybackRuntime({ env, animeCatalog: client.anime, providerConfigStore: client.config, configurationSnapshot: client.snapshot, subtitleCatalog: client.subtitles, providerOptions, metadata: client.metadata, titleMetadata: client.tmdb, ...(dependencies.subtitles ? { subtitles: dependencies.subtitles } : {}), ...(remoteFiles ? { files: remoteFiles } : {}), log: fields => app.log.info(fields, 'playback operation') })
+  const runtime = await createPlaybackRuntime({ env, animeCatalog: client.anime, animeTmdbEpisode: client.tmdbEpisode, providerConfigStore: client.config, configurationSnapshot: client.snapshot, subtitleCatalog: client.subtitles, providerOptions, metadata: client.metadata, titleMetadata: client.tmdb, ...(dependencies.subtitles ? { subtitles: dependencies.subtitles } : {}), ...(remoteFiles ? { files: remoteFiles } : {}), log: fields => app.log.info(fields, 'playback operation') })
   app.addHook('onClose', () => runtime.close())
   app.addHook('preHandler', async request => {
     if (!request.url.startsWith('/v1/playback/') || runtime.configurationCurrent()) return

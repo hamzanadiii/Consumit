@@ -35,7 +35,10 @@ describe('private experience preferences', () => {
     expect(changed.statusCode).toBe(200)
     expect(changed.headers['cache-control']).toBe('private, no-store')
     expect((await app.inject({ url: `${url}?memberId=first`, cookies: second })).json()).toEqual({ saved: false, preferences: defaultExperiencePreferences() })
-    expect((await app.inject({ url, cookies: first })).json().preferences.audioLanguage).toBe('ar')
+    expect((await app.inject({ url, cookies: first })).json().preferences).toMatchObject({ audioLanguage: 'ar', shareViewingTrends: false })
+    const optedIn = await app.inject({ method: 'PATCH', url, cookies: first, headers, payload: { shareViewingTrends: true } })
+    expect(optedIn.json().preferences.shareViewingTrends).toBe(true)
+    expect((await app.inject({ url, cookies: second })).json().preferences.shareViewingTrends).toBe(false)
   })
   it('rejects foreign origins, ownership fields, duplicates and invalid preferences', async () => {
     const { app, first } = await setup(), url = '/v1/me/experience-preferences'

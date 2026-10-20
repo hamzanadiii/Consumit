@@ -11,8 +11,9 @@ const config = process.env.PLAYBACK_MEDIA_CONFIG ?? 'infra/playback/providers.lo
 const filter = process.argv.find(arg => arg.startsWith('--ids='))?.slice(6).split(',')
 const variant = process.argv.includes('--alternate')
 const reportPath = process.argv.find(arg => arg.startsWith('--out='))?.slice(6) ?? `tmp/provider-diagnostics${variant ? '-alternate' : ''}.json`
+const browserOrigin = process.env.PLAYBACK_DIAGNOSTIC_ORIGIN ?? 'http://localhost:8080'
 const rows = JSON.parse(await readFile(config, 'utf8')) as { id: string; enabled?: boolean;  }[]
-const api = 'http://localhost:3001'
+const api = process.env.PLAYBACK_DIAGNOSTIC_API ?? 'http://localhost:3001'
 const metadata = new Map<number, Promise<any>>()
 function anime(id: number) {
   let result = metadata.get(id)
@@ -69,13 +70,13 @@ async function checkSource(page: any, source: ProviderSource) {
 try {
   await Promise.all(Array.from({ length: 2 }, async () => {
     const page = await browser.newPage()
-    await page.goto('http://localhost:8080/about', { waitUntil: 'domcontentloaded' })
+    await page.goto(new URL('/about', browserOrigin).toString(), { waitUntil: 'domcontentloaded' })
     await page.addScriptTag({ content: hlsCode })
     for (;;) {
       const provider = selected[next++]
       if (!provider) break
       const base = rows[providers.indexOf(provider)]!
-      const record: any = { id: base.id, runtimeId: provider.adapter.id, enabled: base.enabled !== false, delivery: 'direct', checks: [] }
+      const record: any = { id: base.id, runtimeId: provider.adapter.id, enabled: base.enabled !== false, delivery: base.deliveryMode ?? 'direct', checks: [] }
       for (const kind of provider.mediaKinds) {
         const ref = (!variant ? provider.probes?.[kind]?.ref : undefined) ?? (kind === 'anime' ? { kind, id: variant ? 7785 : 21, episode: 1 } : kind === 'series' ? { kind, id: variant ? 1396 : 1399, season: 1, episode: 1 } : { kind, id: variant ? 272 : 550 })
         const started = Date.now()
@@ -103,5 +104,5 @@ try {
     await page.close()
   }))
 } finally { await browser.close() }
-await writeFile(reportPath, JSON.stringify({ at: new Date().toISOString(), browser: 'Chrome', origin: 'http://localhost:8080', providers: output }, null, 2) + '\n')
+await writeFile(reportPath, JSON.stringify({ at: new Date().toISOString(), browser: 'Chrome', origin: browserOrigin, providers: output }, null, 2) + '\n')
 console.log(JSON.stringify({ checked: output.length, direct: output.filter(row => row.checks.some((check: any) => check.direct)).map(row => row.id) }))

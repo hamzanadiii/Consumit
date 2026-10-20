@@ -17,8 +17,28 @@ export function mediaHeaders(provider: string, host: string, headerHost: string,
     return { referer: 'https://movy.sx/' }
   }
   if (provider === 'stormboron' && recipe === 'storm-boron-v1') return { referer: 'https://vidstorm.to/' }
+  if (provider === 'aether' && recipe === 'aether-v1') {
+    // tnmr binds its signed master to the UA that followed the LUL worker
+    // 302; replaying that exact UA on every hop is the only way the edge
+    // accepts the grant. Strip everything else.
+    const userAgent = hints['user-agent']
+    return {
+      ...(typeof userAgent === 'string' && userAgent.length <= 512 && !/[\r\n]/.test(userAgent) ? { 'user-agent': userAgent } : {}),
+    }
+  }
   if (provider === 'aphrodite' && hints.referer === 'https://atlantic.st/') return { referer: hints.referer }
-  if (['vidnest', 'vaplayer', 'zeta'].includes(provider)) {
+  if (provider === 'aniclover' && hints.referer === 'https://aniclover.cc/'
+      && (!hints.origin || hints.origin === 'https://aniclover.cc')) {
+    return { referer: 'https://aniclover.cc/', origin: 'https://aniclover.cc' }
+  }
+  if (provider === 'justanime') {
+    const userAgent = hints['user-agent']
+    return {
+      referer: 'https://justanime.to/', origin: 'https://justanime.to',
+      ...(typeof userAgent === 'string' && userAgent.length <= 512 && !/[\r\n]/.test(userAgent) ? { 'user-agent': userAgent } : {}),
+    }
+  }
+  if (['vidnest', 'vaplayer', 'zeta', 'animedex'].includes(provider)) {
     const out: Record<string, string> = {}
     // Preserve the adapter-recorded public hints; drop anything unexpected.
     for (const [name, value] of Object.entries(hints)) {

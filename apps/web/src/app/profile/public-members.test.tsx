@@ -44,7 +44,8 @@ describe('public profile interactions', () => {
   it('shows visitor navigation without owner collections', () => {
     render(<ProfileSectionNavigation counts={{}} name="Film Fan" username="film_fan" />)
     for (const section of ['Overview', 'Ratings', 'Reviews', 'Lists', 'Network']) expect(screen.getByRole('link', { name: section })).toBeVisible()
-    for (const section of ['Activity', 'Watched', 'Diary', 'History', 'Watchlist', 'Likes', 'Tags', 'Followers', 'Following']) expect(screen.queryByRole('link', { name: section })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Watchlist' })).toHaveAttribute('href', '/profile/film_fan/watchlist')
+    for (const section of ['Activity', 'Watched', 'Diary', 'History', 'Likes', 'Tags', 'Followers', 'Following']) expect(screen.queryByRole('link', { name: section })).not.toBeInTheDocument()
   })
   it('recovers an initial collection failure and handles an empty page', async () => {
     mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })

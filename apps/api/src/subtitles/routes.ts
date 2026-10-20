@@ -142,7 +142,7 @@ export function registerSubtitleRoutes(
     reply.raw.once('close', cancel)
     const stream = Readable.from((async function* () {
       try {
-        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor)) {
+        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs))) {
           yield `${JSON.stringify(event)}\n`
         }
       } finally {
@@ -157,7 +157,7 @@ export function registerSubtitleRoutes(
       // network intermediary interrupts NDJSON delivery.
       const events = []
       try {
-        for await (const event of deps.subtitles.discovery.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor)) events.push(event)
+        for await (const event of deps.subtitles.discovery.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs))) events.push(event)
         return subtitleDiscoveryResponseSchema.parse({ events })
       } finally { clearTimeout(timer); reply.raw.off('close', cancel); controller.abort() }
     }
@@ -187,7 +187,7 @@ export function registerSubtitleRoutes(
 
   app.post('/v1/subtitles/discover/prepare', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
-    if (deps.env && !isAllowedOrigin(request.headers, deps.env.appOrigin, deps.env.nodeEnv !== 'production')) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
+    if (!deps.env || !isAllowedOrigin(request.headers, deps.env.appOrigin, deps.env.nodeEnv !== 'production')) throw new ApiError('FORBIDDEN', 'Cross-site requests are not allowed.')
     const parsed = prepareBodySchema.safeParse(request.body)
     if (!parsed.success) return invalidQuery('Use a valid discovery and candidate id.')
     const track = await deps.subtitles.discovery.prepare(parsed.data.searchId, parsed.data.candidateId, AbortSignal.timeout(10_000))

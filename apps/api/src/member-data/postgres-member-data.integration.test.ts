@@ -2,6 +2,8 @@ import pg from 'pg'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createDbClient } from '../db/client.ts'
+import { defaultExperiencePreferences } from '@consumit/contracts'
+import { createExperienceRepository } from '../experience/repository.ts'
 import { createPostgresMemberData } from './postgres-member-data.ts'
 
 const databaseUrl = process.env.DATABASE_URL
@@ -9,6 +11,7 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required for integration test
 const control = new pg.Pool({ connectionString: databaseUrl })
 const db = createDbClient(databaseUrl)
 const memberData = createPostgresMemberData(db.prisma)
+const experience = createExperienceRepository(db.prisma)
 
 beforeEach(async () => control.query('TRUNCATE "Member" CASCADE'))
 
@@ -43,10 +46,10 @@ describe('real member data read model', () => {
       await db.prisma.savedTitle.create({ data: { catalogKind: 'MOVIE', createdAt: timestamp, memberId: owner.id, tmdbId: id } })
       await db.prisma.diaryEntry.create({ data: { catalogKind: 'MOVIE', createdAt: timestamp, memberId: owner.id, tmdbId: id, watchedOn: timestamp } })
       const list = await db.prisma.memberList.create({ data: { memberId: owner.id, name: `Page list ${index}`, slug: `page-list-${index}`, updatedAt: timestamp, visibility: 'public' } })
-      await db.prisma.savedMemberList.create({ data: { createdAt: timestamp, listId: list.id, memberId: viewer.id } })
+      await db.prisma.savedMemberList.create({ data: { createdAt: timestamp, listId: list.id, listName: list.name, listSlug: list.slug, memberId: viewer.id, ownerUsername: 'library_owner', ownerDisplayName: null } })
     }
 
-    async function collect(memberId: string, collection: 'diary' | 'lists' | 'saved') {
+    async function collect(memberId: string, collection: 'diary' | 'lists' | 'saved' | 'savedLists') {
       const items: unknown[] = []
       let cursor: string | undefined
       for (let pageNumber = 0; pageNumber < 5; pageNumber++) {
@@ -67,20 +70,21 @@ describe('real member data read model', () => {
     expect((await collect(owner.id, 'saved')).map((item) => (item as { id: number }).id)).toEqual([710004, 710003, 710002, 710001, 710000])
     expect((await collect(owner.id, 'diary')).map((item) => (item as { id: number }).id)).toEqual([710004, 710003, 710002, 710001, 710000])
     expect((await collect(owner.id, 'lists')).map((item) => (item as { slug: string }).slug)).toEqual(['page-list-4', 'page-list-3', 'page-list-2', 'page-list-1', 'page-list-0'])
+    expect((await collect(viewer.id, 'savedLists')).map((item) => (item as { available: boolean }).available)).toEqual([true, true, true, true, true])
     expect(await db.prisma.savedMemberList.count({ where: { memberId: viewer.id } })).toBe(5)
   })
 
   it('resolves username aliases and returns only stored profile activity', async () => {
     const member = await db.prisma.member.create({ data: {
       email: 'profile@example.com', emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
-      profile: { create: { bio: 'Real bio', displayName: 'Real Member', location: 'Rabat', username: 'current_name', visibility: 'public' } },
+      profile: { create: { bio: 'Real bio', displayName: 'Real Member', username: 'current_name', visibility: 'public' } },
       usernameAliases: { create: { username: 'old_name' } },
       watchedTitles: { create: { tmdbId: 666277 } },
       diaryEntries: { create: { sourceKey: null, tmdbId: 666277, watchedOn: new Date('2026-09-01T00:00:00Z') } },
       reviews: { create: { body: 'A stored review.', tmdbId: 666277 } },
     } })
     const profile = await memberData.profile('old_name', member.id)
-    expect(profile).toMatchObject({ canonicalUsername: 'current_name', profile: { bio: 'Real bio', location: 'Rabat' }, statistics: { diaryEntries: 1, reviews: 1, watched: 1 } })
+    expect(profile).toMatchObject({ canonicalUsername: 'current_name', profile: { bio: 'Real bio', sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } }, statistics: { diaryEntries: 1, reviews: 1, watched: 1 } })
     expect(profile?.reviews[0]?.body).toBe('A stored review.')
     expect((await memberData.librarySnapshot(member.id)).diary.items).toHaveLength(1)
   })
@@ -108,7 +112,7 @@ describe('real member data read model', () => {
 
   it('keeps private lists owner-only and persists four ordered native Favorites', async () => {
     const member = await db.prisma.member.create({ data: { email: 'owner@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'list_owner', visibility: 'public' } } } })
-    const list = await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Private list', slug: 'private-list' } })
+    const list = await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Private list', slug: 'private-list', visibility: 'private' } })
     await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Public list', slug: 'public-list', visibility: 'public' } })
     expect(await memberData.list(list.slug)).toBeNull()
     expect(await memberData.list(list.slug, member.id)).toMatchObject({ list: { name: 'Private list', visibility: 'private' } })
@@ -124,6 +128,86 @@ describe('real member data read model', () => {
     expect((await memberData.librarySnapshot(member.id)).saved.items).toMatchObject([{ id: 95396, kind: 'series', origin: 'native' }])
     await memberData.setSaved(member.id, { id: 95396, kind: 'series' }, false)
     expect((await memberData.librarySnapshot(member.id)).saved.items).toEqual([])
+  })
+
+  it('enforces profile section visibility on direct archive reads while owners retain private records', async () => {
+    const member = await db.prisma.member.create({ data: { email: 'section-owner@example.test', profile: { create: { username: 'section_owner' } } } })
+    await db.prisma.savedTitle.create({ data: { memberId: member.id, tmdbId: 550 } })
+    await db.prisma.diaryEntry.create({ data: { memberId: member.id, tmdbId: 550, tags: ['private-diary-tag'], watchedOn: new Date('2026-10-18T00:00:00.000Z') } })
+    await db.prisma.review.create({ data: { body: 'Public take', memberId: member.id, tags: ['public-review-tag'], tmdbId: 550 } })
+    await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Public', slug: 'section-public', visibility: 'public' } })
+    await db.prisma.memberList.create({ data: { memberId: member.id, name: 'Private', slug: 'section-private', visibility: 'private' } })
+
+    expect(await memberData.profileArchive('section_owner', 'diary')).toBeNull()
+    expect(await memberData.profileArchive('section_owner', 'watchlist')).toMatchObject({ items: [{ id: 550, kind: 'movie' }] })
+    expect(await memberData.profileArchive('section_owner', 'tags')).toMatchObject({ items: [{ tag: 'public-review-tag' }] })
+    expect(JSON.stringify(await memberData.profileArchive('section_owner', 'tags'))).not.toContain('private-diary-tag')
+
+    await db.prisma.profile.update({ where: { memberId: member.id }, data: { sectionVisibility: { lists: false, reviews: false, tags: false, watchlist: false } } })
+    expect(await memberData.profileArchive('section_owner', 'watchlist')).toBeNull()
+    expect(await memberData.profileArchive('section_owner', 'lists')).toBeNull()
+    expect(await memberData.profileArchive('section_owner', 'reviews')).toBeNull()
+    expect(await memberData.profileArchive('section_owner', 'tags')).toBeNull()
+    expect(await memberData.profileArchive('section_owner', 'diary', member.id)).toMatchObject({ items: [{ tags: ['private-diary-tag'] }] })
+    expect(await memberData.profileArchive('section_owner', 'watchlist', member.id)).toMatchObject({ items: [{ id: 550, kind: 'movie' }] })
+    expect(await memberData.profileArchive('section_owner', 'lists', member.id)).toMatchObject({ items: expect.arrayContaining([expect.objectContaining({ visibility: 'private' }), expect.objectContaining({ visibility: 'public' })]) })
+  })
+
+  it('creates public lists, appends titles without reordering notes, and keeps saved references after privacy changes or deletion', async () => {
+    const owner = await db.prisma.member.create({ data: { email: 'curator@example.com', profile: { create: { username: 'curator' } } } })
+    const viewer = await db.prisma.member.create({ data: { email: 'saver@example.com', profile: { create: { username: 'saver' } } } })
+    const created = await memberData.createList(owner.id, { description: 'A short trail.', idempotencyKey: crypto.randomUUID(), name: 'Late night', visibility: 'public' })
+    expect(created.list.visibility).toBe('public')
+    expect(await memberData.list(created.list.slug)).toMatchObject({ viewerIsOwner: false, viewerHasSaved: false })
+
+    await memberData.updateListContent(owner.id, created.list.id, { description: 'A changing trail.', items: [{ id: 550, kind: 'movie', note: 'Keep this note' }], name: 'Late night, revised', visibility: 'public' })
+    expect(await memberData.appendListTitle!(owner.id, created.list.id, { id: 550, kind: 'movie' })).toBe(true)
+    expect(await memberData.appendListTitle!(owner.id, created.list.id, { id: 603, kind: 'movie' })).toBe(true)
+    expect(await memberData.list(created.list.slug, owner.id)).toMatchObject({ items: [{ id: 550, note: 'Keep this note', position: 1 }, { id: 603, note: null, position: 2 }] })
+
+    expect(await memberData.saveList!(viewer.id, created.list.slug)).toBe(true)
+    expect(await memberData.list(created.list.slug, viewer.id)).toMatchObject({ viewerHasSaved: true })
+    const followed = await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)
+    expect(followed).toMatchObject({ collection: 'savedLists', items: [{ available: true, itemCount: 2, listName: 'Late night, revised', listSlug: created.list.slug, ownerUsername: 'curator' }] })
+
+    await db.prisma.profile.update({ where: { memberId: owner.id }, data: { sectionVisibility: { lists: false } } })
+    expect(await memberData.list(created.list.slug)).toBeNull()
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [{ available: false }] })
+    await db.prisma.profile.update({ where: { memberId: owner.id }, data: { sectionVisibility: { lists: true } } })
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [{ available: true }] })
+
+    await memberData.updateList(owner.id, created.list.id, { visibility: 'private' })
+    expect(await memberData.list(created.list.slug)).toBeNull()
+    expect(await memberData.list(created.list.slug, owner.id)).not.toBeNull()
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [{ available: false, itemCount: null, listName: 'Late night, revised' }] })
+    await memberData.updateList(owner.id, created.list.id, { visibility: 'public' })
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [{ available: true }] })
+
+    await memberData.deleteList(owner.id, created.list.id)
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [{ available: false, listSlug: created.list.slug }] })
+    expect(await db.prisma.savedMemberList.count({ where: { memberId: viewer.id } })).toBe(1)
+    await memberData.removeSavedList!(viewer.id, created.list.id)
+    expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [] })
+  })
+
+  it('returns only title-level trends from opted-in members, deduplicates episodes, and applies the five-member threshold', async () => {
+    const members = await Promise.all(Array.from({ length: 6 }, (_, index) => db.prisma.member.create({ data: { email: `trend-${index}@example.test`, profile: { create: { username: `trend_${index}` } } } })))
+    expect((await experience.read(members[0]!.id)).preferences).toEqual(defaultExperiencePreferences())
+    for (const member of members.slice(0, 5)) await experience.patch(member.id, { shareViewingTrends: true })
+    for (let index = 0; index < 4; index++) {
+      await memberData.setProgress(members[index]!.id, { id: 880, kind: 'series', season: 1, episode: 1, positionSeconds: 100 })
+    }
+    await memberData.setProgress(members[0]!.id, { id: 880, kind: 'series', season: 1, episode: 2, positionSeconds: 110 })
+    for (let index = 0; index < 5; index++) {
+      await memberData.setProgress(members[index]!.id, { id: 990, kind: 'series', season: 1, episode: 1, positionSeconds: 100 })
+    }
+    await memberData.setProgress(members[0]!.id, { id: 990, kind: 'series', season: 1, episode: 2, positionSeconds: 110 })
+    await memberData.setProgress(members[5]!.id, { id: 990, kind: 'series', season: 1, episode: 1, positionSeconds: 100 })
+    expect(await memberData.publicMemberTrends!()).toEqual([{ id: 990, kind: 'series' }])
+
+    await experience.patch(members[0]!.id, { shareViewingTrends: false })
+    expect(await memberData.publicMemberTrends!()).toEqual([])
+    expect(JSON.stringify(await memberData.publicMemberTrends!())).not.toMatch(/trend_|memberId|count|live/i)
   })
 
   it('detaches edited Letterboxd records so import cleanup preserves them', async () => {

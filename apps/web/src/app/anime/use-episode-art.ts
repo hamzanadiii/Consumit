@@ -11,11 +11,10 @@ export type EpisodeArt = {
   airDate: string | null
 }
 
-/** Canonical episode art with the honest fallback chain: caller-supplied
- *  streaming art wins (zero extra requests); otherwise the episode endpoint
- *  (TMDB primary, Kitsu fallback server-side) fills titles and stills;
- *  misses stay null and the card keeps its placeholder. Skipped for
- *  unaired episodes, which can have no art yet. */
+/** Canonical episode art from the episode endpoint (AniZip/TVDB first,
+ *  then configured metadata fallbacks); misses stay null so callers can use
+ *  honest title art rather than a reused seasonal streaming promo. Skipped
+ *  for unaired episodes, which can have no art yet. */
 export function useEpisodeArt(anilistId: number, episode: number, options: { covered?: boolean | undefined; upcoming?: boolean | undefined } = {}): EpisodeArt | null {
   const { covered = false, upcoming = false } = options
   const [result, setResult] = useState<{ key: string; art: EpisodeArt } | null>(null)

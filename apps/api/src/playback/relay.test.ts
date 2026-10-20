@@ -62,30 +62,46 @@ describe('separate direct and relay provider tiers', () => {
     expect(relay.permits(resolved)).toBe(false)
   })
   it('issues the reviewed LookMovie recipe to the configured Cloudflare Worker', async () => {
-    const registration: ProviderRegistration = { ...setup().providers[2]!, adapter: createStaticProvider('lookmovie-relay', []), relayHostDiscovery: 'lookmovie-v1', mediaHosts: ['srv310.seclar.cyou'], mediaHostPatterns: [/^srv[0-9]+\.[a-z-]+\.cyou$/] }
+    const registration: ProviderRegistration = { ...setup().providers[2]!, adapter: createStaticProvider('lookmovie', []), relayHostDiscovery: 'lookmovie-v1', mediaHosts: ['srv310.seclar.cyou'], mediaHostPatterns: [/^srv[0-9]+\.[a-z-]+\.cyou$/] }
     const resolved = { registration, source: { ...source, url: 'https://srv313.seclar.cyou/movie.m3u8', relayRecipe: 'lookmovie-v1' as const, relayHosts: ['srv313.seclar.cyou'] }, subtitles: [], delivery: 'direct' as const }
-    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { 'lookmovie-relay': ['srv310.seclar.cyou'] }, discovery: parseRelayDiscovery(JSON.stringify({ 'lookmovie-relay': 'lookmovie-v1' })) })
+    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { 'lookmovie': ['srv310.seclar.cyou'] }, discovery: parseRelayDiscovery(JSON.stringify({ 'lookmovie': 'lookmovie-v1' })) })
     expect(relay.permits(resolved)).toBe(true)
     const src = await relay.issue(resolved, Date.now() + 60000, 'https://watch.example')
     expect(new URL(src!).origin).toBe('https://edge.example')
     expect(new URL(src!).pathname).toMatch(/^\/media\//)
     const grant = await (await createGrantCodec(secret)).open(new URL(src!).pathname.slice('/media/'.length))
-    expect(grant).toMatchObject({ provider: 'lookmovie-relay', recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
+    expect(grant).toMatchObject({ provider: 'lookmovie', recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
+  })
+  it('leases Aether rotating tnmr hosts only when both registration and edge recipe opt in', async () => {
+    const registration: ProviderRegistration = { ...setup().providers[2]!, adapter: createStaticProvider('aether', []), deliveryMode: 'relay', relayHostDiscovery: 'aether-v1', mediaHosts: ['cdn1018.cdn-tnmr.org'], mediaHostPatterns: [/^(?:[a-z0-9-]+\.)+(?:cdn-)?tnmr\.org$/i] }
+    const resolved = { registration, source: { ...source, url: 'https://cjdgxnffutfw.tnmr.org/hls2/master.m3u8', headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36' }, relayRecipe: 'aether-v1' as const, relayHosts: ['cjdgxnffutfw.tnmr.org'] }, subtitles: [], delivery: 'direct' as const }
+    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { aether: ['cdn1018.cdn-tnmr.org'] }, discovery: parseRelayDiscovery(JSON.stringify({ aether: 'aether-v1' })) })
+    expect(relay.permits(resolved)).toBe(true)
+    const src = await relay.issue(resolved, Date.now() + 60000, 'https://watch.example')
+    expect(new URL(src!).pathname).toBe('/v1/playback/relay-manifest')
+    const grant = await (await createGrantCodec(secret)).open(new URL(src!).searchParams.get('grant')!)
+    expect(grant).toMatchObject({ provider: 'aether', recipe: 'aether-v1', hosts: ['cjdgxnffutfw.tnmr.org'], headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36' } })
+    const withoutRecipe = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { aether: ['cdn1018.cdn-tnmr.org'] } })
+    expect(withoutRecipe.permits(resolved)).toBe(false)
+  })
+  it('rejects an Aether grant without recipe opt-in on the edge', () => {
+    expect(() => parseRelayDiscovery(JSON.stringify({ aether: 'aether-v1' }))).not.toThrow()
+    expect(() => parseRelayDiscovery(JSON.stringify({ aether: 'storm-boron-v1' }))).toThrow('Unknown relay discovery recipe.')
   })
   it('binds LookMovie fallback and renewal to its media node and separate signing key', async () => {
     const nodeSecret = 'node-secret-separate-from-edge-at-least-32-chars'
-    const registration: ProviderRegistration = { ...setup().providers[2]!, adapter: createStaticProvider('lookmovie-relay', []), relayHostDiscovery: 'lookmovie-v1', mediaHosts: ['srv310.seclar.cyou'], mediaHostPatterns: [/^srv[0-9]+\.[a-z-]+\.cyou$/] }
+    const registration: ProviderRegistration = { ...setup().providers[2]!, adapter: createStaticProvider('lookmovie', []), relayHostDiscovery: 'lookmovie-v1', mediaHosts: ['srv310.seclar.cyou'], mediaHostPatterns: [/^srv[0-9]+\.[a-z-]+\.cyou$/] }
     const resolved = { registration, source: { ...source, url: 'https://srv313.seclar.cyou/movie.m3u8', relayRecipe: 'lookmovie-v1' as const, relayHosts: ['srv313.seclar.cyou'] }, subtitles: [], delivery: 'direct' as const }
-    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: {}, node: { origin: 'https://media.example', secret: nodeSecret, providers: { 'lookmovie-relay': ['srv310.seclar.cyou'] } } })
+    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: {}, node: { origin: 'https://media.example', secret: nodeSecret, providers: { 'lookmovie': ['srv310.seclar.cyou'] } } })
     expect(relay.permits(resolved)).toBe(true)
     const src = await relay.issue(resolved, Date.now() + 60000, 'https://watch.example')
     expect(new URL(src!).origin).toBe('https://media.example')
     expect(new URL(src!).pathname).toMatch(/^\/media\//)
     const token = new URL(src!).pathname.slice(7)
-    expect(await (await createGrantCodec(nodeSecret)).open(token)).toMatchObject({ provider: 'lookmovie-relay', recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
+    expect(await (await createGrantCodec(nodeSecret)).open(token)).toMatchObject({ provider: 'lookmovie', recipe: 'lookmovie-v1', hosts: ['srv313.seclar.cyou'] })
     await expect((await createGrantCodec(secret)).open(token)).rejects.toThrow()
-    expect(await relay.accepts(src!, 'lookmovie-relay')).toBe(true)
-    expect(await relay.accepts(src!.replace('media.example', 'edge.example'), 'lookmovie-relay')).toBe(false)
+    expect(await relay.accepts(src!, 'lookmovie')).toBe(true)
+    expect(await relay.accepts(src!.replace('media.example', 'edge.example'), 'lookmovie')).toBe(false)
     expect(await relay.accepts(src!, 'relay-primary')).toBe(false)
     registration.deliveryMode = 'direct'
     expect(relay.permits(resolved)).toBe(false)

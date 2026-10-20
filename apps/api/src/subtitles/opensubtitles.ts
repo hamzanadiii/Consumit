@@ -57,7 +57,7 @@ export function createOpenSubtitlesProvider(http: SubtitleHttp, keys?: OpenSubti
     name: 'OpenSubtitles',
     supports(query: SubtitleQuery) {
       if (!keys) return false
-      if (query.type === 'anime') return !!query.tmdbId
+      if (query.type === 'anime') return !!(query.tmdbId || query.imdbId)
       return (query.type === 'movie' || query.type === 'tv') && !!(query.tmdbId || query.imdbId)
     },
     async search(query: SubtitleQuery, signal: AbortSignal): Promise<RawSubtitle[]> {

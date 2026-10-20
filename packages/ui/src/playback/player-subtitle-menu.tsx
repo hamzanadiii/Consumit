@@ -2,7 +2,7 @@ import type { RefObject } from 'react'
 import { Captions, Check, ChevronRight, Loader2, Search, TimerReset, Upload } from 'lucide-react'
 
 import { cn } from '../lib/cn'
-import { PlayerPanel } from './player-panel'
+import { PlayerPanel, PlayerRadioGroup, PlayerRadioOption } from './player-panel'
 import { nativeLanguageName, subtitleLabelDetail } from './subtitle-sync'
 import { settingsRowClass } from './player-settings'
 import type { PlayerOption, PlayerSubtitleCandidate, PlayerSubtitleDiscovery } from './player-types'
@@ -75,41 +75,37 @@ export function PlayerSubtitleMenu({
 
   return (
     <div className="contents" ref={menuRef}>
-      <PlayerPanel aria-label="Subtitles" className="consumit-subtitle-panel" id="consumit-player-menu-subtitles" onClose={actions.close} onBack={actions.back} meta={model.trackCount > 0 ? `${model.trackCount} ${model.trackCount === 1 ? 'track' : 'tracks'}` : undefined} title="Subtitles">
+      <PlayerPanel anchorSelector={'[data-player-destination="captions"]'} aria-label="Captions" className="consumit-subtitle-panel" id="consumit-player-menu-subtitles" onClose={actions.close} meta={model.trackCount > 0 ? `${model.trackCount} ${model.trackCount === 1 ? 'track' : 'tracks'}` : undefined} title="Captions">
         {model.subtitleNotice ? <p className="mb-3 text-xs leading-5 text-copy" role="status">{model.subtitleNotice}</p> : null}
         <div className="consumit-subtitle-body">
-          <div className="consumit-subtitle-browser">
-            <button aria-checked={model.selected === 'off'} className={settingsRowClass(model.selected === 'off')} onClick={() => actions.chooseSubtitle('off')} role="menuitemradio" type="button">
+          <PlayerRadioGroup className="consumit-subtitle-browser" label="Caption tracks">
+            <PlayerRadioOption selected={model.selected === 'off'} className={settingsRowClass(model.selected === 'off')} onSelect={() => actions.chooseSubtitle('off')}>
               <span className="min-w-0 flex-1 text-left font-medium">Off</span>
               {model.selected === 'off' ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-            </button>
+            </PlayerRadioOption>
             <label className="consumit-subtitle-search">
               <Search aria-hidden="true" className="size-4 shrink-0" />
               <input aria-label="Search subtitle languages and tracks" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted" onChange={(event) => actions.changeSearch(event.target.value)} placeholder="Find a language or track" type="search" value={model.search} />
             </label>
             {model.uploading ? <p className="consumit-subtitle-availability" role="status">Reading subtitle file…</p> : null}
             {!search && model.uploadedSubtitle ? (
-              <button aria-checked={model.selected === uploadedValue} className={settingsRowClass(model.selected === uploadedValue)} onClick={() => actions.chooseSubtitle(uploadedValue!)} role="menuitemradio" type="button">
+              <PlayerRadioOption selected={model.selected === uploadedValue} className={settingsRowClass(model.selected === uploadedValue)} onSelect={() => actions.chooseSubtitle(uploadedValue!)}>
                 <SubtitleTrackLabel language="und" label={model.uploadedSubtitle.label} detail="Uploaded · current viewing session" />
                 {model.selected === uploadedValue ? <Check aria-hidden="true" className="size-4 shrink-0 text-orange" /> : null}
-              </button>
+              </PlayerRadioOption>
             ) : null}
             {model.discovery?.loading ? <p className="px-2 py-1 text-xs text-muted" role="status">Searching subtitle providers…</p> : null}
             {model.discovery?.error ? <div className="consumit-subtitle-notice" role="alert"><p>{model.discovery.error}</p>{actions.requestDiscovery ? <button disabled={model.discovery.loading} onClick={actions.requestDiscovery} type="button">Try again</button> : null}</div> : null}
             {model.menuError ? <div className="consumit-subtitle-notice" role="alert"><p>{model.menuError}</p>{search ? <button disabled={model.searching} onClick={() => actions.runSearch(model.search)} type="button">Try search again</button> : null}</div> : null}
             {model.loadError ? <div className="consumit-subtitle-notice" role="alert"><p>{model.loadError}</p><button onClick={actions.retryFile} type="button">Retry this track</button></div> : null}
-            {!model.discovery?.error && model.discovery?.providers.some((provider) => provider.state === 'failed' || provider.state === 'timeout' || provider.reason === 'credentials_required') ? (
-              <p className="consumit-subtitle-availability">Some tracks are unavailable. You can still choose from the available tracks.</p>
-            ) : null}
             {search ? <div className="space-y-1">
               {model.searching ? <p className="px-2 text-xs text-muted" role="status">Searching tracks…</p> : null}
               {!model.searching && matchingLocalSubtitles.length === 0 && searchResults.length === 0 ? <p className="px-2 text-xs text-muted">No tracks match this search.</p> : null}
-              {matchingLocalSubtitles.map((option) => <button aria-checked={model.selected === option.value} className={settingsRowClass(model.selected === option.value)} key={option.value} onClick={() => actions.chooseSubtitle(option.value)} role="menuitemradio" type="button"><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{model.selected === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
+              {matchingLocalSubtitles.map((option) => <PlayerRadioOption selected={model.selected === option.value} className={settingsRowClass(model.selected === option.value)} key={option.value} onSelect={() => actions.chooseSubtitle(option.value)}><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{model.selected === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</PlayerRadioOption>)}
               {searchResults.map((track) => <button className={settingsRowClass(false)} disabled={model.preparingId !== null} key={track.id} onClick={() => actions.selectCandidate(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{model.preparingId === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
               {model.nextSearchCursor != null ? <button className={settingsRowClass(false)} onClick={() => actions.runSearch(model.search, model.nextSearchCursor!)} type="button">Load more matches</button> : null}
             </div> : null}
             {!search && !model.uploadedSubtitle && !model.discovery?.loading && model.languages.length === 0 ? <p className="px-2 py-2 text-sm text-muted">No subtitles found for this title yet.</p> : null}
-            {actions.requestDiscovery && !model.discovery?.loading && !model.discovery?.error ? <button className={settingsRowClass(false)} onClick={actions.requestDiscovery} type="button">Search providers again</button> : null}
             {!search && model.languages.map((language) => (
               <div className="consumit-subtitle-language" key={language.code}>
                 <button aria-expanded={language.opened} className={settingsRowClass(false)} onClick={() => actions.toggleLanguage(language.code, language.opened)} type="button">
@@ -119,18 +115,22 @@ export function PlayerSubtitleMenu({
                 {language.opened ? <div aria-label={`${nativeLanguageName(language.code, language.code)} subtitle tracks`} className="space-y-1 pl-3">
                   {language.loading ? <p className="consumit-subtitle-availability" role="status">Loading tracks…</p> : null}
                   {language.failed ? <div className="consumit-subtitle-notice" role="alert"><p>These tracks could not load.</p><button onClick={() => actions.retryLanguage(language.code)} type="button">Try this language again</button></div> : null}
-                  {language.options.map((option) => <button aria-checked={model.selected === option.value} className={settingsRowClass(model.selected === option.value)} key={option.value} onClick={() => actions.chooseSubtitle(option.value)} role="menuitemradio" type="button"><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{model.selected === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</button>)}
+                  {language.options.map((option) => <PlayerRadioOption selected={model.selected === option.value} className={settingsRowClass(model.selected === option.value)} key={option.value} onSelect={() => actions.chooseSubtitle(option.value)}><SubtitleTrackLabel language={option.language} label={option.label} detail={option.detail} />{model.selected === option.value ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</PlayerRadioOption>)}
                   {language.tracks.map((track) => <button className={settingsRowClass(false)} disabled={model.preparingId !== null} key={track.id} onClick={() => actions.selectCandidate(track)} type="button"><SubtitleTrackLabel language={track.language} label={track.label} detail={subtitleCandidateDetail(track)} />{model.preparingId === track.id ? <Loader2 aria-label="Preparing subtitle" className="size-4 animate-spin" /> : null}</button>)}
                   {language.hasMore && !language.failed ? <button className={settingsRowClass(false)} disabled={language.loading} onClick={() => actions.loadMoreLanguage(language.code)} type="button">Load more tracks</button> : null}
                 </div> : null}
               </div>
             ))}
-          </div>
+            {!model.discovery?.error && model.discovery?.providers.some((provider) => provider.state === 'failed' || provider.state === 'timeout' || provider.reason === 'credentials_required') ? (
+              <p className="consumit-subtitle-availability">Some tracks are unavailable. You can still choose from the available tracks.</p>
+            ) : null}
+            {actions.requestDiscovery && !model.discovery?.loading && !model.discovery?.error ? <button className={settingsRowClass(false)} onClick={actions.requestDiscovery} type="button">Search providers again</button> : null}
+          </PlayerRadioGroup>
           <div aria-label="Subtitle tools" className="consumit-subtitle-tools" role="group">
             <button aria-label="Subtitle appearance" onClick={actions.openAppearance} type="button"><Captions aria-hidden="true" className="size-4" />Appearance</button>
             <button aria-label="Sync subtitle to audio" onClick={actions.openSync} type="button"><TimerReset aria-hidden="true" className="size-4" />Sync</button>
-            <input accept=".srt,.vtt,text/vtt,application/x-subrip" aria-label="Subtitle file" className="sr-only" disabled={model.uploading} onChange={(event) => { actions.upload(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
-            <button aria-label="Upload subtitle file" disabled={model.uploading} onClick={() => uploadInputRef.current?.click()} title="SRT or VTT · up to 2 MB" type="button"><Upload aria-hidden="true" className="size-4" />Upload</button>
+            <input accept=".srt,.vtt,.ass,.ssa,text/vtt,application/x-subrip,text/x-ssa" aria-label="Subtitle file" className="sr-only" disabled={model.uploading} onChange={(event) => { actions.upload(event.target.files?.[0]); event.target.value = '' }} ref={uploadInputRef} type="file" />
+            <button aria-label="Upload subtitle file" disabled={model.uploading} onClick={() => uploadInputRef.current?.click()} title="SRT, VTT, ASS, or SSA · up to 2 MB" type="button"><Upload aria-hidden="true" className="size-4" />Upload</button>
           </div>
         </div>
       </PlayerPanel>

@@ -52,41 +52,50 @@ const profile: MemberProfile = {
   bio: null,
   createdAt: '2026-09-07T12:00:00.000Z',
   displayName: 'Hamza',
-  location: null,
   nextUsernameChangeAt: null,
+  sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true },
   username: 'hamzanadi',
   usernameChangedAt: null,
-  visibility: 'private',
 }
 
 beforeEach(() => {
   const preferences = { ...defaultExperiencePreferences(), subtitleLanguages: ['en', 'ar', 'fr'] }
   mocks.experienceRequest.mockImplementation(async (_signal: AbortSignal, patch?: ExperiencePatch) => ({ preferences: { ...preferences, ...patch }, saved: true }))
 })
-describe('profile publishing', () => {
+describe('profile section privacy', () => {
   beforeEach(() => { vi.clearAllMocks(); window.localStorage.clear() })
   function screenWithProfile() {
     render(<SessionProvider initialMember={{ ...member }} initialStatus="authenticated"><SettingsScreen initialProfile={profile} /></SessionProvider>)
   }
-  it('starts private, explains the boundary and saves an explicit public choice', async () => {
-    mocks.updateMemberProfile.mockResolvedValue({ ...profile, visibility: 'public' })
+  it('keeps profile identity public and saves individual section visibility', async () => {
+    mocks.updateMemberProfile.mockResolvedValue({ ...profile, sectionVisibility: { ...profile.sectionVisibility, ratings: false } })
     screenWithProfile()
-    expect(screen.getByRole('radio', { name: 'Private' })).toBeChecked()
-    expect(screen.getByText(/Publishing shares your display name/)).toHaveTextContent('all ratings, and all reviews')
-    expect(screen.getByText(/Location, diary, watched titles/)).toHaveTextContent('stay private')
-    await userEvent.click(screen.getByRole('radio', { name: 'Public' }))
+    expect(screen.queryByRole('radio', { name: 'Private' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
+    expect(screen.getByText('Your profile identity is public.', { exact: true })).toBeInTheDocument()
+    expect(screen.getByText(/Watched titles, Diary, History, active playback, resume progress, and account details always stay private/)).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Ratings' })).toBeChecked()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Ratings' }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!)
-    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' })))
+    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({ sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } })))
     expect(await screen.findByText('Profile saved.')).toBeVisible()
   })
-  it('retains the selected visibility after a failed save and permits a retry', async () => {
-    mocks.updateMemberProfile.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ ...profile, visibility: 'public' })
+  it('retains a selected section setting after a failed save and permits a retry', async () => {
+    mocks.updateMemberProfile.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ ...profile, sectionVisibility: { ...profile.sectionVisibility, ratings: false } })
     screenWithProfile()
-    await userEvent.click(screen.getByRole('radio', { name: 'Public' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Ratings' }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!)
     expect(await screen.findByRole('alert', { name: 'Settings error' })).toHaveTextContent('profile could not be saved')
-    expect(screen.getByRole('radio', { name: 'Public' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Ratings' })).not.toBeChecked()
     await userEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!)
     expect(await screen.findByText('Profile saved.')).toBeVisible()
+  })
+
+  it('keeps anonymous viewing trends off until the member opts in separately', async () => {
+    screenWithProfile()
+    const toggle = await screen.findByRole('switch', { name: 'Share anonymous viewing trends' })
+    expect(toggle).not.toBeChecked()
+    await userEvent.click(toggle)
+    await waitFor(() => expect(mocks.experienceRequest).toHaveBeenCalledWith(expect.any(AbortSignal), { shareViewingTrends: true }))
   })
 })

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
 import { sourceAccess, adapter, document, mediaType, parseSkipSegments, ProviderFailure, type ProviderHttp } from './http.ts'
@@ -44,7 +45,10 @@ export function createAnimeRelayProvider(http: ProviderHttp, id: 'megavid' | '9a
       headers = { referer: 'https://megavid.buzz/', origin: 'https://megavid.buzz' }
     } else {
       const path = id === '9anime' ? `/hianime/anime/${ref.id}/${ref.episode}/${audio}/hd-2` : `/aniwave_hls/${ref.id}/${ref.episode}/${audio}`
-      const response = await document(http, `https://new.vidnest.fun${path}`, signal,
+      // new.vidnest.fun requires a per-request `_n` nonce (verified 2026-10-19:
+      // bare requests 403 "missing or invalid nonce"; any valid base64url works).
+      const nonce = randomBytes(16).toString('base64url')
+      const response = await document(http, `https://new.vidnest.fun${path}?_n=${nonce}`, signal,
         { accept: 'application/json', referer: 'https://vidnest.fun/' })
       const raw: unknown = JSON.parse(response.text)
       const envelope = envelopeSchema.parse(raw)

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Nightly Postgres backup (Neon) + rotation.
+# Nightly Postgres backup + rotation.
 #
 # Dumps $DATABASE_URL with pg_dump (custom format, compressed), keeps 7
 # daily dumps in /backups, and snapshots the provider-overrides file
@@ -12,7 +12,7 @@
 #   2. docker compose exec backup pg_restore -h <host> -U <role> \
 #        -d <fresh-db> --clean --if-exists --no-owner \
 #        /backups/<file>.dump
-#      (--no-owner: dumps reference neondb_owner, which exists only on Neon.)
+#      (--no-owner: dumps reference the source role, which may not exist on the target.)
 #   3. Verify: tables + row counts, then
 #      DATABASE_URL=local bunx prisma migrate status (expect "up to date").
 set -eu
@@ -21,9 +21,9 @@ STAMP=$(date -u +%F)
 OUT="/backups/consumit-${STAMP}.dump"
 
 echo "[backup] dumping database..."
-# --no-owner/--no-acl: Neon objects belong to neondb_owner, which exists
-# nowhere else. Without these flags every restore drowns in missing-role
-# errors (proven in the drill).
+# --no-owner/--no-acl: objects belong to the source role, which may not
+# exist on the restore target. Without these flags every restore drowns
+# in missing-role errors (proven in the drill).
 pg_dump --dbname="$DATABASE_URL" --format=custom --compress=6 --file="$OUT" --no-owner --no-acl
 chmod 600 "$OUT"
 

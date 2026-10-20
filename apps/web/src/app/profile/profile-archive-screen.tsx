@@ -17,7 +17,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
-import { ArtworkFrame, PosterStack, buttonVariants } from '@consumit/ui'
+import { ArtworkFrame, PosterStack, Select, buttonVariants } from '@consumit/ui'
 
 import { TitleCollectionFilters, titleDecade, type TitleCollectionSort } from '../shared/title-collection-filters'
 import { TitleCard } from '../shared/title-card'
@@ -53,7 +53,7 @@ function pageKey(collection: MemberProfileArchivePage['collection'], item: unkno
       return `${String(row.kind)}:${String(row.kind === 'diary' ? nested.entryId : nested.reviewId)}`
     }
     case 'diary': return String(row.entryId)
-    case 'films': case 'likes': return `${String(row.kind)}:${String(row.id)}`
+    case 'films': case 'likes': case 'watchlist': return `${String(row.kind)}:${String(row.id)}`
     case 'lists': return String(row.id)
     case 'reviews': return String(row.reviewId)
     case 'tags': return String(row.tag)
@@ -70,7 +70,7 @@ function appendPage(current: MemberProfileArchivePage | undefined, incoming: Mem
 function refsInPage(page: MemberProfileArchivePage): CatalogRef[] {
   switch (page.collection) {
     case 'activity': return page.items.map((event) => ({ id: event.item.id, kind: event.item.kind }))
-    case 'diary': case 'films': case 'likes': case 'reviews': return page.items.map(({ id, kind }) => ({ id, kind }))
+    case 'diary': case 'films': case 'likes': case 'reviews': case 'watchlist': return page.items.map(({ id, kind }) => ({ id, kind }))
     default: return []
   }
 }
@@ -282,6 +282,10 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       entries = page.items.length ? <ul className="mt-7 flex flex-wrap gap-3">{page.items.map(({ count, tag }) => <li key={tag}><Link className="inline-flex min-h-12 items-center gap-3 rounded-full border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-4 text-sm text-[var(--fs-ink)] transition-colors hover:border-[var(--fs-accent)] hover:text-[var(--fs-accent)]" href={`/profile/${encodeURIComponent(username)}/activity?tag=${encodeURIComponent(tag)}`}><span>#{tag}</span><span className="text-xs tabular-nums text-[var(--fs-muted)]">{count}</span></Link></li>)}</ul> : <EmptyArchive>Tags added to diary entries and reviews will become a searchable map of your cinema.</EmptyArchive>
       break
     }
+    case 'watchlist': {
+      entries = page.items.length ? <ul className="mt-7 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-4 lg:grid-cols-6">{page.items.map(ref => { const title = titleMap.get(refKey(ref)); return <TitleCard href={titleHref(ref)} key={refKey(ref)} meta={kindLabel(ref.kind)} rating={null} title={title ?? { ...ref, title: `${kindLabel(ref.kind)} #${ref.id}`, year: null, posterUrl: null, tmdbRating: null }} /> })}</ul> : <EmptyArchive>No titles in this public Watchlist yet.</EmptyArchive>
+      break
+    }
   }
 
   const archiveTitles: Record<Exclude<ProfileSectionId, 'overview' | 'watchlist' | 'history' | 'ratings' | 'followers' | 'following' | 'network'>, { description: string; heading: string }> = {
@@ -324,17 +328,15 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
           {section === 'lists' ? (
             <div className="flex flex-wrap items-center gap-3">
               {owner ? (
-                <label className="flex min-h-10 items-center gap-2 text-xs text-[var(--fs-muted)]">Show
-                  <select aria-label="Filter lists by visibility" className="h-10 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-3 text-xs font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onChange={(event) => setListVisibility(event.currentTarget.value as 'all' | 'public' | 'private')} value={listVisibility}>
-                    <option value="all">All lists</option><option value="public">Public</option><option value="private">Private</option>
-                  </select>
-                </label>
+                <div className="flex min-h-10 items-center gap-2 text-xs text-[var(--fs-muted)]">
+                  <span>Show</span>
+                  <Select className="w-36" hideLabel label="Filter lists by visibility" onValueChange={(value) => setListVisibility(value as 'all' | 'public' | 'private')} options={[{ value: 'all', label: 'All lists' }, { value: 'public', label: 'Public' }, { value: 'private', label: 'Private' }]} value={listVisibility} />
+                </div>
               ) : null}
-              <label className="flex min-h-10 items-center gap-2 text-xs text-[var(--fs-muted)]">Sort
-                <select aria-label="Sort profile lists" className="h-10 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-3 text-xs font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onChange={(event) => setListSort(event.currentTarget.value as 'recent' | 'title' | 'size')} value={listSort}>
-                  <option value="recent">Recently updated</option><option value="title">Title A–Z</option><option value="size">Most titles</option>
-                </select>
-              </label>
+              <div className="flex min-h-10 items-center gap-2 text-xs text-[var(--fs-muted)]">
+                <span>Sort</span>
+                <Select className="w-48" hideLabel label="Sort profile lists" onValueChange={(value) => setListSort(value as 'recent' | 'title' | 'size')} options={[{ value: 'recent', label: 'Recently updated' }, { value: 'title', label: 'Title A–Z' }, { value: 'size', label: 'Most titles' }]} value={listSort} />
+              </div>
             </div>
           ) : null}
           {selectedTag ? <Link className="text-xs font-bold text-[var(--fs-accent)] underline underline-offset-4" href={`/profile/${encodeURIComponent(username)}/tags`}>Browse all tags</Link> : null}

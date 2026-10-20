@@ -73,11 +73,11 @@ function HeroArticle({ animate, eager, hero, titleId }: {
       <div aria-hidden="true" className={`absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.92)_0%,rgba(0,0,0,0.62)_45%,rgba(0,0,0,0.08)_100%)] ${styles.shade}`} />
       <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0)_40%)]" />
       <div className={`relative flex max-w-2xl flex-col justify-center gap-3 p-6 sm:p-10 lg:p-12 min-h-[calc(100svh-100px)] sm:min-h-[calc(100svh-104px)] lg:min-h-[calc(100svh-112px)] ${styles.copy}${animate ? ' fs-hero-in' : ''}`} key={animate ? `${titleId}-in` : `${titleId}-idle`}>
-        <h2 className="max-w-[24ch] text-balance font-bold" id={titleId}>
+        <h2 className="text-balance font-bold" id={titleId}>
           {hero.logoUrl ? (
             <Image alt={hero.title} className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28" height={240} loading={eager ? undefined : 'lazy'} priority={eager} src={hero.logoUrl} width={640} />
           ) : (
-            <span className="font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">{hero.title}</span>
+            <span className="block max-w-[24ch] font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] font-normal tracking-[-0.025em] text-white">{hero.title}</span>
           )}
         </h2>
         {hero.tagline ? <p className={`max-w-[48ch] font-display text-2xl leading-snug text-white/95 ${styles.tagline}`}>{hero.tagline}</p> : null}

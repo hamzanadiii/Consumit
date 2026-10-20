@@ -3,6 +3,7 @@ import {
   apiErrorResponseSchema,
   createDiaryEntryRequestSchema,
   createMemberListRequestSchema,
+  appendListTitleRequestSchema,
   createReviewRequestSchema,
   diaryEntrySchema,
   profileSchema,
@@ -12,6 +13,7 @@ import {
   memberRatingLookupResponseSchema,
   watchHistoryPageSchema,
   memberListDetailSchema,
+  listReadResponseSchema,
   memberRatingSchema,
   memberRatingPageSchema,
   memberReviewSchema,
@@ -166,6 +168,10 @@ export const getMemberRatingsForTitles = (titles: readonly CatalogRef[]): Promis
 export const getMemberWatchHistoryPage = (cursor?: string): Promise<WatchHistoryPage> => request(`/v1/me/watch-history?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { method: 'GET' }, watchHistoryPageSchema)
 export const createMemberList = (input: CreateMemberListRequest): Promise<MemberListDetail> => request('/v1/me/lists', { body: body(createMemberListRequestSchema.parse(input)), method: 'POST' }, memberListDetailSchema)
 export const getMemberListDetail = (slug: string): Promise<MemberListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, { method: 'GET' }, memberListDetailSchema)
+export const getMemberListRead = (slug: string) => request(`/v1/lists/${encodeURIComponent(slug)}`, { method: 'GET' }, listReadResponseSchema)
+export const appendMemberListTitle = (listId: string, title: CatalogRef): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}/items`, { body: body(appendListTitleRequestSchema.parse(title)), method: 'POST' })
+export const saveMemberList = (slug: string): Promise<void> => request(`/v1/me/saved-lists/${encodeURIComponent(slug)}`, { method: 'PUT' })
+export const removeSavedMemberList = (listId: string): Promise<void> => request(`/v1/me/saved-lists/${encodeURIComponent(listId)}`, { method: 'DELETE' })
 export const updateMemberListContent = (listId: string, changes: UpdateMemberListContentRequest): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { body: body(updateMemberListContentRequestSchema.parse(changes)), method: 'PUT' })
 export const deleteMemberList = (listId: string): Promise<void> => request(`/v1/me/lists/${encodeURIComponent(listId)}`, { method: 'DELETE' })
 

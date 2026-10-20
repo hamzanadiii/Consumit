@@ -21,19 +21,30 @@ const CONTENT_SECURITY_POLICY = [
   [
     "script-src-elem 'self' 'unsafe-inline'",
     ...(isDev ? ["'unsafe-eval'"] : []),
-    'https://www.googletagmanager.com https://www.gstatic.com https://www.highrevenueformat.com',
+    'https://www.googletagmanager.com https://www.gstatic.com https://www.highrevenueformat.com https://pl29474263.profitableratecpmnetwork.com',
   ].join(' '),
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://image.tmdb.org https://www.themoviedb.org https://s4.anilist.co https://api.dicebear.com https://www.highrevenueformat.com",
+  "img-src 'self' data: blob: https://image.tmdb.org https://www.themoviedb.org https://artworks.thetvdb.com https://s4.anilist.co https://api.dicebear.com https://www.highrevenueformat.com",
   "font-src 'self'",
   [
     "connect-src 'self'",
+    // HLS.js fetches provider manifests and relay segments with Fetch/XHR;
+    // only the source URLs passed to it are separately validated against the
+    // configured provider and relay host policies before playback.
+    'https:',
     ...playbackFixtureMedia,
     ...(isDev ? ['ws: wss:'] : []),
     'https://www.google-analytics.com https://*.google-analytics.com https://analytics.google.com https://*.analytics.google.com https://www.gstatic.com https://www.google.com',
   ].join(' '),
   ["media-src 'self' blob: https:", ...playbackFixtureMedia].join(' '),
-  "frame-src 'self' https://www.gstatic.com",
+  // Reviewed provider document origins. Frames load at the provider; the API
+  // independently validates canonical identity and each configured source host.
+  ["frame-src 'self' https://www.gstatic.com",
+    'https://vixsrc.to https://apiplayer.ru https://watch.embed-api.stream https://vsembed.ru',
+    'https://vidcore.io https://cinesrc.st https://embed.vidrift.net https://vidfast.vc',
+    'https://vaplayer.ru https://moviesapi.to https://vidlink.pro https://vidnest.fun https://vidrock.to',
+    'https://flixcloud.cc https://megaplay.buzz https://ani.pm https://vidbolt.xyz',
+  ].join(' '),
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "base-uri 'self'",

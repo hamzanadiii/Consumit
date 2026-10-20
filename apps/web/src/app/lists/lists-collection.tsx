@@ -1,14 +1,14 @@
 'use client'
 
-import type { CatalogRef } from '@consumit/contracts'
+import type { CatalogRef, SavedMemberList } from '@consumit/contracts'
 import Link from 'next/link'
 import { ListVideo, Search } from 'lucide-react'
 import { useState } from 'react'
 
-import { PosterStack, buttonVariants } from '@consumit/ui'
+import { PosterStack, Select, buttonVariants } from '@consumit/ui'
 
 import { browserCatalogBatches } from '@/lib/catalog-browser'
-import { getMemberLibraryPage, getMemberListDetail } from '@/lib/identity-browser'
+import { getMemberLibraryPage, getMemberListDetail, getMemberListRead, removeSavedMemberList } from '@/lib/identity-browser'
 
 import { CreateListForm } from './list-actions'
 
@@ -24,6 +24,8 @@ export type ListCollectionItem = {
   savedByViewer: boolean
   isOwner: boolean
 }
+
+export type SavedListCollectionItem = SavedMemberList & { posters: readonly (string | undefined)[] }
 
 function ListCollageCard({ list }: { list: ListCollectionItem }) {
   const posters = list.posters.slice(0, 5)
@@ -68,12 +70,20 @@ export type ListsCollectionProps = {
   catalogUnavailable?: boolean
   listNextCursor?: string | null
   lists: readonly ListCollectionItem[]
+  savedLists?: readonly SavedListCollectionItem[]
+  savedListNextCursor?: string | null
 }
 
-export function ListsCollection({ catalogDetailsLimited = false, catalogUnavailable = false, listNextCursor: initialListCursor = null, lists: initialLists }: ListsCollectionProps) {
+export function ListsCollection({ catalogDetailsLimited = false, catalogUnavailable = false, listNextCursor: initialListCursor = null, lists: initialLists, savedLists: initialSavedLists = [], savedListNextCursor: initialSavedCursor = null }: ListsCollectionProps) {
   const [lists, setLists] = useState<readonly ListCollectionItem[]>(initialLists)
+  const [savedLists, setSavedLists] = useState<readonly SavedListCollectionItem[]>(initialSavedLists)
   const [listCursor, setListCursor] = useState(initialListCursor)
+  const [savedCursor, setSavedCursor] = useState(initialSavedCursor)
   const [loadingCollection, setLoadingCollection] = useState<'lists' | null>(null)
+  const [savedLoading, setSavedLoading] = useState(false)
+  const [savedLoadError, setSavedLoadError] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [savedQuery, setSavedQuery] = useState('')
   const [loadError, setLoadError] = useState<'lists' | null>(null)
   const [artworkError, setArtworkError] = useState(false)
   const [sort, setSort] = useState<'updated' | 'title' | 'size'>('updated')
@@ -121,6 +131,38 @@ export function ListsCollection({ catalogDetailsLimited = false, catalogUnavaila
     }
   }
 
+  async function loadMoreSaved() {
+    const cursor = savedCursor
+    if (!cursor || savedLoading) return
+    setSavedLoading(true); setSavedLoadError(false)
+    try {
+      const page = await getMemberLibraryPage('savedLists', cursor)
+      if (page.collection !== 'savedLists') throw new Error('Saved list page mismatch')
+      const covers = new Map<string, readonly CatalogRef[]>()
+      await Promise.all(page.items.filter(item => item.available).slice(0, 8).map(async item => {
+        try { const detail = await getMemberListRead(item.listSlug); covers.set(item.listId, detail.items.slice(0, 5)) }
+        catch { /* Keep the saved reference visible if its cover cannot load. */ }
+      }))
+      const refs = [...new Map([...covers.values()].flat().map(ref => [`${ref.kind}:${ref.id}`, ref])).values()].slice(0, 120)
+      const postersByRef = new Map<string, string>()
+      try { for (const title of await browserCatalogBatches(refs)) postersByRef.set(`${title.kind}:${title.id}`, title.posterUrl ?? '') } catch { setArtworkError(true) }
+      const next: SavedListCollectionItem[] = page.items.map(item => ({ ...item, posters: (covers.get(item.listId) ?? []).map(ref => postersByRef.get(`${ref.kind}:${ref.id}`) || undefined) }))
+      setSavedLists(current => [...current, ...next.filter(item => !current.some(existing => existing.listId === item.listId))])
+      setSavedCursor(page.nextCursor)
+    } catch { setSavedLoadError(true) } finally { setSavedLoading(false) }
+  }
+
+  async function removeBookmark(listId: string) {
+    if (removingId) return
+    setRemovingId(listId); setSavedLoadError(false)
+    try {
+      await removeSavedMemberList(listId)
+      setSavedLists(current => current.filter(item => item.listId !== listId))
+    } catch { setSavedLoadError(true) } finally { setRemovingId(null) }
+  }
+
+  const visibleSavedLists = savedLists.filter(item => !savedQuery.trim() || item.listName.toLocaleLowerCase().includes(savedQuery.trim().toLocaleLowerCase()))
+
   return (
       <div data-consumit-lists-collection>
           {catalogUnavailable ? (
@@ -142,11 +184,10 @@ export function ListsCollection({ catalogDetailsLimited = false, catalogUnavaila
                     <input className="min-w-0 w-full bg-transparent text-xs text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Find a collection" type="search" value={query} />
                   </label>
                   <p className="text-xs tabular-nums text-[var(--fs-muted)]">{visibleLists.length}{listCursor ? '+' : ''} {visibleLists.length === 1 && !listCursor ? 'list' : 'lists'} in this view</p>
-                  <label className="flex min-h-11 items-center gap-3 text-xs text-[var(--fs-muted)]">Sort by
-                    <select aria-label="Sort your lists" className="h-10 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-3 text-xs font-bold text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onChange={(event) => setSort(event.currentTarget.value as 'updated' | 'title' | 'size')} value={sort}>
-                      <option value="updated">When updated</option><option value="title">Title</option><option value="size">Most titles</option>
-                    </select>
-                  </label>
+                  <div className="flex min-h-11 items-center gap-3 text-xs text-[var(--fs-muted)]">
+                    <span>Sort by</span>
+                    <Select className="w-44" hideLabel label="Sort your lists" onValueChange={(value) => setSort(value as 'updated' | 'title' | 'size')} options={[{ value: 'updated', label: 'When updated' }, { value: 'title', label: 'Title' }, { value: 'size', label: 'Most titles' }]} value={sort} />
+                  </div>
                 </div>
                 {listCursor ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Filters and sorting apply to loaded lists. Load more to include older lists.</p> : null}
                 {visibleLists.length === 0 ? (
@@ -163,13 +204,26 @@ export function ListsCollection({ catalogDetailsLimited = false, catalogUnavaila
                 {listCursor || loadError === 'lists' ? <button className={`${buttonVariants({ variant: 'secondary' })} mt-6`} disabled={loadingCollection !== null} onClick={() => void loadMore('lists')} type="button">{loadingCollection === 'lists' ? 'Loading lists…' : loadError === 'lists' ? 'Try again' : 'Load more lists'}</button> : null}
               </section>
 
+              <section className="mt-12 scroll-mt-8 border-t border-[var(--fs-line)] pt-7" id="saved-lists" aria-labelledby="saved-lists-heading">
+                <div className="flex flex-col gap-3 border-b border-[var(--fs-line)] pb-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div><h2 className="font-display text-2xl text-[var(--fs-ink)]" id="saved-lists-heading">Saved Lists</h2><p className="mt-1 text-xs text-[var(--fs-muted)]">Bookmarks follow the curator’s latest edits.</p></div>
+                  {savedLists.length ? <label className="flex h-10 w-full items-center gap-2 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-3 text-[var(--fs-muted)] focus-within:ring-2 focus-within:ring-[var(--fs-focus)] sm:w-44"><Search aria-hidden="true" className="size-3.5 shrink-0" /><span className="sr-only">Search saved lists</span><input className="min-w-0 w-full bg-transparent text-xs text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={event => setSavedQuery(event.currentTarget.value)} placeholder="Find a saved list" type="search" value={savedQuery} /></label> : null}
+                </div>
+                {visibleSavedLists.length ? <ul className="mt-6 grid gap-x-6 gap-y-8 xl:grid-cols-2">{visibleSavedLists.map(item => <li className="min-w-0" key={item.listId}><article className="border-b border-[var(--fs-line)] pb-5">
+                  {item.available ? <Link aria-label={`${item.listName}, ${item.itemCount ?? 0} titles`} className="block rounded-control outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/lists/${item.listSlug}`} prefetch={false}><PosterStack items={item.posters.slice(0, 5).map((src, index) => ({ key: String(index), label: '', src }))} /></Link> : <div className="grid aspect-[12/5] place-items-center rounded-control border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] text-xs text-[var(--fs-muted)]">Unavailable</div>}
+                  <div className="mt-4 flex items-start justify-between gap-4"><div className="min-w-0"><p className="font-display text-xl leading-tight text-[var(--fs-ink)]">{item.available ? <Link className="hover:text-[var(--fs-accent)]" href={`/lists/${item.listSlug}`} prefetch={false}>{item.listName}</Link> : item.listName}</p><p className="mt-2 text-xs text-[var(--fs-muted)]">{item.available ? `By ${item.ownerDisplayName ?? `@${item.ownerUsername}`} · ${item.itemCount ?? 0} ${(item.itemCount ?? 0) === 1 ? 'title' : 'titles'}` : `By ${item.ownerDisplayName ?? `@${item.ownerUsername}`} · no longer public`}</p>{!item.available ? <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">The curator made this list private or deleted it. You can remove the saved reference.</p> : null}</div><button className="min-h-10 shrink-0 rounded-control px-3 text-xs font-bold text-[var(--fs-muted)] hover:text-[var(--fs-danger)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" disabled={removingId !== null} onClick={() => void removeBookmark(item.listId)} type="button">{removingId === item.listId ? 'Removing…' : 'Remove'}</button></div>
+                </article></li>)}</ul> : <div className="mt-6 border-y border-dashed border-[var(--fs-line)] py-7 text-sm leading-6 text-[var(--fs-muted)]">{savedLists.length ? 'No saved lists match this search.' : 'Save a public list from its page and it will be waiting here.'}</div>}
+                {savedLoadError ? <p className="mt-4 text-sm text-[var(--fs-danger)]" role="alert">Saved Lists could not be updated. Try again.</p> : null}
+                {savedCursor || savedLoadError ? <button className={`${buttonVariants({ variant: 'secondary' })} mt-6`} disabled={savedLoading} onClick={() => void loadMoreSaved()} type="button">{savedLoading ? 'Loading…' : savedLoadError ? 'Try again' : 'Load more saved lists'}</button> : null}
+              </section>
+
             </div>
 
             <aside className="order-first min-w-0 lg:sticky lg:top-6 lg:order-last">
               <CreateListForm />
               <section className="mt-6 border-t border-[var(--fs-line)] pt-5">
                 <h2 className="font-display text-xl text-[var(--fs-ink)]">Make it yours.</h2>
-                <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">Start with a handful of titles. Shape your private collections in the order you want to revisit them.</p>
+                <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">Start with a handful of titles. Shape a public collection to share, or keep it private.</p>
               </section>
             </aside>
           </div>

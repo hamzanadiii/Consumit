@@ -9,9 +9,12 @@ import {
   CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_WINDOW_MS,
   MAX_MEMBER_SESSIONS,
   challengeCodeHash,
   challengeLookup,
+  loginLookup,
   type AuthChallenge,
   type AuthStateStore,
   type RegistrationChallenge,
@@ -53,6 +56,7 @@ export function createMemoryAuthState(options: {
   const usernameReservations = new Map<string, { email: string; expiresAt: Date }>()
   const sessions = new Map<string, SessionRecord>()
   const attemptCounters = new Map<string, Counter>()
+  const loginCounters = new Map<string, Counter>()
   const sendCounters = new Map<string, Counter>()
   const tombstones = new Map<string, Date>()
 
@@ -139,6 +143,9 @@ export function createMemoryAuthState(options: {
       bumpCounter(sendCounters, scoped, ACCOUNT_SEND_WINDOW_MS)
       return 'stored'
     },
+    async clearFailedLogins(email) {
+      loginCounters.delete(loginLookup(codePepper, email))
+    },
     async close() {},
     async consumeChallenge(input) {
       const key = challengeKey(input.purpose, input.email)
@@ -201,6 +208,9 @@ export function createMemoryAuthState(options: {
     async isUsernameReserved(username) {
       return activeReservation(username) !== null
     },
+    async loginLocked(email) {
+      return (liveCounter(loginCounters, loginLookup(codePepper, email))?.count ?? 0) >= LOGIN_MAX_ATTEMPTS
+    },
     async pendingRegistration(email) {
       const challenge = challenges.get(challengeKey('registration', email))
       if (!challenge || challenge.expiresAt.getTime() <= clock().getTime() || challenge.payload.kind !== 'registration') {
@@ -224,6 +234,9 @@ export function createMemoryAuthState(options: {
         session.lastSeenAt = now
       }
       return { ...session }
+    },
+    async registerFailedLogin(email) {
+      bumpCounter(loginCounters, loginLookup(codePepper, email), LOGIN_WINDOW_MS)
     },
     async revokeMemberSessions(memberId) {
       for (const [hash, session] of sessions) if (session.memberId === memberId) removeSession(hash)

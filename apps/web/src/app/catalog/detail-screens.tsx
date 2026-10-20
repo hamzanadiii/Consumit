@@ -144,7 +144,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
             </p>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm leading-6">
             {rating ? (
               <strong className="inline-flex items-center gap-1 font-bold text-orange tabular-nums">
                 <Star aria-hidden="true" className="size-3.5 fill-current" />
@@ -170,7 +170,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
             </p>
           ) : null}
 
-          <div className="mt-2 flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3 [&_a]:min-h-11 [&_button]:min-h-11">
             <TitlePlayAction id={detail.id} kind={detail.kind} {...(detail.kind === 'series' ? { seasons: detail.seasons } : {})} />
           </div>
         </div>

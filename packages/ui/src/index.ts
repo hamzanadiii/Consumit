@@ -93,6 +93,11 @@ export {
   type ConsumitPlayerProps,
   type PlayerMenuId,
   type PlayerOption,
+  type CaptionBackground,
+  type CaptionColor,
+  type CaptionFont,
+  type CaptionPosition,
+  type CaptionSize,
 } from './playback/consumit-player'
 export {
   MAX_SUBTITLE_LANGUAGES,
@@ -148,3 +153,7 @@ export {
   type SeasonOption,
   type SeasonSelectorProps,
 } from './title/title'
+
+export { PlayerShortcuts } from './playback/player-shortcuts'
+
+export { PlayerPanel } from './playback/player-panel'

@@ -3,18 +3,27 @@ import { cn } from '../lib/cn'
 export type CaptionSize = 'small' | 'medium' | 'large' | 'xlarge'
 export type CaptionBackground = 'cinematic' | 'boxed' | 'subtle'
 export type CaptionPosition = 'bottom' | 'top'
-/** FilScreen vibe default: Charter film-poster serif. `sans` is the compact DejaVu interface voice. */
-export type CaptionFont = 'filscreen' | 'sans'
+/** Caption families all include script-aware fallbacks for Arabic and other RTL scripts. */
+export type CaptionFont = 'filscreen' | 'sans' | 'inter'
+export type CaptionColor = 'ivory' | 'warm' | 'sky' | 'mint'
 
 export const CAPTION_SIZE_KEY = 'consumit.player.caption-size'
 export const CAPTION_BACKGROUND_KEY = 'consumit.player.caption-background'
 export const CAPTION_POSITION_KEY = 'consumit.player.caption-position'
 export const CAPTION_FONT_KEY = 'consumit.player.caption-font'
+export const CAPTION_COLOR_KEY = 'consumit.player.caption-color'
 
 export const CAPTION_SIZES: readonly CaptionSize[] = ['small', 'medium', 'large', 'xlarge']
 export const CAPTION_BACKGROUNDS: readonly CaptionBackground[] = ['cinematic', 'boxed', 'subtle']
 export const CAPTION_POSITIONS: readonly CaptionPosition[] = ['bottom', 'top']
-export const CAPTION_FONTS: readonly CaptionFont[] = ['filscreen', 'sans']
+export const CAPTION_FONTS: readonly CaptionFont[] = ['filscreen', 'sans', 'inter']
+export const CAPTION_COLORS: readonly CaptionColor[] = ['ivory', 'warm', 'sky', 'mint']
+export const CAPTION_COLOR_VALUES: Record<CaptionColor, string> = {
+  ivory: '#fffaf0',
+  warm: '#ffe08a',
+  sky: '#b8eaff',
+  mint: '#c7f2d4',
+}
 
 /** Read an allowlisted preference without letting unavailable storage affect playback. */
 export function readStoredCaption<T extends string>(key: string, fallback: T, allowed: readonly T[]): T {
@@ -120,11 +129,12 @@ export function captionSizeClass(size: CaptionSize, fullscreen: boolean) {
 }
 
 export function captionFontClass(font: CaptionFont) {
-  // FilScreen vibe default: Charter film-poster serif with tight tracking.
-  // Sans falls back to the compact DejaVu interface voice.
-  return font === 'sans'
-    ? 'font-interface font-bold tracking-[-0.01em]'
-    : 'font-display font-normal tracking-[-0.02em]'
+  switch (font) {
+    case 'sans': return 'consumit-caption-font-dejavu font-bold tracking-normal'
+    case 'inter': return 'consumit-caption-font-inter font-bold tracking-[-0.01em]'
+    case 'filscreen':
+    default: return 'consumit-caption-font-serif font-bold tracking-[-0.02em]'
+  }
 }
 
 /** Cursive RTL scripts break letter joining under non-zero letter-spacing in Chromium. */

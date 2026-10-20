@@ -32,6 +32,15 @@ async function start(page: Page, id: number) {
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime), { timeout: 20_000 }).toBeGreaterThan(0)
 }
 
+async function waitForReadyAttempt(page: Page, providerId: string) {
+  const response = await page.waitForResponse(async response => {
+    if (!response.url().includes('/v1/playback/attempts') || response.request().method() !== 'POST' || response.status() !== 200) return false
+    const result = await response.json().catch(() => null)
+    return result?.status === 'ready' && result.session?.source?.providerId === providerId
+  })
+  return response.json()
+}
+
 test('native playback saves guest progress and resumes after reload', async ({ page }) => {
   await start(page, 1)
   expect(await page.locator('video').evaluate((video: HTMLVideoElement) => { video.currentTime = 12; video.pause(); return video.paused })).toBe(true)
@@ -75,18 +84,18 @@ test('direct HLS decodes video and exposes the actual English caption track', as
 
 test('the imported VixSrc adapter connects API extraction to actual HLS decoding', async ({ page, browserName }) => {
   test.skip(browserName === 'webkit' && process.platform === 'win32', 'Windows Playwright WebKit does not expose a working HLS decoder for this fixture.')
-  const resolved = page.waitForResponse((response) => response.url().endsWith('/v1/playback/resolve') && response.status() === 200)
+  const resolved = waitForReadyAttempt(page, 'vixsrc')
   await start(page, 4)
-  expect((await (await resolved).json()).source.providerId).toBe('vixsrc')
+  expect((await resolved).session.source.providerId).toBe('vixsrc')
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.videoWidth)).toBe(640)
 })
 
 test('an unavailable source falls back to compatible media', async ({ page }) => {
-  const fallback = page.waitForResponse((response) => response.url().endsWith('/fallback') && response.status() === 200)
+  const fallback = waitForReadyAttempt(page, 'backup')
   await page.goto('/watch/movie/3')
   const startButton = page.getByRole('button', { name: 'Start watching', exact: true })
   if (await startButton.isVisible()) await startButton.click()
-  expect((await (await fallback).json()).source.providerId).toBe('backup')
+  expect((await fallback).session.source.providerId).toBe('backup')
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.videoWidth)).toBeGreaterThan(0)
 })
 
@@ -94,7 +103,7 @@ test('recovery preserves a paused position', async ({ page }) => {
   await start(page, 1)
   await page.locator('video').evaluate((video: HTMLVideoElement) => { video.currentTime = 12; video.pause() })
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('consumit.progress:guest:movie:1:0:0') ?? '{}').positionSeconds)).toBeGreaterThanOrEqual(12)
-  const fallback = page.waitForResponse((response) => response.url().endsWith('/fallback') && response.status() === 200)
+  const fallback = waitForReadyAttempt(page, 'backup')
   await page.locator('video').evaluate((video) => video.dispatchEvent(new Event('error')))
   await fallback
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThanOrEqual(12)
@@ -120,8 +129,8 @@ test('renewing an unchanged media URL keeps playback running without reloading i
 
 test('subtitle discovery shows all languages, pages tracks, and prepares the selected file', async ({ page }) => {
   await start(page, 5)
-  await page.getByRole('button', { name: 'Subtitles' }).click()
-  const menu = page.getByRole('menu', { name: 'Subtitles' })
+  await page.getByRole('button', { name: 'Captions' }).click()
+  const menu = page.getByRole('dialog', { name: 'Captions' })
   await expect(menu.getByRole('button', { name: /English 26/ })).toBeVisible()
   await expect(menu.getByRole('button', { name: /العربية 2/ })).toBeVisible()
   await menu.getByRole('button', { name: /English 26/ }).click()
@@ -130,15 +139,15 @@ test('subtitle discovery shows all languages, pages tracks, and prepares the sel
   await expect(menu.getByRole('button', { name: /English release 25/ })).toBeVisible()
   await menu.getByRole('button', { name: /English release 1$/ }).click()
   await expect(page.locator('video track[src*="/v1/subtitles/file/"]')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Subtitles' }).click()
+  await page.getByRole('button', { name: 'Captions' }).click()
   await page.locator('input[type="file"][accept*=".srt"]').setInputFiles({
     name: 'local.srt', mimeType: 'application/x-subrip',
     buffer: Buffer.from('1\n00:00:01,000 --> 00:00:20,000\nLocal caption\n'),
   })
   await expect(page.locator('video track[src^="blob:"]')).toHaveCount(1)
-  await page.getByRole('button', { name: 'Subtitles' }).click()
-  await page.getByRole('menu', { name: 'Subtitles' }).getByRole('button', { name: 'Sync subtitle to audio' }).click()
-  await expect(page.getByRole('menu', { name: 'Subtitle sync' })).toBeVisible()
+  await page.getByRole('button', { name: 'Captions' }).click()
+  await page.getByRole('dialog', { name: 'Captions' }).getByRole('button', { name: 'Sync subtitle to audio' }).click()
+  await expect(page.getByRole('dialog', { name: 'Subtitle sync' })).toBeVisible()
 })
 
 test('repeated short source renewals keep playback, captions, and paused position', async ({ page }) => {

@@ -71,9 +71,7 @@ export async function browserSearchAnime(query: string, page = 1, signal?: Abort
   return parsed.data
 }
 
-/** Canonical episode metadata (Kitsu title/synopsis/still) for one anime
- *  episode. Null on any miss — callers fall back to streaming thumbnails,
- *  then the honest placeholder. */
+/** Canonical episode metadata for one anime episode. Null on any miss. */
 export async function browserAnimeEpisode(anilistId: number, episode: number, signal?: AbortSignal): Promise<AnimeEpisode | null> {
   let response: Response
   try {

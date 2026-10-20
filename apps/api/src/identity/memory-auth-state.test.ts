@@ -9,6 +9,8 @@ import {
   CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
+  LOGIN_MAX_ATTEMPTS,
+  LOGIN_WINDOW_MS,
   MAX_MEMBER_SESSIONS,
 } from './auth-state.ts'
 import { createMemoryAuthState } from './memory-auth-state.ts'
@@ -56,6 +58,24 @@ describe('memory authentication state', () => {
     now = new Date(now.getTime() + ACCOUNT_CONFIRM_WINDOW_MS + 1)
     expect(await state.beginChallenge({ ...challenge, code: '999999' })).toBe('stored')
     expect(await state.consumeChallenge({ code: '999999', email: challenge.email, purpose: 'registration' })).toMatchObject({ kind: 'registration' })
+  })
+
+  it('counts failed sign-ins per account, rolls the window, and clears after success', async () => {
+    let now = new Date('2026-09-07T00:00:00.000Z')
+    const state = createMemoryAuthState({ clock: () => now })
+    expect(await state.loginLocked('member@example.com')).toBe(false)
+    for (let attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt += 1) {
+      await state.registerFailedLogin('member@example.com')
+    }
+    expect(await state.loginLocked('member@example.com')).toBe(true)
+    expect(await state.loginLocked('other@example.com')).toBe(false)
+    now = new Date(now.getTime() + LOGIN_WINDOW_MS + 1)
+    expect(await state.loginLocked('member@example.com')).toBe(false)
+    for (let attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt += 1) {
+      await state.registerFailedLogin('member@example.com')
+    }
+    await state.clearFailedLogins('member@example.com')
+    expect(await state.loginLocked('member@example.com')).toBe(false)
   })
 
   it('caps outbound challenge sends per account regardless of challenge state', async () => {

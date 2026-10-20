@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { movieDetail, movieSummary, seriesDetail, seriesSummary } from '@/test/catalog-fixtures'
+import { movieDetail, movieSummary, seriesSummary } from '@/test/catalog-fixtures'
 import { browserCatalogBatch, browserCatalogTitle } from '@/lib/catalog-browser'
 import { BecauseYouWatchedRail, readWatchedSeeds } from './because-you-watched-rail'
 const session = vi.hoisted(() => ({ member: { id: 'alice' } as { id: string } | null, status: 'authenticated' }))
-vi.mock('../session/session', () => ({ useSession: () => session }))
+vi.mock('../session/session', () => ({ useOptionalSession: () => session, useSession: () => session }))
 vi.mock('@/lib/catalog-browser', () => ({ browserCatalogBatch: vi.fn(), browserCatalogTitle: vi.fn() }))
 const nextTitle = { ...movieSummary, id: 9, title: 'Your next movie' }
 function watch(id: number, kind = 'movie', completed = true, updatedAt = '2026-10-09T00:00:00Z', owner = 'alice') {
@@ -29,23 +29,24 @@ describe('account recommendations', () => {
     expect(browserCatalogBatch).not.toHaveBeenCalled()
     expect(screen.queryByText('Because you watched')).not.toBeInTheDocument()
   })
-  it('uses actual account history, removes watched duplicates and switches seeds', async () => {
+  it('uses actual account history to rank suggestions across all recent seeds', async () => {
     watch(seriesSummary.id, 'series', true, '2026-10-08T00:00:00Z'); watch(movieSummary.id)
     render(<BecauseYouWatchedRail />)
     expect(await screen.findByRole('img', { name: 'Your next movie poster' })).toBeInTheDocument()
     expect(screen.getAllByRole('img', { name: 'Your next movie poster' })).toHaveLength(1)
-    vi.mocked(browserCatalogTitle).mockResolvedValue({ ...seriesDetail, recommendations: [] })
-    fireEvent.change(screen.getByLabelText('Choose a watched title for recommendations'), { target: { value: `series:${seriesSummary.id}` } })
-    expect(await screen.findByText(/No recommendations for this selection/)).toBeInTheDocument()
+    expect(browserCatalogTitle).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Picked from your recent watches.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Choose a watched title for recommendations')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Recommendation title type')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Sort recommendations')).not.toBeInTheDocument()
   })
-  it('supports Not interested with Undo and a type filter', async () => {
+  it('supports Not interested with compact Undo and Reset actions', async () => {
     watch(movieSummary.id); render(<BecauseYouWatchedRail />)
     fireEvent.click(await screen.findByRole('button', { name: 'Not interested in Your next movie' }))
     await waitFor(() => expect(screen.queryByRole('img', { name: 'Your next movie poster' })).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Undo Not interested' }))
+    expect(screen.getByRole('button', { name: 'Reset hidden' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     expect(await screen.findByRole('img', { name: 'Your next movie poster' })).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Recommendation title type'), { target: { value: 'anime' } })
-    expect(screen.queryByRole('img', { name: 'Your next movie poster' })).not.toBeInTheDocument()
   })
   it('retries a catalog recommendation failure', async () => {
     watch(movieSummary.id); vi.mocked(browserCatalogTitle).mockRejectedValueOnce(new Error('Unavailable'))

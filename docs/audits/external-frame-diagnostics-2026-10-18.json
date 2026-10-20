@@ -1,0 +1,147 @@
+{
+  "evidenceId": "ev_0e2efa2e966407da3c1d701a54ffde5acfdf7d6c919b5ab589e2871170dd94a6",
+  "method": "REA controlled browser scenario with an isolated local immediate-parent harness",
+  "at": "2026-10-18",
+  "subject": "VidRift movie 550",
+  "runtime": {
+    "mode": "launch",
+    "process_ownership": "provider-owned",
+    "cleanup": "terminated-owned-process",
+    "product": "Chromium",
+    "version": "155.0.8059.80"
+  },
+  "scenario": {
+    "start_origin": "http://127.0.0.1:8769",
+    "action_count": 1,
+    "secret_references": [],
+    "network_content": {
+      "request_body": false,
+      "response_body": false,
+      "header_values": false
+    },
+    "event_families": [
+      "console"
+    ]
+  },
+  "durationMs": 23818,
+  "reports": [
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:ui-hidden",
+      "keys": [
+        "type"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:providers",
+      "keys": [
+        "type",
+        "providers",
+        "current"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:unpaused",
+      "tmdbId": "550",
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "anilist": null,
+      "currentTime": 0.000387,
+      "keys": [
+        "type",
+        "tmdbId",
+        "mediaType",
+        "season",
+        "episode",
+        "anilist",
+        "currentTime"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:providers",
+      "keys": [
+        "type",
+        "providers",
+        "current"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:ui-visible",
+      "keys": [
+        "type"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:ui-hidden",
+      "keys": [
+        "type"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:progress",
+      "tmdbId": "550",
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "anilist": null,
+      "currentTime": 5.245701,
+      "duration": 8348.333999999973,
+      "keys": [
+        "type",
+        "tmdbId",
+        "mediaType",
+        "season",
+        "episode",
+        "anilist",
+        "currentTime",
+        "duration"
+      ]
+    },
+    {
+      "origin": "https://embed.vidrift.net",
+      "immediate": true,
+      "type": "vidrift:progress",
+      "tmdbId": "550",
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "anilist": null,
+      "currentTime": 10.272101,
+      "duration": 8348.333999999973,
+      "keys": [
+        "type",
+        "tmdbId",
+        "mediaType",
+        "season",
+        "episode",
+        "anilist",
+        "currentTime",
+        "duration"
+      ]
+    }
+  ],
+  "limitations": [
+    "Artifact identity is unavailable for this observation.",
+    "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+    "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+    "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+    "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+    "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+    "Storage values are hashed only after declared-secret redaction.",
+    "Browser host platform and architecture were not observed."
+  ]
+}

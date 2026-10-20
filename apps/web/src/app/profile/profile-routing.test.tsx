@@ -16,16 +16,17 @@ vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Erro
 vi.mock('@/lib/identity-server', () => ({ getServerSession: mocks.session }))
 vi.mock('@/lib/member-server', () => ({ getPublicProfile: mocks.profile, getProfileRead: mocks.profile, getMemberLibrarySnapshot: mocks.library, getPublicProfileArchivePage: mocks.archive, getMemberList: mocks.list, getMemberRatingsForTitles: mocks.ratings, getPublicCollection: mocks.collection, MemberApiError: class extends Error {} }))
 vi.mock('@/lib/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
-const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', location: null, nextUsernameChangeAt: null, username: 'hamza', usernameChangedAt: null, visibility: 'private' }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
+const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }
+const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
 const ownList = { id: 'private-list', slug: 'private-list', name: 'My private collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }
-const visitorProfile: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'hamza', profile: { id: 'public-member-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, isFollowing: false }, favorites: [], ratingDistribution: [], statistics: { ratings: 4, reviews: 2, lists: 1 }, social: { followers: 3, following: 5 } }
+const visitorProfile: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'hamza', sectionVisibility, profile: { id: 'public-member-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, isFollowing: false }, favorites: [], ratingDistribution: [], statistics: { ratings: 4, reviews: 2, lists: 1 }, social: { followers: 3, following: 5 } }
 
 describe('profile archive routing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.session.mockResolvedValue({ status: 'authenticated', member: { username: 'hamza' } })
     mocks.profile.mockResolvedValue({ ...profile, viewerIsOwner: true })
-    mocks.library.mockResolvedValue({ lists: { items: [ownList], nextCursor: null } })
+    mocks.library.mockResolvedValue({ lists: { items: [ownList], nextCursor: null }, savedLists: { items: [], nextCursor: null } })
     mocks.list.mockResolvedValue({ items: [] })
     mocks.archive.mockResolvedValue({ collection: 'lists', items: [], nextCursor: null })
     mocks.ratings.mockResolvedValue([])

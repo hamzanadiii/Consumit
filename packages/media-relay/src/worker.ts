@@ -8,7 +8,7 @@ import type { ProviderHttp, ProviderHttpResponse } from '../../provider-sdk/src/
 import { playbackRefSchema } from '@consumit/contracts'
 
 export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string }
-type Dependencies = { fetch?: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => ReturnType<typeof fetch>; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number; stage: string }) => void }
+type Dependencies = { fetch?: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => ReturnType<typeof fetch>; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number; stage: string; blockedHost?: string }) => void }
 const MAX_MANIFEST_BYTES = 512 * 1024
 const LOOKMOVIE_HOST = /^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/
 /** Constant-time bearer secret check so auth timing does not leak secret bytes. */
@@ -100,7 +100,7 @@ export function createRelayWorker(deps: Dependencies = {}) {
           const title = input.title.trim(), year = Number(input.year)
           let lastHop = 'none'
           const http = workerLookmovieHttp(upstreamFetch, verifyPublicHost, entry => { lastHop = `${entry.host}${entry.path}:${entry.status}` })
-          const provider = createLookmovieProvider(http, async () => ({ title, year }), now, { id: 'lookmovie-relay', relayHostDiscovery: true })
+          const provider = createLookmovieProvider(http, async () => ({ title, year }), now, { id: 'lookmovie', relayHostDiscovery: true })
           const controller = new AbortController()
           const timer = setTimeout(() => controller.abort(new DOMException('LookMovie resolution timed out.', 'TimeoutError')), 24_000)
           try {
@@ -138,8 +138,10 @@ export function createRelayWorker(deps: Dependencies = {}) {
           const discovery = JSON.parse(env.RELAY_DISCOVERY_PROVIDERS ?? '{}') as Record<string, string>
           const reviewed = grant.provider === 'stormboron' && grant.recipe === 'storm-boron-v1'
             || ['wecollege-miami', 'wecollege-boise'].includes(grant.provider) && grant.recipe === 'wecollege-city-v1'
-            || grant.provider === 'lookmovie-relay' && grant.recipe === 'lookmovie-v1'
+            || grant.provider === 'lookmovie' && grant.recipe === 'lookmovie-v1'
               && grant.hosts?.every(host => /^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/.test(host))
+            || grant.provider === 'aether' && grant.recipe === 'aether-v1'
+              && grant.hosts?.every(host => /^(?:[a-z0-9-]+\.)+(?:cdn-)?tnmr\.org$/.test(host))
           if (!staticHosts.length || !reviewed || discovery[grant.provider] !== grant.recipe || !grant.hosts?.length) return fail(403)
           hosts = grant.hosts
         }
@@ -151,9 +153,9 @@ export function createRelayWorker(deps: Dependencies = {}) {
       const signal = AbortSignal.any([request.signal, abort.signal])
       let timer = setTimeout(() => abort.abort(), 10_000)
       const started = now()
-      let bytes = 0, status = 502, kind = 'media', stage = 'grant'
+      let bytes = 0, status = 502, kind = 'media', stage = 'grant', blockedHost: string | undefined
       let bytesKnown = true
-      const report = () => { try { deps.report?.({ provider: grant.provider, kind, status, bytes, bytesKnown, durationMs: Math.max(0, now() - started), stage }) } catch { /* Telemetry cannot interrupt playback. */ } }
+      const report = () => { try { deps.report?.({ provider: grant.provider, kind, status, bytes, bytesKnown, durationMs: Math.max(0, now() - started), stage, ...(blockedHost ? { blockedHost } : {}) }) } catch { /* Telemetry cannot interrupt playback. */ } }
       try {
         let url = bingeFetchUrl(grant.provider, grant.url, grant.kind === 'hls')
         let response: Response | undefined
@@ -201,7 +203,9 @@ export function createRelayWorker(deps: Dependencies = {}) {
           try { rewritten = await rewriteRelayManifest(text, url, grant, hosts, codec, path.origin, now()) }
           catch (error) {
             const message = error instanceof Error ? error.message : ''
-            stage = message === 'Blocked manifest destination.' ? 'manifest-host-scope'
+            const blocked = /^Blocked manifest destination: ([a-z0-9.-]+)\.$/.exec(message)
+            if (blocked) blockedHost = blocked[1]
+            stage = blocked ? 'manifest-host-scope'
               : message === 'Unsupported manifest.' && /#EXT-X-DEFINE\b|\{\$/.test(text) ? 'manifest-variables'
                 : message === 'Unsupported manifest.' && /#EXT-X-CONTENT-STEERING\b/.test(text) ? 'manifest-content-steering'
                   : message === 'Unsupported manifest.' ? 'manifest-unsupported'

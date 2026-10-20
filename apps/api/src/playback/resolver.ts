@@ -8,9 +8,8 @@ import { matchesRequestedAudio, supportsRequestedAudio } from './audio-policy.ts
 import { acquireProviderBudget } from './provider-budget.ts'
 
 const permitsSource = (source: ProviderSource, input: ResolvePlaybackRequest) => matchesRequestedAudio(source, input)
-  && !(input.preferences?.adsEnabled === false && source.type === 'iframe' && source.frameSandbox === 'none')
 
-export type ResolvedSource = { source: ProviderSource; qualitySources?: ProviderSource[]; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
+export type ResolvedSource = { source: ProviderSource; qualitySources?: ProviderSource[]; serverSources?: ProviderSource[]; registration: ProviderRegistration; subtitles: SubtitleCandidate[]; delivery: 'direct' }
 
 /** Adapter-declared siblings remain scoped to one mirror and audio track. */
 function qualitySiblings(source: ProviderSource, candidates: ProviderSource[]) {
@@ -72,11 +71,13 @@ function cancellable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   })
 }
 
-export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; healthScope?: 'relay' | 'embed'; providerFilter?: (registration: ProviderRegistration) => boolean; sourceFilter?: (source: ProviderSource, registration: ProviderRegistration) => boolean; /** Providers that remain in automatic order during cooldown; normal admission limits still apply. */ alwaysAttemptProviderIds?: readonly string[]; /** Ignored: kept for compatibility with hedged callers. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
+export function createResolver(providers: readonly ProviderRegistration[], options: { region: string; deadlineMs?: number; healthScope?: 'relay' | 'embed'; providerFilter?: (registration: ProviderRegistration) => boolean; sourceFilter?: (source: ProviderSource, registration: ProviderRegistration) => boolean;   /** Providers that remain in automatic order during cooldown; normal admission limits still apply. */ alwaysAttemptProviderIds?: readonly string[]; /** Hedged-start window: after this long without a winner the next candidate starts in parallel. Preference order is preserved. */ hedgeMs?: number; now?: () => number; store?: PlaybackStore; providerOrders?: Record<'movie' | 'series' | 'anime', string[]> }) {
   const now = options.now ?? Date.now
-  // One resolve is a sequential waterfall with a shared deadline. Each
-  // adapter gets its configured attempt limit; the usual limit is three
-  // seconds, and explicitly slower adapters may use more of the 20s budget.
+  // One resolve is a hedged waterfall with a shared deadline. Each adapter
+  // gets its configured attempt limit; the usual limit is three seconds, and
+  // explicitly slower adapters may use more of the 20s budget. After hedgeMs
+  // (default 1.5s) without a winner the next candidate starts in parallel,
+  // but a lower-priority result never shadows a higher-priority in-flight.
   const deadlineMs = options.deadlineMs ?? 20_000
   const cache = new Map<string, Cached>()
   const pending = new Map<string, Pending>()
@@ -113,7 +114,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     void options.store.set(healthKey(id, kind), JSON.stringify(row), 24 * 3600).catch(() => undefined)
   }
 
-  async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal, retryCooldown = false): Promise<ResolvedSource | null> {
+  async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal, retryCooldown = false, sourceKey?: string): Promise<ResolvedSource | null> {
     if (options.providerFilter && !options.providerFilter(registration)) return null
     const current = state(registration.adapter.id, input.ref.kind)
     if (current.window + 60000 <= now()) { current.window = now(); current.requests = 0 }
@@ -138,7 +139,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         // Hostile-output validation already ran in validatedSources (schema,
         // expiry, allowlisted https media, no credentials/transforms).
         // Configured providers resolve directly with no approval step.
-        const candidates = matching
+        const candidates = sourceKey ? matching.filter((candidate) => candidate.key === sourceKey) : matching
         const targetHeight = input.preferences?.qualityHeight ?? input.capabilities.maxHeight ?? 1080
         const qualityScore = (source: ProviderSource) => source.height === undefined ? 10_000
           : source.height <= targetHeight ? 5_000 + source.height : 4_000 - source.height
@@ -157,7 +158,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
         current.latency = current.latency ? current.latency * 0.8 + (now() - started) * 0.2 : now() - started
         current.outcomes++
         attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'success' })
-        return { source, qualitySources: qualitySiblings(source, matching), registration, subtitles: tracks, delivery: 'direct' as const }
+        return { source, qualitySources: qualitySiblings(source, matching), serverSources: matching.filter((candidate) => candidate.serverName).slice(0, 32), registration, subtitles: tracks, delivery: 'direct' as const }
       } catch {
         const message = signal.reason instanceof Error ? signal.reason.message : typeof signal.reason === 'string' ? signal.reason : ''
         const ourCut = message === 'Resolution deadline reached'
@@ -182,7 +183,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     })
   }
 
-  async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string, retryCooldown = false) {
+  async function run(input: ResolvePlaybackRequest, excluded: readonly string[], parent: AbortSignal, preferred?: string, retryCooldown = false, sourceKey?: string) {
     await Promise.all(providers.map((provider) => hydrate(provider.adapter.id, input.ref.kind)))
     // Kind routing is load-bearing: without it a movie provider answers an
     // anime ref by numeric-id coincidence (AniList 793 played as TMDB 793).
@@ -203,30 +204,56 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
     const controller = new AbortController()
     const deadline = setTimeout(() => controller.abort(new DOMException('Resolution deadline reached', 'TimeoutError')), deadlineMs)
     const signal = AbortSignal.any([parent, controller.signal])
-    // One hung provider must not hold the whole request: bound each
-    // sequential attempt so a stalled first provider falls through to the
-    // next instead of burning the full deadline. Slow-but-good providers
-    // carry their own budget, still capped by the total deadline.
-    try {
-      for (const candidate of candidates) {
-        if (signal.aborted) return null
-        const perAttempt = new AbortController()
-        const onAbort = () => perAttempt.abort(signal.reason)
-        signal.addEventListener('abort', onAbort, { once: true })
-        const attemptSignal = AbortSignal.any([signal, perAttempt.signal])
-        let timer: ReturnType<typeof setTimeout> | undefined
-        const budget = candidate.attemptMs ?? 3000
-        const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, budget) })
-        try {
-          // An explicit fresh choice retries a recovered provider even while
-          // automatic traffic is cooling. Admission limits still apply.
-          const bypassCooldown = (retryCooldown && candidate.adapter.id === preferred)
-            || options.alwaysAttemptProviderIds?.includes(candidate.adapter.id) === true
-          const value = await Promise.race([attempt(candidate, input, attemptSignal, bypassCooldown), timeout])
-          if (value) return { ...value, subtitles: dedupeSubtitleTracks(value.subtitles) }
-        } finally { clearTimeout(timer); signal.removeEventListener('abort', onAbort); perAttempt.abort() }
+    // Hedged resolution: start the next candidate after hedgeMs without a
+    // winner, but a lower-priority result never shadows a higher-priority
+    // in-flight attempt — preference order is preserved. A fast provider
+    // still wins outright; a slow primary falls through sooner.
+    const hedgeMs = options.hedgeMs ?? 1500
+    const settled = new Array<ResolvedSource | null | undefined>(candidates.length).fill(undefined)
+    const promises: Array<Promise<void>> = []
+    const checkInOrder = (): ResolvedSource | null | undefined => {
+      for (let i = 0; i < settled.length; i++) {
+        if (settled[i] === undefined) return undefined
+        if (settled[i] !== null) return settled[i]!
       }
       return null
+    }
+    const startAttempt = async (candidate: ProviderRegistration, index: number) => {
+      const perAttempt = new AbortController()
+      const onAbort = () => perAttempt.abort(signal.reason)
+      signal.addEventListener('abort', onAbort, { once: true })
+      const attemptSignal = AbortSignal.any([signal, perAttempt.signal])
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const budget = candidate.attemptMs ?? 3000
+      const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => { perAttempt.abort(new DOMException('Provider attempt timed out', 'TimeoutError')); resolve(null) }, budget) })
+      try {
+        const bypassCooldown = (retryCooldown && candidate.adapter.id === preferred)
+          || options.alwaysAttemptProviderIds?.includes(candidate.adapter.id) === true
+        const value = await Promise.race([attempt(candidate, input, attemptSignal, bypassCooldown, sourceKey), timeout])
+        settled[index] = value
+      } catch {
+        settled[index] = null
+      } finally {
+        clearTimeout(timer); signal.removeEventListener('abort', onAbort); perAttempt.abort()
+      }
+    }
+    try {
+      for (let i = 0; i < candidates.length; i++) {
+        if (signal.aborted) return null
+        const promise = startAttempt(candidates[i]!, i)
+        promises.push(promise)
+        let hedgeTimer: ReturnType<typeof setTimeout> | undefined
+        const hedgeTimeout = new Promise<null>((resolve) => { hedgeTimer = setTimeout(() => resolve(null), hedgeMs) })
+        try { await Promise.race([promise, hedgeTimeout]) } finally { if (hedgeTimer) clearTimeout(hedgeTimer) }
+        const winner = checkInOrder()
+        if (winner) return { ...winner, subtitles: dedupeSubtitleTracks(winner.subtitles) }
+        if (winner === null) return null
+      }
+      // All candidates started. Wait for every in-flight attempt to settle,
+      // then return the first success in preference order.
+      await Promise.allSettled(promises)
+      const winner = checkInOrder()
+      return winner ? { ...winner, subtitles: dedupeSubtitleTracks(winner.subtitles) } : null
     } finally { clearTimeout(deadline); controller.abort() }
   }
 
@@ -242,13 +269,13 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   }
 
   return {
-    async resolve(input: ResolvePlaybackRequest, signal: AbortSignal, excluded: readonly string[] = [], preferred?: string, fresh = false): Promise<ResolvedSource | null> {
+    async resolve(input: ResolvePlaybackRequest, signal: AbortSignal, excluded: readonly string[] = [], preferred?: string, fresh = false, retryCooldown = fresh && Boolean(preferred), sourceKey?: string): Promise<ResolvedSource | null> {
       if (signal.aborted) return null
       // Admin overrides mutate registrations in place. Include configuration
       // and saved order so a prior winner cannot bypass an Admin change.
       const deliveryConfig: unknown[] = providers.map((provider) => [provider.adapter.id, provider.enabled, provider.role ?? 'video', provider.deliveryMode ?? 'direct', provider.relayHostDiscovery, provider.priority ?? 0, provider.approvedRegions, provider.mediaKinds, provider.mediaHosts, provider.upstreamGroup, provider.adapter.audioLanguages])
       deliveryConfig.push([input.ref.kind, ...(options.providerOrders?.[input.ref.kind] ?? [])])
-      const key = JSON.stringify([input, options.region, options.healthScope ?? 'direct', excluded, preferred, deliveryConfig])
+      const key = JSON.stringify([input, options.region, options.healthScope ?? 'direct', excluded, preferred, retryCooldown, sourceKey, deliveryConfig])
       const cached = cache.get(key)
       if (!fresh && cached && cached.until > now()) return cached.value
       if (fresh) cache.delete(key)
@@ -263,7 +290,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
             try {
               const raw = await cancellable(options.store.get(sharedKey), signal)
               if (raw) {
-                const cached = JSON.parse(raw) as { provider: string; source: unknown; qualitySources?: unknown[] }
+                const cached = JSON.parse(raw) as { provider: string; source: unknown; qualitySources?: unknown[]; serverSources?: unknown[] }
                 const registration = providers.find((entry) => {
                   return entry.adapter.id === cached.provider && entry.enabled && suppliesVideo(entry) && entry.mediaKinds.includes(input.ref.kind)
                     && entry.approvedRegions.includes(options.region) && !excluded.includes(entry.upstreamGroup)
@@ -271,16 +298,18 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
                 })
                 if (registration) {
                   const source = validatedSources({ ok: true, sources: [cached.source] }, registration, now())[0]
+                  if (sourceKey && source?.key !== sourceKey) return null
                   if (source && (source.type === 'iframe' || input.capabilities[source.type]) && permitsSource(source, input) && (!options.sourceFilter || options.sourceFilter(source, registration))) {
                     const siblings = Array.isArray(cached.qualitySources) ? validatedSources({ ok: true, sources: cached.qualitySources.slice(0, 32) }, registration, now())
                       .filter(candidate => (candidate.type === 'iframe' || input.capabilities[candidate.type]) && permitsSource(candidate, input) && (!options.sourceFilter || options.sourceFilter(candidate, registration))) : []
-                    return { source, qualitySources: qualitySiblings(source, siblings), registration, subtitles: [], delivery: 'direct' as const }
+                    const serverSources = Array.isArray(cached.serverSources) ? validatedSources({ ok: true, sources: cached.serverSources.slice(0, 32) }, registration, now()) : []
+                    return { source, qualitySources: qualitySiblings(source, siblings), serverSources, registration, subtitles: [], delivery: 'direct' as const }
                   }
                 }
               }
             } catch { /* Disposable access cache failure must not prevent fresh resolution. */ }
           }
-          return run(input, excluded, signal, preferred, fresh && Boolean(preferred))
+          return run(input, excluded, signal, preferred, retryCooldown, sourceKey)
         }
         const promise = discover().then((value) => {
           if (!controller.signal.aborted) {
@@ -289,7 +318,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
             cache.set(key, { value, until: value ? Math.min(now() + cacheSeconds * 1000, Date.parse(value.source.expiresAt) - 30000) : now() + 3000 })
             if (value && options.store) {
               const ttl = Math.min(cacheSeconds, (Date.parse(value.source.expiresAt) - now() - 30000) / 1000)
-              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source, qualitySources: value.qualitySources, delivery: value.delivery }), ttl).catch(() => undefined)
+              if (ttl > 0) void options.store.set(sharedKey, JSON.stringify({ provider: value.registration.adapter.id, source: value.source, qualitySources: value.qualitySources, serverSources: value.serverSources, delivery: value.delivery }), ttl).catch(() => undefined)
             }
           }
           return value

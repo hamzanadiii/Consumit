@@ -1,8 +1,9 @@
 import { FilScreenHome } from './home/filscreen-home'
 
-import type { AnimeTitleSummary, CatalogKind, CatalogTitleSummary } from '@consumit/contracts'
-import { getCatalogBatch, getCatalogDiscovery, getCatalogTitle } from '@/lib/catalog-api'
+import type { AnimeTitleSummary, CatalogKind, CatalogRef, CatalogTitleSummary, PublicListDiscovery, PublicListDiscoveryItem } from '@consumit/contracts'
+import { getCatalogBatch, getCatalogBatchForRefs, getCatalogDiscovery, getCatalogTitle } from '@/lib/catalog-api'
 import { getAnimeTrending } from '@/lib/anime-api'
+import { getPublicListDiscovery, getPublicMemberTrends } from '@/lib/member-server'
 
 import type { HeroDetail } from './catalog/catalog-ui'
 import { CatalogUnavailableScreen } from './catalog/catalog-ui'
@@ -39,6 +40,8 @@ export default async function HomePage() {
   let topRatedSeries: readonly CatalogTitleSummary[] = []
   let awardWinningShows: readonly CatalogTitleSummary[] = []
   let mindfuckMovies: readonly CatalogTitleSummary[] = []
+  let memberTrendRefs: readonly CatalogRef[] = []
+  let publicListDiscovery: PublicListDiscovery = { newFromNetwork: [], popular: [] }
 
   try {
     const [
@@ -53,6 +56,8 @@ export default async function HomePage() {
       topRatedSeriesRes,
       awardWinningShowsRes,
       mindfuckMoviesRes,
+      memberTrendsRes,
+      publicListsRes,
     ] = await Promise.all([
       getCatalogDiscovery({ feed: 'popular', kind: 'all', page: 1 }),
       getCatalogDiscovery({ feed: 'popular', kind: 'all', page: 2 }).catch(() => ({ items: [] as const, meta: { stale: false } })),
@@ -65,6 +70,8 @@ export default async function HomePage() {
       getCatalogDiscovery({ feed: 'top-rated', kind: 'series', page: 1 }).catch(() => ({ items: [] as const, meta: { stale: false } })),
       getCatalogBatch('series:126308,series:241259,series:154385,series:136315,series:124101,series:111803,series:76331,series:93405,series:87108,series:65494,series:60059,series:97546').catch(() => ({ items: [] as const, meta: { stale: false } })),
       getCatalogBatch('movie:496243,movie:539,movie:426,movie:244786,movie:829,movie:372058,movie:1417,movie:11324,movie:550,movie:77,movie:27205,movie:157336,movie:1124,movie:44214,movie:670').catch(() => ({ items: [] as const, meta: { stale: false } })),
+      getPublicMemberTrends().catch(() => ({ items: [] as CatalogRef[] })),
+      getPublicListDiscovery().catch(() => ({ newFromNetwork: [], popular: [] })),
     ])
 
     const dedupe = (items: readonly CatalogTitleSummary[]) => {
@@ -92,9 +99,34 @@ export default async function HomePage() {
     topRatedSeries = topRatedSeriesRes.items
     awardWinningShows = awardWinningShowsRes.items
     mindfuckMovies = mindfuckMoviesRes.items
+    memberTrendRefs = memberTrendsRes.items
+    publicListDiscovery = publicListsRes
   } catch (error) {
     return <CatalogUnavailableScreen activeHref="/" error={error} />
   }
+
+  let trendingWithMembers: readonly CatalogTitleSummary[] = []
+  if (memberTrendRefs.length) {
+    try { trendingWithMembers = (await getCatalogBatchForRefs(memberTrendRefs))?.items ?? [] }
+    catch { /* Community trends are optional; the rest of Home stays usable. */ }
+  }
+
+  const listPreviewRefs = [...publicListDiscovery.newFromNetwork, ...publicListDiscovery.popular].flatMap(item => item.preview)
+  const listPosters = new Map<string, string>()
+  if (listPreviewRefs.length) {
+    try {
+      const batch = await getCatalogBatchForRefs(listPreviewRefs)
+      for (const title of batch?.items ?? []) {
+        if (title.posterUrl) listPosters.set(`${title.kind}:${title.id}`, title.posterUrl)
+      }
+    } catch {
+      // Real lists still render with the shared missing-art treatment.
+    }
+  }
+  const enrichLists = (items: readonly PublicListDiscoveryItem[]) => items.map(item => ({
+    ...item,
+    artworkSources: item.preview.map(ref => listPosters.get(`${ref.kind}:${ref.id}`)),
+  }))
 
   // The reel tracks Trending now: the top backdropped titles, enriched with
   // full details, become the five slides in feed order.
@@ -129,12 +161,15 @@ export default async function HomePage() {
       awardWinningShows={awardWinningShows}
       hero={heroItem}
       mindfuckMovies={mindfuckMovies}
+      newFromNetworkLists={enrichLists(publicListDiscovery.newFromNetwork)}
+      popularLists={enrichLists(publicListDiscovery.popular)}
       spotlight={enriched.map((entry) => entry.item)}
       topRatedMovies={topRatedMovies}
       topRatedSeries={topRatedSeries}
       trendingAnime={trendingAnime}
       trendingMovies={trendingMovies}
       trendingSeries={trendingSeries}
+      trendingWithMembers={trendingWithMembers}
     />
   )
 }

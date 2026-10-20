@@ -18,6 +18,31 @@ const MAX_LINES = 80_000
 const MAX_CUES = 20_000
 const MAX_CUE_TEXT_CHARS = 1_200
 const MAX_FETCH_BYTES = 2 * 1024 * 1024
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true })
+const UTF8_LENIENT = new TextDecoder('utf-8')
+const WINDOWS_1256 = new TextDecoder('windows-1256')
+const WINDOWS_1252 = new TextDecoder('windows-1252')
+const ARABIC_SCRIPT = /[\u0590-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g
+
+/** Decode subtitle bytes consistently for uploaded files and the cue-sync
+ *  fallback. Arabic subtitles frequently use Windows-1256 without declaring
+ *  it, while native browser text decoding silently assumes UTF-8. */
+export function decodeSubtitleBytes(input: ArrayBuffer | Uint8Array): string {
+  let bytes = input instanceof Uint8Array ? input : new Uint8Array(input)
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) bytes = bytes.subarray(3)
+  try {
+    return UTF8_STRICT.decode(bytes)
+  } catch {
+    // Continue with legacy encodings.
+  }
+  const as1256 = WINDOWS_1256.decode(bytes)
+  const arabicCount = as1256.match(ARABIC_SCRIPT)?.length ?? 0
+  if (arabicCount >= 8 && arabicCount / Math.max(1, as1256.length) >= 0.15) return as1256
+  const lenient = UTF8_LENIENT.decode(bytes)
+  const replacements = (lenient.match(/\uFFFD/g) ?? []).length
+  if (replacements <= Math.max(3, lenient.length * 0.01)) return lenient
+  return WINDOWS_1252.decode(bytes)
+}
 
 export const SUBTITLE_DELAY_KEY = 'consumit.player.subtitle-delay'
 export const MAX_SUBTITLE_DELAY_MS = 30_000
@@ -281,6 +306,10 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
   } catch {
     throw new Error('Subtitle file URL invalid.')
   }
+  // The client applies the member's sync offset via cueTextAt and the
+  // native-fullscreen bridge. A server-side ?offsetMs= baked into the URL
+  // would shift cues a second time, so strip it before fetching.
+  parsedUrl.searchParams.delete('offsetMs')
   const localUpload = parsedUrl.protocol === 'blob:' && parsedUrl.origin === window.location.origin
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:' && !localUpload) throw new Error('Subtitle file URL unsupported.')
   const response = await fetch(parsedUrl.href, { credentials: 'same-origin', signal })
@@ -289,7 +318,7 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
   if (!reader) {
     const text = await response.text()
     if (text.length > MAX_FETCH_BYTES) throw new Error('Subtitle file too large.')
-    const cues = parseVttCues(text)
+    const cues = parseSubtitleCues(text)
     if (!cues.length) throw new Error('Subtitle file has no usable cues.')
     return cues
   }
@@ -316,7 +345,72 @@ export async function fetchVttCues(url: string, signal: AbortSignal): Promise<Su
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
-  const cues = parseVttCues(new TextDecoder().decode(merged))
+  const cues = parseSubtitleCues(decodeSubtitleBytes(merged))
   if (!cues.length) throw new Error('Subtitle file has no usable cues.')
   return cues
+}
+
+/** ASS/SSA dialogue extraction for session tracks the server could not
+ *  pre-convert. Override blocks, karaoke, positioning, and drawing-mode
+ *  path data are dropped; the goal is readable timed text, not styling. */
+export function parseAssCues(content: string): SubtitleCue[] {
+  const cues: SubtitleCue[] = []
+  const text = content.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')
+  const lines = text.split('\n')
+  let inEvents = false
+  let formatFields: string[] = ['layer', 'start', 'end', 'style', 'name', 'marginl', 'marginr', 'marginv', 'effect', 'text']
+  for (const raw of lines) {
+    if (cues.length >= MAX_CUES) break
+    const line = raw.trim()
+    if (/^\[events\]$/i.test(line)) { inEvents = true; continue }
+    if (/^\[.*\]$/.test(line)) { inEvents = false; continue }
+    if (!inEvents) continue
+    if (/^format:\s*/i.test(line)) { formatFields = line.slice(7).split(',').map((f) => f.trim().toLowerCase()); continue }
+    if (!/^dialogue:\s*/i.test(line)) continue
+    const body = line.slice(9)
+    const parts = body.split(',')
+    if (parts.length < formatFields.length) continue
+    const textIdx = formatFields.indexOf('text')
+    const startIdx = formatFields.indexOf('start')
+    const endIdx = formatFields.indexOf('end')
+    if (textIdx === -1 || startIdx === -1 || endIdx === -1) continue
+    const start = assTimeToSeconds(parts[startIdx]?.trim() ?? '')
+    const end = assTimeToSeconds(parts[endIdx]?.trim() ?? '')
+    if (start === null || end === null || end <= start) continue
+    const rawText = parts.slice(textIdx).join(',').trim()
+    const cleaned = stripAssTags(rawText)
+    if (!cleaned) continue
+    cues.push({ startTime: start, endTime: end, text: cleaned.slice(0, MAX_CUE_TEXT_CHARS) })
+  }
+  return cues.sort((a, b) => a.startTime - b.startTime)
+}
+
+/** ASS centisecond timestamp (`H:MM:SS.cc`) to seconds. */
+function assTimeToSeconds(time: string): number | null {
+  const m = time.trim().match(/^(\d+):(\d{2}):(\d{2})\.(\d{2})$/)
+  if (!m) return null
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 100
+}
+
+function stripAssTags(text: string): string {
+  return text
+    // Drawing spans: closed first, then an unclosed \p1 swallows the line.
+    .replace(/\{[^}]*\\p1[^}]*\}.*?\{[^}]*\\p0[^}]*\}/g, '')
+    .replace(/\{[^}]*\\p1[^}]*\}.*/g, '')
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/\\N/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\h/g, ' ')
+    .replace(/\\[kKfFoOpPtT][^\s\\]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** Content-sniffed subtitle parser: WebVTT and SRT share the VTT block
+ *  parser (parseTimestamp already handles SRT comma-milliseconds and
+ *  numeric counter lines are skipped); ASS/SSA is detected by its Events
+ *  section and parsed separately. */
+export function parseSubtitleCues(text: string): SubtitleCue[] {
+  if (/\[events\]/i.test(text) || /^dialogue:/im.test(text)) return parseAssCues(text)
+  return parseVttCues(text)
 }

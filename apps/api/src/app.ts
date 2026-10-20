@@ -58,6 +58,7 @@ import { createAnimeMetaResolver, createAnimeTitleResolver, createAnimeTitleVari
 import { registerAnimeRoutes } from './anime/routes.ts'
 import { createKitsuCatalog } from './catalog/kitsu/adapter.ts'
 import { createTmdbEpisodeArt, type TmdbEpisodeArtResolver } from './anime/tmdb-episode-art.ts'
+import { createTmdbAnimeEpisodeMapper } from './subtitles/tmdb-episode.ts'
 import { createAnizipEpisodeArt, type CanonicalEpisodeArt } from './anime/anizip-episode-art.ts'
 
 
@@ -191,6 +192,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     : env.nodeEnv !== 'test' && env.tmdbToken
       ? createTmdbCatalog({ cache: catalogCache, language: env.tmdbLanguage, region: env.tmdbRegion, token: env.tmdbToken })
       : catalog
+  const tmdbAnimeEpisode = createTmdbAnimeEpisodeMapper(resolvedCatalog)
   const emailConfigured = env.emailProvider === 'ses' ? env.ses : env.resendApiKey
   if (!identity && db && env.valkeyUrl && env.authCodePepper && emailConfigured && env.authEmailFrom) {
     const state = createValkeyAuthState(env.valkeyUrl, env.authCodePepper)
@@ -240,12 +242,12 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     ...(animeTmdbEpisodeArt ? { tmdbEpisodeArt: animeTmdbEpisodeArt } : resolvedCatalog !== unavailableCatalogAdapter ? { tmdbEpisodeArt: createTmdbEpisodeArt(resolvedCatalog, catalogCache) } : {}),
   })
   registerCatalogRoutes(app, { anime: animeService, catalog: resolvedCatalog })
-  if (env.applicationMode !== 'product') registerSkipTimesRoutes(app, env.nodeEnv === 'test' ? { read: async () => [] } : createSkipTimes({ animeMalId: async (id) => (await animeService.title(id)).malId }))
-  registerAnimeRoutes(app, { anime: animeService })
+  registerSkipTimesRoutes(app, env.nodeEnv === 'test' ? { read: async () => [] } : createSkipTimes({ animeMalId: async (id) => (await animeService.title(id)).malId }))
+  registerAnimeRoutes(app, { anime: animeService, env, identity: resolvedIdentity })
   const productMode = env.applicationMode === 'product'
   const providerOptions = {
     tmdbToken: env.tmdbToken,
-    ...(env.playback?.relay?.discovery?.['lookmovie-relay'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
+    ...(env.playback?.relay?.discovery?.['lookmovie'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
     animeTitleResolver: createAnimeTitleResolver(resolvedAnimeCatalog),
     animeTitleVariantsResolver: createAnimeTitleVariantsResolver(resolvedAnimeCatalog),
     animeMetaResolver: createAnimeMetaResolver(resolvedAnimeCatalog),
@@ -284,7 +286,7 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
       catch { return { ok: false as const, code: 'unavailable' as const, retryable: true } }
     } }
   }
-  const runtime = productMode ? null : await createPlaybackRuntime({ env, animeCatalog: resolvedAnimeCatalog, providerConfigStore: resolvedProviderConfig ?? undefined, subtitleCatalog: db ? createPostgresSubtitleCatalog(db.prisma) : undefined, playback, subtitles, scheduleProbes: !env.backgroundJobs, log: fields => app.log.info(fields, 'playback operation') })
+  const runtime = productMode ? null : await createPlaybackRuntime({ env, animeCatalog: resolvedAnimeCatalog, animeTmdbEpisode: async (tmdbId, absoluteEpisode, signal) => { signal.throwIfAborted(); const coordinates = await tmdbAnimeEpisode(tmdbId, absoluteEpisode); signal.throwIfAborted(); return coordinates }, providerConfigStore: resolvedProviderConfig ?? undefined, subtitleCatalog: db ? createPostgresSubtitleCatalog(db.prisma) : undefined, playback, subtitles, scheduleProbes: !env.backgroundJobs, log: fields => app.log.info(fields, 'playback operation') })
   if (runtime) { providers.splice(0, providers.length, ...runtime.providers); providerOrders = runtime.providerOrders }
   const playbackStore = runtime?.store ?? (env.playback?.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore())
   const resolvedPlayback = runtime?.playback
@@ -327,7 +329,9 @@ export async function buildApp({ experience, publicMembers, releases, catalog = 
     animeTitle: createAnimeTitleResolver(resolvedAnimeCatalog), animeTitles: createAnimeTitleVariantsResolver(resolvedAnimeCatalog), animeMeta: createAnimeMetaResolver(resolvedAnimeCatalog),
   })
   registerProductInternal(app, { env, config: resolvedProviderConfig ?? undefined, anime: resolvedAnimeCatalog, metadata: canonicalMetadata,
-    tmdb: env.tmdbToken ? createTmdbMetadataResolver(env.tmdbToken) : undefined, subtitles: db ? createPostgresSubtitleCatalog(db.prisma) : undefined,
+    tmdb: env.tmdbToken ? createTmdbMetadataResolver(env.tmdbToken) : undefined,
+    tmdbEpisode: async (tmdbId, absoluteEpisode) => tmdbAnimeEpisode(tmdbId, absoluteEpisode),
+    subtitles: db ? createPostgresSubtitleCatalog(db.prisma) : undefined,
     releaseRefresh: async () => { if (releaseRepository && env.releases?.enabled) await createReleaseScheduler(releaseRepository, createReleaseCatalog(resolvedCatalog, resolvedAnimeCatalog), event => app.log.info(event, 'release refresh')).runOnce() },
     catalogCleanup: async () => { await catalogCacheStore?.deleteExpired(new Date()) },
   })

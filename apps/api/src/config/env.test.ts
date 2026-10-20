@@ -13,7 +13,7 @@ describe('API environment', () => {
     expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ENABLED: 'false', PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' })).toThrow('require the Cloudflare resolver')
   })
   it('allows an independently enabled LookMovie media node and rejects arbitrary node providers', () => {
-    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_NODE_ENABLED: 'true', PLAYBACK_NODE_ORIGIN: 'https://media.example', PLAYBACK_NODE_SECRET: 'n'.repeat(48), PLAYBACK_NODE_PROVIDERS: '{"lookmovie-relay":["srv310.seclar.cyou"]}' }
+    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_NODE_ENABLED: 'true', PLAYBACK_NODE_ORIGIN: 'https://media.example', PLAYBACK_NODE_SECRET: 'n'.repeat(48), PLAYBACK_NODE_PROVIDERS: '{"lookmovie":["srv310.seclar.cyou"]}' }
     expect(loadEnv(config).playback?.relay?.node?.origin).toBe('https://media.example')
     expect(() => loadEnv({ ...config, PLAYBACK_NODE_PROVIDERS: '{"arbitrary":["media.example"]}' })).toThrow('approved media node')
     expect(() => loadEnv({ ...config, PLAYBACK_NODE_ORIGIN: 'http://media.example' })).toThrow('approved media node')

@@ -10,14 +10,14 @@ import type { MemberData } from './member-data.ts'
 const origin = 'http://localhost:3000'
 
 function memberDataStub(): MemberData {
-  const emptyLibrary = { diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }
+  const emptyLibrary = { diary: { items: [], nextCursor: null }, favorites: [], lists: { items: [], nextCursor: null }, savedLists: { items: [], nextCursor: null }, saved: { items: [], nextCursor: null } }
   const storedProgress = { completed: false, durationSeconds: 3600, id: 693134, kind: 'movie' as const, positionSeconds: 1200, updatedAt: '2026-09-06T00:00:00.000Z' }
   const storedRating = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null, value: 9 }
   const storedLike = { id: 693134, kind: 'movie' as const, origin: 'native' as const, sourceKey: null }
   const storedReview = { body: 'A patient masterpiece.', id: 693134, kind: 'movie' as const, origin: 'native' as const, reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] }
   const storedTitleReview = { author: { avatarStyle: 'dusk' as const, avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }, body: 'A patient masterpiece.', liked: true, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }
   return {
-    createList: vi.fn(async () => { throw new Error('NOT_IMPLEMENTED') }),
+    createList: vi.fn(async (_memberId: string, input) => ({ items: [], list: { description: input.description ?? null, id: 'list-1', itemCount: 0, name: input.name, origin: 'native' as const, slug: 'late-night-1', visibility: input.visibility }, owner: { displayName: 'Cinema Fan', username: 'cinema_fan' }, viewerIsOwner: true, viewerHasSaved: false })),
     createDiaryEntry: vi.fn(async (_memberId: string, input: CreateDiaryEntryRequest) => ({ ...(input.episode !== undefined ? { episode: input.episode } : {}), ...(input.season !== undefined ? { season: input.season } : {}), entryId: 'diary-1', id: input.id, kind: input.kind, origin: 'native' as const, rewatch: input.rewatch ?? false, sourceKey: null, tags: input.tags ?? [], watchedOn: input.watchedOn })),
     deleteDiary: vi.fn(async () => true),
     createReview: vi.fn(async () => storedReview),
@@ -47,6 +47,10 @@ function memberDataStub(): MemberData {
     updateList: vi.fn(async () => true),
     updateListContent: vi.fn(async () => true),
     deleteList: vi.fn(async () => true),
+    appendListTitle: vi.fn(async () => true),
+    saveList: vi.fn(async () => true),
+    removeSavedList: vi.fn(async () => true),
+    publicMemberTrends: vi.fn(async () => [{ id: 550, kind: 'movie' as const }]),
     updateReview: vi.fn(async () => true),
   }
 }
@@ -66,6 +70,29 @@ describe('member data mutation routes', () => {
     apps.push(app)
     return { app, cookie: { [sessionCookieName(env)]: session.sessionToken }, memberData, memberId: session.member.id }
   }
+
+  it('uses public list defaults, protects list writes, and returns only title references for public trends', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+    const trends = await app.inject('/v1/trends/members')
+    expect(trends.statusCode).toBe(200)
+    expect(trends.headers['cache-control']).toBe('no-store')
+    expect(trends.json()).toEqual({ items: [{ id: 550, kind: 'movie' }] })
+    expect(JSON.stringify(trends.json())).not.toMatch(/member|username|count|live/i)
+
+    const created = await app.inject({ cookies: cookie, headers, method: 'POST', payload: { idempotencyKey: '07a4d96f-54bf-4688-9d63-fd92ccefc940', name: 'Late night' }, url: '/v1/me/lists' })
+    expect(created.statusCode).toBe(201)
+    expect(created.json().list.visibility).toBe('public')
+    expect(memberData.createList).toHaveBeenCalledWith(memberId, { idempotencyKey: '07a4d96f-54bf-4688-9d63-fd92ccefc940', name: 'Late night', visibility: 'public' })
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'POST', payload: { id: 550, kind: 'movie' }, url: '/v1/me/lists/list-1/items' })).statusCode).toBe(204)
+    expect(memberData.appendListTitle).toHaveBeenCalledWith(memberId, 'list-1', { id: 550, kind: 'movie' })
+    expect((await app.inject({ cookies: cookie, headers, method: 'PUT', url: '/v1/me/saved-lists/late-night-1' })).statusCode).toBe(204)
+    expect(memberData.saveList).toHaveBeenCalledWith(memberId, 'late-night-1')
+    expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/me/saved-lists/list-1' })).statusCode).toBe(204)
+    expect(memberData.removeSavedList).toHaveBeenCalledWith(memberId, 'list-1')
+    expect((await app.inject({ headers, method: 'PUT', url: '/v1/me/saved-lists/late-night-1' })).statusCode).toBe(401)
+  })
 
   it('serves bounded library pages and rejects invalid or mismatched cursors', async () => {
     const { app, cookie, memberData, memberId } = await setup()

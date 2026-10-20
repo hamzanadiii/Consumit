@@ -20,6 +20,7 @@ import {
   SettingsFact,
   SettingsRail,
   SettingsSection,
+  Toggle,
 } from '@consumit/ui'
 
 import { FilScreenShell } from '../shared'
@@ -29,6 +30,7 @@ import { dicebearAvatarUrl, memberAvatarSrc, randomAvatarSeed } from '@/lib/avat
 import { NotificationPreference } from './notification-preference'
 import { PreferenceEditor } from '../experience/preference-fields'
 import { AdStatus } from '../shared/ad-status'
+import { useExperience } from '../experience/experience-provider'
 
 const SETTINGS_ITEMS = [
   { href: '#account', label: 'Account', index: '01' },
@@ -43,6 +45,7 @@ const SETTINGS_ITEMS = [
 export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
   const router = useRouter()
   const session = useSession()
+  const experience = useExperience()
   const [profile, setProfile] = useState(initialProfile)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialProfile.avatarUrl)
   const profileSaveLock = useRef(false)
@@ -119,9 +122,17 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
         avatarUrl,
         bio: String(data.get('bio')).trim() || null,
         displayName: String(data.get('displayName')).trim() || null,
-        location: String(data.get('location')).trim() || null,
+        sectionVisibility: {
+          favorites: data.get('sectionVisibility-favorites') === 'on',
+          ratings: data.get('sectionVisibility-ratings') === 'on',
+          reviews: data.get('sectionVisibility-reviews') === 'on',
+          lists: data.get('sectionVisibility-lists') === 'on',
+          network: data.get('sectionVisibility-network') === 'on',
+          likes: data.get('sectionVisibility-likes') === 'on',
+          tags: data.get('sectionVisibility-tags') === 'on',
+          watchlist: data.get('sectionVisibility-watchlist') === 'on',
+        },
         username: String(data.get('username')),
-        visibility: data.get('visibility') === 'public' ? 'public' : 'private',
       })
       setProfile(updated)
       if (session.member) session.setMember({ ...session.member, avatarUrl: updated.avatarUrl, displayName: updated.displayName, username: updated.username })
@@ -248,14 +259,14 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                   <Input autoCapitalize="none" className="mt-2 w-full" defaultValue={profile.username} id="settings-username" maxLength={30} minLength={3} name="username" pattern="[a-z0-9_]{3,30}" required />
                   {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
                 </div>
-                <div><Label htmlFor="settings-location">Location</Label><Input className="mt-2 w-full" defaultValue={profile.location ?? ''} id="settings-location" maxLength={100} name="location" /></div>
-                <p className="text-xs text-muted">Your location stays private.</p>
                 <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
                 <fieldset className="sm:col-span-2 border-t border-[var(--fs-line)] pt-5">
-                  <legend className="text-sm font-bold text-[var(--fs-ink)]">Profile visibility</legend>
-                  <div className="mt-3 flex flex-wrap gap-5">{(['private', 'public'] as const).map((value) => <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[var(--fs-ink)]" key={value}><input className="size-4 accent-[var(--fs-accent)]" defaultChecked={profile.visibility === value} name="visibility" type="radio" value={value} />{value === 'private' ? 'Private' : 'Public'}</label>)}</div>
-                  <p className="mt-2 max-w-[70ch] text-sm leading-6 text-[var(--fs-secondary)]">Publishing shares your display name, username, avatar, banner, bio, favorites, all ratings, and all reviews. Public lists become accessible while your profile is public.</p>
-                  <p className="mt-2 max-w-[70ch] text-xs leading-5 text-[var(--fs-muted)]">Location, diary, watched titles, watchlist, likes, tags, history, progress, account details, and import metadata stay private. Making your profile private hides it from visitors and search and keeps your follows.</p>
+                  <legend className="text-sm font-bold text-[var(--fs-ink)]">Public profile sections</legend>
+                  <p className="mt-2 max-w-[70ch] text-xs leading-5 text-[var(--fs-muted)]">Your profile identity is public. Choose which parts of your taste visitors can see. Watched titles, Diary, History, active playback, resume progress, and account details always stay private.</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">{([
+                    ['favorites', 'Favorites'], ['ratings', 'Ratings'], ['reviews', 'Reviews'], ['lists', 'Lists'],
+                    ['network', 'Network'], ['likes', 'Likes'], ['tags', 'Tags'], ['watchlist', 'Watchlist'],
+                  ] as const).map(([key, label]) => <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control border border-[var(--fs-field-border)] px-3 text-sm text-[var(--fs-ink)]" key={key}><input className="size-4 accent-[var(--fs-accent)]" defaultChecked={profile.sectionVisibility[key]} name={`sectionVisibility-${key}`} type="checkbox" />{label}</label>)}</div>
                 </fieldset>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>
@@ -283,8 +294,14 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               index="02"
               title="Privacy & social"
             >
-              <SettingsFact lead="Private until you publish.">Choose Public in the profile editor above, then save changes. Each list has its own visibility control.</SettingsFact>
-              <SettingsFact lead="Follow public profiles.">People can discover your published taste and follow you. Your personal watch history stays private.</SettingsFact>
+              <SettingsFact lead="Your profile identity is public.">Each taste section has its own visibility setting in Account. Public list pages are shareable only when both the list and your Lists section are public.</SettingsFact>
+              <SettingsFact lead="Your private records stay private.">Watched titles, Diary, History, active playback, resume progress, and account data never appear on your public profile.</SettingsFact>
+              <PreferenceRow
+                className="mt-4"
+                control={<Toggle checked={experience.preferences.shareViewingTrends} disabled={!experience.ready || !experience.owner} label="Share anonymous viewing trends" onCheckedChange={value => { void experience.patch({ shareViewingTrends: value }).catch(() => {}) }} />}
+                description={experience.error ?? 'Allow recent playback progress to help rank an anonymous title row for the community. This never shows your name or activity and is separate from profile visibility.'}
+                label="Anonymous viewing trends"
+              />
             </SettingsSection>
 
             <SettingsSection

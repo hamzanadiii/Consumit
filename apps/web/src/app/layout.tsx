@@ -10,6 +10,7 @@ import { SIDEBAR_INIT_SCRIPT, THEME_INIT_SCRIPT } from './home/filscreen-theme'
 import { ShellStateProvider } from './home/shell-state'
 import { WebVitals } from './web-vitals'
 import { GoogleAnalytics } from './shared/google-analytics'
+import { LenisProvider } from './shared/lenis-provider'
 
 const siteDescription = 'Watch movies, series, and anime. Remember what you love in your private library.'
 
@@ -51,7 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           <ShellStateProvider>
             <WebVitals />
             <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
-            {children}
+            <LenisProvider>{children}</LenisProvider>
           </ShellStateProvider>
         </SessionProvider>
       </body>

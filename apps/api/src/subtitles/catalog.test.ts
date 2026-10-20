@@ -6,7 +6,7 @@ describe('catalogIdentity', () => {
   it('keys movies, series, and anime canonically with zero defaults', () => {
     expect(catalogIdentity({ kind: 'movie', id: 550 })).toEqual({ kind: 'MOVIE', tmdbId: 550, anilistId: 0, season: 0, episode: 0 })
     expect(catalogIdentity({ kind: 'series', id: 1396, season: 2, episode: 7 })).toEqual({ kind: 'SERIES', tmdbId: 1396, anilistId: 0, season: 2, episode: 7 })
-    expect(catalogIdentity({ kind: 'anime', id: 21, episode: 1001 })).toEqual({ kind: 'ANIME', tmdbId: 0, anilistId: 21, season: 0, episode: 1001 })
+    expect(catalogIdentity({ kind: 'anime', id: 21, episode: 1001 })).toEqual({ kind: 'ANIME', tmdbId: 0, anilistId: 21, season: 1, episode: 1001 })
   })
 })
 

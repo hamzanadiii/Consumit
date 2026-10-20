@@ -12,10 +12,13 @@ import {
   publicMemberPageSchema,
   publicProfileCollectionPageSchema,
   type PublicProfileCollection,
+  type PublicListDiscovery,
   memberProfileArchivePageSchema,
   memberRatingLookupResponseSchema,
   memberRatingPageSchema,
   titleReviewsPageSchema,
+  publicMemberTrendsSchema,
+  publicListDiscoverySchema,
   type CatalogKind,
   type MemberLibrarySnapshot,
   type MemberLibraryCollection,
@@ -68,6 +71,8 @@ export const getPublicProfile = cache(async (username: string): Promise<MemberPr
   return memberProfileDataSchema.parse(profile)
 })
 export const getListRead = cache((slug: string) => request(`/v1/lists/${encodeURIComponent(slug)}`, listReadResponseSchema))
+export const getPublicMemberTrends = cache(() => request('/v1/trends/members', publicMemberTrendsSchema))
+export const getPublicListDiscovery = cache((): Promise<PublicListDiscovery> => request('/v1/lists/discovery', publicListDiscoverySchema))
 export const getPeopleSearch = cache((q: string, cursor?: string) => request(`/v1/members/search?${new URLSearchParams({ q, limit: '20', ...(cursor ? { cursor } : {}) })}`, publicMemberPageSchema))
 export const getPublicCollection = cache((username: string, collection: PublicProfileCollection, cursor?: string) => request(`/v1/profiles/${encodeURIComponent(username)}/collections/${collection}?${new URLSearchParams({ limit: '20', ...(cursor ? { cursor } : {}) })}`, publicProfileCollectionPageSchema))
 export const getPublicProfileArchivePage = cache((username: string, collection: MemberProfileArchiveKind, cursor?: string, limit = 30): Promise<MemberProfileArchivePage> => {

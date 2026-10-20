@@ -4,7 +4,7 @@ export type PlaybackTransport = {
   resolve(input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackSession>
   providers(input: ResolvePlaybackRequest, signal: AbortSignal): Promise<PlaybackProvider[]>
   recover(session: PlaybackSession, action: 'refresh' | 'fallback', failure: PlaybackFailureRequest, signal: AbortSignal): Promise<PlaybackSession>
-  switch(session: PlaybackSession, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences): Promise<PlaybackSession>
+  switch(session: PlaybackSession, providerId: string, signal: AbortSignal, preferences?: PlaybackPreferences, sourceKey?: string): Promise<PlaybackSession>
 }
 
 /** One recovery policy for member Watch and cookie-free public embeds.
@@ -45,16 +45,17 @@ export function createPlaybackCoordinator(transport: PlaybackTransport, now = Da
       return transport.resolve(input, signal)
     },
     providers: transport.providers,
-    async switch(session: PlaybackSession, providerId: string, signal: AbortSignal) {
-      return preferences ? transport.switch(session, providerId, signal, preferences) : transport.switch(session, providerId, signal)
+    async switch(session: PlaybackSession, providerId: string, signal: AbortSignal, sourceKey?: string) {
+      return preferences ? transport.switch(session, providerId, signal, preferences, sourceKey) : transport.switch(session, providerId, signal, undefined, sourceKey)
     },
-    async switchAvailable(session: PlaybackSession, providerId: string, providers: readonly PlaybackProvider[], signal: AbortSignal) {
+    async switchAvailable(session: PlaybackSession, providerId: string, providers: readonly PlaybackProvider[], signal: AbortSignal, sourceKey?: string) {
       const tried = new Set<string>([session.source.providerId])
       let candidate: string | undefined = providerId
       while (candidate && !signal.aborted) {
         tried.add(candidate)
         try {
-          const next = preferences ? await transport.switch(session, candidate, signal, preferences) : await transport.switch(session, candidate, signal)
+          const selectedKey = candidate === providerId ? sourceKey : undefined
+          const next = preferences ? await transport.switch(session, candidate, signal, preferences, selectedKey) : await transport.switch(session, candidate, signal, undefined, selectedKey)
           return next
         } catch {
           if (signal.aborted) throw signal.reason

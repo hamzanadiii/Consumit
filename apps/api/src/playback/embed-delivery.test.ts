@@ -10,7 +10,7 @@ const source: ProviderSource = { key: 'main', url: 'https://media.example/master
 function row(id: string, deliveryMode: 'direct' | 'relay' | 'embed', available = true): ProviderRegistration {
   return { adapter: createStaticProvider(id, [{ ref, sources: available ? [{ ...source, ...(deliveryMode === 'embed' ? { type: 'iframe', url: 'https://media.example/embed/exact', frameSandbox: 'none' as const } : {}) }] : [] }]), enabled: true, deliveryMode, approvedRegions: ['US'], mediaHosts: ['media.example'], mediaKinds: ['series'], upstreamGroup: id, concurrency: 2, requestsPerMinute: 30 }
 }
-describe('Direct then Relay then Embed delivery', () => {
+describe('configured playback delivery', () => {
   it('starts on the explicitly chosen provider without running the other tiers', async () => {
     const direct = row('direct', 'direct'), frame = row('frame', 'embed')
     direct.adapter.resolve = vi.fn(direct.adapter.resolve)
@@ -44,7 +44,7 @@ describe('Direct then Relay then Embed delivery', () => {
     const calls: string[] = []
     for (const provider of [direct, proxy, frame]) { const resolve = provider.adapter.resolve; provider.adapter.resolve = vi.fn(async (input, signal) => { calls.push(provider.adapter.id); return resolve(input, signal) }) }
     const relay = createPlaybackRelay({ origin: 'https://edge.example', secret: 'fixture-secret-over-thirty-two-characters', providers: { relay: ['media.example'] } })
-    const playback = createPlayback({ providers: [frame, proxy, direct], region: 'US', store: createMemoryPlaybackStore(), relay })
+    const playback = createPlayback({ providers: [frame, proxy, direct], providerOrders: { movie: [], series: ['direct', 'relay', 'frame'], anime: [] }, region: 'US', store: createMemoryPlaybackStore(), relay })
     const result = await playback.resolve('guest', input, signal)
     expect(calls).toEqual(['direct', 'relay', 'frame'])
     expect(result.ref).toEqual(ref)
@@ -63,8 +63,10 @@ describe('Direct then Relay then Embed delivery', () => {
     expect(direct.source.delivery).toBe('direct')
     await expect(playback.switchProvider('other', start.id, 'frame', signal)).rejects.toThrow()
   })
-  it('publishes the declared frame sandbox policy only on frame sources', async () => {
-    const playback = createPlayback({ providers: [row('direct', 'direct'), row('frame', 'embed')], region: 'US', store: createMemoryPlaybackStore() })
+  it('publishes plain-frame policy even for legacy restricted sources, without marking media sources', async () => {
+    const frame = row('frame', 'embed')
+    frame.adapter = createStaticProvider('frame', [{ ref, sources: [{ ...source, type: 'iframe', frameSandbox: 'restricted' }] }])
+    const playback = createPlayback({ providers: [row('direct', 'direct'), frame], region: 'US', store: createMemoryPlaybackStore() })
     const start = await playback.resolve('guest', input, signal)
     expect(start.source.frameSandbox).toBeUndefined()
     const framed = await playback.switchProvider('guest', start.id, 'frame', signal)

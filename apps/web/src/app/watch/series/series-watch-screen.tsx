@@ -1,14 +1,13 @@
 'use client'
 
-import { titleHref, watchHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
+import { watchHref, type CatalogEpisode, type CatalogTitleDetail } from '@consumit/contracts'
 import { SeasonSelector } from '@consumit/ui'
-import { useRouter } from 'next/navigation'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { browserCatalogSeason } from '@/lib/catalog-browser'
 
-import { EpisodeRail, type RailEpisode } from '../episode-rail'
+import { EpisodeBrowser, useEpisodeBrowser, type RailEpisode } from '../episode-rail'
 import { WatchPlayback } from '../watch-playback'
-import { WatchDetails, WatchSurface } from '../watch-surface'
-import styles from '../watch-surface.module.css'
+import { WatchPlayerSurface } from '../watch-surface'
 import type { WatchEpisode, WatchTitle } from '../watch-screen'
 
 function formatRuntime(minutes: number | null | undefined): string | null {
@@ -18,10 +17,10 @@ function formatRuntime(minutes: number | null | undefined): string | null {
   return hours > 0 ? `${hours}h ${rest}m` : `${minutes}m`
 }
 
-/** Series watch: embedded player beside the shared episode rail. Episode
+/** Series watch: full-viewport player with episode selection inside Settings. Episode
  *  stills, titles, and runtimes ride the season payload the route already
- *  fetches — no extra requests. Unaired episodes (future air dates) render
- *  disabled; seasons switch through the route query. */
+ *  fetches. Browsing another season uses the existing catalog endpoint without
+ *  navigating; choosing an aired episode updates the route query. */
 export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, prevHref, now, pinnedProvider, seasonNumber, seasons, tmdbId }: {
   detail: CatalogTitleDetail
   episodeNumber: number
@@ -34,23 +33,40 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
   seasons: readonly { number: number }[]
   tmdbId: number
 }) {
-  const router = useRouter()
+  const [browseSelection, setBrowseSelection] = useState({ current: seasonNumber, value: seasonNumber })
+  const browseSeason = browseSelection.current === seasonNumber ? browseSelection.value : seasonNumber
+  const [seasonData, setSeasonData] = useState<{ season: number; episodes: readonly CatalogEpisode[] }>({ season: seasonNumber, episodes })
+  const [seasonError, setSeasonError] = useState(false)
+  const [seasonAttempt, setSeasonAttempt] = useState(0)
+  const browsingEpisodes = useMemo(() => browseSeason === seasonNumber ? episodes : seasonData.season === browseSeason ? seasonData.episodes : [], [browseSeason, seasonNumber, episodes, seasonData])
+  const seasonLoading = browseSeason !== seasonNumber && seasonData.season !== browseSeason && !seasonError
+  useEffect(() => {
+    if (browseSeason === seasonNumber) return
+    let active = true
+    const request = new AbortController()
+    void browserCatalogSeason(tmdbId, browseSeason, request.signal).then(result => {
+      if (active) { setSeasonData({ season: browseSeason, episodes: result.item.episodes }); setSeasonError(false) }
+    }, () => { if (active) setSeasonError(true) })
+    return () => { active = false; request.abort() }
+  }, [tmdbId, browseSeason, seasonNumber, seasonAttempt])
   const railEpisodes = useMemo<RailEpisode[]>(() => (
-    [...episodes]
+    [...browsingEpisodes]
       .sort((a, b) => a.episodeNumber - b.episodeNumber)
       .map((item) => {
         const upcoming = !!item.airDate && Date.parse(item.airDate) > now
         return {
           number: item.episodeNumber,
+          seasonNumber: browseSeason,
           title: item.title || `Episode ${item.episodeNumber}`,
+          ...(item.overview ? { description: item.overview } : {}),
           ...(item.stillUrl ? { stillUrl: item.stillUrl } : {}),
           ...(formatRuntime(item.runtimeMinutes) ? { meta: formatRuntime(item.runtimeMinutes) } : {}),
           ...(item.airDate ? { airDate: item.airDate } : {}),
-          ...(upcoming ? { upcoming: true } : { href: watchHref({ kind: 'series', id: tmdbId }, { episode: item.episodeNumber, season: seasonNumber }) }),
-          ...(item.episodeNumber === episodeNumber ? { current: true } : {}),
+          ...(upcoming ? { upcoming: true } : { href: watchHref({ kind: 'series', id: tmdbId }, { episode: item.episodeNumber, season: browseSeason }) }),
+          ...(browseSeason === seasonNumber && item.episodeNumber === episodeNumber ? { current: true } : {}),
         }
       })
-  ), [episodes, episodeNumber, now, seasonNumber, tmdbId])
+  ), [browsingEpisodes, episodeNumber, now, browseSeason, seasonNumber, tmdbId])
   const seasonOptions = useMemo(() => [...seasons].map((season) => season.number).sort((a, b) => a - b), [seasons])
   const watchTitle = detail as WatchTitle
   const current = episodes.find((item) => item.episodeNumber === episodeNumber)
@@ -65,44 +81,40 @@ export function SeriesWatchScreen({ detail, episodeNumber, episodes, nextHref, p
     }
     : undefined
 
-  return (
-    <WatchSurface backHref={titleHref(detail)}>
-        <div className={styles.columns} data-consumit-series-watch>
-          <div className={styles.primary}>
-            <WatchPlayback
-              episode={watchEpisode}
-              key={`${tmdbId}:${seasonNumber}:${episodeNumber}`}
-              layout="embedded"
-              nextHref={nextHref}
-              prevHref={prevHref}
-              title={watchTitle}
-              {...(pinnedProvider ? { pinnedProvider } : {})}
-            />
-            <WatchDetails
-              episode={`Season ${seasonNumber} · Episode ${episodeNumber}${current?.title ? ` · ${current.title}` : ''}`}
-              meta={[detail.year, formatRuntime(current?.runtimeMinutes ?? watchTitle.episodeRuntimeMinutes), watchTitle.contentRating].filter(Boolean).join(' · ')}
-              overview={current?.overview || detail.overview}
-              title={detail.title}
-            />
-          </div>
-          <div className={styles.aside}>
-          <EpisodeRail
+  const episodeBrowser = useEpisodeBrowser({ episodes: railEpisodes })
+  const episodePanel = <>
+    {seasonLoading ? <p role="status" className="py-3 text-sm text-copy">Loading episodes…</p> : null}
+    {seasonError ? <p role="alert" className="py-3 text-sm text-copy">Episodes could not load. <button className="min-h-11 underline" type="button" onClick={() => { setSeasonError(false); setSeasonAttempt(value => value + 1) }}>Retry</button></p> : null}
+          <EpisodeBrowser
+            pending={seasonLoading || seasonError}
+            browser={episodeBrowser}
             actions={seasonOptions.length > 1 ? (
               <SeasonSelector
                 label="Season"
-                onValueChange={(value) => router.push(watchHref({ kind: 'series', id: tmdbId }, { episode: 1, season: Number(value) }))}
+                onValueChange={(value) => { setSeasonError(false); setBrowseSelection({ current: seasonNumber, value: Number(value) }) }}
                 options={seasonOptions.map((season) => ({ label: `Season ${season}`, value: String(season) }))}
-                value={String(seasonNumber)}
+                value={String(browseSeason)}
               />
             ) : undefined}
-            countLabel={`Season ${seasonNumber} · ${railEpisodes.length} episode${railEpisodes.length === 1 ? '' : 's'}`}
-            currentLabel="Now playing"
+            countLabel={`Season ${browseSeason} · ${railEpisodes.length} episode${railEpisodes.length === 1 ? '' : 's'}`}
+            currentLabel="Current episode"
             episodes={railEpisodes}
             fallbackArt={detail.backdropUrl ?? detail.posterUrl}
             heading="Episodes"
           />
-          </div>
-        </div>
-    </WatchSurface>
+  </>
+
+  return (
+    <WatchPlayerSurface>
+      <WatchPlayback
+        episode={watchEpisode}
+        episodePanel={episodePanel}
+        layout="fullscreen"
+        nextHref={nextHref}
+        prevHref={prevHref}
+        title={watchTitle}
+        {...(pinnedProvider ? { pinnedProvider } : {})}
+      />
+    </WatchPlayerSurface>
   )
 }
