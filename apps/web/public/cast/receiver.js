@@ -54,12 +54,8 @@
         /* Fail open: the sender recovery ladder covers denied requests. */
       }
     };
-    if (typeof playbackConfig.manifestRequestHandler !== 'undefined') {
-      playbackConfig.manifestRequestHandler = inject;
-    }
-    if (typeof playbackConfig.segmentRequestHandler !== 'undefined') {
-      playbackConfig.segmentRequestHandler = inject;
-    }
+    playbackConfig.manifestRequestHandler = inject;
+    playbackConfig.segmentRequestHandler = inject;
   }
 
   playerManager.setMessageInterceptor(

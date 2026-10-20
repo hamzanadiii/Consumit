@@ -117,8 +117,10 @@ decision change.
 
 1. Cast Developer Console registration owner + test-device whitelist.
    (Still operator work; blocks only hardware verification.)
-2. Receiver app ID wiring: config-only (`NEXT_PUBLIC_CAST_RECEIVER_ID`),
-   unpublished while testing. (Implemented; button hidden until set.)
+2. Receiver app ID wiring: config-only (`NEXT_PUBLIC_CAST_RECEIVER_ID`). The
+   app owner registers the shared custom receiver once and supplies its ID to
+   every web build; members never provide their own IDs. Hardware acceptance
+   remains blocked until that registration and deployment configuration exist.
 3. CORS check on first-party subtitle files from the receiver origin. (P2.)
 4. Guests may cast by default: the sender session exists for guests and
    progress stays device-local, mirroring local guest playback. Restrict to

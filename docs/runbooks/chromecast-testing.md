@@ -8,13 +8,16 @@ idle behavior) only reproduce on hardware.
 ## Prerequisites
 
 1. A Chromecast or Cast-enabled TV on the same network as the test sender.
-2. The custom receiver registered in the Cast Developer Console with its URL
-   pointing at the deployment under test (`https://<app>/cast/receiver.html`).
+2. One custom receiver registered by the app owner in the Cast Developer
+   Console with its URL pointing at the deployment under test
+   (`https://<app>/cast/receiver.html`). This is a shared app configuration;
+   members do not register or provide their own receiver IDs.
    For local testing, host the receiver on the LAN and register that URL on a
    whitelisted test device. The receiver SDK itself always loads from Google;
    only the receiver app URL changes.
-3. `NEXT_PUBLIC_CAST_RECEIVER_ID` set to the registered app ID on the web
-   deployment under test. Without it the cast button stays hidden by design.
+3. `NEXT_PUBLIC_CAST_RECEIVER_ID` set to that shared app ID before building
+   the web deployment under test. Without it the Cast SDK and device picker
+   cannot start, so casting is unavailable to every member on that build.
 4. A title with a proxy-delivery source (most reliable on TV hardware) and
    one with a direct source.
 
