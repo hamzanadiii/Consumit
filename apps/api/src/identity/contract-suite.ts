@@ -77,11 +77,12 @@ export function describeIdentityContract(name: string, setup: () => Promise<Iden
         // The correct password is refused too, so a distributed spray cannot
         // keep guessing once the account budget is gone.
         const locked = await caughtIdentityError(harness.identity.login({ email: 'hamza@example.com', password: 'long-enough-password' }))
-        expect(locked.code).toBe('TOO_MANY_ATTEMPTS')
-        // Unknown addresses keep answering as invalid credentials, so the
-        // lockout itself does not confirm whether an account exists.
+        // Locked and unknown accounts share the same outward response so the
+        // account-level budget cannot be used to enumerate email addresses.
         const unknown = await caughtIdentityError(harness.identity.login({ email: 'nobody@example.com', password: 'wrong-password-long' }))
-        expect(unknown.code).toBe('INVALID_CREDENTIALS')
+        expect(locked.code).toBe('INVALID_CREDENTIALS')
+        expect(locked.code).toBe(unknown.code)
+        expect(locked.message).toBe(unknown.message)
         await harness.state.clearFailedLogins('hamza@example.com')
         await expect(harness.identity.login({ email: 'hamza@example.com', password: 'long-enough-password' })).resolves.toMatchObject({ member: { email: 'hamza@example.com' } })
       } finally {

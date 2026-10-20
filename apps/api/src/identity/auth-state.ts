@@ -59,10 +59,9 @@ export interface AuthStateStore {
   health(): Promise<boolean>
   issueSession(input: { authVersion: number; memberId: string }): Promise<{ record: SessionRecord; token: string }>
   isUsernameReserved(username: string): Promise<boolean>
-  loginLocked(email: string): Promise<boolean>
+  tryLoginAttempt(email: string): Promise<boolean>
   pendingRegistration(email: string): Promise<RegistrationChallenge | null>
   readSession(token: string): Promise<SessionRecord | null>
-  registerFailedLogin(email: string): Promise<void>
   revokeMemberSessions(memberId: string): Promise<void>
   revokeSession(token: string): Promise<void>
 }

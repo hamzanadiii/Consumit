@@ -70,17 +70,15 @@ describe('Valkey authentication state', () => {
     }
   })
 
-  it('counts failed sign-ins per account atomically and clears the budget', async () => {
+  it('caps concurrent sign-in attempts per account atomically and clears the budget', async () => {
     const state = createValkeyAuthState(url, pepper)
     try {
-      expect(await state.loginLocked('member@example.com')).toBe(false)
-      for (let attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt += 1) {
-        await state.registerFailedLogin('member@example.com')
-      }
-      expect(await state.loginLocked('member@example.com')).toBe(true)
-      expect(await state.loginLocked('other@example.com')).toBe(false)
+      const attempts = await Promise.all(Array.from({ length: LOGIN_MAX_ATTEMPTS + 10 }, () => state.tryLoginAttempt('member@example.com')))
+      expect(attempts.filter(Boolean)).toHaveLength(LOGIN_MAX_ATTEMPTS)
+      expect(await state.tryLoginAttempt('member@example.com')).toBe(false)
+      expect(await state.tryLoginAttempt('other@example.com')).toBe(true)
       await state.clearFailedLogins('member@example.com')
-      expect(await state.loginLocked('member@example.com')).toBe(false)
+      expect(await state.tryLoginAttempt('member@example.com')).toBe(true)
     } finally {
       await state.close()
     }

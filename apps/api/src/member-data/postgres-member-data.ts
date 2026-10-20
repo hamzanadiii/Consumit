@@ -413,6 +413,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     },
     async updateListContent(memberId, listId, changes: UpdateMemberListContentRequest) {
       return prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:list:${listId}`}))`
         const owned = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId } })
         if (!owned) return false
         await tx.listItem.deleteMany({ where: { listId } })

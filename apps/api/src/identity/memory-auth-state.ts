@@ -208,8 +208,11 @@ export function createMemoryAuthState(options: {
     async isUsernameReserved(username) {
       return activeReservation(username) !== null
     },
-    async loginLocked(email) {
-      return (liveCounter(loginCounters, loginLookup(codePepper, email))?.count ?? 0) >= LOGIN_MAX_ATTEMPTS
+    async tryLoginAttempt(email) {
+      const key = loginLookup(codePepper, email)
+      if ((liveCounter(loginCounters, key)?.count ?? 0) >= LOGIN_MAX_ATTEMPTS) return false
+      bumpCounter(loginCounters, key, LOGIN_WINDOW_MS)
+      return true
     },
     async pendingRegistration(email) {
       const challenge = challenges.get(challengeKey('registration', email))
@@ -234,9 +237,6 @@ export function createMemoryAuthState(options: {
         session.lastSeenAt = now
       }
       return { ...session }
-    },
-    async registerFailedLogin(email) {
-      bumpCounter(loginCounters, loginLookup(codePepper, email), LOGIN_WINDOW_MS)
     },
     async revokeMemberSessions(memberId) {
       for (const [hash, session] of sessions) if (session.memberId === memberId) removeSession(hash)
