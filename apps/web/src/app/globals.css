@@ -61,7 +61,7 @@ select {
 }
 
 * {
-  scrollbar-color: var(--consumit-faint) var(--consumit-canvas);
+  scrollbar-color: var(--consumit-orange) var(--consumit-canvas);
   scrollbar-width: thin;
 }
 
@@ -76,7 +76,7 @@ select {
 ::-webkit-scrollbar-thumb {
   border: 3px solid var(--consumit-canvas);
   border-radius: 999px;
-  background: var(--consumit-faint);
+  background: var(--consumit-orange);
 }
 
 /* The phone shell keeps discovery in view; personal destinations live in a
