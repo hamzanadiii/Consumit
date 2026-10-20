@@ -9,6 +9,7 @@ import { Button, ConsumitPlayer, Select, Toggle, buttonVariants, SUBTITLE_LANGUA
 import { useSession } from '../session/session'
 import { useExperience } from '../experience/experience-provider'
 import { applyPlayerDefaults } from '@/lib/experience-storage'
+import { trackConsumitAnalytics } from '@/lib/google-analytics'
 import { browserSkipTimes } from '@/lib/skip-times-browser'
 import { listPlaybackProviders, playbackCapabilities, playbackRequest, runPlaybackAttempt, switchPlaybackProvider, listSeparateAudio, prepareSeparateAudio } from '@/lib/playback-browser'
 import { discoverSubtitles, pageSubtitles, searchSubtitles, prepareSubtitle, fetchSubtitlePreference, saveSubtitlePreference, type SubtitleDiscoveryEvent, type SubtitleCandidate, type SubtitleProviderStatus } from '@/lib/subtitles-browser'
@@ -31,6 +32,15 @@ function formatClock(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = Math.floor(totalSeconds % 60)
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+type AnalyticsPlaybackSample = { position: number; at: number; delivery: 'direct' | 'relay' | 'cast'; playerType: 'html5' | 'cast' }
+type AnalyticsPlaybackClock<T> = {
+  recording: T
+  started: boolean
+  eligible: boolean
+  watchedMs: number
+  sentThirtySeconds: boolean
+  lastSample: AnalyticsPlaybackSample | null
 }
 const sourceChoiceValue = (providerId: string, serverId: string) => `${providerId}::${serverId}`
 function sourceChoice(value: string | null, providers: readonly PlaybackProvider[]) {
@@ -152,6 +162,34 @@ function WatchPlaybackReady({ episodePanel, audioControl, audioLanguage: audioLa
   const requestInput = useCallback((currentRef: PlaybackRef, preferences?: import('@consumit/contracts').PlaybackPreferences) => ({ ref: currentRef, capabilities: playbackCapabilities(), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, preferences: { qualityHeight: intent.current.qualityHeight, audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, ...preferences, adsEnabled: adsEnabled.current } }), [audioLanguageProp])
   const clockRecording = useRef(recording)
   const clock = useRef({ position: 0, duration: 0, playing: false, completed: false })
+  const analyticsPlayback = useRef<AnalyticsPlaybackClock<typeof recording>>({ recording, started: false, eligible: false, watchedMs: 0, sentThirtySeconds: false, lastSample: null })
+  const currentAnalyticsPlayback = useCallback(() => {
+    if (analyticsPlayback.current.recording !== recording) analyticsPlayback.current = { recording, started: false, eligible: false, watchedMs: 0, sentThirtySeconds: false, lastSample: null }
+    return analyticsPlayback.current
+  }, [recording])
+  const startAnalyticsPlayback = useCallback((playerType: 'html5' | 'cast') => {
+    const state = currentAnalyticsPlayback()
+    if (state.started) return
+    state.started = true
+    state.eligible = trackConsumitAnalytics({ name: 'playback_started', playerType })
+    state.lastSample = null
+  }, [currentAnalyticsPlayback])
+  const resetAnalyticsPlaybackSample = useCallback(() => {
+    currentAnalyticsPlayback().lastSample = null
+  }, [currentAnalyticsPlayback])
+  const sampleAnalyticsPlayback = useCallback((position: number, playing: boolean, delivery: 'direct' | 'relay' | 'cast', playerType: 'html5' | 'cast') => {
+    const state = currentAnalyticsPlayback()
+    const at = performance.now()
+    const previous = state.lastSample
+    if (state.eligible && previous && playing && previous.delivery === delivery && position > previous.position && position - previous.position < 30) {
+      state.watchedMs += Math.max(0, Math.min(5000, at - previous.at))
+    }
+    state.lastSample = playing && Number.isFinite(position) ? { position, at, delivery, playerType } : null
+    if (state.eligible && !state.sentThirtySeconds && state.watchedMs >= 30_000) {
+      state.sentThirtySeconds = true
+      trackConsumitAnalytics({ name: 'playback_30s', playerType })
+    }
+  }, [currentAnalyticsPlayback])
   const completionId = useRef<string | null>(null)
   const [resume, setResume] = useState({ position: 0, playing: false })
   const reportRecoveryProgress = useCallback((progress: { tried: number; total: number }) => {
@@ -381,8 +419,10 @@ function WatchPlaybackReady({ episodePanel, audioControl, audioLanguage: audioLa
         if (status.playing && !tvPlaying.current) {
           tvPlaying.current = true
           eventsRef.current?.push({ type: 'started', position: status.position })
+          startAnalyticsPlayback('cast')
         }
         if (!status.playing) tvPlaying.current = false
+        sampleAnalyticsPlayback(status.position, status.playing, 'cast', 'cast')
         if (status.duration > 0 && status.position >= status.duration - 1 && !clock.current.completed) {
           eventsRef.current?.push({ type: 'ended', position: status.position })
           completePlayback()
@@ -400,7 +440,7 @@ function WatchPlaybackReady({ episodePanel, audioControl, audioLanguage: audioLa
       cancelled = true
       unsubscribe()
     }
-  }, [castSender, completePlayback, recording])
+  }, [castSender, completePlayback, recording, sampleAnalyticsPlayback, startAnalyticsPlayback])
   const checkCast = useCallback(async () => {
     if (!process.env.NEXT_PUBLIC_CAST_RECEIVER_ID) return 'unconfigured' as const
     const ready = await castSender.ensure()
@@ -921,15 +961,27 @@ function WatchPlaybackReady({ episodePanel, audioControl, audioLanguage: audioLa
           onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)} onRetry={() => void start()}
           onSubtitleRequest={() => { if (!subtitleRequested || subtitleError) { setSubtitleLoading(true); setSubtitleError(null); setSubtitleRequested(true); setSubtitleAttempt((attempt) => attempt + 1) } }}
           onSubtitleRefresh={() => { if (!subtitleLoading) { setSubtitleLoading(true); setSubtitleError(null); setSubtitleProviders([]); setSubtitleRequested(true); setSubtitleAttempt(attempt => attempt + 1) } }}
-          onTimeUpdate={(event) => { if (!localSource || latestRecording.current !== recording) return; clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration; if (localSource) eventsRef.current?.sample(clock.current.position, clock.current.playing, localSource.delivery) }}
-          onSeeking={(event) => { if (!localSource || latestRecording.current !== recording) return; eventsRef.current?.resetViewing(); clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration }}
+          onTimeUpdate={(event) => {
+            if (!localSource || latestRecording.current !== recording) return
+            clock.current.position = event.currentTarget.currentTime
+            clock.current.duration = event.currentTarget.duration
+            eventsRef.current?.sample(clock.current.position, clock.current.playing, localSource.delivery)
+            if (localSource.delivery === 'direct' || localSource.delivery === 'relay') {
+              sampleAnalyticsPlayback(clock.current.position, clock.current.playing, localSource.delivery, 'html5')
+            }
+          }}
+          onSeeking={(event) => { if (!localSource || latestRecording.current !== recording) return; eventsRef.current?.resetViewing(); resetAnalyticsPlaybackSample(); clock.current.position = event.currentTarget.currentTime; clock.current.duration = event.currentTarget.duration }}
           onPlay={() => { if (!localSource || latestRecording.current !== recording) return; const replay = clock.current.completed; if (replay) completionId.current = null; clock.current.playing = true; clock.current.completed = false; setEnded(false); if (replay) { const previous = completionWrite.current; void (previous ?? Promise.resolve()).then(() => { if (!clock.current.completed) void save(true, true) }) } if (!subtitleRequested) { setSubtitleLoading(true); setSubtitleRequested(true) } }}
-          onPause={() => { if (!localSource || latestRecording.current !== recording) return; eventsRef.current?.resetViewing(); clock.current.playing = false; if (!requestRef.current) void save(false, true) }}
-          onEnded={() => { if (localSource && latestRecording.current === recording) completePlayback() }}
+          onPause={() => { if (!localSource || latestRecording.current !== recording) return; eventsRef.current?.resetViewing(); resetAnalyticsPlaybackSample(); clock.current.playing = false; if (!requestRef.current) void save(false, true) }}
+          onEnded={() => { if (localSource && latestRecording.current === recording) { resetAnalyticsPlaybackSample(); completePlayback() } }}
           autoSkip={autoSkip}
           onAutoSkipChange={handleAutoSkip}
           onSeeked={() => { void save(false, true) }}
-          onPlaybackEvent={(event) => eventsRef.current?.push({ ...event, ...(localSource ? { delivery: localSource.delivery } : {}) })}
+          onPlaybackEvent={(event) => {
+            eventsRef.current?.push({ ...event, ...(localSource ? { delivery: localSource.delivery } : {}) })
+            if (event.type === 'started') startAnalyticsPlayback('html5')
+            if (event.type === 'buffer-start' || event.type === 'buffer-end') resetAnalyticsPlaybackSample()
+          }}
           onMediaPreferencesChange={(preferences) => coordinator.setPreferences({ ...preferences, ...(localSource?.qualityHeights?.length ? { qualityHeight: readQualityPreference() } : {}), audioLanguage: audioLanguageProp ?? intent.current.audioLanguage, adsEnabled: adsEnabled.current })}
         />
         )}

@@ -19,6 +19,7 @@ import {
   updateMemberProfile,
   verifyMemberEmail,
 } from '@/lib/identity-browser'
+import { trackConsumitAnalytics } from '@/lib/google-analytics'
 
 import { useSession } from '../session/session'
 import { AuthThemeScope } from './auth-theme'
@@ -228,6 +229,7 @@ export function SignUpScreen({ titles = [], nextPath = '/' }: { titles?: readonl
     const data = new FormData(event.currentTarget)
     try {
       const member = await verifyMemberEmail({ code: String(data.get('code')), email })
+      trackConsumitAnalytics({ name: 'sign_up' })
       const name = displayName.trim()
       if (name) {
         try {
