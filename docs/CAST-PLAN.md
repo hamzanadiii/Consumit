@@ -15,8 +15,9 @@ scope; this slice is VOD-only (movies, series episodes, anime episodes).
 ## UX flow
 
 ```text
-Watch (or embed) player chrome → Cast button (advanced controls row; second
-mobile row) → device picker → TV loads Consumit receiver → member sees
+Watch player header Cast shortcut (or phone Settings → Cast) → native device
+picker when a TV is available, otherwise connection guidance → TV loads
+Consumit receiver → member sees
 backdrop + title + progress on TV → phone becomes remote (play/pause/seek/
 volume/captions/server) → disconnect returns playback to the phone at the
 TV's position.

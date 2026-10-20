@@ -320,11 +320,13 @@ function PlayerIconButton({
   menuId,
   title,
   text,
+  className,
 }: {
   text?: string | undefined
   destination?: string | undefined
   active?: boolean | undefined
   children: ReactNode
+  className?: string | undefined
   disabled?: boolean | undefined
   expanded?: boolean | undefined
   label: string
@@ -347,6 +349,7 @@ function PlayerIconButton({
           ? 'border-orange bg-orange/15 text-orange'
           : 'border-white/10 bg-white/5 text-ink hover:border-white/25 hover:bg-white/10',
         'disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:text-muted',
+        className,
       )}
       disabled={disabled}
       onClick={onClick}
@@ -2062,10 +2065,31 @@ export function ConsumitPlayer({
               <p data-player-heading className="truncate font-display font-normal tracking-[-0.02em] text-ink drop-shadow-md" title={title}>{title}</p>
               {topMeta ?? (startupPending ? preparationMeta : undefined) ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta ?? preparationMeta}</p> : null}
             </div>
-            <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2" data-player-episode-navigation>
+            <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2" data-player-header-actions>
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2" data-player-episode-navigation>
               {onPreviousEpisode ? <PlayerIconButton label="Previous episode" onClick={onPreviousEpisode}><SkipBack aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
               {onNextEpisode ? <PlayerIconButton label="Next episode" onClick={onNextEpisode}><SkipForward aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
               <img alt="Consumit" className="ml-3 size-[48px] shrink-0 sm:size-[64px]" height={64} src="/assets/consumit-mark.svg" width={64} />
+              </div>
+              {onCastClick ? <PlayerIconButton
+                active={castConnected || activeMenu === 'cast'}
+                className="max-sm:hidden"
+                destination="cast"
+                disabled={!hasSource}
+                expanded={activeMenu === 'cast'}
+                label={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
+                menuId="cast"
+                onClick={event => {
+                  if (castAvailable || castConnected) {
+                    menuReturnFocus.current = event.currentTarget
+                    setActiveMenu(null)
+                    onCastClick()
+                    return
+                  }
+                  openDestination('cast', ['cast'], event.currentTarget)
+                }}
+                title={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
+              ><Cast aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
             </div>
           </div>
         ) : null}
@@ -2428,7 +2452,7 @@ export function ConsumitPlayer({
         </div>
         {activeMenu === 'cast' ? (
           <div className="contents" ref={menuRef}>
-            <PlayerPanel anchorSelector={'[data-player-destination="settings"]'} onBack={() => setActiveMenu('settings')} aria-label="Cast to TV" id="consumit-player-menu-cast" onClose={closeMenu} title="Cast to TV">
+            <PlayerPanel anchorElement={menuReturnFocus.current} anchorSelector={'[data-player-destination="settings"]'} onBack={() => setActiveMenu('settings')} aria-label="Cast to TV" id="consumit-player-menu-cast" onClose={closeMenu} title="Cast to TV">
               <CastPanel available={castAvailable} onCheck={onCastCheck} onConnect={onCastClick ? () => { closeMenu(); onCastClick() } : undefined} />
             </PlayerPanel>
           </div>
