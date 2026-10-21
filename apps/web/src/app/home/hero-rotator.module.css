@@ -13,7 +13,7 @@
     height: 100%;
     min-height: 0;
     max-width: none;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 12px;
     padding: 32px 20px 40px;
     overflow-wrap: anywhere;

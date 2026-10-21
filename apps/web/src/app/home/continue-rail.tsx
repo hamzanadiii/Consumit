@@ -70,7 +70,7 @@ export function ContinueRail() {
   const showEditToggle = status === 'ready' && rows.length > 0
 
   return (
-    <section aria-labelledby="filscreen-continue-title" className="mt-8">
+    <section aria-labelledby="filscreen-continue-title" className="mt-4 sm:mt-8">
       <div className="flex items-center justify-between gap-4">
         <h2 className="font-display text-2xl tracking-[-0.02em]" id="filscreen-continue-title">Continue watching</h2>
         {showEditToggle ? (
