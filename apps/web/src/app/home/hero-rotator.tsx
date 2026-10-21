@@ -147,7 +147,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
     (next: number) => {
       if (count <= 0) return
       progressRef.current = 0
-      if (fillRef.current) fillRef.current.style.transform = 'scaleY(0)'
+      if (fillRef.current) fillRef.current.style.setProperty('--hero-progress', '0')
       setIndex(((next % count) + count) % count)
     },
     [count],
@@ -199,7 +199,7 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
         progressRef.current = 0
         setIndex((current) => (current + 1) % count)
       }
-      if (fillRef.current) fillRef.current.style.transform = `scaleY(${Math.min(progressRef.current, 1)})`
+      if (fillRef.current) fillRef.current.style.setProperty('--hero-progress', `${Math.min(progressRef.current, 1)}`)
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
@@ -267,12 +267,11 @@ export function FilScreenHeroRotator({ hero, label = 'Featured titles', spotligh
                 <span aria-hidden="true" className="relative block h-8 w-2 overflow-hidden rounded bg-white/25">
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 origin-top rounded bg-[var(--fs-accent)]"
+                    className={`absolute inset-0 rounded bg-[var(--fs-accent)] ${styles.progressFill}`}
                     ref={fillRef}
                     // Fresh mounts start empty: without this the fill renders
                     // full until the shared clock writes its first frame, and
                     // stays frozen full whenever rotation is paused.
-                    style={{ transform: 'scaleY(0)' }}
                   />
                 </span>
               ) : (
