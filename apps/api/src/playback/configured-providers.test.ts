@@ -116,11 +116,12 @@ describe('configured real provider integration', () => {
     const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
     const providers = configuredProviders(raw, { tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
     const animeIds = ['9anime', 'anixo', 'zoko', 'aniwave']
-    const movieIds = ['bingebangymovies', 'stormboron', 'zeta', 'rivenebula', 'rivezephyr', 'wecollege-miami', 'wecollege-boise']
+    const movieIds = ['stormboron', 'zeta', 'rivenebula', 'rivezephyr', 'wecollege-miami', 'wecollege-boise']
     for (const id of [...animeIds, ...movieIds]) {
       const provider = providers.find(row => row.adapter.id === id)
       expect(provider).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: animeIds.includes(id) ? ['anime'] : ['movie', 'series'] })
     }
+    expect(providers.find(row => row.adapter.id === 'bingebangymovies')).toMatchObject({ enabled: true, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'] })
     expect(providers.find(row => row.adapter.id === 'vixsrc')?.deliveryMode).toBe('direct')
     expect(providers.find(row => row.adapter.id === 'megavid')?.deliveryMode).toBe('relay')
     expect(providers.find(row => row.adapter.id === 'movy')).toMatchObject({ enabled: false, role: 'both', deliveryMode: 'relay', mediaKinds: ['movie'], mediaHosts: ['img.rousav.tech'] })

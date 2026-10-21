@@ -580,7 +580,7 @@
   {
     "id": "bingebangymovies",
     "adapter": "bingebangymovies",
-    "enabled": false,
+    "enabled": true,
     "role": "video",
     "deliveryMode": "relay",
     "regions": [
@@ -595,7 +595,7 @@
     "upstreamGroup": "bingebangymovies",
     "concurrency": 1,
     "requestsPerMinute": 20,
-    "priority": 10,
+    "priority": 50,
     "attemptMs": 15000,
     "mediaKinds": [
       "movie",
