@@ -125,28 +125,15 @@
   [data-consumit-input] { min-height: 48px; font-size: 16px; }
 }
 
-/* Ten explicit choices replace tiny half-star hit areas on touch phones.
-   The original native radios and clear-on-reselection behavior stay intact. */
+/* Keep the shared five-star rating on touch phones and enlarge each star's
+   hit area without changing its native half-star radio choices. */
 @media (max-width: 639px) and (pointer: coarse) {
-  [data-consumit-rating-input] { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); max-width: 280px; gap: 6px; }
-  [data-consumit-rating-input] > span { display: contents; }
-  [data-consumit-rating-input] > span > span { display: none; }
-  [data-consumit-rating-input] label {
-    position: relative;
-    inset: auto;
-    display: grid;
-    place-items: center;
-    min-height: 44px;
-    width: auto;
-    border: 1px solid var(--consumit-control-outline);
-    border-radius: var(--consumit-radius-control);
-    color: var(--consumit-copy);
-    font-size: 14px;
+  [data-consumit-rating-input] > span[role='presentation'] {
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
   }
-  [data-consumit-rating-input] label::after { content: attr(data-rating); }
-  [data-consumit-rating-input] label:has(input:checked) { background: var(--consumit-orange); border-color: var(--consumit-orange); color: var(--consumit-canvas); font-weight: 700; }
-  [data-consumit-rating-input] label:has(input:focus-visible) { outline: 2px solid var(--consumit-orange); outline-offset: 2px; }
-  [data-consumit-rating-input] label:has(input:disabled) { opacity: .45; cursor: default; }
 }
 
 [data-consumit-tabs],
