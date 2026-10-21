@@ -1031,26 +1031,13 @@ describe('playback shell components', () => {
     fireEvent.click(screen.getByRole('button', { name: /TV connection/ }))
     expect(onCastClick).toHaveBeenCalledTimes(2)
   })
-  it('shows a direct Cast shortcut in the player header and launches the picker when a TV is available', () => {
+  it('keeps Cast out of the player header while retaining the Settings connection control', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const onCastClick = vi.fn()
-    const { container } = render(<ConsumitPlayer backHref="/title" source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
-    const castButton = screen.getByRole('button', { name: 'Cast to TV' })
-    expect(container.querySelector('[data-player-header]')).toContainElement(castButton)
-    expect(castButton).toHaveAttribute('data-player-destination', 'cast')
-    fireEvent.click(castButton)
-    expect(onCastClick).toHaveBeenCalledOnce()
-    expect(screen.queryByRole('dialog', { name: 'Cast to TV' })).not.toBeInTheDocument()
-  })
-  it('opens Cast guidance from the header when no TV is discovered', async () => {
-    const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const onCastClick = vi.fn()
-    const onCastCheck = vi.fn(async () => 'ready' as const)
-    render(<ConsumitPlayer backHref="/title" source={source} title="Stowaway" onCastCheck={onCastCheck} onCastClick={onCastClick} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Cast to TV' }))
-    expect(screen.getByRole('dialog', { name: 'Cast to TV' })).toBeInTheDocument()
-    fireEvent.click(await screen.findByRole('button', { name: 'Choose TV' }))
-    expect(onCastClick).toHaveBeenCalledOnce()
+    const { container } = render(<ConsumitPlayer backHref="/title" source={source} title="Stowaway" castAvailable onCastClick={vi.fn()} />)
+    expect(container.querySelector('[data-player-header]')).not.toHaveTextContent('Cast to TV')
+    expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
+    expect(screen.getByRole('button', { name: /TV connection/ })).toBeInTheDocument()
   })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()

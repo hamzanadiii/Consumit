@@ -2071,25 +2071,6 @@ export function ConsumitPlayer({
               {onNextEpisode ? <PlayerIconButton label="Next episode" onClick={onNextEpisode}><SkipForward aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
               <img alt="Consumit" className="ml-3 size-[48px] shrink-0 sm:size-[64px]" height={64} src="/assets/consumit-mark.svg" width={64} />
               </div>
-              {onCastClick ? <PlayerIconButton
-                active={castConnected || activeMenu === 'cast'}
-                className="max-sm:hidden"
-                destination="cast"
-                disabled={!hasSource}
-                expanded={activeMenu === 'cast'}
-                label={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
-                menuId="cast"
-                onClick={event => {
-                  if (castAvailable || castConnected) {
-                    menuReturnFocus.current = event.currentTarget
-                    setActiveMenu(null)
-                    onCastClick()
-                    return
-                  }
-                  openDestination('cast', ['cast'], event.currentTarget)
-                }}
-                title={castConnected ? 'Disconnect from TV' : 'Cast to TV'}
-              ><Cast aria-hidden="true" className="size-5" /></PlayerIconButton> : null}
             </div>
           </div>
         ) : null}
