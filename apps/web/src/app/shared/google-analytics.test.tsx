@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ANALYTICS_CHOICE_KEY, saveAnalyticsChoice, type AnalyticsWindow } from '@/lib/google-analytics'
 import { AnalyticsPreferences, GoogleAnalytics } from './google-analytics'
 
@@ -12,9 +12,21 @@ vi.mock('next/script', () => ({ default: ({ src }: { src: string }) => <span dat
 const events = () => (browser.dataLayer ?? []).map((entry) => Array.from(entry as ArrayLike<unknown>))
 const pageViews = () => events().filter((entry) => entry[0] === 'event' && entry[1] === 'page_view')
 
+function completeQueuedEvents() {
+  const callbacks = events().flatMap((entry) => {
+    if (entry[0] !== 'event' || !entry[2] || typeof entry[2] !== 'object') return []
+    const callback = (entry[2] as { event_callback?: unknown }).event_callback
+    return typeof callback === 'function' ? [callback as () => void] : []
+  })
+  act(() => callbacks.forEach((callback) => callback()))
+}
+
+afterEach(completeQueuedEvents)
+
 beforeEach(() => {
   vi.unstubAllEnvs()
   pathname = '/'
+  window.history.replaceState({}, '', '/')
   localStorage.clear()
   delete browser.dataLayer
   delete browser.gtag
@@ -52,13 +64,17 @@ describe('optional GA4', () => {
     view.rerender(<StrictMode><GoogleAnalytics measurementId={id} /></StrictMode>)
     expect(pageViews()).toHaveLength(1)
     pathname = '/movies'
+    window.history.replaceState({}, '', '/movies')
     view.rerender(<StrictMode><GoogleAnalytics measurementId={id} /></StrictMode>)
     expect(pageViews()).toHaveLength(2)
     pathname = '/watch/movie/550'
+    window.history.replaceState({}, '', '/watch/movie/550')
     view.rerender(<StrictMode><GoogleAnalytics measurementId={id} /></StrictMode>)
     expect(pageViews()).toHaveLength(2)
+    completeQueuedEvents()
     expect(browser[`ga-disable-${id}`]).toBe(true)
     pathname = '/'
+    window.history.replaceState({}, '', '/')
     view.rerender(<StrictMode><GoogleAnalytics measurementId={id} /></StrictMode>)
     expect(pageViews()).toHaveLength(3)
     expect(browser[`ga-disable-${id}`]).toBe(false)
