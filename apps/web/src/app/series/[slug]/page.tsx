@@ -14,12 +14,6 @@ type SeriesDetailPageProps = {
   searchParams: Promise<{ episode?: string | string[]; season?: string | string[] }>
 }
 
-export const revalidate = 300
-
-export function generateStaticParams() {
-  return []
-}
-
 export async function generateMetadata({ params }: SeriesDetailPageProps): Promise<Metadata> {
   const { slug } = await params
   const id = Number(slug)
