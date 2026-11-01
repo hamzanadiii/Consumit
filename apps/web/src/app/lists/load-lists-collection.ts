@@ -34,8 +34,9 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
   const catalogDetailsLimited = new Set(refs.map((ref) => `${ref.kind}:${ref.id}`)).size > MAX_PAGE_CATALOG_ENRICHMENT
   if (refs.length > 0) {
     try {
-      const batch = await getCatalogBatchForRefs(refs)
-      posters = new Map((batch?.items ?? []).map((title) => [`${title.kind}:${title.id}`, title]))
+      const resolved = await getCatalogBatchForRefs(refs)
+      posters = new Map((resolved?.items ?? []).map((title) => [`${title.kind}:${title.id}`, title]))
+      catalogUnavailable = resolved?.unavailable ?? false
     } catch {
       catalogUnavailable = true
     }
@@ -44,7 +45,7 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
     description: list.description,
     itemCount: list.itemCount,
     name: list.name,
-    posters: (itemsBySlug.get(list.slug) ?? []).map((ref) => posters.get(`${ref.kind}:${ref.id}`)?.posterUrl ?? undefined),
+    posters: (itemsBySlug.get(list.slug) ?? []).map((ref) => { const title = posters.get(`${ref.kind}:${ref.id}`); return title?.posterUrl ?? title?.backdropUrl ?? undefined }),
     curator: 'You',
     username,
     slug: list.slug,
@@ -54,7 +55,7 @@ export async function loadListsCollection(username: string): Promise<ListsCollec
   }))
   const savedLists = library.savedLists.items.map((saved) => ({
     ...saved,
-    posters: (savedItemsBySlug.get(saved.listId) ?? []).map((ref) => posters.get(`${ref.kind}:${ref.id}`)?.posterUrl ?? undefined),
+    posters: (savedItemsBySlug.get(saved.listId) ?? []).map((ref) => { const title = posters.get(`${ref.kind}:${ref.id}`); return title?.posterUrl ?? title?.backdropUrl ?? undefined }),
   }))
   return { catalogDetailsLimited, catalogUnavailable, listNextCursor: library.lists.nextCursor, lists, savedLists, savedListNextCursor: library.savedLists.nextCursor }
 }

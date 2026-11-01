@@ -106,7 +106,8 @@ describe('catalog contracts', () => {
     expect(bannerUrlSchema.safeParse('https://image.tmdb.org/t/p/w1280/abc.jpg').success).toBe(true)
     expect(bannerUrlSchema.safeParse('https://api.dicebear.com/7.x/notionists/svg?seed=abc').success).toBe(false)
     expect(bannerUrlSchema.safeParse('https://evil.example/t/p/w1280/abc.jpg').success).toBe(false)
-    expect(recoveryConfirmRequestSchema.safeParse({ code: '12345678', email: 'hamza@example.com', newPassword: 'another-long-password' }).success).toBe(true)
+    expect(recoveryConfirmRequestSchema.safeParse({ code: '123456', email: 'hamza@example.com', newPassword: 'another-long-password' }).success).toBe(true)
+    expect(recoveryConfirmRequestSchema.safeParse({ code: '12345678', email: 'hamza@example.com', newPassword: 'another-long-password' }).success).toBe(false)
     expect(passwordChangeRequestSchema.safeParse({ currentPassword: 'long-enough-password', newPassword: 'another-long-password' }).success).toBe(true)
     expect(accountDeletionRequestSchema.safeParse({ password: 'long-enough-password' }).success).toBe(true)
   })
@@ -121,7 +122,7 @@ describe('catalog contracts', () => {
 
   it('validates editable profiles and username availability', () => {
     expect(updateProfileRequestSchema.parse({ avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: '  Films, quietly.  ', displayName: ' Hamza ', sectionVisibility: { ratings: false, watchlist: true }, username: 'HAMZA_8' })).toEqual({
-      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza_8',
+      avatarStyle: 'noir', avatarUrl: 'https://api.dicebear.com/7.x/notionists/svg?seed=abc', bannerUrl: 'https://image.tmdb.org/t/p/w1280/abc.jpg', bio: 'Films, quietly.', displayName: 'Hamza', sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }, username: 'hamza_8',
     })
     expect(updateProfileRequestSchema.safeParse({ avatarUrl: 'javascript:alert(1)' }).success).toBe(false)
     expect(profileSchema.safeParse({ avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-09-06T00:00:00.000Z', displayName: null, nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza_8', usernameChangedAt: null }).success).toBe(true)

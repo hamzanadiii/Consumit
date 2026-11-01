@@ -2,12 +2,12 @@
 
 import type { AnimeTitleDetail, AnimeFranchise, AnimeAiringSchedule, AnimeEpisode } from '@consumit/contracts'
 import { watchHref } from '@consumit/contracts'
-import { CastCard, SectionHeading, Tabs } from '@consumit/ui'
+import { Button, CastCard, SectionHeading } from '@consumit/ui'
 import { CalendarClock, ChevronLeft, ChevronRight, Star } from 'lucide-react'
 import Image from 'next/image'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { browserAnimeEpisodes } from '@/lib/anime-browser'
+import { browserAnimeEpisodes, browserAnimeRelations } from '@/lib/anime-browser'
 
 import { TitleCard } from '../../shared/title-card'
 import { EpisodeCard } from '../../shared/episode-card'
@@ -16,7 +16,7 @@ import { MemberActionPanel } from '../../catalog/member-action-panel'
 import { TitleReviews } from '../../catalog/title-reviews'
 import { TitlePlayAction } from '../../catalog/title-play-action'
 
-import { FilScreenShell, AnimeTitleRail } from '@/app/shared'
+import { FilScreenShell, AnimeTitleRail, ScrollableTabs } from '@/app/shared'
 
 const ANIME_EPISODES_PER_PAGE = 8
 
@@ -52,13 +52,15 @@ function formatAirDate(iso: string): string {
 /** Hero title: TMDB logo art when the title matched confidently, serif
  *  display type otherwise. Exported for tests. */
 export function AnimeHeroTitle({ logoUrl, title }: { logoUrl: string | null; title: string }) {
-  if (logoUrl) {
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null)
+  if (logoUrl && failedLogoUrl !== logoUrl) {
     return (
       <div>
         <Image
           alt={title}
           className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28"
           height={240}
+          onError={() => setFailedLogoUrl(logoUrl)}
           priority
           src={logoUrl}
           width={640}
@@ -75,6 +77,12 @@ export function AnimeHeroTitle({ logoUrl, title }: { logoUrl: string | null; tit
 }
 
 function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
+  const [failedArtworkUrls, setFailedArtworkUrls] = useState<readonly string[]>([])
+  const artworkUrl = detail.bannerImage && !failedArtworkUrls.includes(detail.bannerImage)
+    ? detail.bannerImage
+    : detail.coverImage.url && !failedArtworkUrls.includes(detail.coverImage.url)
+      ? detail.coverImage.url
+      : null
   const score = formatScore(detail.averageScore)
   const seasonLabel = formatSeason(detail.season, detail.seasonYear)
   const episodeCount = detail.episodes ? `${detail.episodes} ep` : null
@@ -85,28 +93,21 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
       className="relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#09090b] text-white"
       data-consumit-anime-masthead
     >
-      {detail.bannerImage ? (
+      {artworkUrl ? (
         <Image
           alt=""
           className="object-cover"
           fill
+          onError={() => setFailedArtworkUrls((current) => current.includes(artworkUrl) ? current : [...current, artworkUrl])}
           priority
           sizes="(max-width: 1280px) 100vw, 1400px"
-          src={detail.bannerImage}
-        />
-      ) : detail.coverImage.url ? (
-        <Image
-          alt=""
-          className="object-cover"
-          fill
-          priority
-          sizes="(max-width: 1280px) 100vw, 1400px"
-          src={detail.coverImage.url}
+          src={artworkUrl}
         />
       ) : (
         <div
           aria-hidden="true"
           className="absolute inset-0"
+          data-consumit-anime-artwork-fallback
           style={{ background: `radial-gradient(120% 90% at 78% 8%, ${detail.coverImage.color ?? '#6b3c32'} 0%, #3a211d 40%, #09090b 100%)` }}
         />
       )}
@@ -151,7 +152,7 @@ function AnimeHero({ detail }: { detail: AnimeTitleDetail }) {
           <MemberActionPanel
             id={detail.anilistId}
             kind="anime"
-            posterUrl={detail.coverImage.url ?? undefined}
+            posterUrl={detail.coverImage.url ?? detail.bannerImage ?? undefined}
             title={detail.titles.preferred}
             year={detail.seasonYear}
           />
@@ -415,15 +416,61 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
   detail: AnimeTitleDetail
   relations: AnimeFranchise | null
 }) {
+  const [relationState, setRelationState] = useState<{
+    anilistId: number
+    value: AnimeFranchise | null
+    loading: boolean
+    failed: boolean
+    retried: boolean
+  }>(() => ({ anilistId: detail.anilistId, value: relations, loading: false, failed: false, retried: false }))
+  const relationRequest = useRef<AbortController | null>(null)
+  const focusRelatedAfterRetry = useRef(false)
+  const relatedSectionRef = useRef<HTMLElement | null>(null)
+  const recoveredEmptyRef = useRef<HTMLParagraphElement | null>(null)
+  const currentRelationState = useMemo(() => relationState.anilistId === detail.anilistId
+    ? relationState
+    : { anilistId: detail.anilistId, value: relations, loading: false, failed: false, retried: false }, [detail.anilistId, relations, relationState])
+  const activeRelations = currentRelationState.value
   const related = useMemo(() => {
     const seen = new Set([detail.anilistId])
     const priority = (type: string) => type === 'PREQUEL' ? 0 : type === 'SEQUEL' ? 1 : 2
-    return (relations?.relations ?? []).filter(relation => {
+    return (activeRelations?.relations ?? []).filter(relation => {
       if (seen.has(relation.anime.anilistId)) return false
       seen.add(relation.anime.anilistId)
       return true
     }).sort((a, b) => priority(a.type) - priority(b.type))
-  }, [detail.anilistId, relations])
+  }, [activeRelations, detail.anilistId])
+  async function retryRelatedAnime() {
+    if (currentRelationState.loading) return
+    relationRequest.current?.abort()
+    const controller = new AbortController()
+    relationRequest.current = controller
+    const anilistId = detail.anilistId
+    focusRelatedAfterRetry.current = true
+    setRelationState({ anilistId, value: activeRelations, loading: true, failed: false, retried: false })
+    try {
+      const result = await browserAnimeRelations(anilistId, controller.signal)
+      if (controller.signal.aborted) return
+      setRelationState({ anilistId, value: result, loading: false, failed: false, retried: true })
+    } catch {
+      if (controller.signal.aborted) return
+      focusRelatedAfterRetry.current = false
+      setRelationState(previous => previous.anilistId === anilistId
+        ? { ...previous, loading: false, failed: true, retried: false }
+        : previous)
+    } finally {
+      if (relationRequest.current === controller) relationRequest.current = null
+    }
+  }
+  useEffect(() => () => relationRequest.current?.abort(), [detail.anilistId])
+  useEffect(() => {
+    if (!focusRelatedAfterRetry.current || currentRelationState.loading || !currentRelationState.retried) return
+    const target = related.length
+      ? relatedSectionRef.current?.querySelector<HTMLElement>('a[href^="/anime/"]')
+      : recoveredEmptyRef.current
+    target?.focus()
+    focusRelatedAfterRetry.current = false
+  }, [currentRelationState, detail.anilistId, related.length])
   const recommendations = useMemo(() => {
     const seen = new Set<number>()
     return detail.recommendations.filter((item) => {
@@ -436,32 +483,38 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
     { href: '#episodes', label: 'Episodes', value: 'episodes' },
     { href: '#overview', label: 'Overview', value: 'overview' },
     { href: '#reviews', label: 'Reviews', value: 'reviews' },
-    { href: '#cast', label: 'Characters', value: 'cast' },
+    ...(detail.characters.length ? [{ href: '#cast', label: 'Characters', value: 'cast' }] : []),
     ...(airing && airing.episodes.length ? [{ href: '#airing', label: 'Airing', value: 'airing' }] : []),
     ...(related.length ? [{ href: '#related', label: 'Related anime', value: 'related' }] : []),
     ...(recommendations.length ? [{ href: '#recommendations', label: 'Recommendations', value: 'recommendations' }] : []),
   ]
   return (
     <FilScreenShell activeKindTab="anime" pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-anime-detail data-anilist-id={detail.anilistId}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-anime-detail data-anilist-id={detail.anilistId}>
         <AnimeHero detail={detail} />
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
-          <Tabs
+          <ScrollableTabs
             activeValue="episodes"
-            aria-label={`${detail.titles.preferred} sections`}
+            ariaLabel={`${detail.titles.preferred} sections`}
             items={tabs}
           />
           <section className="py-10 sm:py-12 lg:py-14" id="episodes" aria-labelledby="episodes-heading">
             <AnimeEpisodesSection detail={detail} key={detail.anilistId} />
           </section>
-          {related.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="anime-related-heading">
+          {related.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="anime-related-heading" ref={relatedSectionRef}>
+            {currentRelationState.retried ? <p className="sr-only" role="status">Related anime loaded.</p> : null}
             <SectionHeading description="Explore the seasons and stories connected to this anime." id="anime-related-heading" title="Related anime" />
             <ul className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">{related.map(({ anime, type }) => {
               const format = anime.format === 'MOVIE' ? 'Film' : anime.format.replace(/_/g, ' ')
               const relation = type === 'PREQUEL' ? anime.format === 'MOVIE' ? 'Previous film' : 'Previous season' : type === 'SEQUEL' ? anime.format === 'MOVIE' ? 'Next film' : 'Next season' : type.replace(/_/g, ' ').toLowerCase().replace(/^./, character => character.toUpperCase())
-              return <TitleCard className="min-w-0" footer={<p className="text-xs leading-5 text-[var(--fs-muted)]">{relation} <span className="text-[var(--fs-faint)]">· {format}</span></p>} key={anime.anilistId} meta={[anime.seasonYear, format].filter(Boolean).join(' · ')} rating={null} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, posterUrl: anime.coverImage.url, year: anime.seasonYear }} />
+              return <TitleCard className="min-w-0" footer={<p className="text-xs leading-5 text-[var(--fs-muted)]">{relation} <span className="text-[var(--fs-faint)]">· {format}</span></p>} key={anime.anilistId} meta={[anime.seasonYear, format].filter(Boolean).join(' · ')} rating={null} title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, posterUrl: anime.coverImage.url, backdropUrl: anime.bannerImage, year: anime.seasonYear }} />
             })}</ul>
-          </section> : relations === null ? <p className="border-t border-[var(--fs-line)] py-6 text-sm text-[var(--fs-muted)]" role="status">Related anime could not load. Refresh to try again.</p> : null}
+          </section> : activeRelations === null ? <div className="border-t border-[var(--fs-line)] py-6">
+            <p className="text-sm text-[var(--fs-muted)]" role="status">{currentRelationState.loading ? 'Loading related anime…' : currentRelationState.failed ? 'Related anime is still unavailable. Try again.' : 'Related anime could not load.'}</p>
+            <Button aria-busy={currentRelationState.loading} className="mt-3 min-h-[44px]" disabled={currentRelationState.loading} onClick={() => void retryRelatedAnime()} variant="secondary">
+              {currentRelationState.loading ? 'Retrying related anime…' : 'Retry related anime'}
+            </Button>
+          </div> : currentRelationState.retried ? <p className="border-t border-[var(--fs-line)] py-6 text-sm text-[var(--fs-muted)]" id="related-retry-status" ref={recoveredEmptyRef} role="status" tabIndex={-1}>No related anime were found.</p> : null}
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="anime-about-heading">
             <div className="max-w-5xl">
               <SectionHeading id="anime-about-heading" title={`About ${detail.titles.preferred}`} />
@@ -471,12 +524,12 @@ export function AnimeDetailScreen({ airing, detail, relations }: {
               <AnimeDetailFacts detail={detail} />
             </div>
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="anime-cast-heading">
+          {detail.characters.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="anime-cast-heading">
             <SectionHeading id="anime-cast-heading" title="Characters & voice actors" />
             <AnimeCastRail characters={detail.characters} />
-          </section>
+          </section> : null}
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="anime-reviews-heading">
-            <SectionHeading id="anime-reviews-heading" title="Member reviews" />
+            <SectionHeading id="anime-reviews-heading" title="Reviews" />
             <TitleReviews
               id={detail.anilistId}
               kind="anime"

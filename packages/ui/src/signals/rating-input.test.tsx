@@ -10,11 +10,11 @@ describe('rating input', () => {
     const { container } = render(<RatingInput label="Your rating" name="rating" onChange={onChange} value={7} />)
 
     expect(screen.getByRole('radiogroup', { name: 'Your rating' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Rate 7 out of 10' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Rate 3.5 out of 5 stars' })).toBeChecked()
     expect(screen.getAllByRole('radio')).toHaveLength(10)
     expect(container.querySelectorAll('[data-consumit-rating-input] [role="presentation"]')).toHaveLength(5)
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Rate 9 out of 10' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Rate 4.5 out of 5 stars' }))
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange).toHaveBeenCalledWith(9)
   })
@@ -23,7 +23,7 @@ describe('rating input', () => {
     const onChange = vi.fn()
     render(<RatingInput label="Your rating" name="rating" onChange={onChange} value={8} />)
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Rate 8 out of 10' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Rate 4 out of 5 stars' }))
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange).toHaveBeenCalledWith(null)
   })
@@ -36,13 +36,28 @@ describe('rating input', () => {
 
     expect(overlays()).toEqual(['0%', '0%', '0%', '0%', '0%'])
 
-    const target = screen.getByRole('radio', { name: 'Rate 7 out of 10' }).closest('label')
+    const target = screen.getByRole('radio', { name: 'Rate 3.5 out of 5 stars' }).closest('label')
     if (!target) throw new Error('Expected a half-star label.')
     await user.hover(target)
     expect(overlays()).toEqual(['100%', '100%', '100%', '50%', '0%'])
     expect(target.closest('[role="presentation"]')?.className).toMatch(/scale-110/)
 
     await user.unhover(target)
+    expect(overlays()).toEqual(['0%', '0%', '0%', '0%', '0%'])
+  })
+
+  it('clears the hover preview after a choice until the parent confirms it', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<RatingInput label="Your rating" name="rating" onChange={vi.fn()} value={null} />)
+    const overlays = () => [...container.querySelectorAll('[data-consumit-rating-input] span[style]')]
+      .map((element) => (element as HTMLElement).style.width)
+    const target = screen.getByRole('radio', { name: 'Rate 5 out of 5 stars' }).closest('label')
+    if (!target) throw new Error('Expected a half-star label.')
+
+    await user.hover(target)
+    expect(overlays()).toEqual(['100%', '100%', '100%', '100%', '100%'])
+    await user.click(target)
+
     expect(overlays()).toEqual(['0%', '0%', '0%', '0%', '0%'])
   })
 })

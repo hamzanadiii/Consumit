@@ -101,7 +101,7 @@ describe('Rigel adapter', () => {
 
   it('reports unavailable when the lookup answers a server error', async () => {
     const { http } = fixture({ api: { status: 403, body: { success: false } } })
-    expect(await createRigelProvider(http, now).resolve(movie, new AbortController().signal)).toMatchObject({ ok: false, code: 'unavailable' })
+    expect(await createRigelProvider(http, now).resolve(movie, new AbortController().signal)).toMatchObject({ ok: false, code: 'blocked' })
   })
 
   it('rejects a ref Rigel cannot address', async () => {

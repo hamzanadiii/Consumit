@@ -1,5 +1,6 @@
 import type { SubtitleHttp } from './http.ts'
 import { normLang } from './lang.ts'
+import { matchesSubtitleEpisode } from './selection-policy.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
 
 // SubSource (subsource.net) — keyless, movies (+TV/anime best-effort).
@@ -61,13 +62,19 @@ export function createSubSourceProvider(http: SubtitleHttp): SubtitleSearchProvi
       if (!page) return []
       const out: RawSubtitle[] = []
       const wantLangs = (query.langs?.length ? query.langs : []).map((lang) => lang.toLowerCase())
-      const epTag = isSeries ? new RegExp(`s0*${Number(query.season ?? 1)}e0*${Number(query.episode ?? 1)}`, 'i') : null
       for (const match of page.matchAll(/<a[^>]+href="(\/subtitle\/[^"]+\/([a-z]+)\/(\d+))"[^>]*>([\s\S]{0,300}?)<\/a>/g)) {
         const lang = normLang(match[2] ?? '')
         if (wantLangs.length && !wantLangs.includes(lang)) continue
         const release = (match[4] ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
-        if (epTag && !epTag.test(release)) continue
-        out.push({ url: `${SITE}${match[1]}`, lang, label: release || lang, format: 'other', provider: 'subsource' })
+        if (isSeries && !matchesSubtitleEpisode(release, query)) continue
+        out.push({
+          url: `${SITE}${match[1]}`,
+          lang,
+          label: release || lang,
+          ...(release ? { release } : {}),
+          format: 'other',
+          provider: 'subsource',
+        })
       }
       // Resolve every returned match in bounded batches. Discovery pages the
       // resulting candidates; no language is silently trimmed here.
@@ -94,6 +101,7 @@ export function createSubSourceProvider(http: SubtitleHttp): SubtitleSearchProvi
             url: result.value,
             lang: entry.lang,
             label: entry.label,
+            ...(entry.release ? { release: entry.release } : {}),
             format: 'zip',
             provider: 'subsource',
             needsExtract: true,

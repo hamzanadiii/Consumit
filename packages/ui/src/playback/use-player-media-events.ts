@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 
 import type { DirectMediaSource } from './media-source'
 import { cueTextAt, type SubtitleCue } from './subtitle-sync'
@@ -8,7 +8,6 @@ export function usePlayerMediaEvents({
   videoRef,
   mediaSrc,
   source,
-  children,
   captionsOn,
   selectedSubtitle,
   subtitleCues,
@@ -17,7 +16,6 @@ export function usePlayerMediaEvents({
   videoRef: RefObject<HTMLVideoElement | null>
   mediaSrc?: string | undefined
   source?: DirectMediaSource | undefined
-  children?: ReactNode
   captionsOn: boolean
   selectedSubtitle: string
   subtitleCues: readonly SubtitleCue[]
@@ -44,7 +42,7 @@ export function usePlayerMediaEvents({
     } catch {
       /* subtitle tracks are enhancement-only */
     }
-  }, [captionsOn, children, selectedSubtitle, source, videoRef])
+  }, [captionsOn, selectedSubtitle, source, videoRef])
 
   useEffect(() => {
     const video = videoRef.current

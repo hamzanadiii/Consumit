@@ -24,7 +24,7 @@ const CONTENT_SECURITY_POLICY = [
     'https://www.googletagmanager.com https://www.gstatic.com https://www.highrevenueformat.com https://pl29474263.profitableratecpmnetwork.com',
   ].join(' '),
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://image.tmdb.org https://www.themoviedb.org https://artworks.thetvdb.com https://s4.anilist.co https://api.dicebear.com https://www.highrevenueformat.com",
+  "img-src 'self' data: blob: https://image.tmdb.org https://www.themoviedb.org https://artworks.thetvdb.com https://s4.anilist.co https://media.kitsu.app https://cdn.myanimelist.net https://api.dicebear.com https://www.highrevenueformat.com",
   "font-src 'self'",
   [
     "connect-src 'self'",
@@ -56,6 +56,10 @@ const CONTENT_SECURITY_POLICY = [
 const nextConfig: NextConfig = {
   devIndicators: false,
   ...(process.env.CONSUMIT_NEXT_DIST_DIR ? { distDir: process.env.CONSUMIT_NEXT_DIST_DIR } : {}),
+  // The isolated browser fixture must not replay a stale persisted route graph.
+  ...(process.env.CONSUMIT_NEXT_DIST_DIR === '.next-experience'
+    ? { experimental: { turbopackFileSystemCacheForDev: false } }
+    : {}),
   output: 'standalone',
   outputFileTracingRoot: `${process.cwd()}/../..`,
   async headers() {
@@ -88,6 +92,21 @@ const nextConfig: NextConfig = {
       {
         hostname: 's4.anilist.co',
         pathname: '/file/anilistcdn/**',
+        protocol: 'https',
+      },
+      {
+        hostname: 'media.kitsu.app',
+        pathname: '/anime/**',
+        protocol: 'https',
+      },
+      {
+        hostname: 'media.kitsu.app',
+        pathname: '/episodes/**',
+        protocol: 'https',
+      },
+      {
+        hostname: 'cdn.myanimelist.net',
+        pathname: '/images/**',
         protocol: 'https',
       },
     ],

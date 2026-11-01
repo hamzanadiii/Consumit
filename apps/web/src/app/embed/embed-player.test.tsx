@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { EmbedEmptyState } from './embed-empty'
@@ -34,6 +34,25 @@ describe('EmbedPlayer', () => {
     )
     const video = await screen.findByLabelText('Dune: Part Two player')
     expect(video).not.toHaveAttribute('autoplay')
+  })
+
+  it('turns plain media observations into compatible parent events', async () => {
+    const postMessage = vi.fn()
+    const originalParent = window.parent
+    Object.defineProperty(window, 'parent', { configurable: true, value: { postMessage } })
+    try {
+      render(<EmbedPlayer sources={[source]} title="Dune: Part Two" videoId={693134} />)
+      const video = await screen.findByLabelText('Dune: Part Two player')
+      Object.defineProperty(video, 'currentTime', { configurable: true, value: 12.5 })
+      Object.defineProperty(video, 'duration', { configurable: true, value: 90 })
+      fireEvent.play(video)
+      expect(postMessage).toHaveBeenCalledWith(
+        { type: 'PLAYER_EVENT', data: { currentTime: 12.5, duration: 90, event: 'play', video_id: 693134 } },
+        '*',
+      )
+    } finally {
+      Object.defineProperty(window, 'parent', { configurable: true, value: originalParent })
+    }
   })
 })
 

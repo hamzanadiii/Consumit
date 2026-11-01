@@ -28,7 +28,7 @@ export type MediaTransport = (url: string, hosts: readonly string[], headers: Re
 
 /** Bounded DNS reuse avoids multiplying uncancellable OS lookups across
  * concurrent adapter hops. Every socket still pins a validated public IP. */
-export function createMediaTransport(): MediaTransport {
+export function createMediaTransport(options: { execution?: 'local' | 'cloudflare-only' } = {}): MediaTransport {
   const cached = new Map<string, { addresses: LookupAddress[]; until: number }>()
   const pending = new Map<string, Promise<{ address: string; family: number }[]>>()
   function addressesFor(host: string): Promise<{ address: string; family: number }[]> {
@@ -47,6 +47,8 @@ export function createMediaTransport(): MediaTransport {
     return work
   }
   return async (value, hosts, headers, signal, init, patterns) => {
+    // This transport is the shared provider boundary for playback, captions,
+    // audio, probes and diagnostics. Canonical catalog metadata stays on API.
     let current = value
     let forwarded = { ...headers }
     let method = init?.method ?? 'GET'
@@ -55,6 +57,7 @@ export function createMediaTransport(): MediaTransport {
       if (!allowedMediaUrl(current, hosts, patterns)) throw new Error('Blocked media destination.')
       signal.throwIfAborted()
       const url = new URL(current)
+      if ((options.execution ?? process.env.PROVIDER_EXECUTION_MODE ?? (process.env.NODE_ENV === 'production' ? 'cloudflare-only' : 'local')) === 'cloudflare-only' && url.hostname !== 'api.themoviedb.org') throw new Error('VPS provider egress denied.')
       let dnsTimer: ReturnType<typeof setTimeout> | undefined
       let abort: (() => void) | undefined
       const addresses = await Promise.race([
@@ -71,7 +74,10 @@ export function createMediaTransport(): MediaTransport {
       })
       signal.throwIfAborted()
       if (!addresses.length || addresses.some((entry) => !publicAddress(entry.address))) throw new Error('Blocked media address.')
-      const address = addresses[0]!
+      // Cloudflare-fronted providers publish AAAA first, while this host has
+      // no working IPv6 route. Pinning the first answer stalled every request
+      // until timeout; prefer IPv4 and keep IPv6 only for IPv6-only hosts.
+      const address = addresses.find((entry) => entry.family === 4) ?? addresses[0]!
       const response = await new Promise<MediaResponse>((resolve, reject) => {
         const req = request(url, {
           method, signal, headers: { ...forwarded, 'accept-encoding': 'identity' },
@@ -81,9 +87,10 @@ export function createMediaTransport(): MediaTransport {
           },
         }, (res) => {
           const resultHeaders = new Headers()
+          const safeHeader = (value: string) => Array.from(value).filter((character) => character.charCodeAt(0) <= 0xff).join('')
           for (const [key, entry] of Object.entries(res.headers)) {
-            if (Array.isArray(entry)) entry.forEach((item) => resultHeaders.append(key, item))
-            else if (entry !== undefined) resultHeaders.set(key, entry)
+            if (Array.isArray(entry)) entry.forEach((item) => resultHeaders.append(key, safeHeader(item)))
+            else if (entry !== undefined) resultHeaders.set(key, safeHeader(entry))
           }
           // Upstreams (notably Cloudflare-fronted JSON APIs) compress even when
           // asked for identity. Decode the known codings so resolution documents

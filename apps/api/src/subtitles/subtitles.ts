@@ -1,3 +1,4 @@
+import { createCloudflareSubtitleService } from './cloudflare-service.ts'
 import { playbackTrackSchema } from '@consumit/contracts'
 import type { PlaybackStore } from '../playback/state.ts'
 import type { TitleMetadataResolver } from '../playback/tmdb-metadata.ts'
@@ -11,8 +12,10 @@ import type { TmdbEpisodeCoordinates } from './tmdb-episode.ts'
 import type { SubtitleSearchProvider } from './types.ts'
 import type { SubtitleQuery } from './types.ts'
 import { z } from 'zod'
+import { isSubtitleProviderEligible, requiresExactEpisodeArchiveMatch } from './selection-policy.ts'
 
 const SEARCH_CACHE_TTL_SECONDS = 3600
+const SEARCH_CACHE_VERSION = 3
 
 /** Optional identity enrichment must not prevent ID-keyed subtitle discovery. */
 async function optionalLookup<T>(lookup: (signal: AbortSignal) => Promise<T>, signal: AbortSignal): Promise<T | null> {
@@ -81,6 +84,7 @@ export type AnimeTitleLookup = (anilistId: number) => Promise<{ title: string }>
 
 export function createSubtitleService(deps: {
   providers: readonly SubtitleSearchProvider[]
+  edge?: { origin: string; secret: string } | undefined
   /** Canonical TMDB title/year/imdb identity for movies and series. Without
    *  it, title-keyed providers skip and only tmdbId-keyed ones answer. */
   metadata?: TitleMetadataResolver | undefined
@@ -101,6 +105,7 @@ export function createSubtitleService(deps: {
   catalog?: SubtitleCatalog | undefined
   requirements?: Readonly<Record<string, string>> | undefined
 }): SubtitleService {
+  deps = { ...deps, providers: deps.providers.filter(provider => isSubtitleProviderEligible(provider.id)) }
   const files = deps.files ?? createStoreFileStore(deps.store)
   /** Best-effort TMDB identity for a canonical anime episode. Bounded so a
    *  slow mapping never holds discovery; misses just narrow the provider set
@@ -123,6 +128,7 @@ export function createSubtitleService(deps: {
   }
   async function usableTracks(tracks: readonly ServedSubtitle[]): Promise<ServedSubtitle[]> {
     const checked = await Promise.all(tracks.map(async (track) => {
+      if (!isSubtitleProviderEligible(track.provider)) return null
       const key = servedStorageKey(track.url)
       return !key || await files.getVtt(key) ? track : null
     }))
@@ -168,6 +174,7 @@ export function createSubtitleService(deps: {
       ...(langs.length ? { langs } : {}),
     }
   }
+  if (deps.edge) return createCloudflareSubtitleService({ ...deps.edge, query: queryFor })
   const discovery = createSubtitleDiscovery({
     providers: deps.providers, store: deps.store, files, origin: deps.origin, catalog: deps.catalog,
     query: (ref, signal, preferredLanguages) => queryFor(ref, signal, preferredLanguages), requirements: deps.requirements,
@@ -180,7 +187,7 @@ export function createSubtitleService(deps: {
       const wanted = cleanQueryLangs(langs?.join(',')).slice(0, 3)
       // Repeat views resolve instantly: the converted files behind these
       // URLs live 7 days, so an hour-old track list is always playable.
-      const cacheKey = `subsearch:v2:${ref.kind}:${ref.id}:${season}:${episode}:${wanted.join('+') || 'en'}`
+      const cacheKey = `subsearch:v${SEARCH_CACHE_VERSION}:${ref.kind}:${ref.id}:${season}:${episode}:${wanted.join('+') || 'en'}`
       try {
         const cached = await deps.store.get(cacheKey)
         if (cached) {
@@ -198,7 +205,7 @@ export function createSubtitleService(deps: {
       // without hammering subtitle upstreams for every hourly expiry.
       if (deps.catalog) {
         try {
-          const rows = await deps.catalog.find(ref, [])
+          const rows = (await deps.catalog.find(ref, [])).filter(row => !requiresExactEpisodeArchiveMatch(row.provider))
           if (rows.length) {
             const cataloged = await usableTracks(toServedTracks(rows, deps.origin))
             if (!cataloged.length) throw new Error('Catalog files expired.')
@@ -265,6 +272,7 @@ export function createSubtitleService(deps: {
           const inputs = (
             await Promise.all(
               tracks.map(async (track) => {
+                if (requiresExactEpisodeArchiveMatch(track.provider)) return null
                 const storageKey = servedStorageKey(track.url)
                 if (!storageKey) return null
                 const vtt = await files.getVtt(storageKey)

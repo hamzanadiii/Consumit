@@ -1,6 +1,6 @@
 import { PrismaClient, type Prisma } from '../../generated/prisma/client.js'
 import { episodeView } from '../releases/repository.ts'
-import { avatarStyleSchema, defaultProfileSectionVisibility, MAX_MEMBER_FAVORITES, experiencePreferencesSchema, profileSectionVisibilitySchema } from '@consumit/contracts'
+import { avatarStyleSchema, defaultProfileSectionVisibility, MAX_MEMBER_FAVORITES, experiencePreferencesSchema, profileSectionVisibilitySchema, tasteRecommendationResponseSchema } from '@consumit/contracts'
 
 import type { IdentityRepository, IdentityRecord } from './repository.ts'
 
@@ -23,6 +23,7 @@ function toRecord(row: IdentityRow): IdentityRecord {
     createdAt: row.createdAt,
     email: row.email,
     emailVerifiedAt: row.emailVerifiedAt,
+    googleSubject: row.googleSubject,
     id: row.id,
     passwordHash: row.credential?.passwordHash ?? null,
     profile: {
@@ -55,7 +56,11 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       const member = await prisma.member.findFirst({ where: { id: memberId, status: 'ACTIVE' } })
       if (!member) return null
       return prisma.$transaction(async (tx) => {
-        await tx.credential.update({ data: { passwordHash }, where: { memberId } })
+        await tx.credential.upsert({
+          create: { memberId, passwordHash },
+          update: { passwordHash },
+          where: { memberId },
+        })
         return toRecord(await tx.member.update({
           data: { authVersion: { increment: 1 } },
           include: includeIdentity,
@@ -72,11 +77,12 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
           if (alias || profile) throw new Error('IDENTITY_USERNAME_CONFLICT')
           return toRecord(await tx.member.create({
             data: {
-              credential: { create: { passwordHash: input.passwordHash } },
+              ...(input.passwordHash ? { credential: { create: { passwordHash: input.passwordHash } } } : {}),
               createdAt: input.createdAt,
               email: input.email,
               emailVerifiedAt: input.createdAt,
-              profile: { create: { username: input.username, usernameChangedAt: input.createdAt } },
+              googleSubject: input.googleSubject ?? null,
+              profile: { create: { displayName: input.displayName ?? null, username: input.username, usernameChangedAt: input.createdAt } },
             },
             include: includeIdentity,
           }))
@@ -88,10 +94,11 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
       }
     },
     async exportMember(memberId, exportedAt) {
-      const [preference, notifications, experience] = await Promise.all([
+      const [preference, notifications, experience, titleRecommendations] = await Promise.all([
         prisma.notificationPreference.findUnique({ where: { memberId } }),
         prisma.releaseNotification.findMany({ where: { memberId }, include: { episode: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
         prisma.$queryRaw<{ preferences: unknown }[]>`SELECT "preferences" FROM "ExperiencePreference" WHERE "memberId"=${memberId}`,
+        prisma.tasteRecommendation.findMany({ where: { OR: [{ senderId: memberId }, { recipientId: memberId }] }, include: { sender: { select: { profile: { select: { username: true } } } }, recipient: { select: { profile: { select: { username: true } } } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
       ])
       const [row, watched, diary, saved, favorites, lists, savedLists, ratings, reviews, watchHistory, hiddenContinue, recommendationDismissals] = await Promise.all([
         prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } }),
@@ -122,6 +129,17 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
         experiencePreferences: experience[0] ? experiencePreferencesSchema.parse(experience[0].preferences) : null,
         notificationPreferences: { newEpisodes: Boolean(preference?.enabledAt) },
         notifications: notifications.map(row => ({ id: row.id, episode: episodeView(row.episode, row.checkedAt), createdAt: row.createdAt.toISOString(), readAt: row.readAt?.toISOString() ?? null })),
+        titleRecommendations: titleRecommendations.map(row => {
+          const direction = row.senderId === memberId ? 'sent' as const : 'received' as const
+          return {
+            id: row.id,
+            direction,
+            peerUsername: direction === 'sent' ? row.recipient.profile?.username ?? null : row.sender.profile?.username ?? null,
+            title: { kind: catalogKind(row.catalogKind), id: row.tmdbId },
+            response: row.response ? tasteRecommendationResponseSchema.parse(row.response.toLowerCase().replaceAll('_', '-')) : null,
+            createdAt: row.createdAt.toISOString(),
+          }
+        }),
         library: {
           diary: diary.map((item) => ({ ...(item.episode > 0 ? { ...(item.catalogKind === 'SERIES' || item.season > 0 ? { season: item.season } : {}), episode: item.episode } : {}), entryId: item.id, id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: calendarDay(item.watchedOn) })),
           favorites: favorites.map((item, index) => ({ id: item.tmdbId, kind: catalogKind(item.catalogKind), origin: dataOrigin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
@@ -182,6 +200,18 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
     async findByEmail(email) {
       const row = await prisma.member.findUnique({ include: includeIdentity, where: { email } })
       return row ? toRecord(row) : null
+    },
+    async findByGoogleSubject(googleSubject) {
+      const row = await prisma.member.findUnique({ include: includeIdentity, where: { googleSubject } })
+      return row ? toRecord(row) : null
+    },
+    async linkGoogleSubject(memberId, googleSubject) {
+      await prisma.member.updateMany({
+        data: { googleSubject },
+        where: { id: memberId, status: 'ACTIVE', OR: [{ googleSubject: null }, { googleSubject }] },
+      })
+      const row = await prisma.member.findFirst({ include: includeIdentity, where: { id: memberId, status: 'ACTIVE' } })
+      return row?.googleSubject === googleSubject ? toRecord(row) : null
     },
     async findById(memberId) {
       const row = await prisma.member.findUnique({ include: includeIdentity, where: { id: memberId } })
@@ -263,6 +293,7 @@ export function createPostgresIdentityRepository(prisma: PrismaClient): Identity
             deletedAt: new Date(),
             email: `deleted+${memberId}@invalid.consumit`,
             emailVerifiedAt: null,
+            googleSubject: null,
             status: 'DELETED',
           },
           where: { id: memberId },

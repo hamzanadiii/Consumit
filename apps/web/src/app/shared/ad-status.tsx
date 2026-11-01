@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, PreferenceRow, Toggle } from '@consumit/ui'
 import { useOptionalExperience } from '../experience/experience-provider'
 
@@ -43,11 +43,13 @@ export function useAdStatus() {
 }
 export function AdStatus() {
   const ads = useAdStatus()
+  const retryRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => { if (ads.error) retryRef.current?.focus() }, [ads.error])
   const label = ads.ready ? ads.enabled ? 'On' : 'Off' : 'Loading'
   return <div>
     <PreferenceRow label="Ad status" description="Pop-under ads are On by default. Turn them Off to stop advertising windows on this device. Your choice saves immediately and syncs when signed in."
       control={<div className="flex items-center gap-3"><span aria-live="polite" className="text-sm text-copy">{label}</span><Toggle checked={ads.enabled} disabled={!ads.ready} label={`Ad status: ${label}`} onCheckedChange={next => { void ads.setEnabled(next).catch(() => {}) }} /></div>} />
     <p className="max-w-prose pb-4 text-xs leading-5 text-muted">Pop-unders are limited to four per rolling 30 minutes, with at least five minutes between them. Turning ads Off stops new pop-unders; Watch keeps playing. Some external players may still show their own ads.</p>
-    {ads.error ? <div className="flex flex-wrap items-center gap-2 pb-4 text-xs text-copy" role="status"><p>{ads.error}</p><Button aria-label="Retry ad preference sync" onClick={() => { void ads.retry?.().catch(() => {}) }} size="sm" variant="secondary">Retry sync</Button></div> : null}
+    {ads.error ? <div className="flex flex-wrap items-center gap-2 pb-4 text-xs text-copy" role="status"><p>{ads.error}</p><Button aria-label="Retry ad preference sync" className="min-h-11 focus:ring-2 focus:ring-orange" onClick={() => { void ads.retry?.().catch(() => {}) }} ref={retryRef} size="sm" variant="secondary">Retry sync</Button></div> : null}
   </div>
 }

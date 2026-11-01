@@ -15,13 +15,14 @@ export default function Error({ error, retry }: { error: Error & { digest?: stri
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto flex min-h-[60vh] w-full max-w-[90rem] items-center py-10">
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto flex min-h-[60vh] w-full max-w-[90rem] items-center py-10">
         <ErrorState
           action={<div className="flex flex-wrap gap-3"><Button onClick={retry}><RotateCcw aria-hidden="true" /> Try again</Button><Link className={buttonVariants({ variant: 'secondary' })} href="/"><ArrowLeft aria-hidden="true" /> Back to Home</Link></div>}
           className="w-full"
-          description="This page could not load. Try again, or return to Home to keep browsing."
+          description="We couldn’t load this page right now. Try again, or return to Home to keep browsing."
           detail={error.digest ? `Reference: ${error.digest}` : undefined}
-          title="Let's get you back to watching"
+          headingLevel={1}
+          title="This page hit a snag"
         />
       </main>
     </FilScreenShell>

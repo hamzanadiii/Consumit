@@ -46,23 +46,19 @@ describe('Cloudflare resolver adapter', () => {
     expect(fetcher.mock.calls[0]?.[0].origin).toBe('https://regional.example')
     expect(native).not.toHaveBeenCalled()
   })
-  it('uses only the explicitly reviewed Miami API lookup route while preserving the original adapter after wrapping', async () => {
+  it('keeps Miami lookup on Cloudflare even when a stale API exception is present', async () => {
     const native = vi.fn(async () => ({ ok: true as const, sources: [{ key: 'miami', url: 'https://moon.zenoak.top/master.m3u8', type: 'hls' as const, expiresAt: '2099-01-01T00:00:00.000Z', headers: {}, subtitles: [] }] }))
     const fetcher = vi.fn(async () => Response.json({ ok: false, code: 'unavailable', retryable: true }))
     const metadata = vi.fn(async () => ({}))
     const provider = { adapter: { id: 'wecollege-miami', resolve: native }, deliveryMode: 'relay', workerConfig: { id: 'wecollege-miami', adapter: 'wecollege' } } as unknown as ProviderRegistration
     provider.adapter = createCloudflareResolverAdapter(provider, {
-      config: { origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret', apiProviders: ['wecollege-miami'] },
+      config: Object.assign({ origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret', cloudflareOnly: true }, { apiProviders: ['wecollege-miami'] }),
       currentConfig: current => ({ ...current.workerConfig }), metadata, fetch: fetcher,
     })
     const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
-    expect(await provider.adapter.resolve(input, new AbortController().signal)).toMatchObject({ ok: true })
-    expect(native).toHaveBeenCalledTimes(1)
-    expect(fetcher).not.toHaveBeenCalled(); expect(metadata).not.toHaveBeenCalled()
-    provider.deliveryMode = 'direct'
-    await provider.adapter.resolve(input, new AbortController().signal)
-    expect(fetcher).toHaveBeenCalledTimes(1)
-    expect(native).toHaveBeenCalledTimes(1)
+    expect(await provider.adapter.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'unavailable' })
+    expect(native).not.toHaveBeenCalled()
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(metadata).toHaveBeenCalledTimes(1)
   })
   it('keeps Aphrodite lookup on the Cloudflare Resolver even when a broader exception config is supplied', async () => {
     const native = vi.fn()
@@ -70,7 +66,7 @@ describe('Cloudflare resolver adapter', () => {
     const metadata = vi.fn(async () => ({}))
     const provider = { adapter: { id: 'aphrodite', resolve: native }, deliveryMode: 'relay', workerConfig: { id: 'aphrodite', adapter: 'aphrodite' } } as unknown as ProviderRegistration
     provider.adapter = createCloudflareResolverAdapter(provider, {
-      config: { origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret', apiProviders: ['wecollege-miami'] },
+      config: { origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret' },
       currentConfig: current => ({ ...current.workerConfig }), metadata, fetch: fetcher,
     })
     const input = { ref: { kind: 'movie' as const, id: 550 }, region: 'US', audioLanguage: 'en' }
@@ -90,7 +86,7 @@ describe('Cloudflare resolver adapter', () => {
       workerConfig: { id: 'vidzen', adapter: 'vidzen', mediaHosts: ['vidzen.fun'] },
     } as unknown as ProviderRegistration
     const adapter = createCloudflareResolverAdapter(provider, {
-      config: { origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret', apiProviders: ['wecollege-miami'] },
+      config: { origin: 'https://resolver.example', secret: 'secret-secret-secret-secret-secret-secret' },
       currentConfig: current => ({ ...current.workerConfig, id: current.adapter.id, regions: [...current.approvedRegions], mediaHosts: [...current.mediaHosts] }),
       metadata: async () => ({ title: 'Fight Club', year: 1999 }),
       fetch,

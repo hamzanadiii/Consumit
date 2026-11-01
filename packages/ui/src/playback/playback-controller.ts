@@ -10,10 +10,14 @@ export type ControllerSnapshot = EngineTracks & {
   audioNotice?: string | undefined
   subtitleNotice?: string | undefined
 }
-export type ControllerEvent = { type: 'started' | 'buffer-start' | 'buffer-end' | 'error' | 'ended'; position: number; elapsedMs?: number }
+export type ControllerEvent = { type: 'started' | 'advanced' | 'seeked' | 'resumed' | 'buffer-start' | 'buffer-end' | 'error' | 'ended'; position: number; elapsedMs?: number }
 
 // Pending seeks have their own recovery budget; ordinary stalls keep the shorter one.
 const SEEK_TIMEOUT_MS = 30_000
+// Slow direct CDNs can spend well over ten seconds before the first decoded
+// frame (VidBolt measured 14.32s); startup uses its own budget and never
+// borrows the shorter mid-playback stall watchdog.
+const STARTUP_TIMEOUT_MS = 20_000
 
 /** One controller per media element; async engine loads are serialized and generation-guarded. */
 export function createPlaybackController(video: HTMLVideoElement, callbacks: {
@@ -34,7 +38,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     const current = generation
     startupTimer = setTimeout(() => {
       if (!destroyed && current === generation && !snapshot.needsGesture && snapshot.phase !== 'failed') fatal('network', 'timeout')
-    }, 12000)
+    }, STARTUP_TIMEOUT_MS)
   }
   let queue = Promise.resolve()
   let tracks: HTMLTrackElement[] = []
@@ -126,6 +130,8 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   let lastPlaybackProgressAt = performance.now()
   let lastPlaybackPosition = 0
   let seekDeadlineAt = 0
+  let seekForProof = false
+  let resumeForProof = false
   let firstFrame = false
   let snapshot: ControllerSnapshot = { phase: 'loading', needsGesture: false, qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [], quality: 'auto', audioTrack: '', subtitleTrack: 'off' }
   function update(value: Partial<ControllerSnapshot>) { if (destroyed) return; snapshot = { ...snapshot, ...value }; callbacks.change(snapshot) }
@@ -155,8 +161,11 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
   }
   function watchForStall() {
     clearTimeout(recoveryTimer)
+    // Start-up is bounded by watchStartup; treating pre-frame waiting as a
+    // playback stall aborts slow sources before they can present a frame.
+    if (!firstFrame) return
     const inspect = () => {
-      if (destroyed || video.paused || snapshot.phase !== 'buffering') return
+      if (destroyed || !firstFrame || video.paused || snapshot.phase !== 'buffering') return
       if (seekDeadlineAt) {
         if (performance.now() >= seekDeadlineAt) { fatal('network', 'timeout'); return }
         recoveryTimer = setTimeout(inspect, 1000)
@@ -258,10 +267,11 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     catch { return Promise.resolve(finish(false)) }
   }
   const listeners: [string, EventListener][] = [
-    ['playing', () => { seekDeadlineAt = 0; clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (wasBuffering) event('buffer-end') }],
+    ['playing', () => { seekDeadlineAt = 0; clearTimeout(startupTimer); clearTimeout(recoveryTimer); const wasBuffering = snapshot.phase === 'buffering'; update({ phase: 'playing', needsGesture: false }); if (!firstFrame) { firstFrame = true; event('started') } else if (resumeForProof) { resumeForProof = false; event('resumed') } else if (wasBuffering) event('buffer-end') }],
     ['pause', () => { seekDeadlineAt = 0; if (snapshot.phase !== 'loading' && snapshot.phase !== 'switching') clearTimeout(startupTimer); clearTimeout(recoveryTimer); if (snapshot.phase !== 'switching' && snapshot.phase !== 'loading' && snapshot.phase !== 'failed') update({ phase: 'paused' }) }],
     ['waiting', () => { if (!video.paused && snapshot.phase !== 'failed') { if (snapshot.phase !== 'buffering') { bufferedAt = performance.now(); lastPlaybackProgressAt = bufferedAt; lastPlaybackPosition = video.currentTime; update({ phase: 'buffering' }); event('buffer-start') } watchForStall() } }],
     ['seeking', () => {
+      if (firstFrame) seekForProof = true
       clearTimeout(recoveryTimer)
       if (video.paused || snapshot.phase === 'failed') return
       seekDeadlineAt = performance.now() + SEEK_TIMEOUT_MS
@@ -272,6 +282,7 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     ['seeked', () => {
       seekDeadlineAt = 0
       lastPlaybackProgressAt = performance.now(); lastPlaybackPosition = video.currentTime
+      if (firstFrame && seekForProof) { seekForProof = false; resumeForProof = true; event('seeked') }
     }],
     ['timeupdate', () => { if (video.currentTime > lastPlaybackPosition + 0.1) { lastPlaybackPosition = video.currentTime; lastPlaybackProgressAt = performance.now() } }],
     ['ended', () => { clearTimeout(startupTimer); clearTimeout(recoveryTimer); update({ phase: 'ended' }); event('ended') }],
@@ -397,6 +408,11 @@ export function createPlaybackController(video: HTMLVideoElement, callbacks: {
     },
     audio,
     subtitle,
+    resetSubtitle() {
+      manualSubtitle = undefined
+      selectSubtitle('off')
+      update({ subtitleNotice: undefined })
+    },
     /** Replace the external caption set without reloading media: late tracks
      *  (e.g. other providers' subtitles arriving after first frame) join the
      *  menu live. The current selection survives when still offered. */

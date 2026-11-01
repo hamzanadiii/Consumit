@@ -52,4 +52,20 @@ describe('content cards', () => {
     expect(screen.getByRole('button', { name: 'Save Dune' })).toBeInTheDocument()
     expect(screen.getByText('8.2')).toBeInTheDocument()
   })
+
+  it('puts the primary title link before optional card actions in keyboard order', () => {
+    const { container } = render(
+      <WatchCard
+        bookmark={<button type="button">Save Dune</button>}
+        href="/watch/movie/693134"
+        title="Dune: Part Two"
+        titleHref="/title/693134"
+      />,
+    )
+    const card = container.querySelector('[data-consumit-watch-card]')
+    const focusableNames = Array.from(card?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? [])
+      .map((element) => element.getAttribute('aria-label') ?? element.textContent?.trim())
+
+    expect(focusableNames).toEqual(['Dune: Part Two', 'Save Dune'])
+  })
 })

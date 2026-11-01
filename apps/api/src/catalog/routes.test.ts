@@ -15,6 +15,7 @@ import type { AnimeCatalog } from './anilist/adapter.ts'
 import type { Catalog } from './catalog.ts'
 import { createFakeCatalog } from './fake-catalog.ts'
 import { AnimeError } from '../anime/errors.ts'
+import { createTestAnimeCapability } from '../anime/test-capability.ts'
 
 const summary: CatalogTitleSummary = {
   backdropUrl: 'https://image.tmdb.org/t/p/w1280/backdrop.jpg',
@@ -217,7 +218,7 @@ describe('catalog routes', () => {
   it('merges anime refs from AniList into the catalog batch beside TMDB refs', async () => {
     const catalog = fakeCatalog()
     const animeCatalog = fakeAnimeCatalog()
-    const app = await buildApp({ animeCatalog, catalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog), catalog })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/titles/batch?refs=movie:550,anime:1' })
@@ -251,7 +252,7 @@ describe('catalog routes', () => {
   it('serves anime search from AniList as catalog summaries without touching TMDB', async () => {
     const catalog = fakeCatalog()
     const animeCatalog = fakeAnimeCatalog()
-    const app = await buildApp({ animeCatalog, catalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog), catalog })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/titles/search?q=example&kind=anime' })
@@ -268,7 +269,7 @@ describe('catalog routes', () => {
     const catalog = fakeCatalog()
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.batch).mockResolvedValueOnce({ items: [], missing: [999] })
-    const app = await buildApp({ animeCatalog, catalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog), catalog })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/titles/batch?refs=anime:999' })
@@ -284,7 +285,7 @@ describe('catalog routes', () => {
   it('fails an anime adapter outage as retryable and proves anime batch output against the contract', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.batch).mockRejectedValueOnce(new AnimeError('ANILIST_UNAVAILABLE', 'AniList is unavailable.', { retryable: true }))
-    const app = await buildApp({ animeCatalog, catalog: fakeCatalog() })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog), catalog: fakeCatalog() })
     openApps.push(app)
 
     const outage = await app.inject({ method: 'GET', url: '/v1/titles/batch?refs=anime:1' })
@@ -310,7 +311,7 @@ describe('catalog routes', () => {
 
   it('names anime as a valid batch reference in the invalid-query message', async () => {
     const catalog = fakeCatalog()
-    const app = await buildApp({ animeCatalog: fakeAnimeCatalog(), catalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog()), catalog })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/titles/batch?refs=novel:1' })

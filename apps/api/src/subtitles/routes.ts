@@ -1,4 +1,6 @@
-import { playbackRefSchema, subtitleDiscoveryResponseSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
+import { createHash } from 'node:crypto'
+import type { Playback } from '../playback/playback.ts'
+import { playbackRefSchema, subtitleCorrectionScopeSchema, subtitleDiscoveryResponseSchema, subtitlePreferenceResponseSchema, subtitlePreferenceSchema, subtitleTrackSchema, subtitlesResponseSchema } from '@consumit/contracts'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { metrics } from '@opentelemetry/api'
 import { z } from 'zod'
@@ -38,6 +40,7 @@ const fileQuerySchema = z.object({
 })
 
 const preferenceRefQuerySchema = z.object({
+  videoVersion: z.string().optional(), contentChecksum: z.string().optional(),
   kind: z.enum(['movie', 'series', 'anime']),
   id: z.coerce.number().int().positive(),
   season: z.coerce.number().int().min(1).max(100).optional(),
@@ -71,7 +74,7 @@ function sendSubtitleError(error: unknown): never {
 
 export function registerSubtitleRoutes(
   app: FastifyInstance,
-  deps: { subtitles: SubtitleService; mode?: 'all' | 'preferences' | 'delivery'; env?: ApiEnv | undefined; identity?: Identity | undefined; preferences?: SubtitlePreferences | undefined },
+  deps: { playback?: Playback | undefined; subtitles: SubtitleService; mode?: 'all' | 'preferences' | 'delivery'; env?: ApiEnv | undefined; identity?: Identity | undefined; preferences?: SubtitlePreferences | undefined },
 ) {
   const meter = metrics.getMeter('consumit.subtitles')
   const searches = meter.createCounter('subtitle.searches')
@@ -132,9 +135,16 @@ export function registerSubtitleRoutes(
 
   app.get('/v1/subtitles/discover', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     if (!deps.subtitles.discovery) throw new SubtitleError('SUBTITLES_UNAVAILABLE', 'Subtitle discovery is unavailable.')
-    const parsed = querySchema.extend({ format: z.enum(['stream', 'json']).default('stream'), cursor: z.string().regex(/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/).optional() }).safeParse(request.query)
+    const parsed = querySchema.extend({ sessionId: z.uuid().optional(), format: z.enum(['stream', 'json']).default('stream'), cursor: z.string().regex(/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/).optional() }).safeParse(request.query)
     if (!parsed.success) return invalidQuery('Use a title kind, numeric id, and valid season/episode.')
     const { kind, id, season, episode } = parsed.data
+    let context: Awaited<ReturnType<NonNullable<Playback['subtitleContext']>>> = null
+    if (parsed.data.sessionId && deps.playback?.subtitleContext) {
+      const token = request.cookies?.[deps.env?.nodeEnv === 'production' ? '__Host-consumit-playback' : 'consumit-playback']
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) throw new ApiError('UNAUTHENTICATED', 'Start playback to create a session.')
+      context = await deps.playback.subtitleContext(createHash('sha256').update(token).digest('hex'), parsed.data.sessionId)
+      if (context && (context.ref.kind !== kind || context.ref.id !== id || (context.ref.season ?? 1) !== season || (context.ref.episode ?? 1) !== episode)) return invalidQuery('Use the current playback episode.')
+    }
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 13_000)
     // Stop provider work immediately when the browser closes discovery.
@@ -142,7 +152,7 @@ export function registerSubtitleRoutes(
     reply.raw.once('close', cancel)
     const stream = Readable.from((async function* () {
       try {
-        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs))) {
+        for await (const event of deps.subtitles.discovery!.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs), context ?? undefined)) {
           yield `${JSON.stringify(event)}\n`
         }
       } finally {
@@ -157,7 +167,7 @@ export function registerSubtitleRoutes(
       // network intermediary interrupts NDJSON delivery.
       const events = []
       try {
-        for await (const event of deps.subtitles.discovery.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs))) events.push(event)
+        for await (const event of deps.subtitles.discovery.discover({ kind, id, season, episode }, controller.signal, parsed.data.cursor, cleanQueryLangs(parsed.data.langs), context ?? undefined)) events.push(event)
         return subtitleDiscoveryResponseSchema.parse({ events })
       } finally { clearTimeout(timer); reply.raw.off('close', cancel); controller.abort() }
     }
@@ -236,7 +246,10 @@ export function registerSubtitleRoutes(
     const query = preferenceRefQuerySchema.safeParse(request.query)
     if (!query.success) return invalidQuery('Use a title kind, a positive numeric id, and a valid season/episode.')
     const ref = preferenceRef(query.data)
-    const record = await preferenceDeps!.preferences.get(memberId, ref)
+    const hasScope = query.data.videoVersion !== undefined || query.data.contentChecksum !== undefined
+    const scope = hasScope ? subtitleCorrectionScopeSchema.safeParse(query.data) : null
+    if (scope && !scope.success) return invalidQuery('Use an exact video version and subtitle checksum.')
+    const record = await preferenceDeps!.preferences.get(memberId, ref, scope?.success ? scope.data : undefined)
     return subtitlePreferenceResponseSchema.parse({
       preference: { ref, trackId: record?.trackId ?? null, offsetMs: record?.offsetMs ?? 0 },
     })
@@ -248,7 +261,7 @@ export function registerSubtitleRoutes(
     const memberId = await viewer(request)
     const parsed = subtitlePreferenceSchema.safeParse(request.body)
     if (!parsed.success) return invalidQuery('Provide a title reference with an optional track and an offset within ±120 seconds.')
-    const record = await preferenceDeps!.preferences.set(memberId, parsed.data.ref, { trackId: parsed.data.trackId, offsetMs: parsed.data.offsetMs })
+    const record = await preferenceDeps!.preferences.set(memberId, parsed.data.ref, { trackId: parsed.data.trackId, offsetMs: parsed.data.offsetMs }, parsed.data.scope)
     return subtitlePreferenceResponseSchema.parse({
       preference: { ref: parsed.data.ref, trackId: record.trackId, offsetMs: record.offsetMs },
     })

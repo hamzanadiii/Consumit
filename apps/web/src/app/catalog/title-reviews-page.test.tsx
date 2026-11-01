@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { movieDetail } from '@/test/catalog-fixtures'
@@ -88,7 +88,10 @@ describe('title reviews page', () => {
     })
     render(<SessionProvider>{await TitleReviewsPage({ id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
 
-    expect(screen.getByRole('link', { name: 'Back to Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
+    expect(within(screen.getByRole('main')).getByRole('heading', { level: 1, name: 'Dune: Part Two reviews' })).toBeInTheDocument()
+    const titleLink = screen.getByRole('link', { name: 'Back to Dune: Part Two' })
+    expect(titleLink).toHaveAttribute('href', '/title/693134')
+    expect(titleLink).toHaveTextContent('Back to title')
     expect(screen.getByText('First public take.')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Popular' })).not.toBeInTheDocument()
     expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
@@ -114,7 +117,10 @@ describe('title reviews page', () => {
     mocks.getTitleReviews.mockResolvedValue({ items: [], page: 1, totalPages: 0, totalResults: 0 })
     render(<SessionProvider>{await TitleReviewsPage({ id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
 
-    expect(screen.getByRole('heading', { name: 'No member reviews yet' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No public reviews yet' })).toBeInTheDocument()
+    const titleLinks = screen.getAllByRole('link', { name: 'Back to Dune: Part Two' })
+    expect(titleLinks).toHaveLength(2)
+    for (const titleLink of titleLinks) expect(titleLink).toHaveTextContent('Back to title')
     expect(screen.queryByText(/Page \d/)).not.toBeInTheDocument()
   })
 
@@ -130,17 +136,18 @@ describe('title reviews page', () => {
     mocks.getTitleReviews.mockRejectedValue(new mocks.MemberApiError('Member data is temporarily unavailable.', 503))
     render(<SessionProvider>{await TitleReviewsPage({ id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
 
+    expect(within(screen.getByRole('main')).getByRole('heading', { level: 1, name: 'Dune: Part Two reviews' })).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded')
     expect(screen.getByRole('link', { name: 'Try again' })).toHaveAttribute('href', '/title/693134/reviews?sort=recent&page=1')
   })
 
-  it('keeps the review archive personal with no friends tab', async () => {
+  it('keeps the public review archive on recent reviews with no friends tab', async () => {
     mocks.getTitleReviews.mockResolvedValue({ items: [], page: 1, totalPages: 0, totalResults: 0 })
     render(<SessionProvider>{await TitleReviewsPage({ id: 693134, kind: 'movie', page: 1, sort: 'recent' })}</SessionProvider>)
 
     expect(mocks.getTitleReviews).toHaveBeenCalledWith('movie', 693134, 1, 'recent')
     expect(screen.queryByRole('link', { name: 'Friends' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'No member reviews yet' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No public reviews yet' })).toBeInTheDocument()
   })
 
   it('resolves anime titles from AniList and serves the anime archive', async () => {
@@ -151,7 +158,7 @@ describe('title reviews page', () => {
     expect(mocks.getCatalogTitle).not.toHaveBeenCalled()
     expect(mocks.getAnimeTitle).toHaveBeenCalledWith(21)
     expect(mocks.getTitleReviews).toHaveBeenCalledWith('anime', 21, 1, 'recent')
-    expect(await screen.findByRole('heading', { level: 2, name: 'Frieren reviews' })).toBeInTheDocument()
+    expect(within(screen.getByRole('main')).getByRole('heading', { level: 1, name: 'Frieren reviews' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to Frieren' })).toHaveAttribute('href', '/anime/21')
     expect(screen.queryByRole('link', { name: 'Friends' })).not.toBeInTheDocument()
   })

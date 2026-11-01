@@ -1,0 +1,11 @@
+{
+  "name": "consumit-provider-edge-canary",
+  "main": "../../packages/media-relay/src/resolver-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": { "RESOLVER_ENABLED": "true", "RESOLVER_COORDINATION_ENABLED": "true", "RESOLVER_ROUTE_POLICY_REQUIRED": "true", "RESOLVER_ROUTE_POLICY": "[]" },
+  "durable_objects": { "bindings": [{ "name": "PROVIDER_COORDINATORS", "class_name": "ProviderCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProviderCoordinator"] }],
+  "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } }
+}

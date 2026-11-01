@@ -8,8 +8,8 @@ import { unavailableMemberData } from './unavailable-member-data.ts'
 import type { PublicMembers } from './public-members.ts'
 
 const origin = 'http://localhost:3000'
-const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }
-const fixture: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'film_fan', sectionVisibility, profile: { id: 'public-id', username: 'film_fan', displayName: 'Film Fan', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: 'Public taste', isFollowing: false }, favorites: [], ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ count: 0, value: index + 1 })), statistics: { lists: 0, ratings: 0, reviews: 0 }, social: { followers: 0, following: 0 } }
+const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }
+const fixture: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'film_fan', sectionVisibility, profile: { id: 'public-id', username: 'film_fan', displayName: 'Film Fan', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: 'Public taste', isFollowing: false }, favorites: [], ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ count: 0, value: index + 1 })), statistics: { activity: 0, diary: 0, history: 0, lists: 0, ratings: 0, reviews: 0, watchlist: 0, watched: 0 }, social: { followers: 0, following: 0 } }
 const apps: Array<Awaited<ReturnType<typeof buildApp>>> = []
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())) })
 async function setup() {

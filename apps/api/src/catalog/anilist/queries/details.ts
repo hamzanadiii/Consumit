@@ -36,6 +36,7 @@ export const detailsQuery = `query ($id: Int) {
       nodes {
         mediaRecommendation {
           id
+          idMal
           isAdult
           title { romaji english native }
           format

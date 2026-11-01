@@ -6,14 +6,15 @@ for (const type of ['native', 'hls'] as const) for (const navigation of ['docume
     const media = await readFile('tests/playback/media/reference.mp4')
     const referrers: Array<string | undefined> = []
     await page.addInitScript(() => {
+      localStorage.setItem('consumit.share-welcome-dismissed.v1', 'true')
       localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: false, subtitleLanguages: ['en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: false }))
     })
-    await page.route('**/v1/playback/resolve', async route => {
+    await page.route('**/v1/playback/attempts', async route => {
       const response = await route.fetch()
-      const session = await response.json()
-      session.source.type = type
-      session.source.src = `https://experience-media.example/${type === 'hls' ? 'master.m3u8' : 'no-referrer.mp4'}`
-      await route.fulfill({ response, json: session })
+      const attempt = await response.json()
+      attempt.session.source.type = type
+      attempt.session.source.src = `https://experience-media.example/${type === 'hls' ? 'master.m3u8' : 'no-referrer.mp4'}`
+      await route.fulfill({ response, json: attempt })
     })
     await page.route('https://experience-media.example/**', async route => {
       const referer = route.request().headers().referer
@@ -54,20 +55,20 @@ for (const type of ['native', 'hls'] as const) for (const navigation of ['docume
     // The route metadata must restore the ordinary policy after leaving Watch.
     if (navigation === 'client') {
       await page.goBack()
-      await expect(page.locator('meta[name="referrer"]')).toHaveAttribute('content', 'strict-origin-when-cross-origin')
+      await expect(page.locator('head meta[name="referrer"]')).toHaveAttribute('content', 'strict-origin-when-cross-origin')
     }
   })
 }
 
 test('Provider Embed retains its explicit referrer policy inside Watch', async ({ page }) => {
-  await page.route('**/v1/playback/resolve', async route => {
+  await page.route('**/v1/playback/attempts', async route => {
     const response = await route.fetch()
-    const session = await response.json()
-    Object.assign(session.source, { type: 'iframe', delivery: 'embed', src: 'https://experience-frame.example/player' })
-    await route.fulfill({ response, json: session })
+    const attempt = await response.json()
+    Object.assign(attempt.session.source, { type: 'iframe', delivery: 'embed', src: 'https://www.gstatic.com/__fixtures/provider-player' })
+    await route.fulfill({ response, json: attempt })
   })
   const frameRequests: Array<string | undefined> = []
-  await page.route('https://experience-frame.example/player', async route => {
+  await page.route('https://www.gstatic.com/__fixtures/provider-player', async route => {
     frameRequests.push(route.request().headers().referer)
     await route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Fixture provider</title>' })
   })

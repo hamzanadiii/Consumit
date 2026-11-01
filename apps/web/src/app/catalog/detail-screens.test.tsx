@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,7 +43,7 @@ describe('series season selection', () => {
     localStorage.setItem(`consumit.progress:guest:series:${seriesDetail.id}:1:3`, JSON.stringify({ ...ref, positionSeconds: 450, durationSeconds: 3000, completed: false, updatedAt: '2026-10-03T00:00:00.000Z' }))
     try {
       render(<SeriesDetailScreen detail={seriesDetail} initialSeason={firstSeason} />)
-      expect(await screen.findByRole('link', { name: 'Continue watching' })).toHaveAttribute('href', `/watch/series/${seriesDetail.id}?season=1&episode=3`)
+      expect(await screen.findByRole('link', { name: 'Continue watching Season 1 · Episode 3' })).toHaveAttribute('href', `/watch/series/${seriesDetail.id}?season=1&episode=3`)
     } finally { localStorage.clear() }
   })
   it('keeps computed taste and numeric scores out of title details', () => {
@@ -64,14 +64,37 @@ describe('series season selection', () => {
 
     expect(screen.getByText('Long live the fighters.')).toBeInTheDocument()
     expect(screen.getByText('Directed by Denis Villeneuve')).toBeInTheDocument()
-    expect(screen.getByText('★ 8.2')).toBeInTheDocument()
+    const score = screen.getByText(/8\.2/).closest('strong')
+    expect(score).toHaveTextContent('8.2')
+    expect(score).not.toHaveTextContent('★')
+    expect(score?.querySelectorAll('svg')).toHaveLength(1)
     expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Your activity' })).toHaveAttribute('href', '/sign-in')
+    expect(screen.getByRole('link', { name: 'Sign in to view your activity' })).toHaveAttribute('href', '/sign-in?next=%2Ftitle%2F693134')
     const synopses = screen.getAllByText('Paul unites with Chani and the Fremen.')
     expect(synopses).toHaveLength(2)
     expect(synopses[0]?.className).toMatch(/line-clamp-3/)
     expect(synopses[1]?.className).not.toMatch(/line-clamp-3/)
+  })
+
+  it('keeps the title identity and masthead readable when catalog artwork fails', () => {
+    const detail = {
+      ...movieDetail,
+      backdropUrl: 'https://image.tmdb.org/t/p/w1280/unavailable-backdrop.jpg',
+      logoUrl: 'https://image.tmdb.org/t/p/w500/unavailable-logo.png',
+    }
+    const { container } = render(<TitleDetailScreen detail={detail} />)
+
+    const logo = screen.getByRole('img', { name: detail.title })
+    fireEvent.error(logo)
+    const visibleTitle = screen.getByRole('heading', { level: 1, name: detail.title })
+    expect(visibleTitle).not.toHaveClass('sr-only')
+    expect(screen.getByRole('link', { name: 'Play' })).toBeVisible()
+
+    const backdrop = Array.from(container.querySelectorAll('img')).find((image) => image.src.includes('unavailable-backdrop.jpg'))
+    expect(backdrop).not.toBeNull()
+    fireEvent.error(backdrop!)
+    expect(container.querySelector('[data-consumit-title-backdrop-fallback]')).toBeInTheDocument()
   })
 
   it('shelves rating in the hero panel with no separate section', () => {
@@ -83,13 +106,18 @@ describe('series season selection', () => {
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
   })
 
-  it('toggles the title save action between add and saved states', async () => {    const user = userEvent.setup()
-const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] }), { status: 200 })))
+  it('toggles the title save action between add and saved states', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn().mockImplementation((input: string | URL | Request) => {
+      if (String(input).includes('/v1/me/titles/')) return Promise.resolve(new Response(JSON.stringify({ rating: null, like: null, review: null, saved: false, watched: false }), { status: 200 }))
+      return Promise.resolve(new Response(JSON.stringify({ diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] }), { status: 200 }))
+    })
     vi.stubGlobal('fetch', fetchMock)
     render(<SessionProvider initialMember={{ avatarStyle: 'dusk', avatarUrl: null, createdAt: '2026-09-07T12:00:00.000Z', displayName: null, email: 'member@example.com', emailVerified: true, id: '9e0a21f4-31bc-4aa7-98ae-b3cb8da0a8ca', role: 'member', username: 'cinema_fan' }} initialStatus="authenticated"><TitleDetailScreen detail={movieDetail} /></SessionProvider>)
 
     const save = screen.getByRole('button', { name: 'Save Dune: Part Two to library' })
     expect(save).toHaveAttribute('aria-pressed', 'false')
+    await waitFor(() => expect(save).toBeEnabled())
     await user.click(save)
     expect(await screen.findByRole('button', { name: 'Remove Dune: Part Two from library' })).toHaveAttribute('aria-pressed', 'true')
     expect(fetchMock).toHaveBeenCalledWith('/v1/me/library/titles/movie/693134', expect.objectContaining({ method: 'PUT' }))

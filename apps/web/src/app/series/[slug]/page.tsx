@@ -11,6 +11,7 @@ import { serializeJsonLd } from '@/lib/json-ld'
 
 type SeriesDetailPageProps = {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ episode?: string | string[]; season?: string | string[] }>
 }
 
 export const revalidate = 300
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: SeriesDetailPageProps): Promi
   } catch { return { title: 'Series · Consumit' } }
 }
 
-export default async function SeriesDetailPage({ params }: SeriesDetailPageProps) {
+export default async function SeriesDetailPage({ params, searchParams }: SeriesDetailPageProps) {
   const { slug } = await params
   const id = Number(slug)
   if (!Number.isInteger(id) || id <= 0) notFound()
@@ -54,6 +55,14 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
     const animeMatch = await getCachedAnimeMatch(item.title, item.originalTitle, item.year).catch(() => null)
     if (animeMatch) redirect(`/anime/${animeMatch}`)
   }
+  const query = await searchParams
+  const seasonValue = Array.isArray(query.season) ? query.season[0] : query.season
+  const episodeValue = Array.isArray(query.episode) ? query.episode[0] : query.episode
+  const requestedSeason = Number(seasonValue)
+  const seasonNumber = item.seasons.some((season) => season.number === requestedSeason)
+    ? requestedSeason
+    : item.seasons[0]?.number
+  const requestedEpisode = Number(episodeValue)
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'TVSeries',
@@ -65,12 +74,14 @@ export default async function SeriesDetailPage({ params }: SeriesDetailPageProps
     name: item.title,
     ...(item.seasons.length ? { numberOfSeasons: item.seasons.length } : {}),
   }
-  const firstSeason = response.item.seasons[0]?.number
-  const seasonResponse = firstSeason ? await getCachedCatalogSeason(id, firstSeason).catch(() => null) : null
+  const seasonResponse = seasonNumber ? await getCachedCatalogSeason(id, seasonNumber).catch(() => null) : null
+  const initialEpisode = Number.isInteger(requestedEpisode) && requestedEpisode > 0 && seasonResponse?.item.episodes.some((episode) => episode.episodeNumber === requestedEpisode)
+    ? requestedEpisode
+    : null
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} type="application/ld+json" />
-      <SeriesDetailScreen detail={response.item} initialSeason={seasonResponse?.item ?? null} />
+      <SeriesDetailScreen detail={response.item} initialEpisode={initialEpisode} initialSeason={seasonResponse?.item ?? null} />
     </>
   )
 }

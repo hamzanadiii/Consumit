@@ -49,6 +49,17 @@ describe('profile banner editor', () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
   })
 
+  it('shows the no-backdrop state only after an empty search succeeds', async () => {
+    const user = userEvent.setup()
+    mocks.browserSearchCatalog.mockResolvedValue({ items: [], page: 1, totalPages: 0, totalResults: 0 })
+    render(<ProfileEditProvider initialBannerOpen><BannerEditor currentBannerUrl={null} /></ProfileEditProvider>)
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search a movie or series for backdrop art' }), 'no match')
+
+    expect(await screen.findByText('No wide backdrops match that search yet.')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('skips titles without wide artwork and removes the banner', async () => {
     const user = userEvent.setup()
     const posterOnly = { ...movieSummary, backdropUrl: null, id: 1, originalTitle: 'Poster Only', title: 'Poster Only' }

@@ -805,6 +805,7 @@
     ],
     "mediaHosts": [
       "moon.zenoak.top",
+      "moon.goldenkite.top",
       "ultramoss.top",
       "emberwave.top",
       "rapidmesa.top"
@@ -850,6 +851,7 @@
     ],
     "mediaHosts": [
       "moon.zenoak.top",
+      "moon.goldenkite.top",
       "ultramoss.top",
       "emberwave.top",
       "rapidmesa.top"
@@ -1975,6 +1977,34 @@
     "priority": 0
   },
   {
+    "id": "vidbolt",
+    "adapter": "vidbolt",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "img.rousav.tech",
+      "img.animecurx.tech",
+      "proxy.vidbolt.xyz",
+      "img1.hscow.com"
+    ],
+    "resolutionHosts": [
+      "vidbolt.xyz"
+    ],
+    "upstreamGroup": "vidbolt",
+    "attemptMs": 8000,
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 0
+  },
+  {
     "id": "miruro",
     "adapter": "miruro",
     "enabled": false,
@@ -2698,6 +2728,165 @@
     "concurrency": 2,
     "requestsPerMinute": 30,
     "priority": 40,
+    "attemptMs": 15000
+  },
+  {
+    "id": "nontonflix",
+    "adapter": "nontonflix",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "media.nontonflix.com"
+    ],
+    "resolutionHosts": [
+      "nontonflix.com"
+    ],
+    "upstreamGroup": "nontonflix",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
+    "attemptMs": 15000
+  },
+  {
+    "id": "embedmaster",
+    "adapter": "embedmaster",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "perfectbussines.website"
+    ],
+    "resolutionHosts": [
+      "embedmaster.link",
+      "embdmstrplayer.com"
+    ],
+    "upstreamGroup": "embedmaster",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
+    "attemptMs": 15000
+  },
+  {
+    "id": "mapple",
+    "adapter": "mapple",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "*.jordanblackwell.bid"
+    ],
+    "resolutionHosts": [
+      "mapple.fun"
+    ],
+    "upstreamGroup": "mapple",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
+    "attemptMs": 15000
+  },
+  {
+    "id": "zenox",
+    "adapter": "zenox",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "zenox.lol",
+      "bub.zenox.lol",
+      "r10.zenox.lol"
+    ],
+    "resolutionHosts": [
+      "zenox.lol"
+    ],
+    "upstreamGroup": "zenox",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
+    "attemptMs": 15000
+  },
+  {
+    "id": "nexa",
+    "adapter": "nexa",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "indiacdn.sbs"
+    ],
+    "resolutionHosts": [
+      "providers.nexa.mov"
+    ],
+    "upstreamGroup": "nexa",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
+    "attemptMs": 15000
+  },
+  {
+    "id": "cno",
+    "adapter": "cno",
+    "enabled": false,
+    "role": "video",
+    "deliveryMode": "relay",
+    "regions": [
+      "US"
+    ],
+    "mediaKinds": [
+      "movie",
+      "series"
+    ],
+    "mediaHosts": [
+      "cno.to",
+      "v.prismdesk.top",
+      "v.lumenbox.top",
+      "v.neonvase.top",
+      "v.starlantern.top",
+      "v.haloshade.top",
+      "v.sparkwick.top"
+    ],
+    "resolutionHosts": [
+      "cno.to"
+    ],
+    "upstreamGroup": "cno",
+    "concurrency": 1,
+    "requestsPerMinute": 10,
+    "priority": 20,
     "attemptMs": 15000
   }
 ]

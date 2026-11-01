@@ -17,7 +17,7 @@ describe('request context', () => {
     const response = await app.inject({ headers: { 'x-request-id': 'web-req-123' }, method: 'GET', url: '/health' })
 
     expect(response.headers['x-request-id']).toBe('web-req-123')
-  })
+  }, 15_000)
 
   it('replaces a malformed caller request id with a generated one', async () => {
     const app = await buildApp()

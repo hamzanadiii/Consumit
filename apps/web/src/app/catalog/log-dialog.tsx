@@ -1,306 +1,107 @@
 'use client'
 
-import { Heart, X } from 'lucide-react'
-import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
-
+import Image from 'next/image'
+import { z } from 'zod'
+import { tasteDraftReadSchema, tasteReviewSchema } from '@consumit/contracts'
 import { RatingInput } from '@consumit/ui'
+import { getMemberTitleState } from '@/lib/identity-browser'
+import { useSession } from '../session/session'
+import { TasteDialog } from '../taste/primitives'
+import { tasteRead, tasteWrite, errorText } from '../taste/api'
 
-import {
-  clearMemberRating,
-  createDiaryEntry,
-  createMemberReview,
-  getMemberTitleState,
-  setMemberLiked,
-  setMemberRating,
-  setMemberWatched,
-  updateMemberReview,
-} from '@/lib/identity-browser'
+export type LogDialogExistingReview = { body: string; reviewId: string; reviewedOn: string | null }
+type Props = { existingReview?: LogDialogExistingReview | null | undefined; id: number; kind: 'movie' | 'series' | 'anime'; onClose: () => void; onSaved: (review?: LogDialogExistingReview) => void; posterUrl?: string | undefined; episode?: number | undefined; season?: number | undefined; title: string; watchedOn?: string | undefined; year?: number | null | undefined; mode?: 'review' | 'log' }
+const formSchema = z.object({ body: z.string(), date: z.string(), rewatch: z.boolean(), spoiler: z.boolean(), rating: z.number().nullable(), tags: z.string() })
+const publicationSchema = z.object({ reviewId: z.string().nullable() })
+const recoverySchema = z.object({ baseReviewRevision: z.int().nonnegative().optional(), pendingPublication: z.object({ input: z.string(), key: z.uuid() }).nullable().optional() })
+type Form = z.infer<typeof formSchema>
+function localToday() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` }
 
-export type LogDialogExistingReview = {
-  body: string
-  reviewId: string
-  reviewedOn: string | null
+export function LogDialog(props: Props) {
+  const session = useSession()
+  return session.member ? <Composer key={`${session.member.id}:${props.kind}:${props.id}:${props.season ?? 'title'}:${props.episode ?? 'title'}:${props.mode ?? 'log'}:${props.existingReview?.reviewId ?? ''}`} {...props} /> : null
 }
-
-type LogDialogProps = {
-  existingReview?: LogDialogExistingReview | null | undefined
-  id: number
-  kind: 'movie' | 'series' | 'anime'
-  onClose: () => void
-  onSaved: () => void
-  posterUrl?: string | undefined
-  episode?: number | undefined
-  season?: number | undefined
-  title: string
-  watchedOn?: string | undefined
-  year?: number | null | undefined
-}
-
-const today = () => new Date().toISOString().slice(0, 10)
-
-function parseTags(raw: string) {
-  return raw
-    .split(',')
-    .map((tag) => tag.trim().slice(0, 100))
-    .filter((tag) => tag.length > 0)
-    .slice(0, 50)
-}
-
-/**
- * Native watch log in the Letterboxd diary shape: poster and title, watched
- * date plus rewatch flag, review, tags, rating, and like, committed with one
- * Save. Every section writes a real stored record; retrying never duplicates
- * a section that already landed. When `existingReview` is provided the dialog
- * edits that stored review in place (PATCH) instead of writing a new one.
- */
-export function LogDialog({ existingReview = null, episode, id, kind, onClose, onSaved, posterUrl, season, title, watchedOn, year }: LogDialogProps) {
-  const [date, setDate] = useState(existingReview?.reviewedOn ?? watchedOn ?? today())
-  const [logWatch, setLogWatch] = useState(true)
-  const [rewatch, setRewatch] = useState(false)
-  const [review, setReview] = useState(existingReview?.body ?? '')
-  const [tags, setTags] = useState('')
-  const [rating, setRating] = useState<number | null>(null)
-  const [liked, setLiked] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const initial = useRef<{ liked: boolean; rating: number | null } | null>(null)
-  const diaryAttempt = useRef<{ fingerprint: string; key: string } | null>(null)
-  const originalReview = useRef(existingReview)
-  const done = useRef({ diary: false, liked: false, rating: false, review: false, watched: false })
-  const panelRef = useRef<HTMLDivElement>(null)
-
+function Composer({ existingReview, id, kind, onClose, onSaved, episode, season, posterUrl, title, watchedOn, mode = 'log' }: Props) {
+  const intent = existingReview ? 'review' : mode
+  const key = existingReview ? `review-${kind}-${id}-${existingReview.reviewId}` : `${intent}-${kind}-${id}-${season ?? 'title'}-${episode ?? 'title'}-new`
+  const [scope, setScope] = useState({ season, episode })
+  const [form, setForm] = useState<Form>({ body: existingReview?.body ?? '', date: watchedOn ?? localToday(), rewatch: false, spoiler: false, rating: null, tags: '' })
+  const [ready, setReady] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [errorAction, setErrorAction] = useState<'load' | 'draft' | 'publish' | null>(null), [publicationFailed, setPublicationFailed] = useState(false), [status, setStatus] = useState('Loading your draft…'), [retry, setRetry] = useState(0), [preview, setPreview] = useState(false)
+  const revision = useRef(0), reviewRevision = useRef(0), saved = useRef(''), attempt = useRef<{ input: string; key: string } | null>(null), pending = useRef<Promise<void> | null>(null)
+  const publishButton = useRef<HTMLButtonElement>(null), focusPublishAfterFailure = useRef(false)
   useEffect(() => {
-    let cancelled = false
-    void getMemberTitleState({ id, kind })
-      .then((state) => {
-        if (cancelled) return
-        initial.current = { liked: state.like !== null, rating: state.rating?.value ?? null }
-        setRating(state.rating?.value ?? null)
-        setLiked(state.like !== null)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          initial.current = { liked: false, rating: null }
-          setLoading(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [id, kind])
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
-      if (event.key !== 'Tab' || !panelRef.current) return
-      const focusable = [...panelRef.current.querySelectorAll<HTMLElement>('button, textarea, input, select, [href]')]
-        .filter((element) => !element.hasAttribute('disabled'))
-      if (focusable.length === 0) return
-      const first = focusable[0]!
-      const last = focusable[focusable.length - 1]!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  async function save() {
-    if (!date) {
-      setError('Choose a watched date.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      if (logWatch && !done.current.watched) {
-        await setMemberWatched({ id, kind }, true)
-        done.current.watched = true
-      }
-      if (logWatch && !done.current.diary) {
-        const diaryInput = { ...(episode !== undefined ? { episode } : {}), id, kind, rewatch, ...(season !== undefined ? { season } : {}), tags: parseTags(tags), watchedOn: date }
-        const fingerprint = JSON.stringify(diaryInput)
-        if (diaryAttempt.current?.fingerprint !== fingerprint) {
-          diaryAttempt.current = { fingerprint, key: globalThis.crypto.randomUUID() }
-        }
-        await createDiaryEntry({ ...diaryInput, idempotencyKey: diaryAttempt.current.key })
-        done.current.diary = true
-      }
-      if (!done.current.rating) {
-        if (rating === null) {
-          if (initial.current?.rating !== null && initial.current?.rating !== undefined) {
-            await clearMemberRating({ id, kind })
-          }
-        } else {
-          await setMemberRating({ id, kind }, rating)
-        }
-        done.current.rating = true
-      }
-      if (!done.current.liked && initial.current && liked !== initial.current.liked) {
-        await setMemberLiked({ id, kind }, liked)
-        done.current.liked = true
-      }
-      const text = review.trim()
-      if (!done.current.review && text) {
-        const original = originalReview.current
-        if (original) {
-          const changes: { body?: string; reviewedOn?: string | null } = {}
-          if (text !== original.body) changes.body = text
-          if (date !== (original.reviewedOn ?? today())) changes.reviewedOn = date
-          if (Object.keys(changes).length > 0) {
-            await updateMemberReview(original.reviewId, changes)
-          }
-          done.current.review = true
-        } else {
-          await createMemberReview({ body: text, id, kind, reviewedOn: date })
-          done.current.review = true
-        }
-      }
-      onSaved()
-    } catch {
-      setError('Your log could not be saved. Please retry.')
-    } finally {
-      setBusy(false)
-    }
+    let active = true
+    void Promise.all([tasteRead(`drafts/${key}`, tasteDraftReadSchema), getMemberTitleState({ id, kind }), existingReview ? tasteRead(`reviews/${existingReview.reviewId}`, tasteReviewSchema) : null]).then(([draft, state, review]) => {
+      if (!active) return
+      revision.current = draft.revision
+      const recovered = formSchema.safeParse(draft.data)
+      const recovery = recoverySchema.parse(draft.data)
+      reviewRevision.current = recovered.success && existingReview ? recovery.baseReviewRevision ?? 0 : review?.revision ?? 0
+      attempt.current = recovered.success ? recovery.pendingPublication ?? null : null
+      setScope(review ? { season: review.season ?? undefined, episode: review.episode ?? undefined } : { season, episode })
+      const next = recovered.success ? recovered.data : { body: review?.body ?? existingReview?.body ?? '', date: watchedOn ?? localToday(), rewatch: false, spoiler: review?.spoiler ?? false, rating: state.rating?.value ?? null, tags: '' }
+      saved.current = JSON.stringify(next); setForm(next); setReady(true); setError(''); setErrorAction(null); setStatus(recovered.success ? 'Private draft restored.' : 'Only published work appears on your profile.')
+    }).catch(cause => { if (active) { setError(errorText(cause)); setErrorAction('load'); setStatus('Your existing records have not changed.') } })
+    return () => { active = false }
+  }, [key, id, kind, existingReview, watchedOn, retry, season, episode])
+  const current = useRef(form)
+  useEffect(() => { current.current = form }, [form])
+  async function persist(force = false) {
+    if (pending.current) await pending.current
+    const value = current.current, serialized = JSON.stringify(value)
+    if (!ready || !force && saved.current === serialized) return
+    const operation = tasteWrite(`drafts/${key}`, { revision: revision.current, data: { ...value, baseReviewRevision: reviewRevision.current, pendingPublication: attempt.current } }, 'PUT', tasteDraftReadSchema).then(result => { revision.current = result.revision; saved.current = serialized; setStatus('Private draft saved.'); setError(''); setErrorAction(null) }).catch(cause => { setError(errorText(cause)); setErrorAction('draft'); throw cause }).finally(() => { pending.current = null })
+    pending.current = operation
+    await operation
   }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-canvas/80 p-5"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
-      <div
-        aria-labelledby="log-dialog-heading"
-        aria-modal="true"
-        className="w-full max-w-2xl rounded-card border border-border bg-surface p-6 sm:p-8"
-        ref={panelRef}
-        role="dialog"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <h2 className="font-display text-3xl text-ink" id="log-dialog-heading">
-            {`Log ${title}${year ? ` ${year}` : ''}${episode !== undefined ? ` · ${kind === 'series' && season !== undefined ? `S${String(season).padStart(2, '0')} ` : ''}E${String(episode).padStart(2, '0')}` : ''}`}
-          </h2>
-          <button
-            aria-label="Close log dialog"
-            className="grid size-11 shrink-0 place-items-center rounded-control text-copy outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-            onClick={onClose}
-            type="button"
-          >
-            <X aria-hidden="true" className="size-5" />
-          </button>
-        </div>
-        <div className="mt-6 grid gap-6 sm:grid-cols-[9rem_minmax(0,1fr)]">
-          <div aria-hidden="true" className="relative hidden aspect-[2/3] w-full overflow-hidden rounded-card border border-border bg-surface-raised sm:block">
-            {posterUrl ? <Image alt="" className="object-cover" fill sizes="144px" src={posterUrl} /> : null}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-ink">
-                <input
-                  checked={logWatch}
-                  className="size-4 cursor-pointer accent-orange"
-                  disabled={busy}
-                  onChange={(event) => setLogWatch(event.currentTarget.checked)}
-                  type="checkbox"
-                />
-                Watched on
-              </label>
-              <input
-                aria-label="Watched date"
-                className="h-11 rounded-control border border-control-outline bg-field px-3 text-sm text-ink outline-none focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange"
-                disabled={busy}
-                onChange={(event) => setDate(event.currentTarget.value)}
-                type="date"
-                value={date}
-              />
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-copy">
-                <input
-                  checked={rewatch}
-                  className="size-4 cursor-pointer accent-orange"
-                  disabled={busy}
-                  onChange={(event) => setRewatch(event.currentTarget.checked)}
-                  type="checkbox"
-                />
-                I&rsquo;ve watched this before
-              </label>
-            </div>
-            <label className="mt-5 block text-xs font-bold uppercase tracking-[0.12em] text-copy" htmlFor="log-dialog-review">
-              Review
-            </label>
-            <textarea
-              className="mt-2 min-h-32 w-full rounded-control border border-control-outline bg-field px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange"
-              disabled={busy}
-              id="log-dialog-review"
-              maxLength={10_000}
-              onChange={(event) => setReview(event.currentTarget.value)}
-              placeholder="Add a review..."
-              value={review}
-            />
-            <div className="mt-5 grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-[0.12em] text-copy" htmlFor="log-dialog-tags">
-                  Tags
-                </label>
-                <input
-                  className="mt-2 h-11 w-full rounded-control border border-control-outline bg-field px-3 text-sm text-ink outline-none placeholder:text-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange"
-                  disabled={busy}
-                  id="log-dialog-tags"
-                  onChange={(event) => setTags(event.currentTarget.value)}
-                  placeholder="eg. cinema"
-                  value={tags}
-                />
-              </div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-copy" id="log-dialog-rating-label">
-                  Rating{rating === null ? '' : ` · ${rating} out of 10`}
-                </p>
-                <div className="mt-2">
-                  <RatingInput label={`Rate ${title} out of 10`} name={`log-rating-${kind}-${id}`} onChange={setRating} value={rating} />
-                </div>
-              </div>
-              <button
-                aria-label={liked ? `Unlike ${title}` : `Like ${title}`}
-                aria-pressed={liked}
-                className="grid size-11 place-items-center self-end rounded-control text-copy outline-none transition-colors hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange motion-reduce:transition-none"
-                disabled={busy}
-                onClick={() => setLiked((current) => !current)}
-                type="button"
-              >
-                <Heart aria-hidden="true" className={liked ? 'size-6 fill-orange text-orange' : 'size-6'} />
-              </button>
-            </div>
-          </div>
-        </div>
-        {error ? <p className="mt-5 text-xs text-orange" role="alert">{error}</p> : null}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-5">
-          <button
-            className="inline-flex min-h-11 items-center rounded-control bg-orange px-5 text-sm font-bold text-canvas outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-45 motion-reduce:transition-none"
-            disabled={busy || loading}
-            onClick={() => void save()}
-            type="button"
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            className="inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-copy outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-            disabled={busy}
-            onClick={onClose}
-            type="button"
-          >
-            Cancel
-          </button>
-        </div>
+  useEffect(() => {
+    if (!ready || busy || error || saved.current === JSON.stringify(form)) return
+    const timer = setTimeout(() => { void persist().catch(() => undefined) }, 1000)
+    return () => clearTimeout(timer)
+    // persist reads the current draft through refs; never persist a stale render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, ready, busy, error])
+  useEffect(() => {
+    if (!busy && error && focusPublishAfterFailure.current) {
+      focusPublishAfterFailure.current = false
+      publishButton.current?.focus()
+    }
+  }, [busy, error])
+  async function close() { if (busy) return; setBusy(true); try { await persist(); onClose() } catch { setBusy(false) } }
+  async function publish() {
+    setBusy(true); setError(''); setErrorAction(null); setPublicationFailed(false)
+    let publicationRequestSent = false
+    try {
+      await persist()
+      const input = { id, kind, body: form.body, spoiler: form.spoiler, rating: form.rating, ...(existingReview ? { reviewId: existingReview.reviewId, revision: reviewRevision.current } : {}), ...(scope.episode === undefined ? {} : { episode: scope.episode }), ...(scope.season === undefined ? {} : { season: scope.season }), ...(intent === 'log' ? { log: { watchedOn: form.date, rewatch: form.rewatch, tags: form.tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 50) } } : {}) }
+      const serialized = JSON.stringify(input)
+      if (attempt.current?.input !== serialized) attempt.current = { input: serialized, key: crypto.randomUUID() }
+      // Store the exact attempt before sending: a lost response must remain retryable after remount.
+      await persist(true)
+      publicationRequestSent = true
+      const publication = await tasteWrite('reviews', { ...input, idempotencyKey: attempt.current.key }, 'POST', publicationSchema)
+      // Publication succeeded even if clearing the recoverable private draft fails.
+      await tasteWrite(`drafts/${key}`, { revision: revision.current, data: {} }).catch(() => undefined)
+      onSaved(publication.reviewId && form.body.trim()
+        ? { reviewId: publication.reviewId, body: form.body.trim(), reviewedOn: existingReview?.reviewedOn ?? (intent === 'log' ? form.date : null) }
+        : undefined)
+    } catch (cause) { focusPublishAfterFailure.current = true; setPublicationFailed(publicationRequestSent); setErrorAction(publicationRequestSent ? 'publish' : 'draft'); setError(errorText(cause)); setBusy(false) }
+  }
+  return <TasteDialog className="taste-log-dialog" title={intent === 'review' ? existingReview ? 'Edit your review' : 'In your own words' : 'Remember this watch'} onClose={() => void close()}>
+    <div className="taste-form taste-log-composer"><div className="taste-log-title">{posterUrl ? <span className="taste-log-poster"><Image alt="" fill sizes="40px" src={posterUrl} /></span> : null}<div><h3>{title}</h3><p className="taste-muted">{scope.episode === undefined ? kind : `${kind === 'series' ? `Season ${scope.season} · ` : ''}Episode ${scope.episode}`}</p></div></div>
+      <fieldset disabled={!ready || busy} className="taste-form taste-log-fields">
+        <div className="taste-log-rating"><RatingInput label={`Rate ${title} out of 5 stars`} name={`taste-${kind}-${id}`} value={form.rating} disabled={!ready || busy} onChange={rating => setForm({ ...form, rating })} /><p className="taste-muted">{scope.episode === undefined ? 'Optional. Your rating can stand on its own.' : 'This rating applies to the whole title. Your review keeps its episode context.'}</p></div>
+        {intent === 'log' ? <div className="taste-editor-grid"><label>Watched on<input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></label><label className="taste-check"><input type="checkbox" checked={form.rewatch} onChange={e => setForm({ ...form, rewatch: e.target.checked })} />This was a rewatch</label></div> : null}
+        {preview ? <article className="taste-review-body">{form.body || 'Your words will appear here.'}</article> : <label>{intent === 'review' ? 'Your review' : 'Add a review, if you want'}<textarea rows={5} maxLength={10000} value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} placeholder="What stayed with you?" /></label>}
+        <div className="taste-actions"><label className="taste-check"><input type="checkbox" checked={form.spoiler} onChange={e => setForm({ ...form, spoiler: e.target.checked })} />Contains spoilers</label><button className="taste-button" onClick={() => setPreview(!preview)}>{preview ? 'Keep writing' : 'Preview'}</button></div>
+        {intent === 'log' ? <label>Tags <span className="taste-muted">Separate with commas</span><input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} maxLength={1000} /></label> : <p className="taste-muted">Publishing a review does not log a watch. Your Reviews visibility setting controls who can read it.</p>}
+      </fieldset>
+      <p className="taste-muted taste-log-status" role="status">{status}</p>
+      <div className="taste-log-feedback">
+        {error ? <p className="taste-status" role="alert">{error} {errorAction === 'load' ? <button className="taste-button" onClick={() => { setError(''); setErrorAction(null); setRetry(x => x + 1) }}>Retry loading</button> : errorAction === 'draft' ? <button className="taste-button" onClick={() => { setError(''); setErrorAction(null); void persist().catch(() => undefined) }}>Retry draft save</button> : null}</p> : null}
+        <div className="taste-actions taste-log-commit"><button className="taste-button" disabled={busy} onClick={() => void close()}>Save draft &amp; close</button><button ref={publishButton} className="taste-button taste-button-primary" disabled={!ready || busy || intent === 'review' && !form.body.trim()} onClick={() => void publish()}>{busy ? 'Saving…' : intent === 'review' ? existingReview ? publicationFailed ? 'Retry saving review' : 'Save review' : publicationFailed ? 'Retry publishing' : 'Publish review' : publicationFailed ? 'Retry saving watch' : 'Save watch'}</button></div>
       </div>
     </div>
-  )
+  </TasteDialog>
 }

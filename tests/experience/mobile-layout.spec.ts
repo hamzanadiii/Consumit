@@ -75,7 +75,10 @@ test('catalog, detail, forms and personal screens fit narrow phones and landscap
   page.on('pageerror', error => errors.push(error.message))
   const captureDirectory = resolve('.impeccable/review/mobile-pass')
   await mkdir(captureDirectory, { recursive: true })
-  const { token, member } = await (await request.get(`${api}/__fixtures/session`)).json()
+  const sessionResponse = await request.get(`${api}/__fixtures/session`)
+  expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true)
+  const { token, member } = await sessionResponse.json()
+  expect({ token, username: member?.username }).toEqual({ token: expect.any(String), username: expect.any(String) })
   for (const [width, height] of [[320, 700], [390, 844], [768, 1024], [844, 390]] as const) {
     await page.setViewportSize({ width, height })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -101,9 +104,11 @@ test('catalog, detail, forms and personal screens fit narrow phones and landscap
         await page.screenshot({ path: resolve(captureDirectory, `${captureName}-${width}x${height}.png`), fullPage: true })
       }
       const fields = page.locator('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"])')
-      for (const field of await fields.all()) {
-        if (await field.isVisible()) expect(await field.evaluate(node => parseFloat(getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(16)
-      }
+      const visibleFontSizes = await fields.evaluateAll(nodes => nodes.filter(node => {
+        const style = getComputedStyle(node)
+        return style.display !== 'none' && style.visibility !== 'hidden' && node.getClientRects().length > 0
+      }).map(node => Number.parseFloat(getComputedStyle(node).fontSize)))
+      for (const fontSize of visibleFontSizes) expect(fontSize, `Input size at ${route}`).toBeGreaterThanOrEqual(16)
     }
     await page.goto('/movies')
     await page.getByRole('button', { name: /^Genre / }).click()
@@ -124,8 +129,8 @@ test('catalog, detail, forms and personal screens fit narrow phones and landscap
     await fits(page)
   }
   await page.goto('/title/693134')
-  const ratings = page.locator('[data-consumit-rating-input] label')
-  await expect(ratings).toHaveCount(10)
+  const ratings = page.locator('[data-consumit-rating-input] > span[role="presentation"]')
+  await expect(ratings).toHaveCount(5)
   for (const rating of await ratings.all()) {
     const bounds = await rating.boundingBox()
     expect(bounds!.width).toBeGreaterThanOrEqual(44)
@@ -137,7 +142,10 @@ test('catalog, detail, forms and personal screens fit narrow phones and landscap
 
 test('profile editor fits short screens, contains keyboard focus and restores its trigger', async ({ page, context, request }) => {
   await mkdir(resolve('.impeccable/review/mobile-pass'), { recursive: true })
-  const { token, member } = await (await request.get(`${api}/__fixtures/session`)).json()
+  const sessionResponse = await request.get(`${api}/__fixtures/session`)
+  expect(sessionResponse.ok(), await sessionResponse.text()).toBe(true)
+  const { token, member } = await sessionResponse.json()
+  expect({ token, username: member?.username }).toEqual({ token: expect.any(String), username: expect.any(String) })
   await context.addCookies([{ name: 'consumit_session', value: token, domain: '127.0.0.1', path: '/', httpOnly: true, sameSite: 'Lax' }])
   for (const [width, height] of [[320, 700], [844, 390]] as const) {
     await page.setViewportSize({ width, height })
@@ -153,6 +161,9 @@ test('profile editor fits short screens, contains keyboard focus and restores it
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width)
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(height)
     expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+    await expect(dialog.getByRole('searchbox', { name: 'Search a movie or series for backdrop art' })).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(dialog.getByRole('button', { name: 'Close edit banner dialog', exact: true })).toBeFocused()
     await page.keyboard.press('Shift+Tab')
     await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused()
     await page.screenshot({ path: resolve('.impeccable/review/mobile-pass', `profile-editor-open-${width}x${height}.png`), fullPage: true })

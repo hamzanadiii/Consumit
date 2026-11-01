@@ -61,8 +61,8 @@ describe('shell state provider', () => {
     const nav = screen.getByRole('navigation', { name: 'Main navigation' })
     const { getByRole } = within(nav)
 
-    await user.click(getByRole('link', { name: 'History' }))
-    const row = getByRole('link', { name: 'History' })
+    await user.click(getByRole('link', { name: 'Community' }))
+    const row = getByRole('link', { name: 'Community' })
     expect(row).toHaveAttribute('aria-busy', 'true')
     expect(screen.getByRole('status', { name: 'Loading page' })).toBeInTheDocument()
   })

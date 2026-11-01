@@ -6,6 +6,8 @@ import { pipeline } from 'node:stream/promises'
 import { createMediaEgress, type MediaBudgetState } from './playback/media-egress.ts'
 import { parseRelayProviders, validateRelayNode } from './playback/relay.ts'
 
+if (process.env.NODE_ENV === 'production' || process.env.PROVIDER_EXECUTION_MODE === 'cloudflare-only') throw new Error('Provider execution on the VPS is disabled; use accepted Cloudflare routes.')
+
 const node = validateRelayNode({ origin: process.env.PLAYBACK_NODE_ORIGIN ?? '', secret: process.env.PLAYBACK_NODE_SECRET ?? '', providers: parseRelayProviders(process.env.PLAYBACK_NODE_PROVIDERS ?? '{}') })
 const appOrigin = process.env.APP_ORIGIN ?? ''
 if (new URL(appOrigin).origin !== appOrigin || !appOrigin.startsWith('https://') || process.env.PLAYBACK_NODE_ENABLED !== 'true') throw new Error('Media daemon requires explicit HTTPS configuration.')

@@ -5,8 +5,7 @@ for (const sourceType of ['native', 'hls']) {
   test(`native iOS fullscreen receives selected and uploaded caption tracks through ${sourceType} playback and rotation`, async ({ page }, testInfo) => {
     await mkdir('.impeccable/review/ios-native-fullscreen', { recursive: true })
     await page.addInitScript(() => {
-      localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: false, subtitleLanguages: ['ar', 'en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: true }))
-      localStorage.setItem('consumit.player.subtitle-delay', '1000')
+      localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: true, subtitleLanguages: ['ar', 'en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: true }))
       Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: undefined })
       Object.defineProperty(HTMLVideoElement.prototype, 'webkitEnterFullscreen', { configurable: true, value: function(this: HTMLVideoElement) { this.dispatchEvent(new Event('webkitbeginfullscreen')) } }); Object.defineProperty(HTMLVideoElement.prototype, 'webkitExitFullscreen', { configurable: true, value: function(this: HTMLVideoElement) { this.dispatchEvent(new Event('webkitendfullscreen')) } })
     })
@@ -14,13 +13,15 @@ for (const sourceType of ['native', 'hls']) {
       { type: 'snapshot', searchId: '78f506d8-4c60-44ed-88dc-c3a20f20b488', languages: [] },
       { type: 'complete', searchId: '78f506d8-4c60-44ed-88dc-c3a20f20b488', languages: [] },
     ].map(event => JSON.stringify(event)).join('\n') + '\n' }))
+    await page.route('**/v1/subtitles?*', route => route.fulfill({ json: { subtitles: [{ id: 'fr', label: 'Français', language: 'fr', url: 'https://experience-media.example/french.vtt', format: 'vtt' }] } }))
+    await page.route('**/v1/subtitles/discover/search?*', route => route.fulfill({ json: { tracks: [], total: 0, nextCursor: null } }))
     await page.route('https://experience-media.example/*.vtt', route => route.fulfill({ contentType: 'text/vtt', headers: { 'access-control-allow-origin': '*' }, body: 'WEBVTT\n\n00:00:00.000 --> 00:00:30.000\nProvider caption\n' }))
     if (sourceType === 'hls') {
-      await page.route('**/v1/playback/resolve', async route => {
+      await page.route('**/v1/playback/attempts', async route => {
         const response = await route.fetch()
-        const session = await response.json()
-        Object.assign(session.source, { type: 'hls', src: 'https://fullscreen-media.example/media.m3u8' })
-        await route.fulfill({ response, json: session })
+        const attempt = await response.json()
+        Object.assign(attempt.session.source, { type: 'hls', src: 'https://fullscreen-media.example/media.m3u8' })
+        await route.fulfill({ response, json: attempt })
       })
       await page.route('https://fullscreen-media.example/**', async route => {
         const name = new URL(route.request().url()).pathname.slice(1)
@@ -37,7 +38,7 @@ for (const sourceType of ['native', 'hls']) {
     await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0)
     await video.evaluate(async (v: HTMLVideoElement) => { v.muted = true; await v.play(); v.pause(); v.currentTime = 2 })
     await page.getByRole('button', { name: 'Captions', exact: true }).click()
-    await page.getByRole('searchbox').fill('French')
+    await page.getByRole('searchbox').fill('Français')
     await page.getByRole('radio', { name: /Français/ }).click()
     await expect(captions).toHaveText('Provider caption')
     await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click()
@@ -62,12 +63,20 @@ for (const sourceType of ['native', 'hls']) {
       await page.locator('input[type="file"]').setInputFiles({ name: `captions.${extension}`, mimeType: extension === 'srt' ? 'application/x-subrip' : 'text/vtt', buffer: Buffer.from(extension === 'srt' ? body.replaceAll('.', ',') : `WEBVTT\n\n${body}`) })
       await expect(captions).toHaveText(`Uploaded ${extension}`)
       await expect(captions).toBeHidden(); await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].filter(track => track.mode === 'showing').length)).toBe(1)
+      await page.getByRole('button', { name: 'Captions', exact: true }).click()
+      await page.getByRole('button', { name: 'Sync subtitle to audio', exact: true }).click()
+      const shiftForward = page.getByRole('button', { name: 'Shift subtitles forwards 50 milliseconds', exact: true })
+      await shiftForward.click()
+      await expect(page.getByText('+50ms', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Back to subtitles', exact: true }).click()
       await expect.poll(nativeText).toBe(`Uploaded ${extension}`)
-      await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].find(track => track.mode === 'showing')?.cues?.[1]?.startTime)).toBe(7)
+      await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].find(track => track.mode === 'showing')?.cues?.[1]?.startTime)).toBe(7.95)
       await page.screenshot({ path: `.impeccable/review/ios-native-fullscreen/${testInfo.project.name}-${sourceType}-${extension}.png` })
       await video.evaluate((v: HTMLVideoElement) => { v.currentTime = 10 })
       await expect(captions).toHaveText(`Later ${extension}`)
       await expect.poll(nativeText).toBe(`Later ${extension}`)
+      await page.getByRole('button', { name: 'Close captions', exact: true }).click()
+      await expect(page.getByRole('dialog', { name: 'Captions' })).toBeHidden()
       await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).click()
       await expect(video).not.toHaveAttribute('data-native-fullscreen'); await expect(player).not.toHaveAttribute('data-viewport-fullscreen')
       await expect(captions).toBeVisible()
@@ -83,6 +92,11 @@ for (const sourceType of ['native', 'hls']) {
     await page.getByRole('radio', { name: 'Off', exact: true }).click()
     await expect(captions).toHaveCount(0)
     await expect.poll(() => video.evaluate((v: HTMLVideoElement) => [...v.textTracks].filter(track => track.mode === 'showing').length)).toBe(0)
+    const captionsDialog = page.getByRole('dialog', { name: 'Captions' })
+    if (await captionsDialog.isVisible()) {
+      await page.getByRole('button', { name: 'Close captions', exact: true }).click()
+      await expect(captionsDialog).toBeHidden()
+    }
     await page.getByRole('button', { name: 'Exit fullscreen', exact: true }).click()
     expect(errors).toEqual([])
   })

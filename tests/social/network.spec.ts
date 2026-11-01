@@ -4,6 +4,7 @@ import { defaultExperiencePreferences } from '../../packages/contracts/src/index
 
 test.beforeEach(async ({ page, request }) => {
   await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: {} })
+  await page.addInitScript(() => localStorage.setItem('consumit.share-welcome-dismissed.v1', 'true'))
   const avatar = await readFile('apps/web/public/assets/hamza-avatar.svg')
   await page.route('https://api.dicebear.com/**', route => route.fulfill({ contentType: 'image/svg+xml', body: avatar }))
   await page.route('**/v1/telemetry/web-vitals', route => route.fulfill({ status: 204 }))

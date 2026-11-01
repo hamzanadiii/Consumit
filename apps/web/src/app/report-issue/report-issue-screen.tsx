@@ -1,7 +1,7 @@
 'use client'
 
 import { buttonVariants, Input, Label, Select, type SelectionOption } from '@consumit/ui'
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { PlaybackDiagnostics } from '@consumit/contracts'
 import { readPlaybackDiagnostics, formatPlaybackDiagnostics } from '@/lib/playback-diagnostics'
 
@@ -16,7 +16,7 @@ const categoryOptions: readonly SelectionOption[] = [
 ]
 
 function FieldHint({ children }: { children: ReactNode }) {
-  return <p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">{children}</p>
+  return <p className="mt-2 text-xs leading-5 text-[var(--fs-secondary)]">{children}</p>
 }
 
 export function ReportIssueScreen({ category, supportEmail }: { category: IssueCategory; supportEmail: string | undefined }) {
@@ -27,11 +27,21 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
   const [replyEmail, setReplyEmail] = useState('')
   const [diagnostics, setDiagnostics] = useState<PlaybackDiagnostics | null>(null)
   const [includeDiagnostics, setIncludeDiagnostics] = useState(false)
-  useEffect(() => { let active = true; queueMicrotask(() => { if (active) setDiagnostics(readPlaybackDiagnostics()) }); return () => { active = false } }, [])
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { headingRef.current?.focus(); let active = true; queueMicrotask(() => { if (active) setDiagnostics(readPlaybackDiagnostics()) }); return () => { active = false } }, [])
+  const titleTooShort = title.length > 0 && title.trim().length < 4
+  const descriptionTooShort = description.length > 0 && description.trim().length < 10
+
+  function changeIssueCategory(value: string) {
+    const nextCategory = parseIssueCategory(value)
+    setIssueCategory(nextCategory)
+    if (nextCategory !== 'playback') setIncludeDiagnostics(false)
+  }
+
   const mailto = useMemo(() => {
     if (!recipient || title.trim().length < 4 || description.trim().length < 10) return null
     if (replyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail.trim())) return null
-    return buildIssueMailto(recipient, { category: issueCategory, description, replyEmail, title, ...(includeDiagnostics && diagnostics ? { diagnostics: formatPlaybackDiagnostics(diagnostics) } : {}) })
+    return buildIssueMailto(recipient, { category: issueCategory, description, replyEmail, title, ...(issueCategory === 'playback' && includeDiagnostics && diagnostics ? { diagnostics: formatPlaybackDiagnostics(diagnostics) } : {}) })
   }, [description, issueCategory, recipient, replyEmail, title, includeDiagnostics, diagnostics])
 
   function updateField(event: FormEvent<HTMLFormElement>) {
@@ -40,42 +50,57 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
 
   return (
     <SupportShell>
-      <main className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[minmax(0,1.3fr)_minmax(15rem,0.7fr)] md:gap-16">
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto grid max-w-5xl gap-10 md:grid-cols-[minmax(0,1.3fr)_minmax(15rem,0.7fr)] md:gap-16">
         <div>
           <a className="inline-flex min-h-11 items-center rounded-control text-xs font-bold text-[var(--fs-secondary)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/help">← Help center</a>
-          <h1 className="mt-8 font-display text-4xl leading-[1.02] tracking-[-0.035em] sm:text-5xl">Tell us what got in the way.</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="mt-8 rounded-sm font-display text-4xl leading-[1.02] tracking-[-0.035em] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:text-5xl">Tell us what got in the way.</h1>
           <p className="mt-4 max-w-[60ch] text-sm leading-6 text-[var(--fs-secondary)]">Share what you expected and what happened. Leave out passwords, payment details, and private browsing information.</p>
 
           {recipient ? (
             <form className="mt-9 flex flex-col gap-6" onSubmit={updateField}>
-              <Select hideLabel id="issue-category" label="Issue category" name="category" onValueChange={(value) => setIssueCategory(parseIssueCategory(value))} options={categoryOptions} value={issueCategory} />
+              <Select hideLabel id="issue-category" label="Issue category" name="category" onValueChange={changeIssueCategory} options={categoryOptions} value={issueCategory} />
 
               <div>
                 <Label htmlFor="issue-title">Short summary</Label>
-                <Input autoComplete="off" className="mt-2 w-full" id="issue-title" maxLength={120} minLength={4} name="title" onChange={(event) => setTitle(event.currentTarget.value)} placeholder="For example, episode will not start" required value={title} />
-                <FieldHint>At least 4 characters.</FieldHint>
+                <Input aria-describedby={titleTooShort ? 'issue-title-error' : undefined} aria-invalid={titleTooShort || undefined} autoComplete="off" className="mt-2 w-full" id="issue-title" maxLength={120} minLength={4} name="title" onChange={(event) => setTitle(event.currentTarget.value)} placeholder="For example, episode will not start" required value={title} />
+                {titleTooShort ? <FieldHint><span id="issue-title-error">Use at least 4 characters.</span></FieldHint> : null}
               </div>
 
               <div>
                 <Label htmlFor="issue-description">What happened?</Label>
-                <textarea aria-describedby="issue-description-hint" className="mt-2 min-h-40 w-full resize-y rounded-control border border-control-outline bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange/30 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas aria-[invalid=true]:border-danger motion-reduce:transition-none" id="issue-description" maxLength={MAX_ISSUE_DESCRIPTION_LENGTH} minLength={10} name="description" onChange={(event) => setDescription(event.currentTarget.value)} placeholder="Include the title or episode, what you were doing, and any message Consumit showed." required value={description} />
+                <textarea aria-describedby={descriptionTooShort ? 'issue-description-hint issue-description-error' : 'issue-description-hint'} aria-invalid={descriptionTooShort || undefined} className="mt-2 min-h-40 w-full resize-y rounded-control border border-control-outline bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted focus-visible:border-orange focus-visible:ring-2 focus-visible:ring-orange/30 focus-visible:ring-offset-1 focus-visible:ring-offset-canvas aria-[invalid=true]:border-danger motion-reduce:transition-none" id="issue-description" maxLength={MAX_ISSUE_DESCRIPTION_LENGTH} minLength={10} name="description" onChange={(event) => setDescription(event.currentTarget.value)} placeholder="Include the title or episode, what you were doing, and any message Consumit showed." required value={description} />
                 <FieldHint><span id="issue-description-hint">10 to {MAX_ISSUE_DESCRIPTION_LENGTH.toLocaleString('en-US')} characters. No passwords, payment details, or private browsing data.</span></FieldHint>
+                {descriptionTooShort ? <FieldHint><span id="issue-description-error">Use at least 10 characters.</span></FieldHint> : null}
               </div>
 
               <div>
-                <Label htmlFor="issue-reply-email">Reply email <span className="font-normal normal-case tracking-normal text-[var(--fs-muted)]">(optional)</span></Label>
+                <Label htmlFor="issue-reply-email">Reply email <span className="font-normal normal-case tracking-normal text-[var(--fs-secondary)]">(optional)</span></Label>
                 <Input aria-describedby="issue-reply-email-hint" aria-invalid={replyEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail.trim()) || undefined} autoComplete="email" className="mt-2 w-full" id="issue-reply-email" maxLength={254} name="replyEmail" onChange={(event) => setReplyEmail(event.currentTarget.value)} placeholder="you@example.com" type="email" value={replyEmail} />
                 <FieldHint><span id="issue-reply-email-hint">{replyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyEmail.trim()) ? 'Enter a valid email address or clear this field.' : 'This address and your report are added to an email draft on your device.'}</span></FieldHint>
               </div>
 
-              {diagnostics && issueCategory === 'playback' ? <div><label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm"><input checked={includeDiagnostics} onChange={event => setIncludeDiagnostics(event.target.checked)} type="checkbox" />Include playback diagnostics</label><p className="text-xs leading-5 text-copy">Only title/episode, provider, browser, delivery path and failure category. No cookies, credentials or media URLs.</p>{includeDiagnostics ? <pre className="mt-2 whitespace-pre-wrap text-xs text-copy">{formatPlaybackDiagnostics(diagnostics)}</pre> : null}</div> : null}
+              {diagnostics && issueCategory === 'playback' ? (
+                <div>
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+                    <input
+                      checked={includeDiagnostics}
+                      className="size-4 shrink-0 accent-[var(--fs-accent)] outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--fs-page)]"
+                      onChange={event => setIncludeDiagnostics(event.target.checked)}
+                      type="checkbox"
+                    />
+                    Include playback diagnostics
+                  </label>
+                  <p className="text-xs leading-5 text-copy">Only title/episode, provider, browser, delivery path and failure category. No cookies, credentials or media URLs.</p>
+                  {includeDiagnostics ? <pre className="mt-2 whitespace-pre-wrap text-xs text-copy">{formatPlaybackDiagnostics(diagnostics)}</pre> : null}
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-4 border-t border-[var(--fs-line)] pt-5">
                 {mailto ? (
-                  <a className={buttonVariants({ size: 'lg', variant: 'accent' })} href={mailto}>Prepare email</a>
+                  <a className={`${buttonVariants({ size: 'lg', variant: 'accent' })} min-h-11`} href={mailto}>Prepare email</a>
                 ) : (
                   <span aria-disabled="true" className={`${buttonVariants({ size: 'lg', variant: 'accent' })} cursor-not-allowed opacity-45`}>Prepare email</span>
                 )}
-                <p className="max-w-[42ch] text-xs leading-5 text-[var(--fs-muted)]">Your email app opens with this draft. Review it and send it there.</p>
+                <p className="max-w-[42ch] text-xs leading-5 text-[var(--fs-secondary)]">Your email app opens with this draft. Review it and send it there.</p>
               </div>
             </form>
           ) : (
@@ -95,7 +120,7 @@ export function ReportIssueScreen({ category, supportEmail }: { category: IssueC
             <li>The movie, series, or anime episode involved</li>
             <li>Any plain-language error shown by Consumit</li>
           </ul>
-          <p className="mt-6 border-t border-[var(--fs-line)] pt-4 text-xs leading-5 text-[var(--fs-muted)]">Playback diagnostics are optional and shown for review. Your watch history and page activity are never attached.</p>
+          <p className="mt-6 border-t border-[var(--fs-line)] pt-4 text-xs leading-5 text-[var(--fs-secondary)]">Playback diagnostics are optional and shown for review. Your watch history and page activity are never attached.</p>
         </aside>
       </main>
     </SupportShell>

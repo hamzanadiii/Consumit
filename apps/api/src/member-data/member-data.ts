@@ -1,6 +1,8 @@
 import type {
   CatalogRef,
   CreateMemberListRequest,
+  DuplicateMemberListRequest,
+  AddMemberListCollaboratorRequest,
   CreateDiaryEntryRequest,
   CreateReviewRequest,
   DiaryEntry,
@@ -45,6 +47,9 @@ export interface MemberData {
   like(memberId: string, ref: CatalogRef): Promise<MemberTitleRecord | null>
   list(slug: string, viewerMemberId?: string): Promise<MemberListDetail | null>
   createList(memberId: string, input: CreateMemberListRequest): Promise<MemberListDetail>
+  duplicateList(memberId: string, slug: string, input: DuplicateMemberListRequest): Promise<MemberListDetail | null>
+  addListCollaborator(ownerId: string, listId: string, input: AddMemberListCollaboratorRequest): Promise<boolean>
+  removeListCollaborator(ownerId: string, listId: string, username: string): Promise<boolean>
   appendListTitle?(memberId: string, listId: string, title: CatalogRef): Promise<boolean>
   saveList?(memberId: string, slug: string): Promise<boolean>
   removeSavedList?(memberId: string, listId: string): Promise<boolean>
@@ -72,7 +77,7 @@ export interface MemberData {
   setSaved(memberId: string, title: CatalogRef, saved: boolean): Promise<void>
   setWatched(memberId: string, title: CatalogRef, watched: boolean): Promise<void>
   titleState(memberId: string, ref: CatalogRef): Promise<MemberTitleState>
-  titleReviews(ref: CatalogRef, page: number, sort: TitleReviewSort, viewerMemberId: string): Promise<TitleReviewsPage>
+  titleReviews(ref: CatalogRef, page: number, sort: TitleReviewSort, viewerMemberId?: string): Promise<TitleReviewsPage>
   updateDiary(memberId: string, entryId: string, changes: UpdateDiaryEntryRequest): Promise<boolean>
   deleteDiary(memberId: string, entryId: string): Promise<boolean>
   updateList(memberId: string, listId: string, changes: UpdateMemberListRequest): Promise<boolean>

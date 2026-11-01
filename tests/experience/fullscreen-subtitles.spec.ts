@@ -5,7 +5,7 @@ for (const sourceType of ['native', 'hls']) {
   test(`full-player fallback retains selected and uploaded captions through ${sourceType} playback and rotation`, async ({ page }, testInfo) => {
     await mkdir('.impeccable/review/ios-fullscreen', { recursive: true })
     await page.addInitScript(() => {
-      localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: false, subtitleLanguages: ['ar', 'en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: true }))
+      localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: true, subtitleLanguages: ['ar', 'en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: true }))
       Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: undefined })
       Object.defineProperty(HTMLVideoElement.prototype, 'webkitEnterFullscreen', { configurable: true, value: undefined })
     })
@@ -13,13 +13,15 @@ for (const sourceType of ['native', 'hls']) {
       { type: 'snapshot', searchId: '78f506d8-4c60-44ed-88dc-c3a20f20b488', languages: [] },
       { type: 'complete', searchId: '78f506d8-4c60-44ed-88dc-c3a20f20b488', languages: [] },
     ].map(event => JSON.stringify(event)).join('\n') + '\n' }))
+    await page.route('**/v1/subtitles?*', route => route.fulfill({ json: { subtitles: [{ id: 'fr', label: 'Français', language: 'fr', url: 'https://experience-media.example/french.vtt', format: 'vtt' }] } }))
+    await page.route('**/v1/subtitles/discover/search?*', route => route.fulfill({ json: { tracks: [], total: 0, nextCursor: null } }))
     await page.route('https://experience-media.example/*.vtt', route => route.fulfill({ contentType: 'text/vtt', headers: { 'access-control-allow-origin': '*' }, body: 'WEBVTT\n\n00:00:00.000 --> 00:00:30.000\nProvider caption\n' }))
     if (sourceType === 'hls') {
-      await page.route('**/v1/playback/resolve', async route => {
+      await page.route('**/v1/playback/attempts', async route => {
         const response = await route.fetch()
-        const session = await response.json()
-        Object.assign(session.source, { type: 'hls', src: 'https://fullscreen-media.example/media.m3u8' })
-        await route.fulfill({ response, json: session })
+        const attempt = await response.json()
+        Object.assign(attempt.session.source, { type: 'hls', src: 'https://fullscreen-media.example/media.m3u8' })
+        await route.fulfill({ response, json: attempt })
       })
       await page.route('https://fullscreen-media.example/**', async route => {
         const name = new URL(route.request().url()).pathname.slice(1)
@@ -35,7 +37,7 @@ for (const sourceType of ['native', 'hls']) {
     await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0)
     await video.evaluate(async (v: HTMLVideoElement) => { v.muted = true; await v.play(); v.pause(); v.currentTime = 2 })
     await page.getByRole('button', { name: 'Captions', exact: true }).click()
-    await page.getByRole('searchbox').fill('French')
+    await page.getByRole('searchbox').fill('Français')
     await page.getByRole('radio', { name: /Français/ }).click()
     await expect(captions).toHaveText('Provider caption')
     await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click()

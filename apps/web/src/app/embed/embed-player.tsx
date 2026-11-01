@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PlaybackEvents, PlaybackRef, PlaybackSession, DeliveryFailure } from '@consumit/contracts'
 
-import { ConsumitPlayer, readQualityPreference, type DirectMediaSource } from '@consumit/ui'
+import { ConsumitPlayer, readQualityPreference, type DirectMediaSource, type PlayerMediaObservation } from '@consumit/ui'
 import { createPlaybackCoordinator, watchSourceExpiry } from '@/lib/playback-coordinator'
 import { playbackCapabilities } from '@/lib/playback-browser'
 import { browserSkipTimes } from '@/lib/skip-times-browser'
@@ -115,9 +115,9 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
     eventsRef.current = events
     return () => { events.close(); eventsRef.current = null }
   }, [sessionId, coordinator])
-  const emit = useCallback((event: EmbedPlayerEventName, video: HTMLVideoElement) => {
-    if (Number.isFinite(video.duration) && video.duration > 0) durationRef.current = video.duration
-    postEmbedPlayerEvent(event, video.currentTime, durationRef.current, videoId)
+  const emit = useCallback((event: EmbedPlayerEventName, observation: PlayerMediaObservation) => {
+    if (observation.durationSeconds > 0) durationRef.current = observation.durationSeconds
+    postEmbedPlayerEvent(event, observation.positionSeconds, durationRef.current, videoId)
   }, [videoId])
   const start = useCallback(async () => {
     if (!playbackRef || requestRef.current) return
@@ -192,31 +192,40 @@ export function EmbedPlayer({ autoPlay = true, lang, audioLanguage, overview, pa
 
   return <div className="relative min-h-0 w-full flex-1 bg-black" data-consumit-embed-player>
     <ConsumitPlayer
-      autoPlay={autoPlay}
-      className="h-full w-full rounded-none border-0"
-      source={source}
-      onSkipSegmentsRequest={requestSkipTimes}
-      extraSubtitles={extraSubtitles}
-      onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)}
-      onSubtitleRequest={loadSubtitles}
-      onPlaybackEvent={(event) => eventsRef.current?.push(event)}
-      onMediaPreferencesChange={(preferences) => coordinator.setPreferences({ ...preferences, ...(audioLanguage ? { audioLanguage } : {}) })}
-      onRetry={() => void start()}
-      onDurationChange={(event) => { if (Number.isFinite(event.currentTarget.duration) && event.currentTarget.duration > 0) durationRef.current = event.currentTarget.duration }}
-      onEnded={(event) => { clock.current.playing = false; emit('ended', event.currentTarget) }}
-      onPause={(event) => { if (!requestRef.current) clock.current.playing = false; emit('pause', event.currentTarget) }}
-      onPlay={(event) => { clock.current.playing = true; loadSubtitles(); emit('play', event.currentTarget) }}
-      onSeeked={(event) => emit('seeked', event.currentTarget)}
-      onTimeUpdate={(event) => { clock.current.position = event.currentTarget.currentTime; emit('timeupdate', event.currentTarget) }}
-      pauseFacts={pauseFacts}
-      pauseLogoUrl={posterSrc}
-      pauseOverview={overview}
-      posterSrc={posterSrc}
-      resumeAt={resume.position}
-      resumePlaying={resume.playing}
-      subtitleLanguages={lang ? [lang] : undefined}
       title={title}
-      topMeta={['Playing from Consumit', source?.qualityHint && source.qualityHint !== 'Auto' ? source.qualityHint : null].filter(Boolean).join(' · ')}
+      media={{ source, autoPlay, resume: { positionSeconds: resume.position, playing: resume.playing } }}
+      presentation={{
+        className: 'h-full w-full rounded-none border-0',
+        pauseFacts, pauseLogoUrl: posterSrc, pauseOverview: overview,
+        posterSrc, topMeta: ['Playing from Consumit', source?.qualityHint && source.qualityHint !== 'Auto' ? source.qualityHint : null].filter(Boolean).join(' · '),
+      }}
+      controls={{
+        preferences: { subtitleLanguages: lang ? [lang] : undefined },
+        playback: { skipSegments: requestSkipTimes },
+        captions: { requestAvailable: true, extraTracks: extraSubtitles },
+        sourceSelection: { retryAvailable: true },
+      }}
+      onControlAction={action => {
+        switch (action.type) {
+          case 'retry': void start(); break
+          case 'subtitle-request': loadSubtitles(); break
+          case 'media-preferences-change': coordinator.setPreferences({ ...action.value, ...(audioLanguage ? { audioLanguage } : {}) }); break
+          default: break
+        }
+      }}
+      onSourceError={(reason, deliveryFailure) => void recover(reason, deliveryFailure)}
+      onPlaybackEvent={(event) => eventsRef.current?.push(event)}
+      onMediaObservation={(observation) => {
+        if (observation.type === 'duration-change') {
+          if (observation.durationSeconds > 0) durationRef.current = observation.durationSeconds
+          return
+        }
+        if (observation.type === 'ended') { clock.current.playing = false; emit('ended', observation) }
+        else if (observation.type === 'pause') { if (!requestRef.current) clock.current.playing = false; emit('pause', observation) }
+        else if (observation.type === 'play') { clock.current.playing = true; loadSubtitles(); emit('play', observation) }
+        else if (observation.type === 'seeked') emit('seeked', observation)
+        else if (observation.type === 'time-update') { clock.current.position = observation.positionSeconds; emit('timeupdate', observation) }
+      }}
     />
     {busy ? <p className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-control border border-border bg-black/80 px-3 py-1.5 text-xs font-bold text-ink" role="status">{session ? 'Switching source…' : 'Finding a source…'}</p> : null}
     {!busy && notice ? <p className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-control border border-border bg-black/80 px-3 py-1.5 text-xs font-bold text-ink" role="status">{notice}</p> : null}

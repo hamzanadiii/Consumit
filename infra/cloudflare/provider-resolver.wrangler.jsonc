@@ -5,5 +5,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } },
-  "vars": { "RESOLVER_ENABLED": "true" }
+  "vars": { "RESOLVER_ENABLED": "true", "RESOLVER_COORDINATION_ENABLED": "true", "RESOLVER_ROUTE_POLICY": "[]", "RESOLVER_ROUTE_POLICY_REQUIRED": "true" },
+  "durable_objects": { "bindings": [{ "name": "PROVIDER_COORDINATORS", "class_name": "ProviderCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProviderCoordinator"] }]
 }

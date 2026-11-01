@@ -18,10 +18,12 @@ import type { Playback } from '../playback/playback.ts'
 import type { SubtitleService } from '../subtitles/subtitles.ts'
 import type { ProviderConfigStore } from './provider-config.ts'
 import { applyOrdersInPlace, applyOverridesInPlace, configuredProviderRegions, isProviderRemoved, orderedProviderIds, providerKinds, type ProviderKind, type ProviderOverridePatch } from './provider-config.ts'
-import { aggregateProviderMetrics, readProviderAlerts, readProviderComparisons, readProviderMetrics, type MetricsSnapshot, type ProviderComparisonRow } from './provider-metrics.ts'
+import { readProviderAlerts, readProviderComparisons, readProviderMetrics, readProviderRouteEvidence, type MetricsSnapshot, type ProviderComparisonRow, type ProviderRouteEvidenceSnapshot } from './provider-metrics.ts'
 import { registerProviderInspection } from './inspection.ts'
 import { createMemoryPlaybackStore } from '../playback/state.ts'
 import { createPlaybackRelay } from '../playback/relay.ts'
+import { createProviderRouteRegistry } from '../playback/route-registry.ts'
+import { buildProviderHealthRows } from '../playback/provider-health.ts'
 
 function parseBody<T extends Record<string, unknown>>(request: FastifyRequest, fields: (keyof T)[]): T {
   const body = request.body as Record<string, unknown> | undefined
@@ -82,9 +84,17 @@ export function registerAdminRoutes(
   deps: { diagnostics?: InternalClient; env: ApiEnv; identity: Identity; repository?: IdentityRepository | undefined; providers?: readonly ProviderRegistration[] | undefined; scoutCatalog?: (() => readonly ProviderRegistration[]) | undefined; scoutRecipes?: readonly { id: string }[] | undefined; providerOrders?: Record<ProviderKind, string[]> | undefined; playbackStore?: PlaybackStore | undefined; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; providerConfig?: ProviderConfigStore | undefined; probeStatus?: (() => Promise<ProbeStatus> | ProbeStatus) | undefined },
 ) {
   const { env, identity, repository, providers = [], providerOrders, playbackStore, playback, subtitles, providerConfig, probeStatus } = deps
+  const routeRegistry = env.playback?.execution === 'cloudflare-only' && env.playback.resolver ? createProviderRouteRegistry({
+    providers, resolverOrigin: env.playback.resolver.origin, resolverOrigins: env.playback.resolver.providerOrigins,
+    relayOrigin: env.playback.relay?.origin, relayOrigins: env.playback.relay?.providerOrigins, relayProviders: env.playback.relay?.providers,
+    accepted: env.playback.acceptedEdgeRoutes ?? [],
+  }) : null
+  if (routeRegistry) for (const provider of providers) provider.routeVersion = routeRegistry.version
   const cookieName = sessionCookieName(env)
   let metricsCache: { at: number; data: MetricsSnapshot | null } | null = null
   let metricsPending: Promise<MetricsSnapshot | null> | null = null
+  let routeEvidenceCache: { at: number; data: ProviderRouteEvidenceSnapshot | null } | null = null
+  let routeEvidencePending: Promise<ProviderRouteEvidenceSnapshot | null> | null = null
   let comparisonCache: { at: number; data: ProviderComparisonRow[] | null } | null = null
   let comparisonPending: Promise<ProviderComparisonRow[] | null> | null = null
   async function comparisonSnapshot(): Promise<ProviderComparisonRow[] | null> {
@@ -104,6 +114,14 @@ export function registerAdminRoutes(
       metricsCache = { at: Date.now(), data }; return data
     }).finally(() => { metricsPending = null })
     return metricsPending
+  }
+  async function routeEvidenceSnapshot(): Promise<ProviderRouteEvidenceSnapshot | null> {
+    if (!env.adminMetricsUrl) return null
+    if (routeEvidenceCache && Date.now() - routeEvidenceCache.at < 15_000) return routeEvidenceCache.data
+    routeEvidencePending ??= readProviderRouteEvidence(env.adminMetricsUrl).catch(() => null).then(data => {
+      routeEvidenceCache = { at: Date.now(), data }; return data
+    }).finally(() => { routeEvidencePending = null })
+    return routeEvidencePending
   }
 
   function guardMutation(request: FastifyRequest) {
@@ -148,7 +166,9 @@ export function registerAdminRoutes(
   })
   registerProviderInspection(app, { authorize: requireAdmin, guard: guardMutation, providers,
     catalog: deps.scoutCatalog, recipes: deps.scoutRecipes, store: playbackStore ?? createMemoryPlaybackStore(), region: env.tmdbRegion, origin: env.appOrigin,
-    relay: env.playback?.relay ? createPlaybackRelay(env.playback.relay) : undefined })
+    relay: env.playback?.relay ? createPlaybackRelay({ ...env.playback.relay,
+      ...(routeRegistry ? { routeVersion: routeRegistry.version, routePolicy: routeRegistry.relayRoutes() } : {}),
+    }) : undefined })
 
   // --- Provider management ---
 
@@ -213,27 +233,15 @@ export function registerAdminRoutes(
   app.get('/v1/admin/providers/health', async (request, reply) => {
     await requireAdmin(request)
     void reply.header('cache-control', 'private, no-store')
-    const probed = await probeStatus?.() ?? {}
-    const metrics = await metricsSnapshot()
-    const kinds = ['movie', 'series', 'anime'] as const
-    const result: Record<string, Array<{ id: string; region: string; enabled: boolean; probe: ProbeStatus[string] | null; status: 'healthy' | 'degraded' | 'down' | 'unknown' | 'disabled'; circuit: { failures: number; playbackFailures: number; openUntil: number; outcomes: number; success: number; latencyMs: number } | null }>> = {}
-    for (const kind of kinds) {
-      const circuits = playback?.providerStatus?.(kind) ?? []
-      result[kind] = providers
-        .filter((p) => !isProviderRemoved(p) && suppliesVideo(p) && p.mediaKinds.includes(kind))
-        .flatMap((p) => [...new Set(p.approvedRegions)].map((region) => {
-          const probe = probed[`${p.adapter.id}:${kind}:${region}`] ?? null
-          const current = circuits.find((entry) => entry.id === p.adapter.id)
-          const open = Boolean(current && current.openUntil > Date.now())
-          const fresh = Boolean(probe && Date.now() - probe.at <= Math.max(10 * 60_000, (env.playback?.probeIntervalMs ?? 0) * 2))
-          const trend = metrics ? aggregateProviderMetrics(metrics, p.adapter.id, kind, region) : null
-          const observations = (trend?.starts ?? 0) + (trend?.playbackFailures ?? 0)
-          const failureShare = observations ? (trend?.playbackFailures ?? 0) / observations : 0
-          const status = !p.enabled ? 'disabled' : fresh && !probe?.ok && open || observations >= 10 && failureShare >= 0.5 ? 'down' : !fresh ? 'unknown' : !probe?.ok || open || observations >= 10 && failureShare >= 0.1 ? 'degraded' : observations >= 10 ? 'healthy' : 'unknown'
-          return { id: p.adapter.id, region, enabled: p.enabled, probe, status, circuit: current ? { failures: current.failures, playbackFailures: current.playbackFailures, openUntil: current.openUntil, outcomes: current.outcomes, success: current.success, latencyMs: current.latency } : null }
-        }))
-    }
-    return result
+    const [probed, evidence] = await Promise.all([probeStatus?.() ?? {}, routeEvidenceSnapshot()])
+    const circuits = (['movie', 'series', 'anime'] as const).flatMap(kind => playback?.providerStatus?.(kind) ?? [])
+    return buildProviderHealthRows({
+      providers: providers.filter(provider => !isProviderRemoved(provider)), probes: probed, circuits,
+      ...(evidence ? { evidence } : {}),
+      ...(routeRegistry?.version ? { routeVersion: routeRegistry.version } : {}),
+      ...(routeRegistry ? { findRoute: (id, kind, region, delivery, purpose) => routeRegistry.find(id, kind, region, delivery, purpose) } : {}),
+      probeIntervalMs: env.playback?.probeIntervalMs ?? 0,
+    })
   })
 
   app.get('/v1/admin/providers/metrics', async (request, reply) => {

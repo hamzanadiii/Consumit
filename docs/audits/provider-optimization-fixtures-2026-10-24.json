@@ -1,0 +1,62 @@
+{
+  "observedAt": "2026-10-24T22:20:23.163Z",
+  "runtime": "v26.3.0",
+  "fixtureOnly": true,
+  "limitations": [
+    "No network, database server, route bundle, browser field metric or production capacity was measured. Catalog persistence is a counted fixture."
+  ],
+  "catalog": {
+    "beforeWithoutSharedLease": {
+      "instances": 30,
+      "durationMs": 12.948199999999929,
+      "persistentReads": 30,
+      "persistentWrites": 30,
+      "upstreamCalls": 30
+    },
+    "afterWithSharedLease": {
+      "instances": 30,
+      "durationMs": 2.461999999999989,
+      "persistentReads": 31,
+      "persistentWrites": 1,
+      "upstreamCalls": 1
+    }
+  },
+  "subtitles": {
+    "simultaneous": 25,
+    "coldMs": 101.01709999999991,
+    "coldUpstreamCalls": 3,
+    "warmUpstreamCalls": 0,
+    "peakProviderConcurrency": 2,
+    "visibleEnglishChoices": 10,
+    "warmP50Ms": 0.012299999999981992,
+    "warmP95Ms": 0.031899999999950523
+  },
+  "progress": {
+    "before": {
+      "overlappingIdenticalLifecycleFlushes": 4,
+      "writes": 4,
+      "cadenceSeconds": 25
+    },
+    "after": {
+      "overlappingIdenticalLifecycleFlushes": 4,
+      "writes": 1,
+      "cadenceSeconds": 25
+    }
+  },
+  "resources": {
+    "before": {
+      "rss": 81510400,
+      "heapTotal": 20971520,
+      "heapUsed": 11007748,
+      "external": 2972985,
+      "arrayBuffers": 1095
+    },
+    "after": {
+      "rss": 106868736,
+      "heapTotal": 25686016,
+      "heapUsed": 18370421,
+      "external": 8656680,
+      "arrayBuffers": 4601256
+    }
+  }
+}

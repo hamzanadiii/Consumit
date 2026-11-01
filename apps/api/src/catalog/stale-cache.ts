@@ -1,4 +1,10 @@
 import type { PersistentCatalogCacheEntry, PersistentCatalogCacheStore } from './cache-store.ts'
+import { randomUUID } from 'node:crypto'
+
+export type CatalogRefreshLease = {
+  claim(key: string, token: string, ttlMs: number): Promise<boolean>
+  release(key: string, token: string): Promise<void>
+}
 
 const MAX_MEMORY_ENTRIES = 500
 const MAX_REFRESH_FAILURES = 500
@@ -30,11 +36,13 @@ export class StaleCache {
   readonly #now: () => number
   readonly #persistent: PersistentCatalogCacheStore | undefined
   readonly #onStoreError: (error: unknown) => void
+  readonly #lease: CatalogRefreshLease | undefined
 
-  constructor(now: () => number = Date.now, persistent?: PersistentCatalogCacheStore, onStoreError: (error: unknown) => void = () => undefined) {
+  constructor(now: () => number = Date.now, persistent?: PersistentCatalogCacheStore, onStoreError: (error: unknown) => void = () => undefined, lease?: CatalogRefreshLease) {
     this.#now = now
     this.#persistent = persistent
     this.#onStoreError = onStoreError
+    this.#lease = lease
   }
 
   async get<T>(
@@ -102,6 +110,30 @@ export class StaleCache {
     }
   }
 
+  /** Store a validated mapping learned from a canonical catalog response. */
+  async set<T>(key: string, value: T, policy: CachePolicy): Promise<void> {
+    const now = this.#now()
+    const entry: Entry<T> = {
+      fetchedAt: new Date(now),
+      freshUntil: now + policy.freshForMs,
+      staleUntil: policy.staleForMs === null ? Number.POSITIVE_INFINITY : now + policy.freshForMs + policy.staleForMs,
+      value,
+    }
+    this.#remember(key, entry)
+    if (!this.#persistent) return
+    try {
+      await this.#persistent.set({
+        key,
+        value,
+        fetchedAt: entry.fetchedAt,
+        freshUntil: new Date(entry.freshUntil),
+        staleUntil: Number.isFinite(entry.staleUntil) ? new Date(entry.staleUntil) : null,
+      })
+    } catch (error) {
+      this.#onStoreError(error)
+    }
+  }
+
   async #readPersistent(key: string): Promise<PersistentCatalogCacheEntry | null> {
     const active = this.#persistentReads.get(key)
     if (active) return active
@@ -120,6 +152,34 @@ export class StaleCache {
     if (active) return active
 
     const request = (async () => {
+      const token = randomUUID()
+      let acquired = false
+      if (this.#lease && this.#persistent) {
+        acquired = await this.#lease.claim(key, token, 30000)
+        if (!acquired) {
+          const stale = this.#entries.get(key) as Entry<T> | undefined
+          if (stale && stale.staleUntil > this.#now()) return stale
+          // Cold followers wait a bounded interval for the owner to publish.
+          // A timeout fails this request; it never starts a duplicate refresh.
+          for (let attempt = 0; attempt < 20; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 100))
+            const shared = await this.#persistent.get(key)
+            if (shared && shared.freshUntil.getTime() > this.#now()) {
+              const entry: Entry<T> = { value: shared.value as T, fetchedAt: shared.fetchedAt, freshUntil: shared.freshUntil.getTime(), staleUntil: shared.staleUntil?.getTime() ?? Infinity }
+              this.#remember(key, entry); return entry
+            }
+          }
+          throw new Error('Catalog refresh is in progress.')
+        }
+      }
+      try {
+      if (acquired && this.#persistent) {
+        const shared = await this.#persistent.get(key)
+        if (shared && shared.freshUntil.getTime() > this.#now()) {
+          const entry: Entry<T> = { value: shared.value as T, fetchedAt: shared.fetchedAt, freshUntil: shared.freshUntil.getTime(), staleUntil: shared.staleUntil?.getTime() ?? Infinity }
+          this.#remember(key, entry); return entry
+        }
+      }
       const value = await load()
       const loadedAt = this.#now()
       const entry: Entry<T> = {
@@ -144,6 +204,7 @@ export class StaleCache {
         }
       }
       return entry
+      } finally { if (acquired) await this.#lease!.release(key, token).catch(this.#onStoreError) }
     })()
 
     this.#inFlight.set(key, request)

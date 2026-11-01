@@ -86,11 +86,17 @@ export function createPlaybackCoordinator(transport: PlaybackTransport, now = Da
   }
 }
 
-/** One expiry clock and background-tab check for both player surfaces. */
-export function watchSourceExpiry(expiresAt: string, refresh: () => void, leadMs = 15_000): () => void {
-  const cancel = scheduleSourceRefresh(expiresAt, refresh, Date.now, leadMs)
+export type SourceExpiryTrigger = 'timer' | 'visibility'
+
+/** One expiry clock and foreground check for both player surfaces. */
+export function watchSourceExpiry(expiresAt: string, refresh: (trigger: SourceExpiryTrigger) => void, leadMs = 15_000): () => void {
+  const cancel = scheduleSourceRefresh(expiresAt, () => refresh('timer'), Date.now, leadMs)
+  let wasHidden = document.visibilityState === 'hidden'
   const visible = () => {
-    if (document.visibilityState === 'visible' && Date.parse(expiresAt) <= Date.now() + 60_000) refresh()
+    if (document.visibilityState === 'hidden') { wasHidden = true; return }
+    if (document.visibilityState !== 'visible' || !wasHidden) return
+    wasHidden = false
+    if (Date.parse(expiresAt) <= Date.now() + 60_000) refresh('visibility')
   }
   document.addEventListener('visibilitychange', visible)
   return () => { cancel(); document.removeEventListener('visibilitychange', visible) }

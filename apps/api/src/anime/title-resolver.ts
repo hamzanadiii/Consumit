@@ -31,6 +31,21 @@ export function createAnimeTitleVariantsResolver(catalog: Pick<AnimeCatalog, 'ti
 
 export type AnimeMetaResolver = (anilistId: number, signal: AbortSignal) => Promise<{ title: string; malId: number | null }>
 
+export type AnimeProviderResolvers = {
+  title: AnimeTitleResolver
+  titleVariants: AnimeTitleVariantsResolver
+  metadata: AnimeMetaResolver
+}
+
+/** Builds the provider-facing anime metadata seam from one catalog. */
+export function createAnimeProviderResolvers(catalog: Pick<AnimeCatalog, 'title'>): AnimeProviderResolvers {
+  return {
+    title: createAnimeTitleResolver(catalog),
+    titleVariants: createAnimeTitleVariantsResolver(catalog),
+    metadata: createAnimeMetaResolver(catalog),
+  }
+}
+
 /** Title plus MAL id for adapters addressed by external identities (Zoko
  *  speaks MAL ids). Shares the title cache shape; one catalog read serves
  *  both fields. */

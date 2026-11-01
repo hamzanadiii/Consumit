@@ -16,7 +16,7 @@ const entries: DiaryEntry[] = [
   { entryId: 'two', id: seriesSummary.id, kind: 'series', season: 2, episode: 4, watchedOn: '2025-12-31', rewatch: true, tags: [], origin: 'native', sourceKey: null },
   { entryId: 'three', id: seriesSummary.id, kind: 'series', season: 2, episode: 5, watchedOn: '2025-12-30', rewatch: false, tags: [], origin: 'native', sourceKey: null },
 ]
-const props = { entries, hasMore: false, onDeleted: vi.fn(), onSaved: vi.fn(), owner: true, ratingsByTitle: { [`movie:${movieSummary.id}`]: 9 }, ratingsUnavailable: false, titles: [movieSummary, seriesSummary] }
+const props = { entries, hasMore: false, onDeleted: vi.fn(), onRetryRatings: vi.fn(), onSaved: vi.fn(), owner: true, ratingsByTitle: { [`movie:${movieSummary.id}`]: 9 }, ratingsRetryFailed: false, ratingsRetrying: false, ratingsUnavailable: false, titles: [movieSummary, seriesSummary] }
 async function pick(user: ReturnType<typeof userEvent.setup>, menu: RegExp, option: string) {
   await user.click(screen.getByRole('button', { name: menu }))
   await user.click(screen.getByRole('option', { name: option }))
@@ -74,6 +74,14 @@ describe('Diary journal', () => {
     expect(screen.getByRole('slider', { name: 'Minimum rating' })).toBeDisabled()
     expect(screen.getAllByText('Unavailable')).toHaveLength(3)
   })
+  it('offers inline rating recovery while retaining diary records after a failed lookup', async () => {
+    const user = userEvent.setup()
+    render(<DiaryCollection {...props} ratingsRetryFailed ratingsUnavailable />)
+    expect(screen.getByRole('link', { name: movieSummary.title })).toBeInTheDocument()
+    expect(screen.getByText(/your records and filters are unchanged/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry rating lookup' }))
+    expect(props.onRetryRatings).toHaveBeenCalledOnce()
+  })
   it('keeps missing catalog references findable and preserves tag filtering', () => {
     render(<DiaryCollection {...props} selectedTag="NEW-YEAR" titles={[]} />)
     expect(screen.getByRole('link', { name: `Movie #${movieSummary.id}` })).toBeInTheDocument()
@@ -112,7 +120,7 @@ describe('Diary journal', () => {
   })
   it('moves a successfully edited log to its new month and removes a deleted row in the archive', async () => {
     const user = userEvent.setup()
-    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 3, lists: 0, reviews: 0, watched: 2 } }
+    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { activity: 3, diaryEntries: 3, history: 0, lists: 0, reviews: 0, watchlist: 0, watched: 2 } }
     render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'diary', items: entries, nextCursor: null }} owner section="diary" titles={props.titles} />)
     await user.click(screen.getByRole('button', { name: `Edit diary entry for ${movieSummary.title}` }))
     const date = screen.getByLabelText('Watched date')
@@ -127,10 +135,10 @@ describe('Diary journal', () => {
   })
   it.each([true, false])('pages repeated watches without exposing ratings across ownership (owner=%s)', async owner => {
     const user = userEvent.setup()
-    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 2, lists: 0, reviews: 0, watched: 1 } }
+    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { activity: 2, diaryEntries: 2, history: 0, lists: 0, reviews: 0, watchlist: 0, watched: 1 } }
     const earlier = { ...entries[0]!, entryId: 'earlier-watch', watchedOn: '2025-12-01', rewatch: true }
     mocks.archive.mockResolvedValue({ collection: 'diary', items: [earlier], nextCursor: null })
-    mocks.ratings.mockRejectedValue(new Error('Rating lookup unavailable'))
+    mocks.ratings.mockRejectedValueOnce(new Error('Rating lookup unavailable')).mockResolvedValueOnce([{ id: movieSummary.id, kind: 'movie', value: 8 }])
     mocks.catalog.mockResolvedValue([movieSummary])
     render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'diary', items: [entries[0]!], nextCursor: 'next' }} owner={owner} section="diary" titles={[movieSummary]} />)
     await user.click(screen.getByRole('button', { name: 'Load more' }))
@@ -138,7 +146,31 @@ describe('Diary journal', () => {
     expect(screen.getByText('2 entries loaded')).toBeInTheDocument()
     if (owner) {
       expect(mocks.ratings).toHaveBeenCalledWith([{ id: earlier.id, kind: earlier.kind }])
-      expect(screen.getByText('Your ratings could not load; rating filters are unavailable.')).toBeInTheDocument()
+      expect(screen.getByText('Your diary is still here, but personal rating filters are temporarily unavailable.')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Retry rating lookup' }))
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry rating lookup' })).not.toBeInTheDocument())
+      expect(screen.getByText('2 entries loaded')).toBeInTheDocument()
+      expect(screen.queryByText('Unavailable')).not.toBeInTheDocument()
+      expect(mocks.ratings).toHaveBeenNthCalledWith(2, [{ id: movieSummary.id, kind: movieSummary.kind }])
     } else expect(mocks.ratings).not.toHaveBeenCalled()
+  })
+  it('retries owner Watched ratings in place and keeps the selected rating filter', async () => {
+    const user = userEvent.setup()
+    const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { activity: 3, diaryEntries: 3, history: 0, lists: 0, reviews: 0, watchlist: 0, watched: 1 } }
+    const ref = { id: movieSummary.id, kind: movieSummary.kind, origin: 'native' as const, sourceKey: null }
+    mocks.ratings.mockRejectedValueOnce(new Error('Rating lookup unavailable')).mockResolvedValueOnce([{ id: movieSummary.id, kind: 'movie', value: 8 }])
+    render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'films', items: [ref], nextCursor: null }} initialRatings={[]} owner ratingsUnavailable section="films" selectedRating="7-9" titles={[movieSummary]} />)
+
+    const retry = () => screen.getByRole('button', { name: /rating lookup/i })
+    await user.click(retry())
+    expect(await screen.findByText(/your records and filters are unchanged/i)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: movieSummary.title })).not.toBeInTheDocument()
+    await user.click(retry())
+
+    expect(await screen.findByRole('link', { name: movieSummary.title })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /rating lookup/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Filter by your rating: 3.5–4.5 stars' })).toBeInTheDocument()
+    expect(mocks.ratings).toHaveBeenCalledTimes(2)
+    expect(mocks.ratings).toHaveBeenNthCalledWith(2, [{ id: movieSummary.id, kind: movieSummary.kind }])
   })
 })

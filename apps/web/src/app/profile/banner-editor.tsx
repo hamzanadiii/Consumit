@@ -27,6 +27,7 @@ function SearchBox({ inputRef, onChange, value }: {
       <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted" />
       <Input
         className="h-12 pl-12"
+        data-initial-focus
         id="profile-banner-search"
         maxLength={100}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -47,12 +48,14 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
   const router = useRouter()
   const { bannerOpen, setBannerOpen } = useProfileEdit()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const retrySearchRef = useRef<HTMLButtonElement>(null)
   const requestIdRef = useRef(0)
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<'all' | 'movie' | 'series' | 'anime'>('all')
   const [results, setResults] = useState<readonly CatalogTitleSummary[]>([])
   const [staged, setStaged] = useState<string | null>(currentBannerUrl)
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [retryRevision, setRetryRevision] = useState(0)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -64,7 +67,6 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
     // flight: aborts surface as unhandled AbortError overlays in the browser.
     const requestId = ++requestIdRef.current
     const timer = window.setTimeout(() => {
-      setSearchState('loading')
       void browserSearchCatalog(normalized, scope)
         .then((response) => {
           if (requestIdRef.current !== requestId) return
@@ -77,18 +79,35 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
         })
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [bannerOpen, query, scope])
+  }, [bannerOpen, query, retryRevision, scope])
 
-  useEffect(() => {
-    if (bannerOpen) searchInputRef.current?.focus()
-  }, [bannerOpen])
+  useEffect(() => { if (searchState === 'error') retrySearchRef.current?.focus() }, [searchState])
 
   function handleQuery(value: string) {
+    requestIdRef.current++
     setQuery(value)
     if (value.trim().length < 2) {
       setResults([])
       setSearchState('idle')
+      return
     }
+    setResults([])
+    setSearchState('loading')
+  }
+
+  function handleScope(value: 'all' | 'movie' | 'series' | 'anime') {
+    requestIdRef.current++
+    setScope(value)
+    if (query.trim().length < 2) return
+    setResults([])
+    setSearchState('loading')
+  }
+
+  function retrySearch() {
+    requestIdRef.current++
+    setResults([])
+    setSearchState('loading')
+    setRetryRevision(revision => revision + 1)
   }
 
   function close() {
@@ -151,9 +170,9 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
 
         <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <SearchBox inputRef={searchInputRef} onChange={handleQuery} value={query} />
-          <div className="flex gap-2">
+          <div className="grid min-w-0 grid-cols-4 gap-2 sm:flex sm:gap-2">
             {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => (
-              <FilterChip className="h-12 flex-1 px-4 sm:flex-none" key={value} onClick={() => setScope(value)} selected={scope === value}>
+              <FilterChip className="h-12 w-full min-w-0 justify-center whitespace-nowrap px-2 text-[0.6875rem] sm:w-auto sm:flex-none sm:px-4 sm:text-xs" key={value} onClick={() => handleScope(value)} selected={scope === value}>
                 {label}
               </FilterChip>
             ))}
@@ -161,7 +180,12 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
         </div>
         {query.trim().length < 2 ? <p className="mt-3 text-xs text-[var(--fs-muted)]">Type at least two characters to search backdrops in real time. Only titles with wide artwork can be banners.</p> : null}
         {searchState === 'loading' ? <p className="mt-5 text-xs text-[var(--fs-muted)]" role="status">Searching the catalog…</p> : null}
-        {searchState === 'error' ? <p className="mt-5 text-xs text-[var(--fs-danger)]" role="alert">Search could not load. Your current banner is preserved.</p> : null}
+        {searchState === 'error' ? (
+          <div className="mt-5 text-xs text-[var(--fs-danger)]" role="alert">
+            <p>Search could not load. Your current banner is preserved.</p>
+            <Button className="mt-3 min-h-11 focus:ring-2 focus:ring-[var(--fs-focus)]" onClick={retrySearch} ref={retrySearchRef} variant="secondary">Retry search</Button>
+          </div>
+        ) : null}
         <div className="mt-5 grid grid-cols-2 gap-3">
           {results.map((title) => {
             const selected = staged === title.backdropUrl
@@ -174,7 +198,7 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
                 onClick={() => setStaged(title.backdropUrl ?? null)}
                 type="button"
               >
-                <span className={`relative block overflow-hidden rounded-[16px] border transition-all duration-200 motion-reduce:transition-none ${selected ? 'border-[var(--fs-accent)] ring-2 ring-[var(--fs-accent)]' : 'border-[var(--fs-field-border)] group-hover:-translate-y-1 group-hover:border-[var(--fs-accent)]/60 motion-reduce:transform-none'}`}>
+                <span className={`relative block overflow-hidden rounded-[16px] border transition-[transform,border-color,box-shadow] duration-200 motion-reduce:transition-none ${selected ? 'border-[var(--fs-accent)] ring-2 ring-[var(--fs-accent)]' : 'border-[var(--fs-field-border)] group-hover:-translate-y-1 group-hover:border-[var(--fs-accent)]/60 motion-reduce:transform-none'}`}>
                   <ArtworkFrame alt={`${title.title} backdrop`} className="rounded-none border-0" ratio="landscape" src={title.backdropUrl ?? undefined} />
                   {selected ? (
                     <span className="absolute top-2 right-2 rounded-full bg-[var(--fs-accent-strong)] px-2.5 py-1 text-[10px] font-bold tracking-wide text-[var(--fs-on-accent)] uppercase">
@@ -188,7 +212,7 @@ export function BannerEditor({ currentBannerUrl }: BannerEditorProps) {
             )
           })}
         </div>
-        {query.trim().length >= 2 && results.length === 0 && searchState !== 'loading' ? <p className="mt-5 text-sm text-[var(--fs-muted)]">No wide backdrops match that search yet.</p> : null}
+        {query.trim().length >= 2 && results.length === 0 && searchState === 'idle' ? <p className="mt-5 text-sm text-[var(--fs-muted)]">No wide backdrops match that search yet.</p> : null}
       </div>
     </ProfileEditorDialog>
   )

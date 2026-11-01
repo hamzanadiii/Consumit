@@ -14,6 +14,7 @@ import {
   parseAssCues,
   parseSubtitleCues,
   parseVttCues,
+  serializeSubtitleCues,
   fetchVttCues,
 } from './subtitle-sync'
 
@@ -75,6 +76,18 @@ Dialogue: 0,0:00:01.00,0:00:04.00,Default,,0,0,0,,{\\b1}ASS caption{\\b0}
   it('returns empty for garbage without throwing', () => {
     expect(parseSubtitleCues('not subtitles at all')).toEqual([])
     expect(parseSubtitleCues('')).toEqual([])
+  })
+
+  it('serializes SRT and ASS cues as parseable WebVTT for native text tracks', () => {
+    const srt = '1\n00:00:00,000 --> 00:00:04,000\nUploaded <literal> & safe\n'
+    const ass = `[Script Info]\nTitle: Test\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:08.00,0:00:12.00,Default,,0,0,0,,Later cue\n`
+    for (const input of [srt, ass]) {
+      const cues = parseSubtitleCues(input)
+      const vtt = serializeSubtitleCues(cues)
+      expect(vtt).toMatch(/^WEBVTT\n/)
+      expect(parseSubtitleCues(vtt)).toEqual(cues)
+    }
+    expect(serializeSubtitleCues([{ startTime: 1, endTime: 2, text: 'A < B & C' }])).toContain('A &lt; B &amp; C')
   })
 })
 

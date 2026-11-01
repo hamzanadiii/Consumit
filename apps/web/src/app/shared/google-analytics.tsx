@@ -80,7 +80,7 @@ export function GoogleAnalytics({ measurementId }: { measurementId: string | und
           <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-[65ch]">
               <h2 className="font-display text-xl text-ink">Help improve Consumit</h2>
-              <p className="mt-2 text-sm leading-6">Allow optional analytics to count public title opens, playback starts, 30 seconds of playback, and verified email sign-ups. No specific title, account identity, provider, or viewing position is sent. <a className="text-orange underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange" href="/privacy#privacy-analytics">Privacy details</a></p>
+              <p className="mt-2 text-sm leading-6">Allow optional analytics to count public title opens, playback starts, 30 seconds of playback, and account sign-ups. No specific title, account identity, provider, or viewing position is sent. <a className="text-orange underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange" href="/privacy#privacy-analytics">Privacy details</a></p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button variant="secondary" onClick={() => saveAnalyticsChoice('declined')}>Decline analytics</Button>

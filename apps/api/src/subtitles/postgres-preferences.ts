@@ -1,6 +1,6 @@
 import type { PlaybackRef } from '@consumit/contracts'
 import type { PrismaClient } from '../../generated/prisma/client.js'
-import type { SubtitlePreferenceRecord, SubtitlePreferences } from './preferences.ts'
+import { subtitleCorrectionContentKey, type SubtitleCorrectionScope, type SubtitlePreferenceRecord, type SubtitlePreferences } from './preferences.ts'
 
 function identity(ref: PlaybackRef) {
   if (ref.kind === 'anime') {
@@ -19,8 +19,12 @@ function identity(ref: PlaybackRef) {
  *  writes fail closed (the member must know their correction did not save). */
 export function createPostgresSubtitlePreferences(prisma: PrismaClient): SubtitlePreferences {
   return {
-    async get(memberId: string, ref: PlaybackRef): Promise<SubtitlePreferenceRecord | null> {
+    async get(memberId: string, ref: PlaybackRef, scope?: SubtitleCorrectionScope): Promise<SubtitlePreferenceRecord | null> {
       try {
+        if (scope) {
+          const row = await prisma.userSubtitleCorrection.findUnique({ where: { memberId_contentKey_videoVersion_contentChecksum: { memberId, contentKey: subtitleCorrectionContentKey(ref), ...scope } } })
+          return row ? { trackId: row.trackId, offsetMs: row.offsetMs } : null
+        }
         const row = await prisma.userSubtitlePreference.findUnique({
           where: {
             memberId_kind_tmdbId_anilistId_season_episode: { memberId, ...identity(ref) },
@@ -33,7 +37,13 @@ export function createPostgresSubtitlePreferences(prisma: PrismaClient): Subtitl
       }
     },
 
-    async set(memberId: string, ref: PlaybackRef, preference: { trackId?: string | null | undefined; offsetMs?: number | undefined }): Promise<SubtitlePreferenceRecord> {
+    async set(memberId: string, ref: PlaybackRef, preference: { trackId?: string | null | undefined; offsetMs?: number | undefined }, scope?: SubtitleCorrectionScope): Promise<SubtitlePreferenceRecord> {
+      if (scope) {
+        const identity = { memberId, contentKey: subtitleCorrectionContentKey(ref), ...scope }
+        const data = { trackId: preference.trackId ?? null, offsetMs: preference.offsetMs ?? 0 }
+        const row = await prisma.userSubtitleCorrection.upsert({ where: { memberId_contentKey_videoVersion_contentChecksum: identity }, create: { ...identity, ...data }, update: data })
+        return { trackId: row.trackId, offsetMs: row.offsetMs }
+      }
       const row = await prisma.userSubtitlePreference.upsert({
         where: {
           memberId_kind_tmdbId_anilistId_season_episode: { memberId, ...identity(ref) },

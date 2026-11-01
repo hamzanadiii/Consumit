@@ -5,20 +5,19 @@ import { PreferenceRow, SettingsFact, SettingsRail, SettingsSection } from './se
 
 describe('settings and support components', () => {
   it('marks the current settings destination', () => {
-    render(<SettingsRail activeHref="#profile" items={[{ href: '#account', label: 'Account' }, { href: '#profile', label: 'Profile', index: '02' }]} />)
+    render(<SettingsRail activeHref="#profile" items={[{ href: '#account', label: 'Account' }, { href: '#profile', label: 'Profile' }]} />)
 
     expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Profile' })).toHaveTextContent('02')
   })
 
   it('composes settings content and controls', () => {
     render(
-      <SettingsSection index="03" title="Privacy & social">
+      <SettingsSection title="Privacy & social">
         <PreferenceRow control={<button type="button">Change</button>} label="Profile visibility" />
       </SettingsSection>,
     )
 
-    expect(screen.getByRole('heading', { name: 'Privacy & social' })).toHaveTextContent('03')
+    expect(screen.getByRole('heading', { name: 'Privacy & social' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument()
   })
 

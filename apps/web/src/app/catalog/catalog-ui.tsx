@@ -77,6 +77,7 @@ export function CatalogFailure({ detail }: { detail?: string | undefined }) {
       )}
       description="We couldn’t load this page’s titles. Please try again."
       detail={detail}
+      headingLevel={1}
       title="The catalog missed its cue"
     />
   )
@@ -101,7 +102,7 @@ export function CatalogUnavailableScreen({
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto min-h-[70vh] w-full max-w-[90rem]">
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto min-h-[70vh] w-full max-w-[90rem]">
         <CatalogFailure {...(detail ? { detail } : {})} />
       </main>
     </FilScreenShell>

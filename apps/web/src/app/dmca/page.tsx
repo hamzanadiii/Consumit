@@ -12,6 +12,12 @@ export default function DmcaPage() {
   return (
     <LegalDocument
       intro={<>Consumit respects intellectual property rights. This page explains how to ask us to remove material that infringes your copyright, and what we can and cannot remove.</>}
+      sections={[
+        { id: 'dmca-hosting', number: 1, title: 'What Consumit hosts' },
+        { id: 'dmca-action', number: 2, title: 'What we can act on' },
+        { id: 'dmca-submit', number: 3, title: 'Submitting a notice' },
+        { id: 'dmca-misuse', number: 4, title: 'Before you send' },
+      ]}
       title="DMCA Notice"
     >
       <LegalSection id="dmca-hosting" number={1} title="What Consumit hosts">

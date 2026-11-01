@@ -1,7 +1,7 @@
 import type { PlaybackRef } from '@consumit/contracts'
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { sourceAccess, adapter, document, masterVariantHeights, mediaType, playlistAbsoluteHosts, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
+import { sourceAccess, adapter, document, masterVariantHeights, mediaType, playlistAbsoluteHosts, ProviderFailure, providerFailureFromOutcomes, providerOutcome, verifiedPlaybackSources, type ProviderHttp, type ProviderOutcome } from './http.ts'
 import { decryptWecollegePayload } from './wecollege-cipher.ts'
 import { discoverRelaySource } from './relay-discovery.ts'
 
@@ -71,6 +71,7 @@ export function createWecollegeProvider(
     // by a soft deadline, and only wait out the full term when nothing
     // arrived at all (empty answers starve both sources and subtitles).
     const landed: ({ cityIndex: number; sources: ProviderSource[] } | null)[] = new Array(cities.length).fill(null)
+    const outcomes: ProviderOutcome[] = []
     const pending = cities.map(async (city, cityIndex) => {
       const scoped = AbortSignal.any([signal, AbortSignal.timeout(5000)])
       try {
@@ -80,6 +81,7 @@ export function createWecollegeProvider(
         try {
           payload = payloadSchema.parse(decryptWecollegePayload(res.text.trim(), seed, ref.id))
         } catch {
+          outcomes.push({ code: 'malformed' })
           return { cityIndex, sources: [] as ProviderSource[] }
         }
 
@@ -147,7 +149,9 @@ export function createWecollegeProvider(
         })
         // Rebuild keys from the measured hints so key and label stay consistent.
         return { cityIndex, sources: contained.map((source, index) => ({ ...source, key: `${city}:${source.qualityHint!.toLowerCase()}:${index}` })) }
-      } catch {
+      } catch (error) {
+        if (signal.aborted) throw error
+        outcomes.push(providerOutcome(error))
         return { cityIndex, sources: [] as ProviderSource[] }
       }
     })
@@ -179,7 +183,11 @@ export function createWecollegeProvider(
         aggregated.push(source)
       }
     }
-    if (!aggregated.length) throw new ProviderFailure('empty')
+    if (!aggregated.length) {
+      signal.throwIfAborted()
+      if (outcomes.length) throw providerFailureFromOutcomes(outcomes)
+      throw new ProviderFailure('empty')
+    }
 
     // Hosts measured browser-unplayable in Chromium (live 2026-09-14: the
     // peakstorm family 403s masters/segments, mirrowcelo002 workers answer

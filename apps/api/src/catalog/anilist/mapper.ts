@@ -86,6 +86,7 @@ function toHttpUrl(value: string | null | undefined): string | null {
 export function mapTitleSummary(raw: AnilistMedia): AnimeTitleSummary {
   return {
     anilistId: raw.id,
+    malId: raw.idMal ?? null,
     kind: 'anime',
     titles: mapTitle(raw),
     format: FORMAT_MAP[raw.format ?? ''] ?? 'TV',

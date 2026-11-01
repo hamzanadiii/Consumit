@@ -8,6 +8,8 @@
     "RELAY_ENABLED": "false",
     "APP_ORIGIN": "https://consumit.example",
     "RELAY_PROVIDERS": "{}",
-    "RELAY_DISCOVERY_PROVIDERS": "{}"
+    "RELAY_DISCOVERY_PROVIDERS": "{}",
+    "RELAY_ROUTE_POLICY": "[]",
+    "RELAY_ROUTE_POLICY_REQUIRED": "true"
   }
 }

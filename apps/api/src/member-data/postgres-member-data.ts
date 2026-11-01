@@ -1,6 +1,7 @@
 import type {
   CatalogKind,
   CatalogRef,
+  AddMemberListCollaboratorRequest,
   CreateMemberListRequest,
   CreateDiaryEntryRequest,
   CreateReviewRequest,
@@ -9,6 +10,7 @@ import type {
   MemberLibraryCollectionPage,
   MemberLibrarySnapshot,
   MemberListDetail,
+  MemberListVisibility,
   MemberProfileData,
   MemberProfileArchiveCursor,
   MemberProfileArchivePage,
@@ -17,6 +19,7 @@ import type {
   MemberReview,
   MemberTitleRecord,
   MemberTitleState,
+  DuplicateMemberListRequest,
   PlaybackProgress,
   ProgressRef,
   ProgressWriteRequest,
@@ -31,7 +34,7 @@ import type {
 } from '@consumit/contracts'
 import { avatarStyleSchema, defaultProfileSectionVisibility, MAX_MEMBER_FAVORITES, memberRatingCursorSchema, profileSectionVisibilitySchema } from '@consumit/contracts'
 
-import { PrismaClient } from '../../generated/prisma/client.js'
+import { Prisma, PrismaClient } from '../../generated/prisma/client.js'
 import { requireActiveTrackingMember, syncReleaseTracking } from '../releases/tracking.ts'
 import { ApiError } from '../http/errors.ts'
 import type { MemberData } from './member-data.ts'
@@ -72,6 +75,10 @@ function diaryEpisodeFields(row: { catalogKind: StoredKind; episode: number; sea
 function listSlug(value: string): string {
   const base = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70)
   return base || 'list'
+}
+
+function listVisibility(value: string): MemberListVisibility {
+  return value === 'public' || value === 'unlisted' ? value : 'private'
 }
 
 // Backward moves within this window are coalesced into the stored position:
@@ -127,9 +134,9 @@ function likeView(row: { catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD
   }
 }
 
-function reviewView(row: { body: string; catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD'; reviewedOn: Date | null; sourceKey: string | null; tags: string[]; tmdbId: number; id: string }): MemberReview {
+function reviewView(row: { spoiler?: boolean; body: string; catalogKind: StoredKind; origin: 'NATIVE' | 'LETTERBOXD'; reviewedOn: Date | null; sourceKey: string | null; tags: string[]; tmdbId: number; id: string }): MemberReview {
   return {
-    body: row.body,
+    body: row.spoiler ? 'Contains spoilers. Open the review to read.' : row.body,
     id: row.tmdbId,
     kind: kind(row.catalogKind),
     origin: origin(row.origin),
@@ -256,7 +263,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       })
       const page = rows.slice(0, limit)
       const last = page.at(-1)
-      return { collection, items: page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const })), nextCursor: rows.length > limit && last ? libraryCursor(collection, { id: last.id, updatedAt: last.updatedAt.toISOString() }) : null }
+      return { collection, items: page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: listVisibility(list.visibility) })), nextCursor: rows.length > limit && last ? libraryCursor(collection, { id: last.id, updatedAt: last.updatedAt.toISOString() }) : null }
     }
 
     if (collection === 'savedLists') {
@@ -279,7 +286,8 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         const visible = list?.member.status === 'ACTIVE' && list.member.profile?.sectionVisibility
           ? profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists
           : false
-        const available = Boolean(list && list.visibility === 'public' && visible)
+        const visibility = list ? listVisibility(list.visibility) : 'private'
+        const available = Boolean(list && list.member.status === 'ACTIVE' && (visibility === 'unlisted' || (visibility === 'public' && visible)))
         return {
           available,
           itemCount: available ? list!._count.items : null,
@@ -320,19 +328,28 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
 
   async function readList(slug: string, viewerMemberId?: string): Promise<MemberListDetail | null> {
     const row = await prisma.memberList.findUnique({
-      include: { items: { orderBy: { position: 'asc' } }, member: { include: { profile: true } } },
+      include: {
+        collaborators: { include: { member: { include: { profile: true } } } },
+        items: { orderBy: { position: 'asc' } },
+        member: { include: { profile: true } },
+      },
       where: { slug },
     })
-    if (!row || row.member.status !== 'ACTIVE' || !row.member.profile) return null
+    if (!row || row.removedAt || row.member.status !== 'ACTIVE' || !row.member.profile) return null
     const viewerIsOwner = row.memberId === viewerMemberId
+    const viewerIsCollaborator = Boolean(viewerMemberId && row.collaborators.some((collaborator) => collaborator.memberId === viewerMemberId && collaborator.member.status === 'ACTIVE'))
+    const viewerCanEdit = viewerIsOwner || viewerIsCollaborator
     const ownerSections = profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(row.member.profile.sectionVisibility)
-    if (!viewerIsOwner && (row.visibility !== 'public' || !ownerSections.lists)) return null
+    const visibility = listVisibility(row.visibility)
+    if (!viewerCanEdit && (visibility === 'private' || (visibility === 'public' && !ownerSections.lists))) return null
     const viewerHasSaved = Boolean(viewerMemberId && !viewerIsOwner && await prisma.savedMemberList.findUnique({ where: { memberId_listId: { memberId: viewerMemberId, listId: row.id } }, select: { id: true } }))
     return {
+      collaborators: viewerCanEdit ? row.collaborators.flatMap(({ member }) => member.profile ? [{ displayName: member.profile.displayName, memberId: member.id, username: member.profile.username }] : []) : [],
       items: row.items.map((item) => ({ id: item.tmdbId, kind: kind(item.catalogKind), note: item.note, origin: origin(item.origin), position: item.position, sourceKey: item.sourceKey })),
-      list: { description: row.description, id: row.id, itemCount: row.items.length, name: row.name, origin: origin(row.origin), slug: row.slug, visibility: row.visibility === 'public' ? 'public' as const : 'private' as const },
+      list: { description: row.description, id: row.id, itemCount: row.items.length, name: row.name, origin: origin(row.origin), slug: row.slug, visibility },
       owner: { displayName: row.member.profile.displayName, username: row.member.profile.username },
-
+      viewerCanEdit,
+      viewerIsCollaborator,
       viewerIsOwner,
       viewerHasSaved,
     }
@@ -371,21 +388,76 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     async createList(memberId: string, input: CreateMemberListRequest): Promise<MemberListDetail> {
       const suffix = input.idempotencyKey.replaceAll('-', '')
       const slug = `${listSlug(input.name)}-${suffix}`
-      const row = await prisma.memberList.upsert({
-        create: { description: input.description ?? null, idempotencyKey: input.idempotencyKey, memberId, name: input.name, origin: 'NATIVE', slug, visibility: input.visibility },
-        update: {},
-        where: { memberId_idempotencyKey: { idempotencyKey: input.idempotencyKey, memberId } },
-        select: { slug: true },
+      const seededTitle = input.title
+      const row = await prisma.$transaction(async (tx) => {
+        const created = await tx.memberList.upsert({
+          create: { description: input.description ?? null, idempotencyKey: input.idempotencyKey, memberId, name: input.name, origin: 'NATIVE', slug, visibility: input.visibility },
+          update: {},
+          where: { memberId_idempotencyKey: { idempotencyKey: input.idempotencyKey, memberId } },
+          select: { id: true, slug: true },
+        })
+        if (seededTitle) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:list:${created.id}`}))`
+          const titleKind = storedKind(seededTitle.kind)
+          const exists = await tx.listItem.findFirst({ select: { id: true }, where: { listId: created.id, catalogKind: titleKind, tmdbId: seededTitle.id } })
+          if (!exists) {
+            const tail = await tx.listItem.aggregate({ _max: { position: true }, where: { listId: created.id } })
+            await tx.listItem.create({ data: { catalogKind: titleKind, listId: created.id, origin: 'NATIVE', position: (tail._max.position ?? 0) + 1, tmdbId: seededTitle.id } })
+          }
+        }
+        return created
       })
       const detail = await readList(row.slug, memberId)
       if (!detail) throw new Error('CREATED_LIST_UNAVAILABLE')
       return detail
     },
+    async duplicateList(memberId: string, slug: string, input: DuplicateMemberListRequest) {
+      const source = await prisma.memberList.findFirst({
+        include: { items: { orderBy: { position: 'asc' } }, member: { include: { profile: true } } },
+        where: { slug, visibility: 'public', removedAt: null, member: { status: 'ACTIVE' } },
+      })
+      if (!source?.member.profile || !profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(source.member.profile.sectionVisibility).lists) return null
+      const existing = await prisma.memberList.findUnique({ select: { slug: true }, where: { memberId_idempotencyKey: { memberId, idempotencyKey: input.idempotencyKey } } })
+      if (existing) return readList(existing.slug, memberId)
+      const name = input.name ?? `${source.name} (copy)`
+      const suffix = input.idempotencyKey.replaceAll('-', '')
+      const duplicate = await prisma.$transaction(async (tx) => {
+        const list = await tx.memberList.create({
+          data: { description: source.description, genres: source.genres, idempotencyKey: input.idempotencyKey, memberId, name, origin: 'NATIVE', slug: `${listSlug(name)}-${suffix}`, visibility: input.visibility },
+          select: { id: true, slug: true },
+        })
+        if (source.items.length) await tx.listItem.createMany({ data: source.items.map((item, index) => ({ catalogKind: item.catalogKind, listId: list.id, note: item.note, origin: 'NATIVE', position: index + 1, tmdbId: item.tmdbId })) })
+        const layout = await tx.tasteDocument.findUnique({ where: { memberId_kind_key: { memberId: source.memberId, kind: 'list', key: source.id } } })
+        if (layout) await tx.tasteDocument.create({ data: { memberId, kind: 'list', key: list.id, data: layout.data as Prisma.InputJsonValue, revision: 1 } })
+        return list
+      })
+      return readList(duplicate.slug, memberId)
+    },
+    async addListCollaborator(ownerId: string, listId: string, input: AddMemberListCollaboratorRequest) {
+      const [list, invitee] = await Promise.all([
+        prisma.memberList.findFirst({ select: { id: true, memberId: true }, where: { id: listId, memberId: ownerId } }),
+        prisma.profile.findUnique({ select: { memberId: true }, where: { username: input.username } }),
+      ])
+      if (!list || !invitee || invitee.memberId === ownerId) return false
+      const active = await prisma.member.findFirst({ select: { id: true }, where: { id: invitee.memberId, status: 'ACTIVE' } })
+      if (!active) return false
+      await prisma.memberListCollaborator.createMany({ data: [{ listId, memberId: active.id }], skipDuplicates: true })
+      return true
+    },
+    async removeListCollaborator(ownerId: string, listId: string, username: string) {
+      const [list, invitee] = await Promise.all([
+        prisma.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId: ownerId } }),
+        prisma.profile.findUnique({ select: { memberId: true }, where: { username } }),
+      ])
+      if (!list || !invitee) return false
+      const removed = await prisma.memberListCollaborator.deleteMany({ where: { listId, memberId: invitee.memberId } })
+      return removed.count === 1
+    },
     async appendListTitle(memberId, listId, title) {
       return prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:list:${listId}`}))`
-        const owned = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId, member: { status: 'ACTIVE' } } })
-        if (!owned) return false
+        const editable = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, member: { status: 'ACTIVE' }, OR: [{ memberId }, { collaborators: { some: { memberId } } }] } })
+        if (!editable) return false
         const catalogKind = storedKind(title.kind)
         const existing = await tx.listItem.findFirst({ select: { id: true }, where: { listId, catalogKind, tmdbId: title.id } })
         if (existing) return true
@@ -397,9 +469,9 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     async saveList(memberId, slug) {
       const list = await prisma.memberList.findFirst({
         include: { member: { include: { profile: true } } },
-        where: { slug, visibility: 'public', member: { status: 'ACTIVE' } },
+        where: { slug, visibility: { in: ['public', 'unlisted'] }, member: { status: 'ACTIVE' } },
       })
-      if (!list || list.memberId === memberId || !list.member.profile || !profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists) return false
+      if (!list || list.memberId === memberId || !list.member.profile || (list.visibility === 'public' && !profileSectionVisibilitySchema.catch(defaultProfileSectionVisibility()).parse(list.member.profile.sectionVisibility).lists)) return false
       await prisma.savedMemberList.upsert({
         create: { listId: list.id, listName: list.name, listSlug: list.slug, memberId, ownerDisplayName: list.member.profile.displayName, ownerUsername: list.member.profile.username },
         update: {},
@@ -414,14 +486,17 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     async updateListContent(memberId, listId, changes: UpdateMemberListContentRequest) {
       return prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`consumit:list:${listId}`}))`
-        const owned = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId } })
-        if (!owned) return false
+        const current = await tx.memberList.findFirst({
+          select: { id: true, memberId: true },
+          where: { id: listId, member: { status: 'ACTIVE' }, OR: [{ memberId }, { collaborators: { some: { memberId } } }] },
+        })
+        if (!current || (current.memberId !== memberId && changes.visibility !== undefined)) return false
         await tx.listItem.deleteMany({ where: { listId } })
         if (changes.items.length) await tx.listItem.createMany({
           data: changes.items.map((item, index) => ({ catalogKind: storedKind(item.kind), listId, note: item.note ?? null, origin: 'NATIVE', position: index + 1, sourceKey: null, tmdbId: item.id })),
         })
         await tx.memberList.update({
-          data: { description: changes.description, name: changes.name, origin: 'NATIVE', sourceKey: null, visibility: changes.visibility },
+          data: { description: changes.description, name: changes.name, origin: 'NATIVE', sourceKey: null, ...(changes.visibility ? { visibility: changes.visibility } : {}) },
           where: { id: listId },
         })
         return true
@@ -444,8 +519,8 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
             favorites: { orderBy: { position: 'asc' }, take: MAX_MEMBER_FAVORITES },
             lists: { include: { _count: { select: { items: true } } }, orderBy: { updatedAt: 'desc' }, take: 30 },
             profile: true,
-            reviews: { orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
-            _count: { select: { diaryEntries: true, followers: true, following: true, lists: true, reviews: true, watchedTitles: true } },
+            reviews: { where: { removedAt: null }, orderBy: [{ reviewedOn: 'desc' }, { createdAt: 'desc' }], take: 30 },
+            _count: { select: { diaryEntries: true, followers: true, following: true, lists: true, reviews: true, savedTitles: true, watchHistory: true, watchedTitles: true } },
           },
           where: { id: memberId, status: 'ACTIVE' },
         }),
@@ -458,16 +533,24 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         canonicalUsername: member.profile.username,
         diary: member.diaryEntries.map((item) => ({ ...diaryEpisodeFields(item), entryId: item.id, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), rewatch: item.rewatch, sourceKey: item.sourceKey, tags: item.tags, watchedOn: day(item.watchedOn) })),
         favorites: member.favorites.map((item, index) => ({ id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), position: index + 1, sourceKey: item.sourceKey })),
-        lists: member.lists.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const })),
+        lists: member.lists.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: listVisibility(list.visibility) })),
         profile: profileView(member.profile, member.createdAt),
-        reviews: member.reviews.map((item) => ({ body: item.body, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), reviewedOn: item.reviewedOn ? day(item.reviewedOn) : null, reviewId: item.id, sourceKey: item.sourceKey, tags: item.tags })),
+        reviews: member.reviews.map((item) => ({ body: item.spoiler ? 'Contains spoilers. Open the review to read.' : item.body, id: item.tmdbId, kind: kind(item.catalogKind), origin: origin(item.origin), reviewedOn: item.reviewedOn ? day(item.reviewedOn) : null, reviewId: item.id, sourceKey: item.sourceKey, tags: item.tags })),
         ratingDistribution: Array.from({ length: 10 }, (_, index) => {
           const value = index + 1
           return { count: ratingCounts.find((row) => row.value === value)?._count._all ?? 0, value }
         }),
 
         social: { followers, following },
-        statistics: { diaryEntries: member._count.diaryEntries, lists: member._count.lists, reviews: member._count.reviews, watched: member._count.watchedTitles },
+        statistics: {
+          activity: member._count.diaryEntries + member._count.reviews,
+          diaryEntries: member._count.diaryEntries,
+          history: member._count.watchHistory,
+          lists: member._count.lists,
+          reviews: member._count.reviews,
+          watchlist: member._count.savedTitles,
+          watched: member._count.watchedTitles,
+        },
       }
     },
     async profileArchive(username, collection, viewerMemberId, cursor, limit = 30): Promise<MemberProfileArchivePage | null> {
@@ -484,7 +567,11 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         : collection === 'lists' ? 'lists'
           : collection === 'likes' ? 'likes'
             : collection === 'tags' ? 'tags'
-              : collection === 'watchlist' ? 'watchlist' : null
+              : collection === 'watchlist' ? 'watchlist'
+                : collection === 'films' ? 'watched'
+                  : collection === 'diary' ? 'diary'
+                    : collection === 'history' ? 'history'
+                      : collection === 'activity' ? 'activity' : null
       if (!isOwner && (!publicSection || !visibleSections[publicSection] || (collection === 'tags' && !visibleSections.reviews))) return null
 
       const pageSize = Math.min(50, Math.max(1, limit))
@@ -493,8 +580,9 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       const createdAt = cursor?.createdAt ? new Date(cursor.createdAt) : undefined
       const updatedAt = cursor?.updatedAt ? new Date(cursor.updatedAt) : undefined
       const watchedOn = cursor?.watchedOn ? new Date(cursor.watchedOn) : undefined
+      const completedAt = cursor?.completedAt ? new Date(cursor.completedAt) : undefined
       const validDate = (value: Date | undefined) => value === undefined || !Number.isNaN(value.getTime())
-      if (!validDate(createdAt) || !validDate(updatedAt) || !validDate(watchedOn)) return null
+      if (!validDate(createdAt) || !validDate(updatedAt) || !validDate(watchedOn) || !validDate(completedAt)) return null
       const next = (hasMore: boolean, value: Omit<MemberProfileArchiveCursor, 'collection'> | null): string | null => hasMore && value ? encode(value) : null
 
       if (collection === 'films' || collection === 'likes') {
@@ -537,12 +625,25 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         return { collection, items, nextCursor: next(hasMore, last ? { createdAt: last.createdAt.toISOString(), id: last.id, watchedOn: last.watchedOn.toISOString() } : null) }
       }
 
+      if (collection === 'history') {
+        if (cursor && !completedAt) return null
+        const rows = await prisma.watchHistoryEntry.findMany({
+          orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+          take,
+          where: { memberId, ...(cursor && completedAt ? { OR: [{ completedAt: { lt: completedAt } }, { completedAt, id: { lt: cursor.id } }] } : {}) },
+        })
+        const page = rows.slice(0, pageSize)
+        const items = page.map((row) => ({ completedAt: row.completedAt.toISOString(), entryId: row.id, id: row.tmdbId, kind: kind(row.catalogKind), ...(row.catalogKind === 'SERIES' || row.season > 0 ? { season: row.season } : {}), ...(row.episode > 0 ? { episode: row.episode } : {}) }))
+        const last = page.at(-1)
+        return { collection, items, nextCursor: next(rows.length > pageSize, last ? { completedAt: last.completedAt.toISOString(), id: last.id } : null) }
+      }
+
       if (collection === 'reviews') {
         if (cursor && !createdAt) return null
         const rows = await prisma.review.findMany({
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take,
-          where: { memberId, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
+          where: { memberId, removedAt: null, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
         })
         const hasMore = rows.length > pageSize
         const page = rows.slice(0, pageSize)
@@ -565,7 +666,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         })
         const hasMore = rows.length > pageSize
         const page = rows.slice(0, pageSize)
-        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: list.visibility === 'public' ? 'public' as const : 'private' as const }))
+        const items = page.map((list) => ({ description: list.description, id: list.id, itemCount: list._count.items, name: list.name, origin: origin(list.origin), slug: list.slug, visibility: listVisibility(list.visibility) }))
         const last = page.at(-1)
         return { collection, items, nextCursor: next(hasMore, last ? { id: last.id, updatedAt: last.updatedAt.toISOString() } : null) }
       }
@@ -591,7 +692,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         const rows = await prisma.savedTitle.findMany({
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take,
-          where: { memberId, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
+          where: { memberId, removedAt: null, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
         })
         const page = rows.slice(0, pageSize)
         const last = page.at(-1)
@@ -610,8 +711,12 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         ] }
       }
       const [diaryRows, reviewRows] = await Promise.all([
-        prisma.diaryEntry.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take, where: { memberId, ...eventFilter('diary') } }),
-        prisma.review.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take, where: { memberId, ...eventFilter('review') } }),
+        isOwner || visibleSections.diary
+          ? prisma.diaryEntry.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take, where: { memberId, ...eventFilter('diary') } })
+          : Promise.resolve([]),
+        isOwner || visibleSections.reviews
+          ? prisma.review.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take, where: { memberId, ...eventFilter('review') } })
+          : Promise.resolve([]),
       ])
       type ActivityItem = Extract<MemberProfileArchivePage, { collection: 'activity' }>['items'][number]
       const events: (ActivityItem & { cursorId: string })[] = [
@@ -704,42 +809,72 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       })
       return row ? reviewView(row) : null
     },
-    async titleReviews(ref: CatalogRef, page: number, _sort: TitleReviewSort, viewerMemberId: string): Promise<TitleReviewsPage> {
+    async titleReviews(ref: CatalogRef, page: number, _sort: TitleReviewSort, viewerMemberId?: string): Promise<TitleReviewsPage> {
       const catalogKind = storedKind(ref.kind)
-      if (!viewerMemberId) return { items: [], page, totalPages: 0, totalResults: 0 }
-      const where = { catalogKind, memberId: viewerMemberId, member: { status: 'ACTIVE' as const }, tmdbId: ref.id }
-      const [totalResults, rows] = await Promise.all([
-        prisma.review.count({ where }),
-        prisma.review.findMany({
-          include: { member: { select: { id: true, profile: { select: { avatarStyle: true, avatarUrl: true, displayName: true, username: true } } } } },
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * TITLE_REVIEWS_PAGE_SIZE,
-          take: TITLE_REVIEWS_PAGE_SIZE,
-          where,
-        }),
+      const viewerBlockFilter = viewerMemberId ? Prisma.sql`
+        AND NOT EXISTS (
+          SELECT 1 FROM "TasteBlock" block
+          WHERE (block."actorId" = ${viewerMemberId} AND block."targetId" = r."memberId")
+             OR (block."actorId" = r."memberId" AND block."targetId" = ${viewerMemberId})
+        )
+      ` : Prisma.empty
+      const fromWhere = Prisma.sql`
+        FROM "Review" r
+        JOIN "Member" m ON m."id" = r."memberId" AND m."status" = 'ACTIVE'
+        JOIN "Profile" p ON p."memberId" = m."id"
+        LEFT JOIN "Rating" rating ON rating."memberId" = r."memberId"
+          AND rating."catalogKind" = r."catalogKind"
+          AND rating."tmdbId" = r."tmdbId"
+        WHERE r."catalogKind" = ${catalogKind}::"CatalogKind"
+          AND r."tmdbId" = ${ref.id}
+          AND r."removedAt" IS NULL
+          AND p."sectionVisibility"->'reviews' IS DISTINCT FROM 'false'::jsonb
+          ${viewerBlockFilter}
+      `
+      const [counts, rows] = await Promise.all([
+        prisma.$queryRaw<Array<{ totalResults: number }>>(Prisma.sql`SELECT COUNT(*)::int AS "totalResults" ${fromWhere}`),
+        prisma.$queryRaw<Array<{
+          avatarStyle: string
+          avatarUrl: string | null
+          body: string
+          displayName: string | null
+          rating: number | null
+          reviewId: string
+          reviewedOn: Date | null
+          spoiler: boolean
+          username: string
+        }>>(Prisma.sql`
+          SELECT
+            p."avatarStyle",
+            p."avatarUrl",
+            r."body",
+            p."displayName",
+            rating."value" AS "rating",
+            r."id" AS "reviewId",
+            r."reviewedOn",
+            r."spoiler",
+            p."username"
+          ${fromWhere}
+          ORDER BY r."createdAt" DESC, r."id" DESC
+          LIMIT ${TITLE_REVIEWS_PAGE_SIZE}
+          OFFSET ${(page - 1) * TITLE_REVIEWS_PAGE_SIZE}
+        `),
       ])
-      const ratings = await prisma.rating.findMany({ where: { catalogKind, memberId: { in: rows.map((row) => row.memberId) }, tmdbId: ref.id } })
-      const ratingByMember = new Map(ratings.map((item) => [item.memberId, item.value]))
-      
+      const totalResults = counts[0]?.totalResults ?? 0
+
       return {
-        items: rows.flatMap((row) => {
-          const profile = row.member.profile
-          if (!profile) return []
-          return [{
-            author: {
-              avatarStyle: avatarStyleSchema.catch('dusk').parse(profile.avatarStyle),
-              avatarUrl: profile.avatarUrl,
-              displayName: profile.displayName,
-              username: profile.username,
-            },
-            body: row.body,
-
-
-            rating: ratingByMember.get(row.memberId) ?? null,
-            reviewId: row.id,
-            reviewedOn: row.reviewedOn ? day(row.reviewedOn) : null,
-          }]
-        }),
+        items: rows.map((row) => ({
+          author: {
+            avatarStyle: avatarStyleSchema.catch('dusk').parse(row.avatarStyle),
+            avatarUrl: row.avatarUrl,
+            displayName: row.displayName,
+            username: row.username,
+          },
+          body: row.spoiler ? 'Contains spoilers. Open the review to read.' : row.body,
+          rating: row.rating,
+          reviewId: row.reviewId,
+          reviewedOn: row.reviewedOn ? day(row.reviewedOn) : null,
+        })),
         page,
         totalPages: Math.ceil(totalResults / TITLE_REVIEWS_PAGE_SIZE),
         totalResults,
@@ -871,7 +1006,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         },
       })
       return {
-        body: row.body,
+        body: row.spoiler ? 'Contains spoilers. Open the review to read.' : row.body,
         id: row.tmdbId,
         kind: kind(row.catalogKind),
         origin: origin(row.origin),
@@ -1012,8 +1147,8 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
     },
     async updateList(memberId: string, listId: string, changes: UpdateMemberListRequest) {
       return prisma.$transaction(async (tx) => {
-        const current = await tx.memberList.findFirst({ select: { id: true }, where: { id: listId, memberId } })
-        if (!current) return false
+        const current = await tx.memberList.findFirst({ select: { id: true, memberId: true }, where: { id: listId, member: { status: 'ACTIVE' }, OR: [{ memberId }, { collaborators: { some: { memberId } } }] } })
+        if (!current || (current.memberId !== memberId && changes.visibility !== undefined)) return false
         await tx.memberList.update({
           data: {
             ...(changes.description !== undefined ? { description: changes.description } : {}),
@@ -1036,6 +1171,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
       const result = await prisma.review.updateMany({
         data: {
           ...(changes.body !== undefined ? { body: changes.body } : {}),
+          revision: { increment: 1 },
           importBatchId: null,
           origin: 'NATIVE',
           ...(changes.reviewedOn === undefined ? {} : { reviewedOn: changes.reviewedOn === null ? null : new Date(`${changes.reviewedOn}T00:00:00.000Z`) }),

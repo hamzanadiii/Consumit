@@ -45,14 +45,21 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
       if (b.since + 60000 <= Date.now()) { b.count = 0; b.since = Date.now() }
       budget.set(p.adapter.id, b)
       // One busy row must not hide the other opted-in rows' tracks.
-      if (b.active >= p.concurrency || b.count >= p.requestsPerMinute) continue
+      if (b.active >= p.concurrency || p.execution !== 'cloudflare' && b.count >= p.requestsPerMinute) continue
       const release = await acquireProviderBudget(p, region, delivery?.store)
       if (!release) continue
       b.active++; b.count++
       attempted++
       try {
         const bounded = AbortSignal.any([signal, AbortSignal.timeout(12000)])
-        const result = await p.adapter.resolve({ ref: input.ref, region, audioLanguage: input.audioLanguage }, bounded)
+        const result = await p.adapter.resolve({ ref: input.ref, region, audioLanguage: input.audioLanguage, ...(p.execution === 'cloudflare' ? { purpose: 'audio' as const } : {}) }, bounded)
+        if (p.execution === 'cloudflare') {
+          for (const source of validatedSources(result, p).filter(source => source.edgeAudio && source.type === 'hls')) {
+            if (tracks.length >= 40) break
+            tracks.push({ id: source.key, label: source.serverName ?? source.language, language: source.language, provider: p.adapter.separateAudio?.label ?? p.adapter.id, src: source.url, expiresAt: source.expiresAt, registration: p, headers: source.headers, source })
+          }
+          continue
+        }
         const source = validatedSources(result, p).find(s => s.type === 'hls')
         if (!source) continue
         // Inspect the same representation delivered to our browser origin.
@@ -96,6 +103,15 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
     async prepare(input: ResolvePlaybackRequest, id: string, signal: AbortSignal) {
       const track = (await discover(input, signal)).find(t => t.id === id)
       if (!track || !eligible().includes(track.registration)) throw new ApiError('NOT_FOUND', 'This audio track is no longer available. Refresh the audio list.')
+      if (track.registration.execution === 'cloudflare') {
+        const result = await track.registration.adapter.resolve({ ref: input.ref, region, audioLanguage: input.audioLanguage, purpose: 'audio', audioTrackKey: id }, signal)
+        const source = validatedSources(result, track.registration).find(source => source.key === id && source.edgeAudio && source.audioDurationSec)
+        if (!source || !source.audioDurationSec) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio track could not be prepared.', { retryable: true })
+        const expiry = Math.min(Date.parse(source.expiresAt) - 5000, Date.now() + MAX_GRANT_MS - 5000)
+        const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '', { kind: input.ref.kind, region, purpose: 'audio' }) : source.url
+        if (!src || expiry <= Date.now()) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio delivery path is unavailable.')
+        return { id, label: track.label, language: track.language, provider: track.provider, src, duration: source.audioDurationSec, expiresAt: new Date(expiry).toISOString() }
+      }
       const response = await httpFor(track.registration)(track.src, track.headers, AbortSignal.any([signal, AbortSignal.timeout(8000)]))
       if (response.status !== 200 || !safe(response.url, track.registration) || assertHlsManifest(response.text) !== 'media'
         || !response.text.includes('#EXT-X-ENDLIST') || parseHlsReferences(response.text, response.url).some(url => !safe(url, track.registration))) {
@@ -104,7 +120,7 @@ export function createSeparateAudio(providers: readonly ProviderRegistration[], 
       const duration = sumMediaPlaylistDuration(response.text)
       if (!duration || duration > 86400) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio timeline is unavailable.')
       const expiry = Math.min(Date.parse(track.expiresAt) - 5000, Date.now() + MAX_GRANT_MS - 5000)
-      const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source: { ...track.source, url: response.url, key: `audio-${track.id}`, type: 'hls', headers: track.headers }, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '') : response.url
+      const src = track.registration.deliveryMode === 'relay' ? await delivery?.relay?.issueAudio({ source: { ...track.source, url: response.url, key: `audio-${track.id}`, type: 'hls', headers: track.headers }, registration: track.registration, subtitles: [], delivery: 'direct' }, expiry, appOrigin ?? '', { kind: input.ref.kind, region, purpose: 'audio' }) : response.url
       if (!src || expiry <= Date.now() || !eligible().includes(track.registration)) throw new ApiError('PLAYBACK_UNAVAILABLE', 'This audio delivery path is unavailable.')
       return { id: track.id, label: track.label, language: track.language, provider: track.provider, src, duration, expiresAt: new Date(expiry).toISOString() }
     },

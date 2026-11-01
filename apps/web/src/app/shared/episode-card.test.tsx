@@ -5,7 +5,9 @@ import { EpisodeCard } from './episode-card'
 it('retains an exact episode destination on both playable actions', () => {
   render(<EpisodeCard episode={4} href="/watch/series/95396?season=2&episode=4" title="A long-awaited return" />)
   expect(screen.getByRole('link', { name: 'Watch Episode 4: A long-awaited return' })).toHaveAttribute('href', '/watch/series/95396?season=2&episode=4')
-  expect(screen.getByRole('link', { name: 'Play episode' })).toHaveAttribute('href', '/watch/series/95396?season=2&episode=4')
+  const action = screen.getByRole('link', { name: 'Play episode' })
+  expect(action).toHaveAttribute('href', '/watch/series/95396?season=2&episode=4')
+  expect(action.className).toMatch(/min-h-\[44px\]/)
 })
 
 it('shows upcoming evidence without allowing an unaired episode to launch', () => {

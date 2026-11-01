@@ -5,12 +5,14 @@ test('adapter-declared raw VTT subtitle playlists retain Direct HLS video and ca
   await page.addInitScript(() => {
     localStorage.setItem('consumit.experience.guest.v1', JSON.stringify({ audioLanguage: 'en', animeAudio: 'sub', subtitlesEnabled: true, subtitleLanguages: ['en'], qualityHeight: null, autoplayNextEpisode: false, guideVersion: 1, guideStatus: 'completed', communityDismissed: false }))
   })
+  // Keep this Watch boundary independent of live aggregated subtitle providers.
+  await page.route('**/v1/subtitles?*', route => route.fulfill({ json: { subtitles: [] } }))
   await page.route('**/v1/subtitles/discover?*', route => route.fulfill({ contentType: 'application/x-ndjson', body: '{"type":"complete","searchId":"78f506d8-4c60-44ed-88dc-c3a20f20b488","languages":[]}\n' }))
-  await page.route('**/v1/playback/resolve', async route => {
+  await page.route('**/v1/playback/attempts', async route => {
     const response = await route.fetch()
-    const session = await response.json()
-    Object.assign(session.source, { type: 'hls', src: 'https://experience-media.example/master.m3u8', hlsSubtitlePlaylistFormat: 'vtt', subtitles: [] })
-    await route.fulfill({ response, json: session })
+    const attempt = await response.json()
+    Object.assign(attempt.session.source, { type: 'hls', src: 'https://experience-media.example/master.m3u8', hlsSubtitlePlaylistFormat: 'vtt', subtitles: [] })
+    await route.fulfill({ response, json: attempt })
   })
   const reads: string[] = []
   await page.route('https://experience-media.example/**', async route => {
@@ -24,6 +26,8 @@ test('adapter-declared raw VTT subtitle playlists retain Direct HLS video and ca
   })
   await page.goto('/watch/movie/693134')
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2)
+  await expect.poll(() => reads).toContain('master.m3u8')
+  await expect.poll(() => reads).toContain('raw.vtt')
   await page.locator('video').evaluate((video: HTMLVideoElement) => { video.pause(); video.currentTime = 2 })
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => Array.from(video.textTracks).flatMap(track => track.language === 'en' && track.mode === 'showing' ? Array.from(track.activeCues ?? []).map(cue => (cue as VTTCue).text) : []))).toEqual(['Direct provider caption'])
   expect(reads.filter(name => name === 'raw.vtt').length).toBeGreaterThanOrEqual(2)

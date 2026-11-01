@@ -32,6 +32,8 @@ The active VPS deployment uses `.env.rebuild` through `CONSUMIT_REBUILD_ENV_FILE
 
 If privacy, playback or ordinary product latency regresses, run `node scripts/rebuild-release.mjs rollback-playback` with the recorded candidate release. It waits for `api-legacy` readiness, sets `CONSUMIT_PLAYBACK_PRIMARY_UPSTREAM=api-legacy:3001` and recreates gateway routing at 100%; durable worker ownership stays active. A full runtime rollback uses the recorded previous API/gateway image IDs with the old combined routing and API scheduling ownership. Stop the general and browser workers and remove their recurring schedules before restoring legacy timer ownership; do not leave duplicate schedulers or delete durable outbox intent.
 
+Production overlay as of 2026-10-26: product API `rebuild-20261026-community-mode-fix-v1` and web `web-20261026-community-v1` serve the taste-publication release. API legacy and playback remain pinned to `rebuild-20261024-streamvault-native-v3`; the gateway and general worker remain on their existing 2026-10-22 release. This API/web-only activation did not change the 1% playback routing or provider policy. See the follow-up in [Delivery](../DELIVERY.md) for route checks and the startup-validation correction.
+
 ## Recovery and operation
 
 - Queue age, terminal rows, queue readiness, pool waiters, event-loop lag and provider playback failures have Prometheus alerts. Test actual alert receipt before promotion.

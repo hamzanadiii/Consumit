@@ -1,7 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { aggregateProviderMetrics, readProviderComparisons, readProviderMetrics } from './provider-metrics.ts'
+import { aggregateProviderMetrics, readProviderComparisons, readProviderMetrics, readProviderRouteEvidence } from './provider-metrics.ts'
 
 describe('provider metrics', () => {
+  it('aggregates only safe route-version playback proof events', async () => {
+    const fetcher = vi.fn(async (input: unknown) => {
+      const expression = new URL(String(input)).searchParams.get('query') ?? ''
+      const result = expression.includes('last_success_timestamp')
+        ? [{ metric: { provider: 'fixture', kind: 'movie', region: 'US', delivery: 'direct', purpose: 'video', routeVersion: 'edge-v1-0123456789abcdef' }, value: [1800000000, '1799999999'] }]
+        : [
+          ...['started', 'advanced', 'seeked', 'resumed'].map(event => ({ metric: { provider: 'fixture', kind: 'movie', region: 'US', delivery: 'direct', purpose: 'video', routeVersion: 'edge-v1-0123456789abcdef', event }, value: [1800000000, '1'] })),
+          { metric: { provider: 'https://secret.example/token', kind: 'movie', region: 'US', delivery: 'direct', purpose: 'video', routeVersion: 'edge-v1-0123456789abcdef', event: 'resumed' }, value: [1800000000, '99'] },
+          { metric: { provider: 'fixture', kind: 'movie', region: 'US', delivery: 'direct', purpose: 'video', routeVersion: 'edge-v1-ffffffffffffffff', event: 'forged' }, value: [1800000000, '99'] },
+        ]
+      return Response.json({ status: 'success', data: { resultType: 'vector', result } })
+    }) as unknown as typeof fetch
+    const evidence = await readProviderRouteEvidence('http://prometheus:9090', fetcher)
+    expect(evidence['fixture:movie:US:direct:video:edge-v1-0123456789abcdef']).toMatchObject({ firstFrame: 1, advanced: 1, seeked: 1, resumed: 1, lastSuccessAt: 1_799_999_999_000 })
+    expect(Object.keys(evidence)).toHaveLength(1)
+    expect(JSON.stringify(evidence)).not.toContain('secret.example')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
   it('maps only bounded aggregate labels and never returns URLs or tokens', async () => {
     const fetcher = vi.fn(async (input: unknown) => {
       const expression = new URL(String(input)).searchParams.get('query') ?? ''

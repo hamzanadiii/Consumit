@@ -16,10 +16,10 @@ vi.mock('next/navigation', () => ({ redirect: (path: string) => { throw new Erro
 vi.mock('@/lib/identity-server', () => ({ getServerSession: mocks.session }))
 vi.mock('@/lib/member-server', () => ({ getPublicProfile: mocks.profile, getProfileRead: mocks.profile, getMemberLibrarySnapshot: mocks.library, getPublicProfileArchivePage: mocks.archive, getMemberList: mocks.list, getMemberRatingsForTitles: mocks.ratings, getPublicCollection: mocks.collection, MemberApiError: class extends Error {} }))
 vi.mock('@/lib/catalog-api', () => ({ getCatalogBatchForRefs: mocks.catalog, MAX_PAGE_CATALOG_ENRICHMENT: 120 }))
-const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }
-const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 1, reviews: 0, watched: 0 } }
+const sectionVisibility = { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }
+const profile: MemberProfileData = { canonicalUsername: 'hamza', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Hamza', nextUsernameChangeAt: null, sectionVisibility, username: 'hamza', usernameChangedAt: null }, diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { activity: 0, diaryEntries: 0, history: 0, lists: 1, reviews: 0, watchlist: 0, watched: 0 } }
 const ownList = { id: 'private-list', slug: 'private-list', name: 'My private collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }
-const visitorProfile: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'hamza', sectionVisibility, profile: { id: 'public-member-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, isFollowing: false }, favorites: [], ratingDistribution: [], statistics: { ratings: 4, reviews: 2, lists: 1 }, social: { followers: 3, following: 5 } }
+const visitorProfile: PublicProfile = { viewerIsOwner: false, canonicalUsername: 'hamza', sectionVisibility, profile: { id: 'public-member-id', username: 'hamza', displayName: 'Hamza', avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, isFollowing: false }, favorites: [], ratingDistribution: [], statistics: { activity: 0, diary: 0, history: 0, lists: 1, ratings: 4, reviews: 2, watchlist: 0, watched: 0 }, social: { followers: 3, following: 5 } }
 
 describe('profile archive routing', () => {
   beforeEach(() => {
@@ -30,6 +30,23 @@ describe('profile archive routing', () => {
     mocks.list.mockResolvedValue({ items: [] })
     mocks.archive.mockResolvedValue({ collection: 'lists', items: [], nextCursor: null })
     mocks.ratings.mockResolvedValue([])
+  })
+  it('lets the owner open the full review and its discussion from the review archive', () => {
+    render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'reviews', items: [{ kind: 'movie', id: movieSummary.id, origin: 'native', sourceKey: null, body: 'A patient masterpiece.', reviewId: 'review-one', reviewedOn: null, tags: [] }], nextCursor: null }} owner section="reviews" titles={[movieSummary]} />)
+    expect(screen.getByRole('link', { name: `Read and discuss review of ${movieSummary.title}` })).toHaveAttribute('href', '/reviews/review-one')
+    expect(screen.getByRole('link', { name: movieSummary.title })).toHaveAttribute('href', `/title/${movieSummary.id}`)
+  })
+  it('opens the published review from an Activity entry', () => {
+    render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'activity', items: [{ kind: 'review', occurredAt: '2026-10-27T12:00:00.000Z', item: { kind: 'movie', id: movieSummary.id, origin: 'native', sourceKey: null, body: 'A patient masterpiece.', reviewId: 'review-one', reviewedOn: null, tags: [] } }], nextCursor: null }} owner section="activity" titles={[movieSummary]} />)
+    expect(screen.getByRole('link', { name: movieSummary.title })).toHaveAttribute('href', '/reviews/review-one')
+  })
+  it('distinguishes a review search with no matches from an empty review archive', async () => {
+    render(<ProfileArchiveScreen data={profile} initialPage={{ collection: 'reviews', items: [{ kind: 'movie', id: movieSummary.id, origin: 'native', sourceKey: null, body: 'A patient masterpiece.', reviewId: 'review-one', reviewedOn: null, tags: [] }], nextCursor: null }} owner section="reviews" titles={[movieSummary]} />)
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search Reviews' }), 'unmatched title')
+    expect(screen.getByText('No loaded reviews match this search. Try another title.')).toBeVisible()
+    expect(screen.queryByText('No reviews have been published yet.')).not.toBeInTheDocument()
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Search Reviews' }))
+    expect(screen.getByRole('link', { name: `Read and discuss review of ${movieSummary.title}` })).toBeVisible()
   })
   it.each([[ListsRedirect, '/profile/hamza/lists'], [WatchlistRedirect, '/profile/hamza/watchlist'], [LibraryRedirect, '/profile/hamza/history']] as const)('redirects legacy entry points into the member profile', async (page, destination) => {
     await expect(page()).rejects.toThrow(`redirect:${destination}`)
@@ -58,7 +75,7 @@ describe('profile archive routing', () => {
   it('keeps private list creation inside the owner Lists tab', async () => {
     render(await ProfileArchivePage({ params: Promise.resolve({ section: 'lists', username: 'hamza' }), searchParams: Promise.resolve({}) }))
     expect(screen.getByRole('heading', { level: 1, name: 'Lists' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create list' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Create a collection' })).toHaveAttribute('href', '/lists/new')
     expect(screen.getByRole('link', { name: 'My private collection, 0 titles' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Saved lists' })).not.toBeInTheDocument()
   })
@@ -110,7 +127,11 @@ describe('profile archive routing', () => {
     expect(screen.getByRole('link', { name: 'Followers, 3', current: 'page' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Following, 5' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument()
-    expect(within(screen.getByRole('navigation', { name: 'Hamza profile sections' })).queryByRole('link', { name: /Watched/ })).not.toBeInTheDocument()
+    const sections = within(screen.getByRole('navigation', { name: 'Hamza profile sections' }))
+    expect(sections.getByRole('link', { name: 'Activity, 0' })).toHaveAttribute('href', '/profile/hamza/activity')
+    expect(sections.getByRole('link', { name: 'Watched, 0' })).toHaveAttribute('href', '/profile/hamza/films')
+    expect(sections.getByRole('link', { name: 'Diary, 0' })).toHaveAttribute('href', '/profile/hamza/diary')
+    expect(sections.getByRole('link', { name: 'History, 0' })).toHaveAttribute('href', '/profile/hamza/history')
     expect(mocks.library).not.toHaveBeenCalled()
   })
   it('uses the API owner discriminator before showing private navigation', async () => {
@@ -118,7 +139,9 @@ describe('profile archive routing', () => {
     mocks.collection.mockResolvedValue({ collection: 'followers', items: [], nextCursor: null })
     render(await ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({}) }))
     expect(screen.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument()
-    expect(within(screen.getByRole('navigation', { name: 'Hamza profile sections' })).queryByRole('link', { name: /Watched/ })).not.toBeInTheDocument()
+    const sections = within(screen.getByRole('navigation', { name: 'Hamza profile sections' }))
+    expect(sections.getByRole('link', { name: 'Watched, 0' })).toHaveAttribute('href', '/profile/hamza/films')
+    expect(sections.queryByRole('link', { name: 'Edit profile' })).not.toBeInTheDocument()
   })
   it('rejects an invalid Network view before loading member data', async () => {
     await expect(ProfileArchivePage({ params: Promise.resolve({ section: 'network', username: 'hamza' }), searchParams: Promise.resolve({ view: 'mutuals' }) })).rejects.toThrow('not-found')

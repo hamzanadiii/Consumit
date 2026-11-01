@@ -3,6 +3,10 @@ import { parseResolverOrigins, type CloudflareResolverConfig } from '../playback
 import { parseRelayProviders, parseRelayDiscovery, parseRelayControlProviders, validateRelayNode, type PlaybackRelayConfig } from '../playback/relay.ts'
 
 const envSchema = z.object({
+  PROVIDER_EXECUTION_MODE: z.enum(['local', 'cloudflare-only']).default('local'),
+  PLAYBACK_EDGE_ACCEPTED_ROUTES: z.string().max(5000).default('[]'),
+  SUBTITLE_WORKER_ORIGIN: z.url().optional(),
+  SUBTITLE_WORKER_SECRET: z.string().min(32).optional(),
   APPLICATION_MODE: z.enum(['combined', 'product', 'playback']).default('combined'),
   INTERNAL_SERVICE_SECRET: z.string().min(32).max(256).optional(),
   INTERNAL_API_ORIGIN: z.url().optional(),
@@ -13,6 +17,8 @@ const envSchema = z.object({
   RELEASE_WORKER_SECRET: z.string().min(32).max(256).optional(),
   AUTH_CODE_PEPPER: z.string().min(32).optional(),
   AUTH_EMAIL_FROM: z.string().trim().min(3).optional(),
+  GOOGLE_CLIENT_ID: z.string().trim().min(1).max(256).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().trim().min(1).max(256).optional(),
   DATABASE_SSL_CA: z.string().optional(),
   DATABASE_SSL_CA_FILE: z.string().min(1).optional(),
   DATABASE_DEPLOYMENT: z.enum(['managed', 'self-hosted']).default('managed'),
@@ -35,7 +41,6 @@ const envSchema = z.object({
   PLAYBACK_RESOLVER_ENABLED: z.enum(['true', 'false']).default('false'),
   PLAYBACK_RESOLVER_ORIGIN: z.url().optional(),
   PLAYBACK_RESOLVER_SECRET: z.string().min(32).optional(),
-  PLAYBACK_RESOLVER_API_PROVIDERS: z.string().max(128).optional(),
   PLAYBACK_RESOLVER_PROVIDER_ORIGINS: z.string().max(20000).optional(),
   PLAYBACK_RESOLVER_COMPUTE_ENABLED: z.enum(['true', 'false']).default('false'),
   PLAYBACK_RESOLVER_COMPUTE_SECRET: z.string().min(32).max(256).optional(),
@@ -56,6 +61,7 @@ const envSchema = z.object({
   OPENSUBTITLES_USER: z.string().trim().min(1).optional(),
   OPENSUBTITLES_PASS: z.string().trim().min(1).optional(),
   TMDB_API_READ_TOKEN: z.string().trim().min(1).optional(),
+  MAL_CLIENT_ID: z.string().trim().min(1).max(256).optional(),
   TMDB_LANGUAGE: z.string().trim().min(1).default('en-US'),
   TMDB_REGION: z.string().trim().length(2).default('US'),
   TRUSTED_PROXIES: z.string().optional(),
@@ -68,6 +74,9 @@ export type ApiEnv = {
   backgroundJobs?: boolean
   releases?: { enabled: boolean; workerSecret: string | undefined }
   playback?: {
+    execution?: 'local' | 'cloudflare-only'
+    acceptedEdgeRoutes?: string[]
+    subtitleWorker?: { origin: string; secret: string }
     relay?: PlaybackRelayConfig
     resolver?: CloudflareResolverConfig
     enabled: boolean; stateUrl: string | undefined; mediaConfig: string | undefined;
@@ -82,6 +91,7 @@ export type ApiEnv = {
   appOrigin: string
   authCodePepper: string | undefined
   authEmailFrom: string | undefined
+  googleOAuth?: { clientId: string; clientSecret: string; redirectUri: string }
   databaseSslCa: string | undefined
   databaseSslCaFile?: string
   emailProvider?: 'resend' | 'ses'
@@ -102,6 +112,7 @@ export type ApiEnv = {
   tmdbLanguage: string
   tmdbRegion: string
   tmdbToken: string | undefined
+  malClientId: string | undefined
   trustedProxies: string[]
   valkeyUrl: string | undefined
 }
@@ -112,6 +123,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     throw new Error(`Invalid API configuration: ${parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
   }
   const value = parsed.data
+  if (Boolean(value.GOOGLE_CLIENT_ID) !== Boolean(value.GOOGLE_CLIENT_SECRET)) {
+    throw new Error('Invalid API configuration: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together.')
+  }
   if (value.APPLICATION_MODE !== 'combined' && (!value.INTERNAL_SERVICE_SECRET || (value.APPLICATION_MODE === 'product' ? !value.INTERNAL_PLAYBACK_ORIGIN : !value.INTERNAL_API_ORIGIN))) {
     throw new Error('Separated applications require an internal origin and a dedicated service secret.')
   }
@@ -146,19 +160,11 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     catch { throw new Error('Provider resolver routes require a bounded map of exact HTTPS origins.') }
   }
   if (Object.keys(providerOrigins).length && value.PLAYBACK_RESOLVER_ENABLED !== 'true') throw new Error('Provider resolver routes require the Cloudflare resolver.')
-  let apiProviders: 'wecollege-miami'[] = []
-  if (value.PLAYBACK_RESOLVER_API_PROVIDERS) {
-    try {
-      apiProviders = z.array(z.literal('wecollege-miami')).max(1)
-        .refine(items => new Set(items).size === items.length).parse(JSON.parse(value.PLAYBACK_RESOLVER_API_PROVIDERS))
-    } catch { throw new Error('Provider resolver API lookup exceptions must contain only the reviewed Miami route.') }
-  }
-  if (apiProviders.length && value.PLAYBACK_RESOLVER_ENABLED !== 'true') throw new Error('Provider resolver API lookup exceptions require the Cloudflare resolver.')
   if (value.PLAYBACK_RESOLVER_ENABLED === 'true') {
     if (value.PLAYBACK_ENABLED !== 'true' || !value.PLAYBACK_RESOLVER_ORIGIN || !value.PLAYBACK_RESOLVER_SECRET) throw new Error('Provider resolver requires playback, an origin, and a secret.')
     const url = new URL(value.PLAYBACK_RESOLVER_ORIGIN)
     if (url.protocol !== 'https:' || url.origin !== value.PLAYBACK_RESOLVER_ORIGIN || url.username || url.password) throw new Error('Provider resolver requires an exact HTTPS origin.')
-    resolver = { origin: url.origin, secret: value.PLAYBACK_RESOLVER_SECRET, ...(apiProviders.length ? { apiProviders } : {}), ...(Object.keys(providerOrigins).length ? { providerOrigins } : {}) }
+    resolver = { origin: url.origin, secret: value.PLAYBACK_RESOLVER_SECRET, ...(Object.keys(providerOrigins).length ? { providerOrigins } : {}) }
   }
   if (value.PLAYBACK_RESOLVER_COMPUTE_ENABLED === 'true') {
     if (!resolver || !value.PLAYBACK_RESOLVER_COMPUTE_SECRET) throw new Error('Provider computation requires the enabled resolver and its separate secret.')
@@ -234,11 +240,28 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
       if (!valid) throw new Error('Invalid API configuration: self-hosted database requires dedicated credentials and certificate-verified TLS.')
     }
   }
+  const acceptedEdgeRoutes = z.array(z.string().regex(/^[a-z0-9-]{1,40}:(?:movie|series|anime):[A-Z]{2}:(?:direct|relay|embed)(?::audio)?$/)).max(384).parse(JSON.parse(value.PLAYBACK_EDGE_ACCEPTED_ROUTES))
+  const cloudflareOnly = value.PROVIDER_EXECUTION_MODE === 'cloudflare-only'
+  // In split deployments, the product API owns member state and playback
+  // settings, but the separate playback process performs provider requests.
+  // Enforce the egress boundary in the process that actually executes them.
+  const executesProviders = value.APPLICATION_MODE !== 'product'
+  if (value.NODE_ENV === 'production' && value.PLAYBACK_ENABLED === 'true' && executesProviders && !cloudflareOnly) throw new Error('Production playback requires Cloudflare-only provider execution.')
+  if (executesProviders && cloudflareOnly && (value.PLAYBACK_NODE_ENABLED === 'true' || value.PLAYBACK_RESOLVER_COMPUTE_ENABLED === 'true')) throw new Error('Cloudflare-only execution forbids VPS media and compute routes; provider lookup stays on Cloudflare Workers.')
+  if (cloudflareOnly && value.PLAYBACK_ENABLED === 'true' && executesProviders && !resolver) throw new Error('Cloudflare-only playback requires the provider resolver Worker.')
+  if (resolver && cloudflareOnly) resolver.cloudflareOnly = true
+  if (relay && cloudflareOnly) relay.cloudflareOnly = true
+  if (value.SUBTITLE_WORKER_ORIGIN) {
+    const url = new URL(value.SUBTITLE_WORKER_ORIGIN)
+    if (url.protocol !== 'https:' || url.origin !== value.SUBTITLE_WORKER_ORIGIN || url.username || url.password) throw new Error('Subtitle Worker requires an exact HTTPS origin.')
+  }
   return {
     applicationMode: value.APPLICATION_MODE,
     backgroundJobs: value.BACKGROUND_JOBS_ENABLED === 'true',
     ...(value.INTERNAL_SERVICE_SECRET ? { internal: { secret: value.INTERNAL_SERVICE_SECRET, ...(value.INTERNAL_API_ORIGIN ? { apiOrigin: value.INTERNAL_API_ORIGIN } : {}), ...(value.INTERNAL_PLAYBACK_ORIGIN ? { playbackOrigin: value.INTERNAL_PLAYBACK_ORIGIN } : {}) } } : {}),
-    playback: { enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
+    playback: { execution: value.PROVIDER_EXECUTION_MODE, acceptedEdgeRoutes,
+      ...(value.SUBTITLE_WORKER_ORIGIN && value.SUBTITLE_WORKER_SECRET ? { subtitleWorker: { origin: value.SUBTITLE_WORKER_ORIGIN, secret: value.SUBTITLE_WORKER_SECRET } } : {}),
+      enabled: value.PLAYBACK_ENABLED === 'true', stateUrl: value.PLAYBACK_VALKEY_URL, mediaConfig: value.PLAYBACK_MEDIA_CONFIG,
       ...(relay ? { relay } : {}),
       ...(resolver ? { resolver } : {}),
       instances: value.PLAYBACK_INSTANCES, probeIntervalMs: value.PLAYBACK_PROBE_INTERVAL_MINUTES * 60_000 },
@@ -246,6 +269,9 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     appOrigin: appUrl.origin,
     authCodePepper: value.AUTH_CODE_PEPPER,
     authEmailFrom: value.AUTH_EMAIL_FROM,
+    ...(value.GOOGLE_CLIENT_ID && value.GOOGLE_CLIENT_SECRET
+      ? { googleOAuth: { clientId: value.GOOGLE_CLIENT_ID, clientSecret: value.GOOGLE_CLIENT_SECRET, redirectUri: `${appUrl.origin}/v1/auth/google/callback` } }
+      : {}),
     databaseSslCa: value.DATABASE_SSL_CA?.replaceAll('\\n', '\n'),
     ...(value.DATABASE_SSL_CA_FILE ? { databaseSslCaFile: value.DATABASE_SSL_CA_FILE } : {}),
     emailProvider: value.AUTH_EMAIL_PROVIDER,
@@ -268,6 +294,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
     tmdbLanguage: value.TMDB_LANGUAGE,
     tmdbRegion: value.TMDB_REGION.toUpperCase(),
     tmdbToken: value.TMDB_API_READ_TOKEN,
+    malClientId: value.MAL_CLIENT_ID,
     trustedProxies: (value.TRUSTED_PROXIES ?? '').split(',').map((entry) => entry.trim()).filter(Boolean),
     valkeyUrl: value.VALKEY_URL,
   }

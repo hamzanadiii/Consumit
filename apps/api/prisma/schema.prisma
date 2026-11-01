@@ -113,8 +113,22 @@ model ReleaseNotification {
 // Identity slice (Phase 3). Emails are stored normalized (lowercase, trimmed)
 // by the module; the unique constraint enforces one account per address.
 model Member {
+  tasteDocuments TasteDocument[]
+  tasteComments TasteComment[]
+  tasteSubscriptions TasteSubscription[]
+  tasteNotifications TasteNotification[]
+  tasteMutations TasteMutation[]
+  tasteBlocksCreated TasteBlock[] @relation("TasteBlockActor")
+  tasteBlocksReceived TasteBlock[] @relation("TasteBlockTarget")
+  tasteEvents TasteEvent[]
+  tasteRecommendationsSent TasteRecommendation[] @relation("TasteRecommendationSender")
+  tasteRecommendationsReceived TasteRecommendation[] @relation("TasteRecommendationRecipient")
+  tasteNotificationsSent TasteNotification[] @relation("TasteNotificationActor")
+  tasteReports TasteReport[]
+  tasteRestricted Boolean @default(false)
   id              String       @id @default(cuid())
   email           String       @unique
+  googleSubject   String?      @unique @db.VarChar(255)
   emailVerifiedAt DateTime?
   authVersion     Int          @default(1)
   role            MemberRole   @default(MEMBER)
@@ -139,9 +153,11 @@ model Member {
   recommendationDismissals RecommendationDismissal[]
   watchHistory    WatchHistoryEntry[]
   lists           MemberList[]
+  listCollaborations MemberListCollaborator[] @relation("ListCollaborator")
   savedLists      SavedMemberList[]
   importBatches   ImportBatch[]
   subtitlePreferences UserSubtitlePreference[]
+  subtitleCorrections UserSubtitleCorrection[]
   releaseTracking ReleaseTracking[]
   notificationPreference NotificationPreference?
   experiencePreference ExperiencePreference?
@@ -184,7 +200,7 @@ model Profile {
   bannerUrl         String?
   displayNameOrigin DataOrigin @default(NATIVE)
   bioOrigin         DataOrigin @default(NATIVE)
-  sectionVisibility Json      @default("{\"favorites\":true,\"ratings\":true,\"reviews\":true,\"lists\":true,\"network\":true,\"likes\":true,\"tags\":true,\"watchlist\":true}")
+  sectionVisibility Json      @default("{\"favorites\":true,\"ratings\":true,\"reviews\":true,\"lists\":true,\"network\":true,\"likes\":true,\"tags\":true,\"watchlist\":true,\"watched\":true,\"diary\":true,\"history\":true,\"activity\":true}")
   // Retained for migration compatibility; profile access is governed by sectionVisibility.
   visibility  String  @default("public")
 }
@@ -202,6 +218,12 @@ enum CatalogKind {
   MOVIE
   SERIES
   ANIME
+}
+
+enum TasteRecommendationResponse {
+  SAVED
+  ALREADY_SEEN
+  NOT_INTERESTED
 }
 
 enum DataOrigin {
@@ -311,6 +333,12 @@ model TitleLike {
 }
 
 model Review {
+  spoiler Boolean @default(false)
+  season Int?
+  episode Int?
+  ratingAtPublication Int?
+  revision Int @default(0)
+  removedAt DateTime?
   id            String      @id @default(cuid())
   memberId      String
   member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
@@ -327,6 +355,7 @@ model Review {
   likes         ReviewLike[]
 
   @@unique([memberId, origin, sourceKey])
+    @@index([catalogKind, tmdbId, removedAt, createdAt, id])
   @@index([memberId, reviewedOn])
   @@index([memberId, createdAt])
 }
@@ -440,6 +469,8 @@ model Favorite {
 }
 
 model MemberList {
+  genres String[] @default([])
+  removedAt DateTime?
   id            String      @id @default(cuid())
   memberId      String
   member        Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
@@ -454,10 +485,23 @@ model MemberList {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   items         ListItem[]
+  collaborators MemberListCollaborator[]
 
   @@unique([memberId, origin, sourceKey])
   @@unique([memberId, idempotencyKey])
   @@index([memberId, updatedAt(sort: Desc), id(sort: Desc)], map: "MemberList_member_updated_desc_idx")
+  @@index([genres], type: Gin)
+}
+
+model MemberListCollaborator {
+  listId    String
+  list      MemberList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member     @relation("ListCollaborator", fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([listId, memberId])
+  @@index([memberId, createdAt(sort: Desc)], map: "MemberListCollaborator_member_created_idx")
 }
 
 model SavedMemberList {
@@ -631,6 +675,21 @@ model UserSubtitlePreference {
   @@index([kind, tmdbId, anilistId, season, episode])
 }
 
+// Exact recording/file corrections. Legacy title-wide preferences remain intact.
+model UserSubtitleCorrection {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  contentKey String
+  videoVersion String
+  contentChecksum String
+  trackId String?
+  offsetMs Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([memberId, contentKey, videoVersion, contentChecksum], map: "subtitle_correction_scope_key")
+}
+
 model ProviderOverride {
   id         String   @id
   configJson String
@@ -653,4 +712,131 @@ model ProviderChange {
   createdAt  DateTime @default(now())
 
   @@index([providerId, createdAt(sort: Desc)])
+}
+
+model TasteDocument {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  kind String
+  key String
+  data Json
+  published Json?
+  revision Int @default(0)
+  publishedAt DateTime?
+  removedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([memberId, kind, key])
+  @@index([kind, publishedAt, id])
+}
+
+model TasteComment {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  targetKind String
+  targetId String
+  parentId String?
+  body String
+  spoiler Boolean @default(false)
+  revision Int @default(0)
+  idempotencyKey String
+  deleted Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([memberId, idempotencyKey])
+  @@index([targetKind, targetId, createdAt, id])
+}
+
+model TasteBlock {
+  actorId String
+  actor Member @relation("TasteBlockActor", fields: [actorId], references: [id], onDelete: Cascade)
+  targetId String
+  target Member @relation("TasteBlockTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([actorId, targetId])
+}
+
+model TasteSubscription {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  targetKind String
+  targetId String
+  muted Boolean @default(false)
+  updates Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@id([memberId, targetKind, targetId])
+}
+
+model TasteEvent {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  targetKind String
+  targetId String
+  createdAt DateTime @default(now())
+  @@unique([targetKind, targetId])
+  @@index([createdAt, id])
+}
+
+model TasteNotification {
+  id String @id @default(cuid())
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  actorId String
+  actor Member @relation("TasteNotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  targetKind String
+  targetId String
+  text String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@unique([memberId, actorId, targetKind, targetId])
+  @@index([memberId, createdAt, id])
+}
+
+model TasteRecommendation {
+  id String @id @default(cuid())
+  senderId String
+  sender Member @relation("TasteRecommendationSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient Member @relation("TasteRecommendationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  catalogKind CatalogKind
+  tmdbId Int
+  response TasteRecommendationResponse?
+  createdAt DateTime @default(now())
+  respondedAt DateTime?
+  @@unique([senderId, recipientId, catalogKind, tmdbId])
+  @@index([recipientId, createdAt(sort: Desc), id])
+}
+
+model TasteReport {
+  id String @id @default(cuid())
+  reporterId String
+  reporter Member @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  targetKind String
+  targetId String
+  commentId String?
+  reason String
+  status String @default("open")
+  createdAt DateTime @default(now())
+  @@index([status, createdAt])
+}
+
+model TasteModeration {
+  id String @id @default(cuid())
+  reportId String
+  actorId String
+  action String
+  note String
+  createdAt DateTime @default(now())
+}
+
+model TasteMutation {
+  memberId String
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  key String
+  fingerprint String
+  result Json
+  @@id([memberId, key])
 }

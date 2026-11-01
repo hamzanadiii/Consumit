@@ -38,20 +38,38 @@ const viewer = {
 } as const
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
 beforeEach(() => {
+  vi.useRealTimers()
   vi.clearAllMocks()
   mocks.browserSearchCatalog.mockResolvedValue({ items: [], page: 1, totalPages: 0, totalResults: 0 })
   mocks.saveMemberFavorites.mockResolvedValue({})
 })
 const profile: MemberProfileData = {
-  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true }, username: 'alex_sample', usernameChangedAt: null },
-  diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { diaryEntries: 0, lists: 0, reviews: 0, watched: 0 },
+  canonicalUsername: 'alex_sample', profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, createdAt: '2026-01-01T00:00:00Z', displayName: 'Alex', nextUsernameChangeAt: null, sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true }, username: 'alex_sample', usernameChangedAt: null },
+  diary: [], favorites: [], lists: [], reviews: [], social: { followers: 0, following: 0 }, statistics: { activity: 0, diaryEntries: 0, history: 0, lists: 0, reviews: 0, watchlist: 0, watched: 0 },
 }
 
 describe('profile as a personal cinema', () => {
+  it('labels every rating bar so each score is clear without counting columns', () => {
+    const ratingDistribution = Array.from({ length: 10 }, (_, index) => ({
+      count: index === 4 ? 3 : index === 8 ? 1 : 0,
+      value: index + 1,
+    }))
+
+    render(<ProfileScreen data={{ ...profile, ratingDistribution }} owner titles={[]} />)
+
+    const ratings = screen.getByRole('region', { name: 'Ratings' })
+    for (let value = 1; value <= 10; value += 1) {
+      expect(within(ratings).getByText(String(value), { selector: '[data-consumit-rating-value]' })).toBeVisible()
+    }
+    expect(within(ratings).getByRole('link', { name: 'Show 3 titles rated 5 out of 10' })).toHaveAttribute('href', '/profile/alex_sample/films?rating=5')
+    expect(within(ratings).getByRole('link', { name: 'Show 1 title rated 9 out of 10' })).toHaveAttribute('href', '/profile/alex_sample/films?rating=9')
+  })
+
   it.each([null, 'https://images.example/selected-portrait.svg'])('uses the same portrait in the signed-in header and own profile with avatarUrl %s', (avatarUrl) => {
     const owner = { ...viewer, username: profile.profile.username, displayName: profile.profile.displayName, avatarUrl }
     render(<SessionProvider initialMember={owner} initialStatus="authenticated"><ProfileScreen data={{ ...profile, profile: { ...profile.profile, avatarUrl } }} owner titles={[]} /></SessionProvider>)
@@ -114,7 +132,7 @@ describe('profile as a personal cinema', () => {
           favorites: [{ id: movieSummary.id, kind: 'movie', position: 1, origin: 'native', sourceKey: null }],
           lists: [{ description: null, id: 'l1', itemCount: 2, name: 'Shortlist', origin: 'native', slug: 'shortlist', visibility: 'private' }],
           reviews: [{ body: 'A patient masterpiece.', id: movieSummary.id, kind: 'movie', origin: 'native', sourceKey: null, reviewId: 'r1', reviewedOn: '2026-09-06', tags: [] }],
-          statistics: { diaryEntries: 1, lists: 1, reviews: 1, watched: 1 },
+          statistics: { activity: 2, diaryEntries: 1, history: 0, lists: 1, reviews: 1, watchlist: 0, watched: 1 },
         }}
         titles={[movieSummary, seriesSummary]}
       />,
@@ -135,6 +153,8 @@ describe('profile as a personal cinema', () => {
     expect(screen.getAllByText(/Watched · S01 E03/).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('link', { name: `${seriesSummary.title}` }).some((link) => link.getAttribute('href') === `/watch/series/${seriesSummary.id}?season=1&episode=3`)).toBe(true)
     expect(within(activityList as HTMLElement).getByText(/reviewed/i)).toBeInTheDocument()
+    const reviewedCard = within(activityList as HTMLElement).getByText(/reviewed/i).closest('li')!
+    expect(within(reviewedCard).getAllByRole('link').some(link => link.getAttribute('href') === '/reviews/r1')).toBe(true)
   })
   it('hides follow actions on the owner profile', () => {
     render(<SessionProvider initialMember={{ ...viewer, username: 'alex_sample' }} initialStatus="authenticated"><ProfileScreen data={profile} owner titles={[]} /></SessionProvider>)
@@ -184,7 +204,8 @@ describe('profile as a personal cinema', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Add favorite 1' }))
     await user.type(screen.getByRole('searchbox', { name: 'Name of movie, series, or anime' }), 'dune')
-    expect(await screen.findByRole('button', { name: 'Pick Dune: Part Two' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Pick Dune: Part Two' }, { timeout: 10_000 })).toBeInTheDocument()
+    expect(mocks.browserSearchCatalog).toHaveBeenCalledWith('dune', 'all')
     await user.click(screen.getByRole('button', { name: 'Pick Dune: Part Two' }))
     await waitFor(() => expect(mocks.saveMemberFavorites).toHaveBeenCalledWith([{ id: movieSummary.id, kind: 'movie' }]))
     expect(mocks.refresh).toHaveBeenCalledTimes(1)

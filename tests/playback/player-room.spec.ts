@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
 
 test.beforeEach(async ({ request }) => {
   await request.post('http://127.0.0.1:18559/__fixtures/reset')
@@ -61,6 +62,42 @@ test('full viewport omits redundant theater mode and locked fullscreen leaves on
   await expect(page.getByRole('button', { name: 'Exit fullscreen', exact: true })).toBeVisible()
 })
 
+test('startup recovery actions stay visible with 44px targets on narrow screens', async ({ page }) => {
+  await mkdir('.impeccable/review/player-room', { recursive: true })
+  await page.goto('/watch/series/7?season=1&episode=4')
+  const recovery = page.getByRole('alertdialog', { name: 'Couldn’t start playback' })
+  await expect(recovery).toBeVisible()
+  const actions = [
+    recovery.getByRole('button', { name: 'Try again with Auto' }),
+    recovery.getByRole('button', { name: 'Choose a source' }),
+    recovery.getByRole('link', { name: 'Return to title' }),
+  ]
+  for (const [name, width, height] of [['phone', 390, 844], ['narrow', 320, 720], ['landscape', 844, 390]] as const) {
+    await page.setViewportSize({ width, height })
+    const player = page.locator('[data-consumit-player]')
+    const playerBounds = await player.boundingBox()
+    const overlayBounds = await page.locator('[data-player-recovery]').boundingBox()
+    expect(overlayBounds!.x).toBeLessThanOrEqual(playerBounds!.x)
+    expect(overlayBounds!.y).toBeLessThanOrEqual(playerBounds!.y)
+    expect(overlayBounds!.x + overlayBounds!.width).toBeGreaterThanOrEqual(playerBounds!.x + playerBounds!.width)
+    expect(overlayBounds!.y + overlayBounds!.height).toBeGreaterThanOrEqual(playerBounds!.y + playerBounds!.height)
+    const card = page.locator('[data-recovery-card]')
+    const cardBounds = await card.boundingBox()
+    expect(cardBounds!.x).toBeGreaterThanOrEqual(0)
+    expect(cardBounds!.x + cardBounds!.width).toBeLessThanOrEqual(width)
+    for (const action of actions) {
+      await expect(action).toBeVisible()
+      const bounds = await action.boundingBox()
+      expect(bounds!.width).toBeGreaterThanOrEqual(44)
+      expect(bounds!.height).toBeGreaterThanOrEqual(44)
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(height)
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(playerBounds!.y + playerBounds!.height)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `.impeccable/review/player-room/recovery-${name}.png` })
+  }
+})
+
 test('Watch states fit desktop, phone and short landscape viewports', async ({ page }, info) => {
   test.setTimeout(150000)
   test.skip(info.project.name !== 'chrome', 'One bounded visual pass covers the viewport matrix.')
@@ -93,9 +130,38 @@ test('Watch states fit desktop, phone and short landscape viewports', async ({ p
   await page.getByRole('button', { name: 'Episodes', exact: true }).click()
   const drawer = page.getByRole('dialog', { name: 'Episodes' })
   await drawer.getByRole('button', { name: 'Go to next episode page' }).click()
-  await expect(drawer.getByText('Coming soon')).toBeVisible()
+  await expect(drawer.getByRole('link', { name: /^Watch episode 9:/ })).toBeVisible()
+  await expect(drawer.getByRole('link', { name: /^Watch episode 1:/ })).toHaveCount(0)
   await page.screenshot({ path: '.impeccable/review/player-room/anime-episodes.png' })
   await page.goto('/watch/series/7?season=1&episode=4')
-  await expect(page.getByRole('alert').filter({ hasText: /Every compatible server/ })).toBeVisible()
+  const recovery = page.getByRole('alertdialog', { name: 'Couldn’t start playback' })
+  await expect(recovery).toBeVisible()
+  await expect(recovery.getByRole('button', { name: 'Try again with Auto' })).toBeVisible()
+  await expect(recovery.getByRole('button', { name: 'Choose a source' })).toBeVisible()
+  await expect(recovery.getByRole('link', { name: 'Return to title' })).toBeVisible()
   await page.screenshot({ path: '.impeccable/review/player-room/recovery.png', fullPage: true })
+})
+
+test('startup recovery keeps keyboard focus inside its blocking choices', async ({ page }) => {
+  await page.goto('/watch/series/7?season=1&episode=4')
+  const recovery = page.getByRole('alertdialog', { name: 'Couldn’t start playback' })
+  const heading = recovery.getByRole('heading', { name: 'Couldn’t start playback' })
+  const retry = recovery.getByRole('button', { name: 'Try again with Auto' })
+  const chooseSource = recovery.getByRole('button', { name: 'Choose a source' })
+  const returnToTitle = recovery.getByRole('link', { name: 'Return to title' })
+
+  await expect(recovery).toHaveAttribute('aria-modal', 'true')
+  await expect(heading).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(returnToTitle).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(retry).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(returnToTitle).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(retry).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(chooseSource).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(returnToTitle).toBeFocused()
 })

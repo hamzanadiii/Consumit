@@ -25,8 +25,10 @@ import { matchesRatingFilter, type RatingRangeValue } from '../shared/rating-fil
 import type { ProfileSectionId } from './profile-section-navigation'
 import { ProfileArchiveShell } from './profile-archive-shell'
 import { DiaryCollection } from './diary-collection'
+import { PersonalRatingsRetry } from './personal-ratings-retry'
 import { browserCatalogBatches } from '@/lib/catalog-browser'
 import { getMemberListDetail, getMemberRatingPage, getMemberRatingsForTitles, getProfileArchivePage } from '@/lib/identity-browser'
+import { formatCalendarDay } from '@/lib/calendar-date'
 
 const ARCHIVE_SIZE = 30
 const COLLAGE_SIZE = 5
@@ -42,7 +44,7 @@ function episodeLabel(entry: DiaryEntry) {
 }
 
 function displayDate(value: string, withYear = false) {
-  return new Date(`${value.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}) })
+  return formatCalendarDay(value, withYear)
 }
 
 function pageKey(collection: MemberProfileArchivePage['collection'], item: unknown) {
@@ -75,7 +77,7 @@ function refsInPage(page: MemberProfileArchivePage): CatalogRef[] {
   }
 }
 
-function EmptyArchive({ children }: { children: string }) {
+function EmptyArchive({ children }: { children: ReactNode }) {
   return <div className="mt-7 rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] px-6 py-12 text-sm leading-6 text-[var(--fs-muted)]">{children}</div>
 }
 
@@ -102,6 +104,8 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
   const [titles, setTitles] = useState<readonly CatalogTitleSummary[]>(initialTitles)
   const [ratingsByTitle, setRatingsByTitle] = useState<Record<string, number>>(() => Object.fromEntries(initialRatings.map(({ id, kind, value }) => [`${kind}:${id}`, value])))
   const [ratingsUnavailableState, setRatingsUnavailableState] = useState(ratingsUnavailable)
+  const [ratingsRetrying, setRatingsRetrying] = useState(false)
+  const [ratingsRetryFailed, setRatingsRetryFailed] = useState(false)
   const [posters, setPosters] = useState<Readonly<Record<string, readonly (string | undefined)[]>>>(listPosters)
   const [query, setQuery] = useState('')
   const [genre, setGenre] = useState('all')
@@ -117,6 +121,8 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       setTitles(initialTitles)
       setRatingsByTitle(Object.fromEntries(initialRatings.map(({ id, kind, value }) => [`${kind}:${id}`, value])))
       setRatingsUnavailableState(ratingsUnavailable)
+      setRatingsRetrying(false)
+      setRatingsRetryFailed(false)
       setLoadError(false)
       setCatalogError(false)
     })
@@ -130,6 +136,26 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
   const titleMap = useMemo(() => new Map(titles.map((title) => [refKey(title), title])), [titles])
   const genres = useMemo(() => [...new Set([...titles.flatMap((title) => title.genreNames), ...(genre === 'all' ? [] : [genre])])].sort((left, right) => left.localeCompare(right)), [genre, titles])
   const decades = useMemo(() => [...new Set(titles.flatMap((title) => { const value = titleDecade(title.year); return value ? [value] : [] }))].sort((left, right) => Number(right) - Number(left)), [titles])
+
+  async function retryRatingLookup() {
+    if (ratingsRetrying) return
+    setRatingsRetrying(true)
+    setRatingsRetryFailed(false)
+    try {
+      const refs = [...new Map(refsInPage(page).map((ref) => [refKey(ref), ref])).values()]
+      const ratings: MemberRating[] = []
+      for (let offset = 0; offset < refs.length; offset += 50) {
+        ratings.push(...await getMemberRatingsForTitles(refs.slice(offset, offset + 50)))
+      }
+      if (ratings.length) setRatingsByTitle((current) => ({ ...current, ...Object.fromEntries(ratings.map(({ id, kind, value }) => [`${kind}:${id}`, value])) }))
+      setRatingsUnavailableState(false)
+    } catch {
+      setRatingsUnavailableState(true)
+      setRatingsRetryFailed(true)
+    } finally {
+      setRatingsRetrying(false)
+    }
+  }
 
 
   async function loadMore() {
@@ -152,7 +178,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       const refs = refsInPage(incoming)
       if ((incoming.collection === 'films' || incoming.collection === 'diary') && owner && typeof selectedRating !== 'number') {
         try { addedRatings = await getMemberRatingsForTitles(refs.slice(0, 50)) }
-        catch { setRatingsUnavailableState(true) }
+        catch { setRatingsUnavailableState(true); setRatingsRetryFailed(false) }
       }
       if (addedRatings.length) setRatingsByTitle((current) => ({ ...current, ...Object.fromEntries(addedRatings.map(({ id, kind, value }) => [`${kind}:${id}`, value])) }))
       setPages((current) => ({ ...current, [incoming.collection]: appendPage(current[incoming.collection], incoming) }))
@@ -195,7 +221,17 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
         const label = title?.title ?? `${kindLabel(ref.kind)} #${ref.id}`
         const diaryEvent = event.kind === 'diary'
         const detail = diaryEvent ? [event.item.rewatch ? 'Rewatched' : 'Watched', episodeLabel(event.item)].filter(Boolean).join(' · ') : 'Published a review'
-        return <li className="py-4" key={pageKey(page.collection, event)}><article className="grid grid-cols-[3rem_3.5rem_minmax(0,1fr)] items-center gap-4"><time className="text-center text-xs font-bold text-[var(--fs-muted)]" dateTime={event.occurredAt}>{displayDate(diaryEvent ? event.item.watchedOn : event.item.reviewedOn ?? event.occurredAt)}</time><Link href={titleHref(ref)}><ArtworkFrame alt={`${label} poster`} className="rounded-control" ratio="square" src={title?.posterUrl ?? undefined} /></Link><div className="min-w-0"><p className="text-sm text-[var(--fs-secondary)]"><Link className="font-bold text-[var(--fs-ink)] hover:text-[var(--fs-accent)]" href={diaryEvent ? diaryEntryHref(event.item) : titleHref(ref)}>{label}</Link><span className="text-[var(--fs-muted)]"> · {detail}</span></p>{!diaryEvent && <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--fs-secondary)]">{event.item.body}</p>}</div></article></li>
+        const destination = diaryEvent ? diaryEntryHref(event.item) : `/reviews/${encodeURIComponent(event.item.reviewId)}`
+        return <li className="py-4" key={pageKey(page.collection, event)}>
+          <article className="grid grid-cols-[3rem_3.5rem_minmax(0,1fr)] items-center gap-4">
+            <time className="text-center text-xs font-bold text-[var(--fs-muted)]" dateTime={event.occurredAt}>{displayDate(diaryEvent ? event.item.watchedOn : event.item.reviewedOn ?? event.occurredAt)}</time>
+            <Link href={titleHref(ref)}><ArtworkFrame alt={`${label} poster`} className="rounded-control" ratio="square" src={title?.posterUrl ?? undefined} /></Link>
+            <div className="min-w-0">
+              <p className="text-sm text-[var(--fs-secondary)]"><Link className="rounded-control font-bold text-[var(--fs-ink)] outline-none hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={destination}>{label}</Link><span className="text-[var(--fs-muted)]"> · {detail}</span></p>
+              {!diaryEvent && <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-[var(--fs-secondary)]">{event.item.body}</p>}
+            </div>
+          </article>
+        </li>
       })}</ol> : <EmptyArchive>{selectedTag ? `No loaded activity is tagged “${selectedTag}”.` : 'No public watches or reviews have been logged yet.'}</EmptyArchive>
       break
     }
@@ -229,11 +265,11 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
         const personalRating = selectedRating === 'none' ? null : typeof selectedRating === 'number' ? selectedRating : (owner ? ratingsByTitle[refKey(ref)] ?? null : null)
         const meta = [title?.year, kindLabel(ref.kind)].filter(Boolean).join(' · ')
           return <TitleCard className="min-w-0" href={titleHref(ref)} key={`${ref.kind}:${ref.id}`} meta={meta} rating={page.collection === 'films' ? null : personalRating} title={cardTitle} />
-      })}</ul> : <EmptyArchive>{page.collection !== 'films' ? 'Titles you like will have a shelf of their own here.' : ratingsUnavailableState && typeof selectedRating === 'string' ? 'Your ratings could not be checked. Reload to retry this filter.' : selectedRating === 'none' && page.items.length === 0 ? 'No watched titles are available to filter yet.' : genre !== 'all' || decade !== 'all' || normalizedQuery || (typeof selectedRating === 'string' && selectedRating !== 'none') ? 'No loaded titles match these filters. Try another rating, genre, decade, or search.' : selectedRating === 'none' ? 'Every loaded watched title has a rating.' : typeof selectedRating === 'number' ? `No titles rated ${selectedRating}/10 yet.` : 'Watched titles will collect here as you mark them watched.'}</EmptyArchive>
+      })}</ul> : <EmptyArchive>{page.collection !== 'films' ? 'Titles you like will have a shelf of their own here.' : ratingsUnavailableState && typeof selectedRating === 'string' ? 'Matching titles will appear when your ratings are available.' : selectedRating === 'none' && page.items.length === 0 ? 'No watched titles are available to filter yet.' : genre !== 'all' || decade !== 'all' || normalizedQuery || (typeof selectedRating === 'string' && selectedRating !== 'none') ? 'No loaded titles match these filters. Try another rating, genre, decade, or search.' : selectedRating === 'none' ? 'Every loaded watched title has a rating.' : typeof selectedRating === 'number' ? `No titles rated ${selectedRating}/10 yet.` : 'Watched titles will collect here as you mark them watched.'}</EmptyArchive>
       break
     }
     case 'diary': {
-      entries = <DiaryCollection entries={page.items} hasMore={page.nextCursor !== null} onDeleted={entryId => setPages(current => { const diary = current.diary; return diary?.collection === 'diary' ? { ...current, diary: { ...diary, items: diary.items.filter(entry => entry.entryId !== entryId) } } : current })} onSaved={(entryId, changes) => setPages(current => { const diary = current.diary; return diary?.collection === 'diary' ? { ...current, diary: { ...diary, items: diary.items.map(entry => entry.entryId === entryId ? { ...entry, ...changes } : entry) } } : current })} owner={owner} ratingsByTitle={ratingsByTitle} ratingsUnavailable={ratingsUnavailableState} selectedTag={selectedTag} titles={titles} />
+      entries = <DiaryCollection entries={page.items} hasMore={page.nextCursor !== null} onDeleted={entryId => setPages(current => { const diary = current.diary; return diary?.collection === 'diary' ? { ...current, diary: { ...diary, items: diary.items.filter(entry => entry.entryId !== entryId) } } : current })} onRetryRatings={() => void retryRatingLookup()} onSaved={(entryId, changes) => setPages(current => { const diary = current.diary; return diary?.collection === 'diary' ? { ...current, diary: { ...diary, items: diary.items.map(entry => entry.entryId === entryId ? { ...entry, ...changes } : entry) } } : current })} owner={owner} ratingsByTitle={ratingsByTitle} ratingsRetryFailed={ratingsRetryFailed} ratingsRetrying={ratingsRetrying} ratingsUnavailable={ratingsUnavailableState} selectedTag={selectedTag} titles={titles} />
       break
     }
     case 'reviews': {
@@ -241,8 +277,21 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       entries = filtered.length ? <div className="mt-7 grid gap-4 xl:grid-cols-2">{filtered.map((review) => {
         const title = titleMap.get(refKey(review))
         const label = title?.title ?? `${kindLabel(review.kind)} #${review.id}`
-        return <article className="grid min-w-0 grid-cols-[88px_minmax(0,1fr)] overflow-hidden rounded-card border border-[var(--fs-field-border)] bg-[var(--fs-field)] sm:grid-cols-[112px_minmax(0,1fr)]" key={review.reviewId}><ArtworkFrame alt={`${label} poster`} className="h-full rounded-none border-0" ratio="portrait" src={title?.posterUrl ?? undefined} /><div className="min-w-0 p-4"><Link className="font-display text-xl leading-tight text-[var(--fs-ink)] hover:text-[var(--fs-accent)]" href={titleHref(review)}>{label}</Link>{review.reviewedOn ? <p className="mt-1 text-xs text-[var(--fs-muted)]">{displayDate(review.reviewedOn, true)}</p> : null}<p className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm leading-6 text-[var(--fs-secondary)]">{review.body}</p></div></article>
-      })}</div> : <EmptyArchive>No reviews have been published yet.</EmptyArchive>
+        return <article className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-3 rounded-card border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4 sm:grid-cols-[88px_minmax(0,1fr)] sm:gap-x-4" key={review.reviewId}>
+          <ArtworkFrame alt={`${label} poster`} className="min-w-0 w-full self-start rounded-control border-0 sm:row-span-3" ratio="portrait" src={title?.posterUrl ?? undefined} />
+          <div className="min-w-0">
+            <Link className="rounded-control font-display text-xl leading-tight text-[var(--fs-ink)] outline-none hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={titleHref(review)}>{label}</Link>
+            {review.reviewedOn ? <time className="mt-1 block text-xs text-[var(--fs-muted)]" dateTime={review.reviewedOn}>{displayDate(review.reviewedOn, true)}</time> : null}
+          </div>
+          <p className="col-span-2 line-clamp-6 min-w-0 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--fs-secondary)] sm:col-span-1">{review.body}</p>
+          <Link aria-label={`Read and discuss review of ${label}`} className="col-span-2 inline-flex min-h-11 items-center justify-self-start rounded-control text-sm font-semibold text-[var(--fs-accent)] underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:col-span-1 sm:col-start-2" href={`/reviews/${encodeURIComponent(review.reviewId)}`}>Read and discuss</Link>
+        </article>
+      })}</div> : <EmptyArchive>
+        {query.trim() ? 'No loaded reviews match this search. Try another title.' : <>
+          <p>No reviews have been published yet.</p>
+          {owner ? <Link className="mt-3 inline-flex min-h-[44px] items-center gap-1 rounded-control text-sm font-bold text-[var(--fs-accent)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/search">Find a title to review <ArrowUpRight aria-hidden="true" className="size-4" /></Link> : null}
+        </>}
+      </EmptyArchive>
       break
     }
     case 'lists': {
@@ -319,10 +368,10 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
       </div>
       {section === 'activity' || section === 'films' || section === 'likes' || section === 'reviews' || section === 'lists' ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 border-b border-[var(--fs-line)] py-2" data-consumit-collection-toolbar>
-          <label className="flex h-10 min-w-0 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]">
+          <label className="flex min-h-[44px] min-w-0 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]">
             <Search aria-hidden="true" className="size-3.5 shrink-0" />
             <span className="sr-only">Search {descriptor.heading}</span>
-            <input className="w-52 min-w-0 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={(event) => setQuery(event.target.value)} placeholder={section === 'lists' ? 'Search collections' : 'Search titles'} type="search" value={query} />
+            <input className="min-h-[44px] w-52 min-w-0 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={(event) => setQuery(event.target.value)} placeholder={section === 'lists' ? 'Search collections' : 'Search titles'} type="search" value={query} />
           </label>
           {section === 'films' ? <TitleCollectionFilters decades={decades} genres={genres} hasActiveFilters={query.trim() !== '' || decade !== 'all' || genre !== 'all' || selectedRating !== undefined || titleSort !== 'recent'} onDecadeChange={setDecade} onGenreChange={setGenre} onRatingChange={(value) => router.push(`/profile/${encodeURIComponent(username)}/films${value === 'any' ? '' : `?rating=${encodeURIComponent(value)}`}`)} onReset={() => { setQuery(''); setDecade('all'); setGenre('all'); setTitleSort('recent'); if (selectedRating !== undefined) router.push(`/profile/${encodeURIComponent(username)}/films`) }} onSortChange={setTitleSort} rating={selectedRating === undefined ? 'any' : String(selectedRating)} recentLabel={typeof selectedRating === 'number' ? 'Recently rated' : 'Recently watched'} selectedDecade={decade} selectedGenre={genre} showRating={owner} sort={titleSort} {...(ratingsUnavailableState ? { unavailableRatings: 'all' as const } : {})} /> : null}
           {section === 'lists' ? (
@@ -342,7 +391,7 @@ export function ProfileArchiveScreen({ data, initialPage, initialRatings = EMPTY
           {selectedTag ? <Link className="text-xs font-bold text-[var(--fs-accent)] underline underline-offset-4" href={`/profile/${encodeURIComponent(username)}/tags`}>Browse all tags</Link> : null}
         </div>
       ) : null}
-      {section === 'films' && owner && ratingsUnavailableState ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Personal rating filters could not load. Reload to retry; rating filters are unavailable until then.</p> : null}
+      {section === 'films' && owner && ratingsUnavailableState ? <PersonalRatingsRetry failed={ratingsRetryFailed} message="Your Watched titles are still here, but personal rating filters are temporarily unavailable." onRetry={() => void retryRatingLookup()} retrying={ratingsRetrying} /> : null}
       {section === 'films' && page.nextCursor ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Search, genre, decade, rating ranges, and sorting apply to loaded titles. Load more to include older watches.</p> : null}
       {section === 'films' && (query.trim() !== '' || genre !== 'all' || decade !== 'all' || (typeof selectedRating === 'string' && selectedRating !== 'none')) ? <p className="mt-3 text-xs tabular-nums text-[var(--fs-muted)]" role="status">{visibleTitleCount} {visibleTitleCount === 1 ? 'title' : 'titles'} shown from {page.items.length} loaded</p> : null}
       {section === 'lists' && page.nextCursor ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Search, visibility, and sorting apply to loaded lists. Load more to include older collections.</p> : null}

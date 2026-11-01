@@ -4,6 +4,6 @@ import { ProfileArchiveShell } from './profile-archive-shell'
 
 export function ProfileListsScreen({ data, ...collection }: ListsCollectionProps & { data: MemberProfileData }) {
   return <ProfileArchiveShell data={data} heading="Lists" owner section="lists">
-    <ListsCollection {...collection} />
+    <ListsCollection key={data.canonicalUsername} {...collection} />
   </ProfileArchiveShell>
 }

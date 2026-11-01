@@ -9,8 +9,8 @@ services:
       NODE_ENV: production
       MEDIA_BUDGET_FILE: /var/lib/consumit/media/budget.json
       MEDIA_MAX_ACTIVE: "16"
-      MEDIA_BYTES_PER_SECOND: "1500000"
-      MEDIA_DAILY_BYTES: "8000000000"
+      MEDIA_BYTES_PER_SECOND: ${MEDIA_BYTES_PER_SECOND:-1500000}
+      MEDIA_DAILY_BYTES: ${MEDIA_DAILY_BYTES:-8000000000}
     volumes:
       - ./infra/secrets/media-budget:/var/lib/consumit/media
     read_only: true

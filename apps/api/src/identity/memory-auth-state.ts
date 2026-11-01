@@ -9,14 +9,18 @@ import {
   CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
+  GOOGLE_AUTH_TTL_MS,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_WINDOW_MS,
   MAX_MEMBER_SESSIONS,
+  RECOVERY_GRANT_TTL_MS,
   challengeCodeHash,
   challengeLookup,
   loginLookup,
   type AuthChallenge,
   type AuthStateStore,
+  type GoogleOAuthAttempt,
+  type GoogleSignupClaim,
   type RegistrationChallenge,
   type SessionRecord,
 } from './auth-state.ts'
@@ -55,6 +59,9 @@ export function createMemoryAuthState(options: {
   const challenges = new Map<string, StoredChallenge>()
   const usernameReservations = new Map<string, { email: string; expiresAt: Date }>()
   const sessions = new Map<string, SessionRecord>()
+  const googleAttempts = new Map<string, { expiresAt: Date; value: GoogleOAuthAttempt }>()
+  const googleSignups = new Map<string, { expiresAt: Date; value: GoogleSignupClaim }>()
+  const recoveryGrants = new Map<string, { expiresAt: Date; memberId: string }>()
   const attemptCounters = new Map<string, Counter>()
   const loginCounters = new Map<string, Counter>()
   const sendCounters = new Map<string, Counter>()
@@ -62,6 +69,10 @@ export function createMemoryAuthState(options: {
 
   function challengeKey(purpose: AuthChallenge['kind'], email: string) {
     return challengeLookup(codePepper, purpose, email)
+  }
+
+  function googleKey(value: string) {
+    return challengeLookup(codePepper, 'recovery', `google:${value}`)
   }
 
   function liveCounter(counters: Map<string, Counter>, key: string) {
@@ -180,6 +191,30 @@ export function createMemoryAuthState(options: {
       challenges.delete(key)
       return { ...challenge.payload }
     },
+    async consumeRecoveryGrant(rawToken) {
+      const key = hashSessionToken(rawToken)
+      const grant = recoveryGrants.get(key)
+      recoveryGrants.delete(key)
+      return grant && grant.expiresAt.getTime() > clock().getTime() ? grant.memberId : null
+    },
+    async consumeGoogleAttempt(rawState) {
+      const key = googleKey(rawState)
+      const stored = googleAttempts.get(key)
+      googleAttempts.delete(key)
+      return stored && stored.expiresAt.getTime() > clock().getTime() ? { ...stored.value } : null
+    },
+    async deleteGoogleSignup(ticket) {
+      googleSignups.delete(googleKey(ticket))
+    },
+    async getGoogleSignup(ticket) {
+      const key = googleKey(ticket)
+      const stored = googleSignups.get(key)
+      if (!stored || stored.expiresAt.getTime() <= clock().getTime()) {
+        googleSignups.delete(key)
+        return null
+      }
+      return { ...stored.value }
+    },
     expireSession(rawToken) {
       const session = sessions.get(hashSessionToken(rawToken))
       if (session) session.expiresAt = new Date(0)
@@ -222,6 +257,18 @@ export function createMemoryAuthState(options: {
         return null
       }
       return { ...challenge.payload } as RegistrationChallenge
+    },
+    async storeGoogleAttempt(rawState, attempt) {
+      googleAttempts.set(googleKey(rawState), { expiresAt: new Date(clock().getTime() + GOOGLE_AUTH_TTL_MS), value: { ...attempt } })
+    },
+    async storeGoogleSignup(ticket, claim) {
+      googleSignups.set(googleKey(ticket), { expiresAt: new Date(clock().getTime() + GOOGLE_AUTH_TTL_MS), value: { ...claim } })
+    },
+    async storeRecoveryGrant({ memberId, token: rawToken }) {
+      recoveryGrants.set(hashSessionToken(rawToken), {
+        expiresAt: new Date(clock().getTime() + RECOVERY_GRANT_TTL_MS),
+        memberId,
+      })
     },
     async readSession(rawToken) {
       const hash = hashSessionToken(rawToken)

@@ -1,4 +1,4 @@
-const QUALITY_TIERS = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320] as const
+const QUALITY_TIERS = [144, 180, 240, 360, 480, 720, 1080, 1440, 2160, 4320] as const
 
 /** A cropped widescreen frame keeps the tier of its uncropped 16:9 raster. */
 export function standardQualityHeight(height?: number, width?: number): number | undefined {

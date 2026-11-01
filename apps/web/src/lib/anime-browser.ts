@@ -1,10 +1,12 @@
 import {
   animeEpisodeSchema,
+  animeFranchiseSchema,
   animeSearchResultSchema,
   apiErrorResponseSchema,
   animePageSchema,
   type AnimeBrowseQuery,
   type AnimeEpisode,
+  type AnimeFranchise,
 } from '@consumit/contracts'
 
 export class BrowserAnimeError extends Error {
@@ -93,5 +95,12 @@ export async function browserAnimeEpisodes(anilistId: number, numbers: number[],
   const raw = await request(`/v1/anime/${anilistId}/episodes?numbers=${numbers.join(',')}`, signal, 12_000)
   const parsed = animeEpisodeSchema.nullable().array().length(numbers.length).safeParse((raw as { episodes?: unknown })?.episodes)
   if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned invalid episode details.')
+  return parsed.data
+}
+
+/** Recover optional franchise context without reloading the title page. */
+export async function browserAnimeRelations(anilistId: number, signal?: AbortSignal): Promise<AnimeFranchise> {
+  const parsed = animeFranchiseSchema.safeParse(await request(`/v1/anime/${anilistId}/relations`, signal))
+  if (!parsed.success) throw new BrowserAnimeError('The anime catalog returned invalid related-title data.')
   return parsed.data
 }

@@ -163,7 +163,7 @@ export function FavoritesShelf({ favorites, owner, titles }: {
           <li key={`empty-${items.length + index + 1}`}>
             <button
               aria-label={`Add favorite ${items.length + index + 1}`}
-              className="group grid aspect-[2/3] w-full cursor-pointer place-items-center rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] outline-none transition-all duration-200 ease-out hover:border-[var(--fs-accent)]/60 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none disabled:cursor-default disabled:opacity-45 disabled:hover:transform-none"
+              className="group grid aspect-[2/3] w-full cursor-pointer place-items-center rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] outline-none transition-colors duration-200 ease-out hover:border-[var(--fs-accent)]/60 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none disabled:cursor-default disabled:opacity-45"
               disabled={busy}
               onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setPaletteOpen(true) }}
               type="button"

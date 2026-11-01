@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { experiencePreferencesSchema } from './experience.ts'
 import { notificationPreferencesSchema, releaseNotificationSchema } from './releases.ts'
+import { tasteRecommendationResponseSchema } from './taste.ts'
+export * from './taste.ts'
 
 export const catalogKindSchema = z.enum(['movie', 'series', 'anime'])
 export type CatalogKind = z.infer<typeof catalogKindSchema>
@@ -177,6 +179,8 @@ export type AnimeImageAsset = z.infer<typeof animeImageAssetSchema>
 
 export const animeTitleSummarySchema = z.object({
   anilistId: z.int().positive(),
+  /** MyAnimeList crosswalk used only for metadata fallbacks; AniList remains the title identity. */
+  malId: z.int().positive().nullable().optional(),
   kind: z.literal('anime'),
   titles: animeTitleSchema,
   format: animeFormatSchema,
@@ -303,6 +307,7 @@ export const animePageSchema = z.object({
   page: z.int().positive(),
   totalPages: z.int().nonnegative(),
   totalResults: z.int().nonnegative(),
+  discoveryBasis: z.enum(['trending', 'seasonal-popularity']).optional(),
 })
 export type AnimePage = z.infer<typeof animePageSchema>
 
@@ -405,7 +410,9 @@ export type Username = z.infer<typeof usernameSchema>
 export const registerRequestSchema = credentialSchema.extend({ username: usernameSchema })
 export type RegisterRequest = z.infer<typeof registerRequestSchema>
 
-export const loginRequestSchema = credentialSchema
+export const loginRequestSchema = credentialSchema.extend({
+  rememberMe: z.boolean().optional(),
+})
 export type LoginRequest = z.infer<typeof loginRequestSchema>
 
 export const avatarStyleSchema = z.enum(['dusk', 'dawn', 'noir', 'halo'])
@@ -443,6 +450,10 @@ export const profileSectionVisibilitySchema = z.object({
   likes: z.boolean().default(true),
   tags: z.boolean().default(true),
   watchlist: z.boolean().default(true),
+  watched: z.boolean().default(true),
+  diary: z.boolean().default(true),
+  history: z.boolean().default(true),
+  activity: z.boolean().default(true),
 }).strict()
 export type ProfileSectionVisibility = z.infer<typeof profileSectionVisibilitySchema>
 export const defaultProfileSectionVisibility = (): ProfileSectionVisibility => profileSectionVisibilitySchema.parse({})
@@ -487,10 +498,38 @@ export const usernameAvailabilityResponseSchema = z.object({
 })
 export type UsernameAvailabilityResponse = z.infer<typeof usernameAvailabilityResponseSchema>
 
+export const usernameAvailabilityParamsSchema = z.object({ username: usernameSchema })
+export type UsernameAvailabilityParams = z.infer<typeof usernameAvailabilityParamsSchema>
+
 export const sessionMemberResponseSchema = z.object({
   member: safeMemberSchema,
 })
 export type SessionMemberResponse = z.infer<typeof sessionMemberResponseSchema>
+
+export const googleSignupPendingResponseSchema = z.object({
+  email: emailSchema,
+  name: z.string().nullable(),
+})
+export type GoogleSignupPendingResponse = z.infer<typeof googleSignupPendingResponseSchema>
+
+export const googleSignupCompletionRequestSchema = z.object({
+  displayName: z.string().trim().max(80).optional(),
+  termsAccepted: z.literal(true),
+  username: usernameSchema,
+}).strict()
+export type GoogleSignupCompletionRequest = z.infer<typeof googleSignupCompletionRequestSchema>
+
+export const googleSignupCompleteResponseSchema = z.object({
+  member: safeMemberSchema,
+  status: z.literal('complete'),
+})
+export type GoogleSignupCompleteResponse = z.infer<typeof googleSignupCompleteResponseSchema>
+
+export const googleSignupVerificationRequiredResponseSchema = z.object({
+  email: emailSchema,
+  status: z.literal('verification-required'),
+})
+export type GoogleSignupVerificationRequiredResponse = z.infer<typeof googleSignupVerificationRequiredResponseSchema>
 
 export const acceptedResponseSchema = z.object({
   message: z.string().min(1),
@@ -501,12 +540,14 @@ export type AcceptedResponse = z.infer<typeof acceptedResponseSchema>
 export const emailRequestSchema = z.object({ email: emailSchema })
 export type EmailRequest = z.infer<typeof emailRequestSchema>
 
-export const verificationCodeSchema = z.string().regex(/^\d{8}$/)
+export const verificationCodeSchema = z.string().regex(/^\d{6}$/)
 export const verifyEmailRequestSchema = emailRequestSchema.extend({ code: verificationCodeSchema })
 export type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>
 
 export const recoveryConfirmRequestSchema = verifyEmailRequestSchema.extend({ newPassword: passwordSchema })
 export type RecoveryConfirmRequest = z.infer<typeof recoveryConfirmRequestSchema>
+export const recoveryCompleteRequestSchema = z.object({ newPassword: passwordSchema })
+export type RecoveryCompleteRequest = z.infer<typeof recoveryCompleteRequestSchema>
 
 export const passwordChangeRequestSchema = z.object({
   currentPassword: passwordSchema,
@@ -584,6 +625,9 @@ export const createDiaryEntryRequestSchema = diaryRefSchema.extend({
 })
 export type CreateDiaryEntryRequest = z.infer<typeof createDiaryEntryRequestSchema>
 
+export const memberListVisibilitySchema = z.enum(['public', 'unlisted', 'private'])
+export type MemberListVisibility = z.infer<typeof memberListVisibilitySchema>
+
 export const memberListSummarySchema = z.object({
   description: z.string().nullable(),
   id: z.string().min(1),
@@ -591,7 +635,7 @@ export const memberListSummarySchema = z.object({
   name: z.string().min(1).max(120),
   origin: recordOriginSchema,
   slug: z.string().min(1).max(160),
-  visibility: z.enum(['private', 'public']),
+  visibility: memberListVisibilitySchema,
 })
 export type MemberListSummary = z.infer<typeof memberListSummarySchema>
 
@@ -599,9 +643,17 @@ export const createMemberListRequestSchema = z.object({
   description: z.string().trim().max(2_000).nullable().optional(),
   idempotencyKey: z.uuid(),
   name: z.string().trim().min(1).max(120),
-  visibility: z.enum(['private', 'public']).default('public'),
+  title: catalogRefSchema.optional(),
+  visibility: memberListVisibilitySchema.default('public'),
 })
 export type CreateMemberListRequest = z.infer<typeof createMemberListRequestSchema>
+
+export const duplicateMemberListRequestSchema = z.object({
+  idempotencyKey: z.uuid(),
+  name: z.string().trim().min(1).max(120).optional(),
+  visibility: memberListVisibilitySchema.default('public'),
+})
+export type DuplicateMemberListRequest = z.infer<typeof duplicateMemberListRequestSchema>
 
 export const memberListItemsRequestSchema = z.object({
   items: z.array(catalogRefSchema.extend({ note: z.string().trim().max(500).nullable().optional() })).max(500),
@@ -612,7 +664,7 @@ export const updateMemberListContentRequestSchema = z.object({
   description: z.string().trim().max(2_000).nullable(),
   items: memberListItemsRequestSchema.shape.items,
   name: z.string().trim().min(1).max(120),
-  visibility: z.enum(['private', 'public']),
+  visibility: memberListVisibilitySchema.optional(),
 }).refine(({ items }) => new Set(items.map(({ id, kind }) => `${kind}:${id}`)).size === items.length, 'A list cannot contain the same title twice.')
 export type UpdateMemberListContentRequest = z.infer<typeof updateMemberListContentRequestSchema>
 
@@ -626,9 +678,18 @@ export const memberListOwnerSchema = z.object({ displayName: z.string().nullable
 export const updateMemberListRequestSchema = z.object({
   description: z.string().trim().min(1).max(2_000).nullable().optional(),
   name: z.string().trim().min(1).max(120).optional(),
-  visibility: z.enum(['private', 'public']).optional(),
+  visibility: memberListVisibilitySchema.optional(),
 }).refine(hasChange, 'Provide at least one list change.')
 export type UpdateMemberListRequest = z.infer<typeof updateMemberListRequestSchema>
+
+export const memberListCollaboratorSchema = z.object({
+  displayName: z.string().nullable(),
+  memberId: z.string().min(1),
+  username: usernameSchema,
+})
+export type MemberListCollaborator = z.infer<typeof memberListCollaboratorSchema>
+export const addMemberListCollaboratorRequestSchema = z.object({ username: usernameSchema })
+export type AddMemberListCollaboratorRequest = z.infer<typeof addMemberListCollaboratorRequestSchema>
 
 export const savedMemberListSchema = z.object({
   available: z.boolean(),
@@ -872,6 +933,7 @@ export type DeliveryFailure = z.infer<typeof deliveryFailureSchema>
 export const frameSandboxSchema = z.enum(['restricted', 'none'])
 export type FrameSandbox = z.infer<typeof frameSandboxSchema>
 export const playbackSourceSchema = z.object({
+  videoVersion: z.string().regex(/^vv-[a-f0-9]{64}$/).optional(),
   id: z.string().min(1).max(160), providerId: z.string().min(1).max(80),
   serverId: z.string().min(1).max(100).optional(), serverName: z.string().min(1).max(80).optional(),
   type: z.enum(['hls', 'dash', 'native', 'iframe']), src: z.string().min(1).max(4096),
@@ -899,7 +961,7 @@ export const playbackFailureRequestSchema = z.object({
   preferences: playbackPreferencesSchema.optional(),
 })
 export const playbackEventsSchema = z.object({ events: z.array(z.object({
-  type: z.enum(['started', 'buffer-start', 'buffer-end', 'error', 'switched', 'ended', 'viewing']),
+  type: z.enum(['started', 'advanced', 'seeked', 'resumed', 'buffer-start', 'buffer-end', 'error', 'switched', 'ended', 'viewing']),
   position: z.number().min(0).max(86400), elapsedMs: z.number().min(0).max(86400000).optional(),
   delivery: playbackDeliverySchema.optional(),
   browser: z.enum(['chrome', 'edge', 'firefox', 'safari', 'other']).optional(),
@@ -967,7 +1029,7 @@ export const playbackProviderListSchema = z.object({ providers: z.array(playback
  *  direct entries are upstream https WebVTT handed to the browser
  *  untouched. Hostile-output gating (https-only into playback sessions)
  *  stays downstream in the playback module. */
-export const subtitleTrackSchema = playbackTrackSchema.extend({ url: z.string().url().max(4096) })
+export const subtitleTrackSchema = playbackTrackSchema.extend({ contentChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(), match: z.enum(['source', 'release', 'unverified']).optional(), url: z.string().url().max(4096) })
 export type SubtitleTrack = z.infer<typeof subtitleTrackSchema>
 /** Aggregated caption tracks for one title/episode, independent of the
  *  selected streaming provider. */
@@ -976,7 +1038,9 @@ export const subtitlesResponseSchema = z.object({ subtitles: z.array(subtitleTra
  *  shifts every cue server-side (`?offsetMs=`); trackId remembers the
  *  chosen track. One row per member/content; crowdsourced correction reads
  *  this table later without ever rewriting shared files. */
+export const subtitleCorrectionScopeSchema = z.object({ videoVersion: z.string().regex(/^vv-[a-f0-9]{64}$/), contentChecksum: z.string().regex(/^[a-f0-9]{64}$/) })
 export const subtitlePreferenceSchema = z.object({
+  scope: subtitleCorrectionScopeSchema.optional(),
   ref: playbackRefSchema,
   trackId: z.string().min(1).max(128).nullable().default(null),
   offsetMs: z.int().min(-120000).max(120000).default(0),
@@ -990,7 +1054,7 @@ export const subtitleProviderStatusSchema = z.object({
   id: z.string().min(1).max(64), name: z.string().min(1).max(160),
   state: z.enum(['ready', 'skipped', 'no_match', 'failed', 'timeout']),
   durationMs: z.number().finite().nonnegative(), found: z.int().min(0).max(100000),
-  reason: z.enum(['credentials_required', 'unsupported']).optional(),
+  reason: z.enum(['credentials_required', 'unsupported', 'unsupported_format']).optional(),
   failure: z.enum(['search', 'parse', 'download', 'conversion']).optional(),
 })
 export const subtitleDiscoveryEventSchema = z.object({
@@ -1004,7 +1068,10 @@ export const subtitleCandidateSchema = z.object({
   id: z.string().min(1).max(128), label: z.string().max(160), language: z.string().max(32).regex(/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/),
   provider: z.string().min(1).max(64), release: z.string().max(160).optional(),
   providerName: z.string().min(1).max(160).optional(),
-  hi: z.boolean().optional(), forced: z.boolean().optional(), sdh: z.boolean().optional(), machineTranslated: z.boolean().optional(),
+  match: z.enum(['source', 'release', 'unverified']).optional(),
+  recommended: z.boolean().optional(),
+  contentChecksum: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  signs: z.boolean().optional(), songs: z.boolean().optional(), hi: z.boolean().optional(), forced: z.boolean().optional(), sdh: z.boolean().optional(), machineTranslated: z.boolean().optional(),
   preparedUrl: z.url().max(4096).refine((value) => /^https?:\/\/[^/?#@\\\s]+(?:[/?#]|$)/i.test(value)).optional(),
 })
 export const subtitleDiscoveryPageSchema = z.object({
@@ -1065,9 +1132,12 @@ export const memberProfileDataSchema = z.object({
    * Counts are stored data and remain behind the owner-only profile route. */
   social: z.object({ followers: z.int().nonnegative(), following: z.int().nonnegative() }).optional(),
   statistics: z.object({
+    activity: z.int().nonnegative(),
     diaryEntries: z.int().nonnegative(),
+    history: z.int().nonnegative(),
     lists: z.int().nonnegative(),
     reviews: z.int().nonnegative(),
+    watchlist: z.int().nonnegative(),
     watched: z.int().nonnegative(),
   }),
 })
@@ -1085,7 +1155,11 @@ export const publicProfileSchema = z.object({
   sectionVisibility: profileSectionVisibilitySchema,
   favorites: z.array(catalogRefSchema.extend({ position: z.int().positive() })).max(MAX_MEMBER_FAVORITES),
   ratingDistribution: z.array(z.object({ count: z.int().nonnegative(), value: z.int().min(1).max(10) })).length(10),
-  statistics: z.object({ ratings: z.int().nonnegative(), reviews: z.int().nonnegative(), lists: z.int().nonnegative() }),
+  statistics: z.object({
+    activity: z.int().nonnegative(), diary: z.int().nonnegative(), history: z.int().nonnegative(),
+    lists: z.int().nonnegative(), ratings: z.int().nonnegative(), reviews: z.int().nonnegative(),
+    watchlist: z.int().nonnegative(), watched: z.int().nonnegative(),
+  }),
   social: z.object({ followers: z.int().nonnegative(), following: z.int().nonnegative() }),
 })
 export type PublicProfile = z.infer<typeof publicProfileSchema>
@@ -1109,18 +1183,19 @@ export type PublicProfileCollectionPage = z.infer<typeof publicProfileCollection
 export const publicMembersPageQuerySchema = z.object({ cursor: z.string().min(1).max(1024).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) })
 export const memberSearchQuerySchema = publicMembersPageQuerySchema.extend({ q: z.string().trim().min(3).max(100) })
 
-/** Profile archives are individually guarded by their public section setting; private history stays private. */
-export const memberProfileArchiveKindSchema = z.enum(['activity', 'diary', 'films', 'likes', 'lists', 'reviews', 'tags', 'watchlist'])
+/** Profile archives are individually guarded by their section visibility setting. Playback progress is never an archive. */
+export const memberProfileArchiveKindSchema = z.enum(['activity', 'diary', 'films', 'history', 'likes', 'lists', 'reviews', 'tags', 'watchlist'])
 export type MemberProfileArchiveKind = z.infer<typeof memberProfileArchiveKindSchema>
 export const memberProfileArchiveQuerySchema = z.object({
   cursor: z.string().min(1).max(512).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(30),
 })
 export const memberProfileArchiveCursorSchema = z.object({
+  completedAt: z.iso.datetime().optional(),
   collection: memberProfileArchiveKindSchema,
   createdAt: z.iso.datetime().optional(),
   id: z.string().min(1).max(128),
-  kind: z.enum(['diary', 'review']).optional(),
+  kind: z.enum(['diary', 'history', 'review']).optional(),
   updatedAt: z.iso.datetime().optional(),
   watchedOn: z.iso.datetime().optional(),
 })
@@ -1134,6 +1209,7 @@ export const memberProfileArchivePageSchema = z.discriminatedUnion('collection',
   z.object({ collection: z.literal('activity'), items: z.array(memberProfileActivityEntrySchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('diary'), items: z.array(diaryEntrySchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('films'), items: z.array(memberTitleRecordSchema).max(50), nextCursor: z.string().max(512).nullable() }),
+  z.object({ collection: z.literal('history'), items: z.array(watchHistoryEntrySchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('likes'), items: z.array(memberTitleRecordSchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('lists'), items: z.array(memberListSummarySchema).max(50), nextCursor: z.string().max(512).nullable() }),
   z.object({ collection: z.literal('reviews'), items: z.array(memberReviewSchema).max(50), nextCursor: z.string().max(512).nullable() }),
@@ -1143,10 +1219,13 @@ export const memberProfileArchivePageSchema = z.discriminatedUnion('collection',
 export type MemberProfileArchivePage = z.infer<typeof memberProfileArchivePageSchema>
 
 export const memberListDetailSchema = z.object({
+  collaborators: z.array(memberListCollaboratorSchema).default([]),
   items: z.array(memberTitleRecordSchema.extend({ note: z.string().nullable(), position: z.int().positive() })),
   list: memberListSummarySchema,
   owner: memberListOwnerSchema,
   
+  viewerCanEdit: z.boolean().default(false),
+  viewerIsCollaborator: z.boolean().default(false),
   viewerIsOwner: z.boolean(),
   viewerHasSaved: z.boolean(),
 })
@@ -1159,7 +1238,12 @@ export const publicListDetailSchema = z.object({
   items: z.array(catalogRefSchema.extend({ note: z.string().nullable(), position: z.int().positive() })),
 })
 export type PublicListDetail = z.infer<typeof publicListDetailSchema>
-export const listReadResponseSchema = z.union([publicListDetailSchema, memberListDetailSchema])
+// Editable collaborators are not owners; preserve their authorized editing fields
+// before the public projection strips member-only data from visitor responses.
+export const listReadResponseSchema = z.union([
+  memberListDetailSchema.refine(value => value.viewerIsOwner || value.viewerCanEdit),
+  publicListDetailSchema,
+])
 
 export const appendListTitleRequestSchema = catalogRefSchema
 export type AppendListTitleRequest = z.infer<typeof appendListTitleRequestSchema>
@@ -1191,6 +1275,10 @@ export const memberExportSchema = z.object({
   experiencePreferences: experiencePreferencesSchema.nullable().optional(),
   notificationPreferences: notificationPreferencesSchema.optional(),
   notifications: z.array(releaseNotificationSchema).optional(),
+  titleRecommendations: z.array(z.object({
+    id: z.string(), direction: z.enum(['sent', 'received']), peerUsername: usernameSchema.nullable(),
+    title: catalogRefSchema, response: tasteRecommendationResponseSchema.nullable(), createdAt: z.iso.datetime(),
+  })).optional(),
   exportedAt: z.iso.datetime(),
   library: memberLibrarySchema,
   watchHistory: z.array(watchHistoryEntrySchema),
@@ -1246,3 +1334,5 @@ export const playbackDiagnosticsSchema = z.strictObject({
   category: z.enum(['network', 'media', 'expired', 'gone', 'subtitles', 'audio', 'unknown']),
 })
 export type PlaybackDiagnostics = z.infer<typeof playbackDiagnosticsSchema>
+
+export { SUBTITLE_POLICY_VERSION, SUBTITLE_RESERVE_LIMIT, primarySubtitleLanguage } from './subtitle-policy.ts'

@@ -3,14 +3,17 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { createDbClient } from '../db/client.ts'
 import { defaultExperiencePreferences } from '@consumit/contracts'
+import { defaultProfileSectionVisibility } from '@consumit/contracts'
 import { createExperienceRepository } from '../experience/repository.ts'
 import { createPostgresMemberData } from './postgres-member-data.ts'
+import { createPublicMembers } from './public-members.ts'
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) throw new Error('DATABASE_URL is required for integration tests.')
 const control = new pg.Pool({ connectionString: databaseUrl })
 const db = createDbClient(databaseUrl)
 const memberData = createPostgresMemberData(db.prisma)
+const publicMembers = createPublicMembers(db.prisma)
 const experience = createExperienceRepository(db.prisma)
 
 beforeEach(async () => control.query('TRUNCATE "Member" CASCADE'))
@@ -153,10 +156,39 @@ describe('real member data read model', () => {
     expect(await memberData.profileArchive('section_owner', 'lists', member.id)).toMatchObject({ items: expect.arrayContaining([expect.objectContaining({ visibility: 'private' }), expect.objectContaining({ visibility: 'public' })]) })
   })
 
+  it('publishes the four independent archives by default and never mixes active progress into History', async () => {
+    const member = await db.prisma.member.create({ data: { email: 'archives-owner@example.test', profile: { create: { username: 'archives_owner' } } } })
+    await db.prisma.watchedTitle.create({ data: { memberId: member.id, tmdbId: 550 } })
+    await db.prisma.diaryEntry.create({ data: { memberId: member.id, tmdbId: 550, tags: ['night'], watchedOn: new Date('2026-10-18T00:00:00.000Z') } })
+    await db.prisma.watchHistoryEntry.create({ data: { catalogKind: 'MOVIE', completionId: crypto.randomUUID(), memberId: member.id, tmdbId: 550 } })
+    await db.prisma.review.create({ data: { body: 'A quiet ending.', memberId: member.id, tmdbId: 550 } })
+    await memberData.setProgress(member.id, { durationSeconds: 3600, id: 693134, kind: 'movie', positionSeconds: 1200 })
+
+    expect(await publicMembers.profile('archives_owner')).toMatchObject({ sectionVisibility: { watched: true, diary: true, history: true, activity: true }, statistics: { watched: 1, diary: 1, history: 1, activity: 2 } })
+    expect(await memberData.profileArchive('archives_owner', 'films')).toMatchObject({ items: [{ id: 550, kind: 'movie' }] })
+    expect(await memberData.profileArchive('archives_owner', 'diary')).toMatchObject({ items: [{ id: 550, tags: ['night'] }] })
+    const history = await memberData.profileArchive('archives_owner', 'history')
+    expect(history).toMatchObject({ items: [{ id: 550, kind: 'movie' }] })
+    expect(JSON.stringify(history)).not.toContain('positionSeconds')
+    expect(await memberData.profileArchive('archives_owner', 'activity')).toMatchObject({ items: expect.arrayContaining([expect.objectContaining({ kind: 'diary' }), expect.objectContaining({ kind: 'review' })]) })
+
+    await db.prisma.profile.update({ where: { memberId: member.id }, data: { sectionVisibility: { watched: false, diary: false, history: false, activity: false } } })
+    expect(await publicMembers.profile('archives_owner')).toMatchObject({ statistics: { watched: 0, diary: 0, history: 0, activity: 0 } })
+    for (const collection of ['films', 'diary', 'history', 'activity'] as const) expect(await memberData.profileArchive('archives_owner', collection)).toBeNull()
+    expect(await memberData.profileArchive('archives_owner', 'history', member.id)).toMatchObject({ items: [{ id: 550 }] })
+
+    await db.prisma.profile.update({ where: { memberId: member.id }, data: { sectionVisibility: { activity: true, diary: false, reviews: false } } })
+    expect(await publicMembers.profile('archives_owner')).toMatchObject({ statistics: { activity: 0, diary: 0, reviews: 0 } })
+    expect(await memberData.profileArchive('archives_owner', 'activity')).toMatchObject({ items: [] })
+  })
+
   it('creates public lists, appends titles without reordering notes, and keeps saved references after privacy changes or deletion', async () => {
     const owner = await db.prisma.member.create({ data: { email: 'curator@example.com', profile: { create: { username: 'curator' } } } })
     const viewer = await db.prisma.member.create({ data: { email: 'saver@example.com', profile: { create: { username: 'saver' } } } })
-    const created = await memberData.createList(owner.id, { description: 'A short trail.', idempotencyKey: crypto.randomUUID(), name: 'Late night', visibility: 'public' })
+    const createRequest = { description: 'A short trail.', idempotencyKey: crypto.randomUUID(), name: 'Late night', title: { id: 550, kind: 'movie' as const }, visibility: 'public' as const }
+    const created = await memberData.createList(owner.id, createRequest)
+    expect(created.items).toMatchObject([{ id: 550, kind: 'movie', position: 1 }])
+    expect((await memberData.createList(owner.id, createRequest)).items).toHaveLength(1)
     expect(created.list.visibility).toBe('public')
     expect(await memberData.list(created.list.slug)).toMatchObject({ viewerIsOwner: false, viewerHasSaved: false })
 
@@ -188,6 +220,39 @@ describe('real member data read model', () => {
     expect(await db.prisma.savedMemberList.count({ where: { memberId: viewer.id } })).toBe(1)
     await memberData.removeSavedList!(viewer.id, created.list.id)
     expect(await memberData.libraryPage(viewer.id, 'savedLists', undefined, 20)).toMatchObject({ items: [] })
+  })
+
+  it('enforces Public, Unlisted, and Private access and gives invited editors content-only control', async () => {
+    const owner = await db.prisma.member.create({ data: { email: 'collab-owner@example.test', profile: { create: { username: 'collab_owner' } } } })
+    const editor = await db.prisma.member.create({ data: { email: 'collab-editor@example.test', profile: { create: { username: 'collab_editor' } } } })
+    const visitor = await db.prisma.member.create({ data: { email: 'collab-visitor@example.test', profile: { create: { username: 'collab_visitor' } } } })
+    const publicList = await memberData.createList(owner.id, { idempotencyKey: crypto.randomUUID(), name: 'Public shelf', visibility: 'public' })
+    const unlisted = await memberData.createList(owner.id, { idempotencyKey: crypto.randomUUID(), name: 'By link', visibility: 'unlisted' })
+    const privateList = await memberData.createList(owner.id, { idempotencyKey: crypto.randomUUID(), name: 'Quiet picks', visibility: 'private' })
+
+    await db.prisma.profile.update({ where: { memberId: owner.id }, data: { sectionVisibility: { lists: false } } })
+    expect(await memberData.list(publicList.list.slug)).toBeNull()
+    expect(await memberData.list(unlisted.list.slug, visitor.id)).toMatchObject({ list: { visibility: 'unlisted' }, viewerCanEdit: false })
+    expect(await memberData.list(privateList.list.slug, visitor.id)).toBeNull()
+    expect(await memberData.list(privateList.list.slug, owner.id)).toMatchObject({ viewerIsOwner: true, viewerCanEdit: true })
+    expect(await memberData.addListCollaborator(owner.id, privateList.list.id, { username: 'collab_editor' })).toBe(true)
+    expect(await memberData.list(privateList.list.slug, editor.id)).toMatchObject({ viewerIsCollaborator: true, viewerCanEdit: true, collaborators: [{ username: 'collab_editor' }] })
+    expect(await memberData.appendListTitle!(editor.id, privateList.list.id, { id: 550, kind: 'movie' })).toBe(true)
+    expect(await memberData.updateList(editor.id, privateList.list.id, { name: 'Quiet picks, reordered' })).toBe(true)
+    expect(await memberData.updateListContent(editor.id, privateList.list.id, { description: 'Editor note.', items: [{ id: 550, kind: 'movie', note: 'Now in order' }], name: 'Quiet picks, reordered' })).toBe(true)
+    expect(await memberData.list(privateList.list.slug, editor.id)).toMatchObject({ list: { visibility: 'private' }, items: [{ id: 550, note: 'Now in order', position: 1 }] })
+    expect(await memberData.updateList(editor.id, privateList.list.id, { visibility: 'public' })).toBe(false)
+    expect(await memberData.updateListContent(editor.id, privateList.list.id, { description: null, items: [], name: 'Attempted publish', visibility: 'public' })).toBe(false)
+    expect(await memberData.deleteList(editor.id, privateList.list.id)).toBe(false)
+    expect(await memberData.removeListCollaborator(owner.id, privateList.list.id, 'collab_editor')).toBe(true)
+    expect(await memberData.list(privateList.list.slug, editor.id)).toBeNull()
+
+    await db.prisma.profile.update({ where: { memberId: owner.id }, data: { sectionVisibility: { lists: true } } })
+    await memberData.updateListContent(owner.id, publicList.list.id, { description: 'A small collection.', items: [{ id: 550, kind: 'movie', note: 'Keep this one' }], name: 'Public shelf' })
+    const duplicate = await memberData.duplicateList(visitor.id, publicList.list.slug, { idempotencyKey: '9c4fa06d-38e9-4e68-9b44-677070303f39', name: 'My shelf', visibility: 'private' })
+    expect(duplicate).toMatchObject({ list: { name: 'My shelf', visibility: 'private' }, items: [{ id: 550, note: 'Keep this one', position: 1 }] })
+    expect(await memberData.list(publicList.list.slug, visitor.id)).toMatchObject({ items: [{ id: 550, note: 'Keep this one' }] })
+    expect(await memberData.duplicateList(visitor.id, unlisted.list.slug, { idempotencyKey: crypto.randomUUID(), name: 'Cannot copy', visibility: 'private' })).toBeNull()
   })
 
   it('returns only title-level trends from opted-in members, deduplicates episodes, and applies the five-member threshold', async () => {
@@ -326,25 +391,34 @@ describe('real member data read model', () => {
     expect(await memberData.review(member.id, { id: 1, kind: 'movie' })).toBeNull()
   })
 
-  it('lists only owner title reviews with author ratings attached', async () => {
+  it('lists title reviews across visible member profiles and respects Review visibility and blocks', async () => {
     const open = await db.prisma.member.create({ data: { email: 'open@example.com', emailVerifiedAt: new Date(), profile: { create: { displayName: 'Open Critic', username: 'open_critic', visibility: 'public' } } } })
-    const quiet = await db.prisma.member.create({ data: { email: 'quiet@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'quiet_member', visibility: 'private' } } } })
+    const quiet = await db.prisma.member.create({ data: { email: 'quiet@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'quiet_member', visibility: 'private', sectionVisibility: defaultProfileSectionVisibility() } } } })
+    const hidden = await db.prisma.member.create({ data: { email: 'hidden@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'hidden_reviewer', visibility: 'public', sectionVisibility: { ...defaultProfileSectionVisibility(), reviews: false } } } } })
+    const spoiler = await db.prisma.member.create({ data: { email: 'spoiler@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'spoiler_reviewer' } } } })
     await db.prisma.review.create({ data: { body: 'First public take.', memberId: open.id, tmdbId: 550 } })
-    await db.prisma.review.create({ data: { body: 'Private take.', memberId: quiet.id, tmdbId: 550 } })
+    await db.prisma.review.create({ data: { body: 'Visible by its own section setting.', memberId: quiet.id, tmdbId: 550 } })
+    await db.prisma.review.create({ data: { body: 'This review is hidden by its section setting.', memberId: hidden.id, tmdbId: 550 } })
+    await db.prisma.review.create({ data: { body: 'The ending changes everything.', memberId: spoiler.id, spoiler: true, tmdbId: 550 } })
     await db.prisma.rating.create({ data: { memberId: open.id, tmdbId: 550, value: 8 } })
 
-    const page = await memberData.titleReviews({ id: 550, kind: 'movie' }, 1, 'recent', open.id)
-    expect(page).toMatchObject({ page: 1, totalPages: 1, totalResults: 1 })
-    expect(page.items).toHaveLength(1)
-    expect(page.items[0]).toMatchObject({
-      author: { displayName: 'Open Critic', username: 'open_critic' },
-      body: 'First public take.',
-      rating: 8,
-    })
+    const page = await memberData.titleReviews({ id: 550, kind: 'movie' }, 1, 'recent')
+    expect(page).toMatchObject({ page: 1, totalPages: 1, totalResults: 3 })
+    expect(page.items.map(item => item.author.username).sort()).toEqual(['open_critic', 'quiet_member', 'spoiler_reviewer'])
+    expect(page.items.find(item => item.author.username === 'open_critic')).toMatchObject({ body: 'First public take.', rating: 8 })
+    expect(page.items.find(item => item.author.username === 'spoiler_reviewer')).toMatchObject({ body: 'Contains spoilers. Open the review to read.' })
+    expect(JSON.stringify(page)).not.toContain('This review is hidden by its section setting.')
+    expect(JSON.stringify(page)).not.toContain('The ending changes everything.')
 
-    const empty = await memberData.titleReviews({ id: 550, kind: 'movie' }, 2, 'recent', open.id)
-    expect(empty).toMatchObject({ items: [], page: 2, totalPages: 1, totalResults: 1 })
-    expect(await memberData.titleReviews({ id: 551, kind: 'movie' }, 1, 'recent', open.id)).toMatchObject({ items: [], totalPages: 0, totalResults: 0 })
+    const empty = await memberData.titleReviews({ id: 550, kind: 'movie' }, 2, 'recent')
+    expect(empty).toMatchObject({ items: [], page: 2, totalPages: 1, totalResults: 3 })
+    expect(await memberData.titleReviews({ id: 551, kind: 'movie' }, 1, 'recent')).toMatchObject({ items: [], totalPages: 0, totalResults: 0 })
+
+    const reader = await db.prisma.member.create({ data: { email: 'reader@example.com', emailVerifiedAt: new Date(), profile: { create: { username: 'review_reader' } } } })
+    await db.prisma.tasteBlock.create({ data: { actorId: reader.id, targetId: quiet.id } })
+    const filteredForReader = await memberData.titleReviews({ id: 550, kind: 'movie' }, 1, 'recent', reader.id)
+    expect(filteredForReader).toMatchObject({ totalResults: 2 })
+    expect(filteredForReader.items.map(item => item.author.username).sort()).toEqual(['open_critic', 'spoiler_reviewer'])
   })
 
   it('keeps anime ids in their own namespace beside colliding TMDB ids', async () => {

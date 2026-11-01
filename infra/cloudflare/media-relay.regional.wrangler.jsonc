@@ -17,6 +17,9 @@
   "vars": {
     "RELAY_ENABLED": "true",
     "APP_ORIGIN": "https://consumit.online",
-    "RELAY_PROVIDERS": "{\"rigel\":[\"api.dlproxy.com\"],\"animekai\":[\"edge1-waw-sprintcdn.r66nv9ed.com\",\"edge2-waw-sprintcdn.r66nv9ed.com\",\"edge1-vienna-sprintcdn.owphbf24.com\",\"edge1-frankfurt-sprintcdn.owphbf24.com\"],\"rivemirage\":[\"cine4k.mpddash.workers.dev\",\"carwashonline.site\",\"nectronincllc.store\",\"buswashsolarpanel.click\"],\"aphrodite\":[\"stream.hls.lol\",\"iad-01.transcode.cfd\",\"totallyacdn.org\"]}"
+    "RELAY_PROVIDERS": "{}",
+    "RELAY_DISCOVERY_PROVIDERS": "{}",
+    "RELAY_ROUTE_POLICY": "[]",
+    "RELAY_ROUTE_POLICY_REQUIRED": "true"
   }
 }

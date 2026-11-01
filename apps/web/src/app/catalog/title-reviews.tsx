@@ -1,7 +1,7 @@
 'use client'
 
 import type { MemberReview, TitleReviewsPage } from '@consumit/contracts'
-import { reviewsHref } from '@consumit/contracts'
+import { reviewsHref, titleHref } from '@consumit/contracts'
 import { PenLine, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
@@ -26,14 +26,14 @@ type TitleReviewsProps = {
 const RECENT_PREVIEW_COUNT = 3
 
 /**
- * Member reviews for a title: the signed-in member's own stored review plus
- * recent reviews from members with public profiles.
+ * The signed-in member's own stored review plus public reviews from other members.
  */
 export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsProps) {
   const { member, status: sessionStatus } = useSession()
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'empty' | 'error'>(member ? 'loading' : 'idle')
   const [review, setReview] = useState<MemberReview | null>(null)
   const [logging, setLogging] = useState(false)
+  const [requestedAction, setRequestedAction] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('consumitAction'))
   const [recent, setRecent] = useState<TitleReviewsPage | null>(null)
   const [recentStatus, setRecentStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [showAllRecent, setShowAllRecent] = useState(false)
@@ -56,6 +56,14 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
       cancelled = true
     }
   }, [member, id, kind])
+
+  useEffect(() => {
+    if (!member || requestedAction !== 'review') return
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('consumitAction') !== 'review') return
+    url.searchParams.delete('consumitAction')
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [member, requestedAction])
 
   useEffect(() => {
     let cancelled = false
@@ -99,14 +107,17 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
 
   const avatarSrc = member ? memberAvatarSrc(member) : null
   const displayName = member?.displayName || member?.username || 'You'
-  const recentItems = recent?.items ?? []
+  const pageRecentItems = recent?.items ?? []
+  const ownReviewIsRecent = Boolean(review && pageRecentItems.some((item) => item.reviewId === review.reviewId))
+  const recentTotalResults = Math.max(0, (recent?.totalResults ?? 0) - (ownReviewIsRecent ? 1 : 0))
+  const recentItems = pageRecentItems.filter((item) => item.reviewId !== review?.reviewId)
   const visibleRecent = showAllRecent ? recentItems : recentItems.slice(0, RECENT_PREVIEW_COUNT)
 
   return (
     <div className="mt-8">
       <div className="flex flex-col gap-4 border-b border-[var(--fs-line)] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fs-muted)]">
-          {review ? 'Your review' : 'Member reviews'}
+          {review ? 'Your review' : 'Public reviews'}
         </span>
 
         {member ? (
@@ -116,7 +127,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
             type="button"
           >
             {review ? <PenLine aria-hidden="true" className="size-3.5" /> : <Plus aria-hidden="true" className="size-3.5" />}
-            {review ? 'Edit review' : 'Log or review'}
+            {review ? 'Edit review' : 'Write a review'}
           </button>
         ) : null}
       </div>
@@ -126,8 +137,8 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
       ) : !member ? (
         <div className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
           <p className="text-sm leading-6 text-[var(--fs-secondary)]">
-            <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/sign-in">Sign in</Link>
-            {' '}to log {title} and write the first member review.
+            <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)]/40 underline-offset-4 outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href={`/sign-in?next=${encodeURIComponent(`${titleHref({ id, kind })}?consumitAction=review`)}`}>Sign in</Link>
+            {' '}to log {title} or write your own review.
           </p>
         </div>
       ) : status === 'loading' || status === 'idle' ? (
@@ -145,7 +156,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         </div>
       ) : !review ? (
         <div className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-          <p className="text-sm leading-6 text-[var(--fs-secondary)]">No member reviews yet. Share what stayed with you — your review will appear here.</p>
+          <p className="text-sm leading-6 text-[var(--fs-secondary)]">You haven’t reviewed this title yet. Share what stayed with you and your review will appear here.</p>
         </div>
       ) : (
         <article className="mt-6 rounded-xl border border-[var(--fs-line)] bg-[var(--fs-field)] p-4 sm:p-5">
@@ -160,7 +171,7 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-[var(--fs-ink)]">{displayName}</p>
               {review.reviewedOn ? (
-                <p className="mt-0.5 text-xs text-[var(--fs-muted)] tabular-nums">{formatReviewedOn(review.reviewedOn)}</p>
+                <time className="mt-0.5 block text-xs text-[var(--fs-muted)] tabular-nums" dateTime={review.reviewedOn}>{formatReviewedOn(review.reviewedOn)}</time>
               ) : null}
             </div>
           </div>
@@ -169,13 +180,15 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         </article>
       )}
 
-      {recentStatus === 'ready' ? (
+      {recentStatus === 'loading' ? (
+        <p className="mt-8 text-sm text-[var(--fs-muted)]" role="status">Loading public reviews…</p>
+      ) : recentStatus === 'ready' ? (
         <div className="mt-8">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--fs-muted)]">
               Recent reviews
-              <span aria-hidden="true" className="ml-2 font-normal normal-case tabular-nums">{recent?.totalResults}</span>
-              <span className="sr-only">, {recent?.totalResults} in total</span>
+              <span aria-hidden="true" className="ml-2 font-normal normal-case tabular-nums">{recentTotalResults}</span>
+              <span className="sr-only">, {recentTotalResults} in total</span>
             </p>
           </div>
           {recentItems.length > 0 ? (
@@ -183,29 +196,31 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
               <div className="mt-5">
                 <ReviewRows key={sort} items={visibleRecent} />
               </div>
-              {(recent?.totalResults ?? 0) > RECENT_PREVIEW_COUNT ? (
+              {recentItems.length > RECENT_PREVIEW_COUNT ? (
                 <button
                   className="mt-2 inline-flex min-h-11 cursor-pointer items-center gap-1 text-xs font-bold text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                   onClick={() => setShowAllRecent((value) => !value)}
                   type="button"
                 >
-                  {showAllRecent ? 'Show fewer' : `Show all ${recent?.totalResults} reviews`}
+                  {showAllRecent ? 'Show fewer' : `Show all ${recentItems.length} reviews`}
                   <span aria-hidden="true">{showAllRecent ? '↑' : '↓'}</span>
                 </button>
               ) : null}
               {showAllRecent && (recent?.totalPages ?? 0) > 1 ? (
-                <p className="mt-1 text-xs text-[var(--fs-muted)] tabular-nums">Showing the 10 most recent of {recent?.totalResults}.</p>
+                  <p className="mt-1 text-xs text-[var(--fs-muted)] tabular-nums">Showing the 10 most recent of {recentTotalResults} public reviews.</p>
               ) : null}
               {(recent?.totalPages ?? 0) > 1 ? (
                 <Link
                   className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                   href={reviewsHref({ id, kind })}
                 >
-                  Browse all {recent?.totalResults} reviews
+                  Browse all {recent?.totalResults} public {recent?.totalResults === 1 ? 'review' : 'reviews'}
                   <span aria-hidden="true">→</span>
                 </Link>
               ) : null}
             </>
+          ) : recent?.totalResults === 0 ? (
+            <p className="mt-5 text-sm text-[var(--fs-muted)]">No public reviews yet.</p>
           ) : null}
         </div>
       ) : recentStatus === 'error' ? (
@@ -221,14 +236,16 @@ export function TitleReviews({ id, kind, title, posterUrl, year }: TitleReviewsP
         </div>
       ) : null}
 
-      {logging && member ? (
+      {(logging || requestedAction === 'review' && ['ready', 'empty'].includes(status)) && member ? (
         <LogDialog
+          mode="review"
           existingReview={review ? { body: review.body, reviewId: review.reviewId, reviewedOn: review.reviewedOn } : null}
           id={id}
           kind={kind}
-          onClose={() => setLogging(false)}
+          onClose={() => { setLogging(false); setRequestedAction(null) }}
           onSaved={() => {
             setLogging(false)
+            setRequestedAction(null)
             void reload()
           }}
           posterUrl={posterUrl ?? undefined}

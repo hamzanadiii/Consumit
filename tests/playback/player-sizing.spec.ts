@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { test, expect } from '@playwright/test'
 
-test('preparation and caption choices fit wide, short desktop and phone viewports', async ({ page, request }, info) => {
+test('startup source search and caption choices fit wide, short desktop and phone viewports', async ({ page, request }, info) => {
   test.skip(info.project.name !== 'chrome', 'One bounded capture pass covers all six sizes.')
   test.setTimeout(180000)
   const phase = process.env.PLAYER_SIZING_CAPTURE_PHASE ?? 'after'
@@ -17,32 +17,35 @@ test('preparation and caption choices fit wide, short desktop and phone viewport
     await request.post('http://127.0.0.1:18559/__fixtures/reset')
     await page.setViewportSize({ width, height })
     let release = () => {}
-    const preparation = new Promise<void>(resolve => { release = resolve })
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined
+    const preparation = new Promise<void>(resolve => {
+      const finish = () => { if (releaseTimer) clearTimeout(releaseTimer); resolve() }
+      release = finish
+      // Give Next time to hydrate before taking the loading-state capture;
+      // the fixture remains bounded if a geometry assertion fails.
+      releaseTimer = setTimeout(finish, 60000)
+    })
     await page.route('**/v1/playback/attempts', async route => { await preparation; await route.continue() })
     await page.goto('/watch/movie/1')
-    await expect(page.getByText('Finding your stream…', { exact: true })).toBeVisible()
-    const artwork = await page.locator('[data-player-preparation-artwork]').boundingBox()
-    const progress = (await page.locator('[data-player-preparation-progress]').boundingBox())!
-    const picture = (await page.locator('.consumit-player-preparation').boundingBox())!
-    await page.screenshot({ scale: 'css', path: `${directory}/${name}-preparation.png` })
-    if (phase === 'after') {
-      // The deterministic movie fixture has no logo artwork. When a title
-      // provides artwork, keep checking its placement; otherwise verify the
-      // preparation copy and progress still fit the picture.
-      if (artwork) expect(artwork.y).toBeGreaterThan(picture.y + picture.height / 2)
-      const bottomInset = width <= 600 ? 20 : name === 'landscape' ? 16 : 40
-      expect(progress.y + progress.height).toBeLessThanOrEqual(picture.y + picture.height - bottomInset + 1)
-      const activePreparationStroke = page.locator('.consumit-player-preparation-steps span').first()
-      expect(await activePreparationStroke.evaluate(element => getComputedStyle(element, '::after').content)).toBe('""')
-      expect(await activePreparationStroke.evaluate(element => getComputedStyle(element, '::after').animationName)).toBe('none')
-      if (width <= 600) {
-        const deck = page.locator('[data-player-controls]')
-        await expect(deck).toHaveCSS('visibility', 'visible')
-        await expect(deck).toHaveCSS('background-color', 'rgb(16, 16, 19)')
-        await expect(deck.getByRole('button', { name: 'Play', exact: true })).toBeHidden()
-        expect((await deck.boundingBox())!.y).toBeCloseTo(picture.y + picture.height, 0)
-      }
+    const searching = page.getByRole('dialog', { name: 'Finding a source', exact: true })
+    await expect(searching).toBeVisible()
+    await expect(searching.getByRole('status')).toHaveText('Checking configured sources.')
+    const card = (await searching.boundingBox())!
+    const stage = (await page.locator('[data-player-stage]').boundingBox())!
+    expect(card.x).toBeGreaterThanOrEqual(0)
+    expect(card.y).toBeGreaterThanOrEqual(0)
+    expect(card.x + card.width).toBeLessThanOrEqual(width)
+    expect(card.y + card.height).toBeLessThanOrEqual(height)
+    for (const name of ['Cancel', 'Choose a source']) {
+      const actionLocator = searching.getByRole('button', { name, exact: true })
+      await expect(actionLocator).toBeVisible({ timeout: 3000 })
+      const action = (await actionLocator.boundingBox())!
+      expect(action.width).toBeGreaterThanOrEqual(44)
+      expect(action.height).toBeGreaterThanOrEqual(44)
+      expect(action.x).toBeGreaterThanOrEqual(card.x)
+      expect(action.x + action.width).toBeLessThanOrEqual(card.x + card.width)
     }
+    await page.screenshot({ scale: 'css', path: `${directory}/${name}-searching.png` })
     release()
     await page.unroute('**/v1/playback/attempts')
     await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState), { timeout: 30000 }).toBeGreaterThanOrEqual(2)
@@ -58,7 +61,9 @@ test('preparation and caption choices fit wide, short desktop and phone viewport
     await expect(pauseCard).toBeVisible()
     await expect(pauseCard.locator('.consumit-player-pause-facts')).toBeVisible()
     const pauseArtwork = (await page.locator('[data-player-pause-artwork]').boundingBox())!
-    expect(pauseArtwork.y + pauseArtwork.height / 2).toBeCloseTo(picture.y + picture.height / 2, 0)
+    const videoBounds = (await page.locator('video').boundingBox())!
+    expect(pauseArtwork.y).toBeGreaterThanOrEqual(videoBounds.y)
+    expect(pauseArtwork.y + pauseArtwork.height).toBeLessThanOrEqual(videoBounds.y + videoBounds.height)
     if (width <= 600 || name === 'landscape') await expect(pauseCard.locator('.consumit-player-pause-overview')).toBeHidden()
     else await expect(pauseCard.locator('.consumit-player-pause-overview')).toBeVisible()
     if (width <= 600) {
@@ -83,11 +88,11 @@ test('preparation and caption choices fit wide, short desktop and phone viewport
     const panel = page.getByRole('dialog', { name: 'Captions', exact: true })
     const english = panel.getByRole('button', { name: /^English \d+/ })
     await expect(english).toBeVisible()
-    await expect(panel.getByText('Some tracks are unavailable. You can still choose from the available tracks.')).toBeAttached()
+    await expect(panel.getByRole('status').filter({ hasText: 'Some tracks are unavailable. You can still choose from the available tracks.' })).toBeVisible()
     const drawer = (await panel.boundingBox())!, list = (await panel.locator('.consumit-subtitle-browser').boundingBox())!, language = (await english.boundingBox())!
     const close = (await panel.getByRole('button', { name: 'Close captions' }).boundingBox())!
     const tools = (await panel.getByRole('group', { name: 'Subtitle tools' }).boundingBox())!
-    measurements.push({ name, width, height, preparation: { artwork, progress, picture }, drawer, list, firstLanguage: language, close, tools })
+    measurements.push({ name, width, height, searching: { card, stage }, drawer, list, firstLanguage: language, close, tools })
     expect(drawer.x).toBeGreaterThanOrEqual(0)
     expect(drawer.y).toBeGreaterThanOrEqual(0)
     expect(drawer.x + drawer.width).toBeLessThanOrEqual(width)
@@ -97,10 +102,30 @@ test('preparation and caption choices fit wide, short desktop and phone viewport
     if (phase === 'after') {
       expect(language.y).toBeGreaterThanOrEqual(list.y)
       expect(language.y + language.height).toBeLessThanOrEqual(list.y + list.height)
+      await page.screenshot({ scale: 'css', path: `${directory}/${name}-captions-initial.png` })
+      if (name === 'phone' || name === 'narrow' || name === 'landscape') {
+        const scrollCue = panel.locator('[data-player-panel-scroll-cue]')
+        await expect(scrollCue).toHaveText('More caption choices below')
+        const cueBounds = (await scrollCue.boundingBox())!
+        expect(cueBounds.y + cueBounds.height).toBeLessThanOrEqual(tools.y)
+
+        const captionList = panel.locator('.consumit-subtitle-browser')
+        const lastLanguage = panel.locator('.consumit-subtitle-language > button').last()
+        await captionList.evaluate((element: HTMLElement) => { element.scrollTop = element.scrollHeight })
+        await expect(scrollCue).toHaveCount(0)
+        const listBounds = (await captionList.boundingBox())!
+        const lastLanguageBounds = (await lastLanguage.boundingBox())!
+        expect(lastLanguageBounds.y).toBeGreaterThanOrEqual(listBounds.y)
+        expect(lastLanguageBounds.y + lastLanguageBounds.height).toBeLessThanOrEqual(listBounds.y + listBounds.height)
+        await captionList.evaluate((element: HTMLElement) => { element.scrollTop = 0 })
+        await expect(scrollCue).toBeVisible()
+      }
       const secondLanguage = panel.getByRole('button', { name: /^Français \d+/ })
       await secondLanguage.scrollIntoViewIfNeeded()
       const secondLanguageBounds = (await secondLanguage.boundingBox())!
-      expect(secondLanguageBounds.y + secondLanguageBounds.height).toBeLessThanOrEqual(list.y + list.height)
+      // Layout rectangles can retain subpixel fractions that do not clip a
+      // rendered edge; keep the actual visible bound within half a CSS pixel.
+      expect(secondLanguageBounds.y + secondLanguageBounds.height).toBeLessThanOrEqual(list.y + list.height + 0.5)
       expect(tools.y + tools.height).toBeLessThanOrEqual(drawer.y + drawer.height)
       expect(await page.getByRole('button', { name: /^Settings:/ }).getAttribute('title')).toBeNull()
     }

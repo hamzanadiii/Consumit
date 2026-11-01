@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test.beforeEach(async ({ page, request }) => {
   await request.post('http://127.0.0.1:18559/__fixtures/reset')
-  await page.route('https://fixture.example/english.vtt', route => route.fulfill({ contentType: 'text/vtt', body: 'WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nFirst caption\n\n00:00:06.000 --> 00:00:09.000\nTwo lines\nSecond line\n' }))
+  await page.route('**/v1/subtitles/file/**', route => route.fulfill({ contentType: 'text/vtt', body: 'WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nFirst caption\n\n00:00:06.000 --> 00:00:09.000\nTwo lines\nSecond line\n' }))
   await page.goto('/watch/movie/5')
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2)
   await page.locator('video').evaluate((video: HTMLVideoElement) => { video.pause(); video.currentTime = 2 })
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page, request }) => {
 test('subtitle tracks use readable native language labels and isolate RTL text', async ({ page }, info) => {
   await page.getByRole('button', { name: 'Captions', exact: true }).click()
   const menu = page.getByRole('dialog', { name: 'Captions', exact: true })
-  await menu.getByRole('button', { name: /العربية 2/ }).click()
+  await menu.getByRole('button', { name: /العربية \d+/ }).click()
   const rows = menu.getByRole('button').filter({ hasText: 'fixture-subtitles' })
   await expect(rows).toHaveCount(2)
   for (const row of await rows.all()) {
@@ -28,6 +28,7 @@ test('captions never move the time display or seek bar', async ({ page }, info) 
   const timeline = page.locator('[data-player-timeline]')
   await expect(page.locator('[data-consumit-player-caption]')).toBeVisible()
   const before = { timing: (await timing.boundingBox())!.y, timeline: (await timeline.boundingBox())!.y }
+  await expect(page.locator('[data-consumit-player-caption]')).toContainText('First caption')
   await page.locator('video').evaluate((video: HTMLVideoElement) => { video.currentTime = 7 })
   await expect(page.locator('[data-consumit-player-caption]')).toContainText('Second line')
   expect((await timing.boundingBox())!.y).toBeCloseTo(before.timing, 0)
@@ -76,8 +77,10 @@ test('volume slider appears on hover and keyboard focus', async ({ page }, info)
     expect(after[index]!.y).toBeCloseTo(before[index]!.y, 0)
   }
   const popover = (await page.locator('.consumit-player-volume-popover').boundingBox())!
-  const timing = (await page.locator('[data-player-timing]').boundingBox())!
-  expect(popover.y + popover.height).toBeLessThanOrEqual(timing.y)
+  const muteBounds = (await mute.boundingBox())!
+  expect(popover.x).toBeGreaterThanOrEqual(muteBounds.x + muteBounds.width)
+  expect(popover.x + popover.width).toBeLessThanOrEqual(await page.evaluate(() => innerWidth))
+  expect(popover.y + popover.height / 2).toBeCloseTo(muteBounds.y + muteBounds.height / 2, 0)
   await volume.focus()
   await page.keyboard.press('Home')
   for (let step = 0; step < 10; step++) await page.keyboard.press('ArrowRight')

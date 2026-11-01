@@ -17,7 +17,7 @@ function memberDataStub(): MemberData {
   const storedReview = { body: 'A patient masterpiece.', id: 693134, kind: 'movie' as const, origin: 'native' as const, reviewId: 'review-1', reviewedOn: '2026-09-06', sourceKey: null, tags: [] }
   const storedTitleReview = { author: { avatarStyle: 'dusk' as const, avatarUrl: null, displayName: 'Cinema Fan', username: 'cinema_fan' }, body: 'A patient masterpiece.', liked: true, likesCount: 12, rating: 9, reviewId: 'review-1', reviewedOn: '2026-09-06' }
   return {
-    createList: vi.fn(async (_memberId: string, input) => ({ items: [], list: { description: input.description ?? null, id: 'list-1', itemCount: 0, name: input.name, origin: 'native' as const, slug: 'late-night-1', visibility: input.visibility }, owner: { displayName: 'Cinema Fan', username: 'cinema_fan' }, viewerIsOwner: true, viewerHasSaved: false })),
+    createList: vi.fn(async (_memberId: string, input) => ({ collaborators: [], items: [], list: { description: input.description ?? null, id: 'list-1', itemCount: input.title ? 1 : 0, name: input.name, origin: 'native' as const, slug: 'late-night-1', visibility: input.visibility }, owner: { displayName: 'Cinema Fan', username: 'cinema_fan' }, viewerCanEdit: true, viewerIsCollaborator: false, viewerIsOwner: true, viewerHasSaved: false })),
     createDiaryEntry: vi.fn(async (_memberId: string, input: CreateDiaryEntryRequest) => ({ ...(input.episode !== undefined ? { episode: input.episode } : {}), ...(input.season !== undefined ? { season: input.season } : {}), entryId: 'diary-1', id: input.id, kind: input.kind, origin: 'native' as const, rewatch: input.rewatch ?? false, sourceKey: null, tags: input.tags ?? [], watchedOn: input.watchedOn })),
     deleteDiary: vi.fn(async () => true),
     createReview: vi.fn(async () => storedReview),
@@ -42,6 +42,9 @@ function memberDataStub(): MemberData {
     setRating: vi.fn(async () => storedRating),
     setSaved: vi.fn(async () => {}),
     setWatched: vi.fn(async () => {}),
+    duplicateList: vi.fn(async (_memberId: string, _slug: string, input) => ({ collaborators: [], items: [], list: { description: null, id: 'list-copy', itemCount: 0, name: input.name, origin: 'native' as const, slug: 'late-night-copy', visibility: input.visibility }, owner: { displayName: 'Cinema Fan', username: 'cinema_fan' }, viewerCanEdit: true, viewerIsCollaborator: false, viewerIsOwner: true, viewerHasSaved: false })),
+    addListCollaborator: vi.fn(async () => true),
+    removeListCollaborator: vi.fn(async () => true),
     titleState: vi.fn(async () => ({ rating: storedRating, like: storedLike, review: storedReview, saved: false, watched: false })),
     updateDiary: vi.fn(async () => true),
     updateList: vi.fn(async () => true),
@@ -92,6 +95,33 @@ describe('member data mutation routes', () => {
     expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/me/saved-lists/list-1' })).statusCode).toBe(204)
     expect(memberData.removeSavedList).toHaveBeenCalledWith(memberId, 'list-1')
     expect((await app.inject({ headers, method: 'PUT', url: '/v1/me/saved-lists/late-night-1' })).statusCode).toBe(401)
+  })
+
+  it('supports unlisted reads, public-list duplication, and owner-managed collaborator routes', async () => {
+    const { app, cookie, memberData, memberId } = await setup()
+    const headers = { origin }
+    vi.mocked(memberData.list).mockResolvedValueOnce({
+      collaborators: [], items: [],
+      list: { description: null, id: 'list-1', itemCount: 0, name: 'By link', origin: 'native', slug: 'by-link', visibility: 'unlisted' },
+      owner: { displayName: 'Cinema Fan', username: 'cinema_fan' }, viewerCanEdit: false, viewerIsCollaborator: false, viewerIsOwner: false, viewerHasSaved: false,
+    })
+    const unlisted = await app.inject({ method: 'GET', url: '/v1/lists/by-link' })
+    expect(unlisted.statusCode).toBe(200)
+    expect(unlisted.headers['x-robots-tag']).toBe('noindex, nofollow')
+    expect(unlisted.headers['cache-control']).toBe('private, no-store')
+    expect(unlisted.json().list.visibility).toBe('unlisted')
+
+    const duplicateInput = { idempotencyKey: 'c141459d-e3c7-41bd-a14b-0d67bb5f6914', name: 'A copy', visibility: 'private' }
+    const duplicate = await app.inject({ cookies: cookie, headers, method: 'POST', payload: duplicateInput, url: '/v1/lists/source-list/duplicate' })
+    expect(duplicate.statusCode).toBe(201)
+    expect(memberData.duplicateList).toHaveBeenCalledWith(memberId, 'source-list', duplicateInput)
+    expect((await app.inject({ headers, method: 'POST', payload: duplicateInput, url: '/v1/lists/source-list/duplicate' })).statusCode).toBe(401)
+
+    expect((await app.inject({ cookies: cookie, headers, method: 'POST', payload: { username: 'editor_one' }, url: '/v1/me/lists/list-1/collaborators' })).statusCode).toBe(204)
+    expect(memberData.addListCollaborator).toHaveBeenCalledWith(memberId, 'list-1', { username: 'editor_one' })
+    expect((await app.inject({ cookies: cookie, headers, method: 'DELETE', url: '/v1/me/lists/list-1/collaborators/editor_one' })).statusCode).toBe(204)
+    expect(memberData.removeListCollaborator).toHaveBeenCalledWith(memberId, 'list-1', 'editor_one')
+    expect((await app.inject({ cookies: cookie, headers, method: 'POST', payload: { username: 'x' }, url: '/v1/me/lists/list-1/collaborators' })).statusCode).toBe(400)
   })
 
   it('serves bounded library pages and rejects invalid or mismatched cursors', async () => {
@@ -341,8 +371,14 @@ describe('member data mutation routes', () => {
     expect((await app.inject({ headers: { origin }, method: 'GET', url: '/v1/me/reviews/movie/693134' })).statusCode).toBe(401)
     expect((await app.inject({ cookies: cookie, headers: { origin }, method: 'GET', url: '/v1/me/reviews/novel/693134' })).statusCode).toBe(400)
   })
-  it('lists only the signed-in member title reviews and strips retired engagement fields', async () => {
+  it('lists visible title reviews for guests and members without exposing retired engagement fields', async () => {
     const { app, cookie, memberData, memberId } = await setup()
+    const guest = await app.inject({ method: 'GET', url: '/v1/reviews/movie/693134' })
+    expect(guest.statusCode).toBe(200)
+    expect(guest.headers['cache-control']).toBe('private, no-store')
+    expect(guest.json()).toMatchObject({ items: [{ body: 'A patient masterpiece.', rating: 9 }] })
+    expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', undefined)
+
     const first = await app.inject({ cookies: cookie, method: 'GET', url: '/v1/reviews/movie/693134' })
     expect(first.statusCode).toBe(200)
     expect(first.headers['cache-control']).toBe('private, no-store')
@@ -350,7 +386,6 @@ describe('member data mutation routes', () => {
     expect(first.json().items[0]).not.toHaveProperty('likesCount')
     expect(first.json().items[0]).not.toHaveProperty('liked')
     expect(memberData.titleReviews).toHaveBeenCalledWith({ id: 693134, kind: 'movie' }, 1, 'recent', memberId)
-    expect((await app.inject({ method: 'GET', url: '/v1/reviews/movie/693134' })).statusCode).toBe(401)
     await app.inject({ cookies: cookie, method: 'GET', url: '/v1/reviews/movie/693134?page=2' })
     expect(memberData.titleReviews).toHaveBeenLastCalledWith({ id: 693134, kind: 'movie' }, 2, 'recent', memberId)
     for (const url of ['/v1/reviews/novel/1', '/v1/reviews/movie/1?page=0', '/v1/reviews/movie/1?page=501', '/v1/reviews/movie/1?sort=popular']) {

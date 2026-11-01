@@ -120,6 +120,15 @@ const tmdbLogoSchema = z.object({
   iso_639_1: z.string().nullable().catch(null),
 })
 
+const tmdbPosterSchema = z.object({
+  file_path: z.string().min(1),
+  height: z.number().int().catch(0),
+  iso_639_1: z.string().nullable().catch(null),
+  vote_average: z.number().catch(0),
+  vote_count: z.number().int().catch(0),
+  width: z.number().int().catch(0),
+})
+
 const tmdbBackdropSchema = z.object({
   file_path: z.string().min(1),
   iso_639_1: z.string().nullable().catch(null),
@@ -131,7 +140,8 @@ const tmdbBackdropSchema = z.object({
 const tmdbImagesSchema = z.object({
   backdrops: z.array(tmdbBackdropSchema).catch([]),
   logos: z.array(tmdbLogoSchema).catch([]),
-}).catch({ backdrops: [], logos: [] })
+  posters: z.array(tmdbPosterSchema).catch([]),
+}).catch({ backdrops: [], logos: [], posters: [] })
 
 const tmdbMovieDetailSchema = tmdbMovieSchema.omit({ genre_ids: true }).extend({
   credits: z.object({
@@ -256,6 +266,26 @@ function pickLogoUrl(
     ?? logos.find((logo) => logo.iso_639_1 === null)
     ?? logos[0]
   return preferred ? imageUrl(preferred.file_path, configuration, 'logo') : null
+}
+
+function pickPosterUrl(
+  posters: readonly z.infer<typeof tmdbPosterSchema>[],
+  configuration: ImageConfiguration,
+  currentPath: string | null,
+) {
+  const primary = imageUrl(currentPath, configuration, 'poster')
+  if (primary) return primary
+  const preferred = [...posters]
+    .filter((poster) => poster.file_path !== currentPath)
+    .sort((left, right) => {
+      const languageRank = (language: string | null) => language === 'en' ? 0 : language === null ? 1 : 2
+      const languageDifference = languageRank(left.iso_639_1) - languageRank(right.iso_639_1)
+      if (languageDifference !== 0) return languageDifference
+      if (right.vote_average !== left.vote_average) return right.vote_average - left.vote_average
+      if (right.vote_count !== left.vote_count) return right.vote_count - left.vote_count
+      return right.width - left.width
+    })[0]
+  return preferred ? imageUrl(preferred.file_path, configuration, 'poster') : null
 }
 
 /**
@@ -655,7 +685,7 @@ export function createTmdbCatalog({
       originalTitle: value.original_title || value.title || `Movie ${value.id}`,
       overview: value.overview,
       popularity: value.popularity,
-      posterUrl: imageUrl(value.poster_path, images.value, 'poster'),
+      posterUrl: pickPosterUrl(value.images.posters, images.value, value.poster_path),
       recommendations: recommendations.filter((item): item is CatalogTitleSummary => item !== null),
       releaseDate: value.release_date,
       runtimeMinutes: value.runtime,
@@ -715,7 +745,7 @@ export function createTmdbCatalog({
       originalTitle: value.original_name || value.name || `Series ${value.id}`,
       overview: value.overview,
       popularity: value.popularity,
-      posterUrl: imageUrl(value.poster_path, images.value, 'poster'),
+      posterUrl: pickPosterUrl(value.images.posters, images.value, value.poster_path),
       recommendations: recommendations.filter((item): item is CatalogTitleSummary => item !== null),
       releaseDate: value.first_air_date,
       seasons: value.seasons

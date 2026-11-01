@@ -92,6 +92,8 @@ services:
         required: false
     environment:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       DATABASE_SSL_MODE: ${DATABASE_SSL_MODE:-disable}
       DATABASE_URL: ${DATABASE_URL:-postgresql://consumit:${CONSUMIT_POSTGRES_PASSWORD:-consumit-local}@postgres:5432/consumit}
       NODE_ENV: ${CONSUMIT_API_NODE_ENV:-development}

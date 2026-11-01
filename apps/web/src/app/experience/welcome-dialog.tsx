@@ -49,7 +49,15 @@ export function WelcomeDialog({ pathname }: { pathname: string }) {
     const element = dialog.current
     const modal = typeof element.showModal === 'function' ? element.showModal.bind(element) : null
     modal?.()
-    return () => { if (typeof element.close === 'function') element.close(); returnFocus.current?.focus() }
+    return () => {
+      if (typeof element.close === 'function') element.close()
+      const previous = returnFocus.current
+      if (previous && previous !== document.body && previous.isConnected) previous.focus()
+      if (!previous || previous === document.body || document.activeElement !== previous) {
+        document.querySelector<HTMLElement>('#consumit-main-content')?.focus()
+      }
+      returnFocus.current = null
+    }
   }, [visible])
 
   function dismiss(start = false) {
@@ -91,24 +99,24 @@ export function WelcomeDialog({ pathname }: { pathname: string }) {
 
   return <><BrowsingNotifications enabled={eligible && experience.ready && !visible} /><dialog ref={dialog} aria-labelledby="welcome-title" aria-describedby="welcome-description" className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain rounded-card border border-[var(--fs-line)] bg-[var(--fs-field)] p-0 text-[var(--fs-ink)] backdrop:bg-black/80" onCancel={event => { event.preventDefault(); dismiss() }}>
     <div className="relative px-5 pb-5 pt-8 sm:px-8 sm:pb-7 sm:pt-10">
-      <Button aria-label="Close welcome" className="absolute right-2 top-2 size-11 text-[var(--fs-muted)]" onClick={() => dismiss()} size="icon" variant="ghost"><X aria-hidden="true" className="size-5" /></Button>
+      <Button aria-label="Close welcome" className="absolute right-2 top-2 size-[44px] text-[var(--fs-muted)]" onClick={() => dismiss()} size="icon" variant="ghost"><X aria-hidden="true" className="size-5" /></Button>
       <div className="text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-full bg-orange/10 text-orange"><Heart aria-hidden="true" className="size-7" strokeWidth={1.5} /></span>
         <h2 className="mt-5 text-balance font-display text-3xl leading-tight sm:text-4xl" id="welcome-title">Welcome to Consumit.</h2>
-        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[var(--fs-secondary)]" id="welcome-description">Movies, series, anime. A good watch is better shared. Send Consumit to a friend and help keep it growing.</p>
-        <div className="mt-5 flex items-center justify-center gap-2">
-          <Button aria-controls="welcome-share-options" aria-expanded={shareOpen} className="min-h-11" onClick={() => void shareConsumit()} variant="accent"><Share2 aria-hidden="true" className="size-4" />Share Consumit</Button>
-          <Button aria-label={copyState === 'copied' ? 'Link copied' : 'Copy Consumit link'} className="size-11 border border-[var(--fs-line)]" onClick={() => void copyShareLink()} size="icon" variant="secondary">{copyState === 'copied' ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}</Button>
+        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[var(--fs-secondary)]" id="welcome-description">Browse movies, series, and anime. Sign in to sync your Watchlist and progress across devices. A few pop-under ads may open while you browse; turn them off in Settings.</p>
+        <Button className="mt-5 min-h-[44px] w-full" onClick={() => dismiss()} variant="accent">Start exploring</Button>
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <Button aria-controls="welcome-share-options" aria-expanded={shareOpen} className="min-h-[44px]" onClick={() => void shareConsumit()} variant="secondary"><Share2 aria-hidden="true" className="size-4" />Share Consumit</Button>
+          <Button aria-label={copyState === 'copied' ? 'Link copied' : 'Copy Consumit link'} className="size-[44px] border border-[var(--fs-line)]" onClick={() => void copyShareLink()} size="icon" variant="secondary">{copyState === 'copied' ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}</Button>
         </div>
         <div hidden={!shareOpen} id="welcome-share-options" className="mt-4">
           <p className="mb-2 text-xs text-[var(--fs-muted)]">Share with your people</p>
-          <div className="flex flex-wrap justify-center gap-2">{shareTargets.map(target => <a className="inline-flex min-h-11 items-center gap-1 rounded-control border border-[var(--fs-line)] px-3 text-xs text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none" href={target.href} key={target.label} rel="noopener noreferrer" target="_blank">{target.label}<ArrowUpRight aria-hidden="true" className="size-3" /></a>)}</div>
+          <div className="flex flex-wrap justify-center gap-2">{shareTargets.map(target => <a className="inline-flex min-h-[44px] items-center gap-1 rounded-control border border-[var(--fs-line)] px-3 text-xs text-[var(--fs-secondary)] outline-none transition-colors hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none" href={target.href} key={target.label} rel="noopener noreferrer" target="_blank">{target.label}<ArrowUpRight aria-hidden="true" className="size-3" /></a>)}</div>
         </div>
         {copyState !== 'idle' || shared ? <p aria-live="polite" className="mt-3 text-xs leading-5 text-[var(--fs-muted)]" role={copyState === 'error' ? 'alert' : 'status'}>{copyState === 'error' ? 'Copy is unavailable. Select the link below or choose a sharing service.' : copyState === 'copied' ? 'Link copied. Thanks for spreading the word.' : 'Thanks for sharing Consumit.'}</p> : null}
         {copyState === 'error' ? <input aria-label="Consumit link to share" className="mt-2 h-11 w-full rounded-control border border-[var(--fs-line)] bg-[var(--fs-field)] px-3 text-center text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onFocus={event => event.currentTarget.select()} readOnly value={shareUrl} /> : null}
       </div>
-      <Button className="mt-5 min-h-11 w-full border border-[var(--fs-line)]" onClick={() => dismiss()} variant="secondary">Start exploring</Button>
-      {guidePending ? <Button className="mt-2 min-h-11 w-full" onClick={() => dismiss(true)} variant="ghost">Personalize my experience</Button> : null}
+      {guidePending ? <Button className="mt-2 min-h-[44px] w-full" onClick={() => dismiss(true)} variant="ghost">Personalize my experience</Button> : null}
     </div>
   </dialog></>
 }

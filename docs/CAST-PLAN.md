@@ -15,7 +15,7 @@ scope; this slice is VOD-only (movies, series episodes, anime episodes).
 ## UX flow
 
 ```text
-Watch Settings → TV connection → native device picker when a TV is available,
+Watch Settings → Cast to TV → native device picker when a TV is available,
 otherwise connection guidance → TV loads
 Consumit receiver → member sees
 backdrop + title + progress on TV → phone becomes remote (play/pause/seek/

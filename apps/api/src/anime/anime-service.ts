@@ -39,13 +39,19 @@ export function createAnimeService(
 
     async matchTmdbTitle(title, originalTitle, year) {
       if (!title.trim()) return null
-      const page = await catalog.search(title.slice(0, 100), 1, 10)
-      for (const item of page.items) {
-        if (matchesAnimeTitle(
-          { title, originalTitle },
-          year,
-          { titles: { english: item.titles.english, romaji: item.titles.romaji, native: item.titles.native }, seasonYear: item.seasonYear },
-        )) return item.anilistId
+      const queries = [...new Set([title, originalTitle].map((value) => value?.trim()).filter((value): value is string => Boolean(value)))].map(value => value.slice(0, 100))
+      const seen = new Set<number>()
+      for (const query of queries) {
+        const page = await catalog.search(query, 1, 10)
+        for (const item of page.items) {
+          if (seen.has(item.anilistId)) continue
+          seen.add(item.anilistId)
+          const candidate = {
+            titles: { english: item.titles.english, romaji: item.titles.romaji, native: item.titles.native },
+            seasonYear: item.seasonYear,
+          }
+          if (matchesAnimeTitle({ title, originalTitle }, year, candidate)) return item.anilistId
+        }
       }
       return null
     },

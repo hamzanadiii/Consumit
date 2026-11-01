@@ -1,0 +1,61 @@
+# Optional local review stack for the standalone sibling frontend.
+# Keep it behind a profile so the regular Consumit stack continues to use apps/web.
+services:
+  api:
+    environment:
+      APP_ORIGIN: http://localhost:8080
+
+  web-next:
+    profiles: [web-next]
+    build:
+      context: ../consumit-web
+      target: dev
+    image: consumit-web-next-dev
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      CONSUMIT_API_URL: http://api:3001
+      WATCHPACK_POLLING: "true"
+    command: ["bun", "run", "dev", "--hostname", "0.0.0.0"]
+    depends_on:
+      api:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ../consumit-web
+          target: /app
+          action: sync
+          ignore:
+            - node_modules/
+            - .next/
+            - .git/
+            - .env*
+            - storybook-static/
+            - package.json
+            - bun.lock
+            - Dockerfile
+            - next.config.ts
+        - path: ../consumit-web/package.json
+          action: rebuild
+        - path: ../consumit-web/bun.lock
+          action: rebuild
+        - path: ../consumit-web/Dockerfile
+          action: rebuild
+        - path: ../consumit-web/next.config.ts
+          action: rebuild
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const response = await fetch('http://127.0.0.1:3000/sign-in'); if (!response.ok) process.exit(1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+  gateway:
+    profiles: [web-next]
+    volumes:
+      - ./infra/nginx/consumit.web-next.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web-next:
+        condition: service_healthy

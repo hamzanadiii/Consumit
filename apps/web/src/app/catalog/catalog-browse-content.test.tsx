@@ -1,5 +1,5 @@
 import type { CatalogPage } from '@consumit/contracts'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,7 +30,56 @@ async function chooseOption(user: ReturnType<typeof userEvent.setup>, triggerNam
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
 
 describe('catalog browsing', () => {
-  it.each(['top-rated', 'trending'] as const)('opens the requested %s shelf and retains it through filters and retry', async (initialFeed) => {
+  it('hides the featured rail arrows when only padding overflows', () => {
+    const twoTitles = { ...page, items: [movieSummary, second] }
+    render(<CatalogBrowseContent current={twoTitles} currentYear={2026} kind="movie" popular={twoTitles} />)
+    const featured = screen.getByRole('region', { name: 'Now Playing' })
+    const rail = featured.querySelector('ul')
+    expect(rail).not.toBeNull()
+    if (!rail) throw new Error('Expected a featured title rail.')
+    Object.defineProperties(rail, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 304 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+    })
+    fireEvent(window, new Event('resize'))
+
+    expect(within(featured).getAllByRole('link')).toHaveLength(2)
+    expect(within(featured).queryByRole('button', { name: /^Scroll featured titles/ })).not.toBeInTheDocument()
+  })
+
+  it('disables featured rail arrows at each edge of a scrollable rail', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }))
+    render(<CatalogBrowseContent current={{ ...page, items: [movieSummary, second] }} currentYear={2026} kind="movie" popular={page} />)
+    const featured = screen.getByRole('region', { name: 'Now Playing' })
+    const rail = featured.querySelector('ul')
+    expect(rail).not.toBeNull()
+    if (!rail) throw new Error('Expected a featured title rail.')
+    Object.defineProperties(rail, {
+      clientWidth: { configurable: true, value: 300 },
+      scrollWidth: { configurable: true, value: 660 },
+      scrollLeft: { configurable: true, writable: true, value: 0 },
+    })
+    Object.defineProperty(rail, 'scrollBy', { configurable: true, value: vi.fn(({ left }: ScrollToOptions) => {
+      rail.scrollLeft = left && left > 0 ? 360 : 0
+      fireEvent.scroll(rail)
+    }) })
+    fireEvent(window, new Event('resize'))
+
+    const left = within(featured).getByRole('button', { name: 'Scroll featured titles left' })
+    const right = within(featured).getByRole('button', { name: 'Scroll featured titles right' })
+    expect(left).toBeDisabled()
+    expect(right).toBeEnabled()
+    await user.click(right)
+    expect(left).toBeEnabled()
+    expect(right).toBeDisabled()
+    await user.click(left)
+    expect(left).toBeDisabled()
+    expect(right).toBeEnabled()
+  })
+
+  it.each(['top-rated', 'trending'] as const)('opens the requested %s shelf and retains it through retry', async (initialFeed) => {
     const user = userEvent.setup()
     discover.mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValue({ ...page, items: [second], totalPages: 1 })
@@ -41,6 +90,12 @@ describe('catalog browsing', () => {
     expect(within(screen.getByRole('region', { name: heading })).queryByRole('link')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await within(screen.getByRole('region', { name: heading })).findByRole('link', { name: 'Arrival' })).toBeInTheDocument()
+    if (initialFeed === 'trending') {
+      expect(screen.getByRole('button', { name: 'Genre All genres' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Year All years' })).toBeDisabled()
+      expect(screen.getByText('Choose Popular or Top rated to filter by genre or year.')).toHaveAttribute('role', 'status')
+      return
+    }
     await chooseOption(user, 'Genre All genres', 'Adventure')
     await waitFor(() => expect(discover).toHaveBeenLastCalledWith(
       { kind: 'movie', feed: initialFeed, genre: 'Adventure', year: undefined }, 1, expect.any(AbortSignal),
@@ -57,6 +112,7 @@ describe('catalog browsing', () => {
     await user.click(screen.getByRole('button', { name: 'Load more' }))
     expect(await results().findByRole('link', { name: 'Arrival' })).toHaveAttribute('href', '/title/2')
     expect(results().getAllByRole('link')).toHaveLength(2)
+    expect(screen.getByRole('status')).toHaveTextContent('2 titles shown')
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
     expect(discover).toHaveBeenCalledWith({ kind: 'movie', feed: 'popular', genre: undefined, year: undefined }, 2, expect.any(AbortSignal))
   })

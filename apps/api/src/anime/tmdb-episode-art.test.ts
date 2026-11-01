@@ -95,7 +95,8 @@ function catalogStub(): Catalog & { calls: string[] } {
 describe('tmdb title matching', () => {
   it('normalizes punctuation and case', () => {
     expect(normalizeAnimeTitle('Cowboy Bebop: The Movie')).toBe('cowboybebopthemovie')
-    expect(normalizeAnimeTitle('カウボーイ ビバップ')).toBe('')
+    expect(normalizeAnimeTitle('カウボーイ ビバップ')).toBe('カウボーイビバップ')
+    expect(normalizeAnimeTitle('ｶｳﾎﾞｰｲ　ﾋﾞﾊﾞｯﾌﾟ')).toBe('カウボーイビバップ')
   })
 
   it('requires title equality plus a year within one', () => {
@@ -122,12 +123,30 @@ describe('anime reverse matching', () => {
     expect(matchesAnimeTitle({ title: '', originalTitle: null }, 1998, candidate())).toBe(false)
   })
 
-  it('leaves non-latin scripts unmatched rather than guessing', () => {
+  it('matches exact native-script titles and rejects near-misses', () => {
+    const nativeCandidate = candidate({ titles: { english: null, romaji: null, native: 'カウボーイビバップ' } })
     expect(matchesAnimeTitle(
       { title: 'Unrelated', originalTitle: 'カウボーイビバップ' },
       null,
-      candidate({ titles: { english: null, romaji: null, native: 'カウボーイビバップ' } }),
+      nativeCandidate,
+    )).toBe(true)
+    expect(matchesAnimeTitle(
+      { title: 'Unrelated', originalTitle: 'カウボーイビバップ改' },
+      null,
+      nativeCandidate,
     )).toBe(false)
+  })
+})
+
+describe('native-title artwork lookup', () => {
+  it('searches TMDB with the AniList native title and matches Unicode exactly', async () => {
+    const catalog = catalogStub()
+    const resolver = createTmdbEpisodeArt(catalog)
+
+    const episode = await resolver.episodeByTitle(9, { english: null, romaji: null, native: 'カウボーイ ビバップ' }, 1998, 1)
+
+    expect(catalog.calls).toContain('search:カウボーイ ビバップ')
+    expect(episode).toMatchObject({ tmdbId: 34969, season: 1, episode: 1 })
   })
 })
 

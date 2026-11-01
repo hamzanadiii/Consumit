@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
+import axe from 'axe-core'
 
 async function openServers(page: Page) {
   await page.getByRole('button', { name: 'Sources', exact: true }).click()
@@ -55,9 +56,15 @@ test('server menu switches decoded media at the paused position and returns to A
 })
 
 test('list retry and failed server selection preserve the decoded current source', async ({ page }, info) => {
-  let lists = 0, listAvailable = false
+  await page.setViewportSize({ width: 320, height: 720 })
+  let lists = 0, listAvailable = false, holdNextList = false
+  let releaseList: (() => void) | undefined
   await page.route('**/v1/playback/providers', async route => {
     lists++
+    if (holdNextList) {
+      holdNextList = false
+      await new Promise<void>(resolve => { releaseList = resolve })
+    }
     if (!listAvailable) await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' })
     else await route.continue()
   })
@@ -67,14 +74,46 @@ test('list retry and failed server selection preserve the decoded current source
   const currentSrc = await page.locator('video').getAttribute('src')
   const panel = await openServers(page)
   await expect(panel.getByText('Servers are unavailable right now. Playback can continue.')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const retry = panel.getByRole('button', { name: 'Try again', exact: true })
+  expect((await retry.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
+  await expect(retry).toHaveClass(/focus-visible:ring-2/)
+  await page.addScriptTag({ content: axe.source })
+  expect(await panel.evaluate(async element => {
+    const report = await (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })).toEqual([])
+  await mkdir(resolve('.impeccable/review/watch-journey'), { recursive: true })
+  await page.screenshot({ animations: 'disabled', path: resolve(`.impeccable/review/watch-journey/source-list-retry-${info.project.name}-320x720.png`) })
   if (process.env.PLAYBACK_VISUAL === '1') await page.screenshot({ path: resolve(`.impeccable/review/server-${info.project.name}-retry.png`), animations: 'disabled' })
+  holdNextList = true
+  await retry.focus()
+  await retry.press('Enter')
+  await expect(panel.getByRole('tab', { name: /All/ })).toBeFocused()
+  await expect(panel.getByRole('status').filter({ hasText: 'Finding sources…' })).toBeVisible()
+  releaseList?.()
+  await expect(panel.getByText('Servers are unavailable right now. Playback can continue.')).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Try again', exact: true })).toBeFocused()
   listAvailable = true
-  await panel.getByRole('button', { name: 'Try again', exact: true }).click()
+  holdNextList = true
+  await panel.getByRole('button', { name: 'Try again', exact: true }).press('Enter')
+  const allSources = panel.getByRole('tab', { name: /All/ })
+  await expect(allSources).toBeFocused()
+  await expect(allSources).toHaveClass(/focus-visible:ring-2/)
+  await expect(panel.getByRole('status').filter({ hasText: 'Finding sources…' })).toBeVisible()
+  releaseList?.()
   const backup = panel.getByRole('button', { name: 'Server 2', exact: true })
   await expect(backup).toBeVisible()
+  await expect(allSources).toBeFocused()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(await panel.evaluate(async element => {
+    const report = await (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })).toEqual([])
+  await page.screenshot({ animations: 'disabled', path: resolve(`.impeccable/review/watch-journey/source-list-recovered-${info.project.name}-320x720.png`) })
   await page.route('**/v1/playback/*/switch', route => route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }))
   await backup.click()
-  await expect(page.getByText('Couldn’t switch sources. Playback is still available.')).toBeVisible()
+  await expect(page.getByText('Couldn’t switch sources. Current source is unchanged.')).toBeVisible()
   expect(await page.locator('video').getAttribute('src')).toBe(currentSrc)
   expect(await page.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThanOrEqual(2)
   expect(lists).toBeGreaterThanOrEqual(2)

@@ -1,6 +1,6 @@
 'use client'
 
-import type { CatalogRef, MemberListSummary } from '@consumit/contracts'
+import type { CatalogRef, MemberListSummary, MemberListVisibility } from '@consumit/contracts'
 import { Button, Select } from '@consumit/ui'
 import { Check, Film, ListPlus, Plus, X } from 'lucide-react'
 import Image from 'next/image'
@@ -45,9 +45,10 @@ export function AddTitleToListDialog({ onClose, posterUrl, title, titleName }: {
   const [lists, setLists] = useState<readonly MemberListSummary[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [listLoadError, setListLoadError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [newName, setNewName] = useState(`${titleName} picks`.slice(0, 120))
-  const [visibility, setVisibility] = useState<'public' | 'private'>('public')
+  const [visibility, setVisibility] = useState<MemberListVisibility>('public')
   const [createRequestKey, setCreateRequestKey] = useState<string | null>(null)
   const [pendingCreatedList, setPendingCreatedList] = useState<MemberListSummary | null>(null)
   const [message, setMessage] = useState('')
@@ -58,16 +59,14 @@ export function AddTitleToListDialog({ onClose, posterUrl, title, titleName }: {
     if (loadInFlight.current) return
     loadInFlight.current = true
     setLoading(true)
-    setError(false)
-    setMessage('')
+    setListLoadError(false)
     try {
       const page = await getMemberLibraryPage('lists', cursorValue)
       if (page.collection !== 'lists') throw new Error('Lists unavailable')
       setLists(current => cursorValue ? [...current, ...page.items] : page.items)
       setCursor(page.nextCursor)
     } catch {
-      setError(true)
-      setMessage('Your lists could not load. Try again.')
+      setListLoadError(true)
     } finally {
       loadInFlight.current = false
       setLoading(false)
@@ -115,13 +114,11 @@ export function AddTitleToListDialog({ onClose, posterUrl, title, titleName }: {
     setCreateRequestKey(idempotencyKey)
     try {
       if (!created) {
-        const result = await createMemberList({ description: null, idempotencyKey, name: newName.trim(), visibility })
+        const result = await createMemberList({ description: null, idempotencyKey, name: newName.trim(), title, visibility })
         created = { ...result.list, origin: 'native' }
         setPendingCreatedList(created)
         setLists(current => [created!, ...current.filter(item => item.id !== created!.id)])
       }
-      await appendMemberListTitle(created.id, title)
-      setLists(current => current.map(list => list.id === created!.id ? { ...list, itemCount: Math.max(list.itemCount, created!.itemCount + 1) } : list))
       setMessage(`Created ${created.name} and added ${titleName}.`)
       setAddedSlug(created.slug)
       setPendingCreatedList(null)
@@ -195,7 +192,7 @@ export function AddTitleToListDialog({ onClose, posterUrl, title, titleName }: {
               </ul>
             ) : loading ? (
               <p className="mt-5 text-sm text-copy" role="status">Finding your lists…</p>
-            ) : error ? (
+            ) : listLoadError ? (
               <div className="mt-5 flex items-center justify-between gap-3 rounded-control bg-surface-raised px-3 py-2.5">
                 <p className="text-xs text-copy" role="alert">Your lists could not load.</p>
                 <button className="min-h-9 shrink-0 px-2 text-xs font-bold text-orange outline-none focus-visible:ring-2 focus-visible:ring-orange" onClick={() => void load()} type="button">Try again</button>
@@ -229,13 +226,13 @@ export function AddTitleToListDialog({ onClose, posterUrl, title, titleName }: {
                 hideLabel
                 id={`${headingId}-visibility`}
                 label="Visibility"
-                onValueChange={value => setVisibility(value as 'public' | 'private')}
-                options={[{ value: 'public', label: 'Public' }, { value: 'private', label: 'Private' }]}
+                onValueChange={value => setVisibility(value as MemberListVisibility)}
+                options={[{ value: 'public', label: 'Public' }, { value: 'unlisted', label: 'Unlisted' }, { value: 'private', label: 'Private' }]}
                 value={visibility}
               />
             </div>
             <Button className="mt-4 min-h-11 w-full" disabled={busyId !== null || !newName.trim()} onClick={() => void createAndAdd()} size="sm" variant="primary">
-              {busyId === 'new' ? 'Creating…' : pendingCreatedList ? 'Retry add title' : 'Create and add title'}
+              {busyId === 'new' ? 'Creating…' : 'Create and add title'}
             </Button>
           </section>
         </div>

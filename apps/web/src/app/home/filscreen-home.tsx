@@ -1,8 +1,12 @@
 'use client'
 
 import type { AnimeTitleSummary, CatalogTitleSummary, PublicListDiscoveryItem } from '@consumit/contracts'
+import { Button, buttonVariants } from '@consumit/ui'
 import { Clock, Flame } from 'lucide-react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 
 import type { HeroDetail } from '../catalog/catalog-ui'
 import { AnimeTitleRail } from './anime-title-rail'
@@ -16,9 +20,46 @@ import { TitleRail } from '../shared/title-rail'
 import { PublicListRail } from './public-list-rail'
 
 type HomeListCard = PublicListDiscoveryItem & { artworkSources: readonly (string | undefined)[] }
+type HomeCatalogState = 'empty' | 'unavailable'
+
+function HomeCatalogNotice({ state }: { state: HomeCatalogState }) {
+  const router = useRouter()
+  const [refreshing, startRefresh] = useTransition()
+  const wrapper = 'mx-auto mb-6 grid w-full max-w-[90rem] gap-4 rounded-card border border-[var(--fs-line)] bg-[var(--fs-field)] px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6'
+  const actionClass = `${buttonVariants({ variant: 'secondary' })} min-h-[44px]`
+
+  if (state === 'empty') {
+    return (
+      <section aria-labelledby="home-recommendations-empty-title" className={wrapper} role="status">
+        <div>
+          <h2 className="font-display text-xl text-[var(--fs-ink)]" id="home-recommendations-empty-title">No fresh recommendations are available yet.</h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--fs-secondary)]">Try a category to find your next watch.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link className={actionClass} href="/movies">Browse movies</Link>
+          <Link className={actionClass} href="/series">Browse series</Link>
+          <Link className={actionClass} href="/anime">Browse anime</Link>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section aria-busy={refreshing} aria-labelledby="home-recommendations-error-title" className={wrapper}>
+      <div aria-labelledby="home-recommendations-error-title" role="alert">
+        <h2 className="font-display text-xl text-[var(--fs-ink)]" id="home-recommendations-error-title">Some recommendations couldn’t load.</h2>
+        <p className="mt-1 text-sm leading-6 text-[var(--fs-secondary)]">The rest of Home is ready. Retry to check for missing shelves.</p>
+      </div>
+      <Button className="min-h-[44px]" disabled={refreshing} onClick={() => startRefresh(() => router.refresh())} size="sm" variant="primary">
+        {refreshing ? 'Refreshing…' : 'Retry recommendations'}
+      </Button>
+    </section>
+  )
+}
 
 export type FilScreenHomeProps = {
   awardWinningShows?: readonly CatalogTitleSummary[] | undefined
+  catalogState?: HomeCatalogState | undefined
   hero: HeroDetail
   mindfuckMovies?: readonly CatalogTitleSummary[] | undefined
   newFromNetworkLists?: readonly HomeListCard[] | undefined
@@ -37,6 +78,7 @@ export type FilScreenHomeProps = {
 
 export function FilScreenHome({
   awardWinningShows = [],
+  catalogState,
   hero,
   mindfuckMovies = [],
   newFromNetworkLists = [],
@@ -50,8 +92,25 @@ export function FilScreenHome({
   trendingSeries = [],
   trendingWithMembers = [],
 }: FilScreenHomeProps) {
+  const mainRef = useRef<HTMLElement>(null)
+  const previousCatalogState = useRef(catalogState)
+  const [catalogAnnouncement, setCatalogAnnouncement] = useState('')
+
+  useEffect(() => {
+    if (previousCatalogState.current === 'unavailable' && catalogState !== 'unavailable') {
+      mainRef.current?.focus()
+      setCatalogAnnouncement('Home recommendations refreshed.')
+    }
+
+    previousCatalogState.current = catalogState
+  }, [catalogState])
+
   return (
-    <FilScreenShell activeKindTab="new" pageHeading="Consumit home">
+    <FilScreenShell activeKindTab="new" pageHeading={undefined}>
+      <main className="min-w-0" id="consumit-main-content" ref={mainRef} tabIndex={-1}>
+      <h1 className="sr-only">Discover your next watch</h1>
+      {catalogAnnouncement && catalogState === undefined ? <p className="sr-only" role="status">{catalogAnnouncement}</p> : null}
+      {catalogState ? <HomeCatalogNotice state={catalogState} /> : null}
       <FilScreenHeroRotator hero={hero} spotlight={spotlight} />
 
       <ContinueRail />
@@ -140,6 +199,7 @@ export function FilScreenHome({
         <Clock aria-hidden="true" className="size-3.5" />
         Progress stays with you when sources change.
       </p>
+      </main>
     </FilScreenShell>
   )
 }

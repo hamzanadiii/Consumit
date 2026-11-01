@@ -1414,7 +1414,7 @@ This slice replaces the browser-only preview session with real server authority.
 Before route implementation, explicitly decide:
 
 - email/password: yes;
-- OAuth providers: excluded from the active product;
+- Google OIDC: active secondary sign-in/sign-up provider; other OAuth providers are excluded;
 - email verification: mandatory before account creation and session issuance;
 - recovery: six-digit, ten-minute email challenge;
 - sessions: Valkey-backed, 30-day idle and 90-day absolute lifetime;

@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
 import { setMemberFollow } from '@/lib/identity-browser'
+import { internalNextPath } from '@/lib/internal-next-path'
 import { useSession } from '../session/session'
 
-export function FollowButton({ memberId, username, isFollowing, privateMember = false }: { memberId: string; username?: string; isFollowing: boolean; privateMember?: boolean }) {
+export function FollowButton({ memberId, username, isFollowing, privateMember = false, signInNextPath }: { memberId: string; username?: string; isFollowing: boolean; privateMember?: boolean; signInNextPath?: string }) {
   const session = useSession()
   const router = useRouter()
   const lock = useRef(false)
@@ -16,7 +17,7 @@ export function FollowButton({ memberId, username, isFollowing, privateMember = 
   const [error, setError] = useState(false)
   if (session.member?.id === memberId) return null
   const destination = `/profile/${encodeURIComponent(username ?? '')}`
-  if (!session.member) return <Link className={`${buttonVariants({ variant: 'primary', size: 'sm' })} min-h-11`} href={`/sign-in?next=${encodeURIComponent(destination)}`}>Sign in to follow</Link>
+  if (!session.member) return <Link className={`${buttonVariants({ variant: 'primary', size: 'sm' })} min-h-[44px]`} href={`/sign-in?next=${encodeURIComponent(internalNextPath(signInNextPath ?? destination))}`}>Sign in to follow</Link>
   async function toggle() {
     if (lock.current) return
     lock.current = true

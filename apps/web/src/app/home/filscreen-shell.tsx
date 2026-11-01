@@ -1,6 +1,6 @@
 'use client'
 
-import { Bookmark, Clapperboard, Heart, History, House, ListVideo, LogOut, Menu, Moon, Search, Settings, Shield, Sun, X } from 'lucide-react'
+import { Bookmark, Heart, House, ListVideo, LogOut, Menu, Moon, Search, Settings, Shield, Sun, Users, X } from 'lucide-react'
 import Image from 'next/image'
 import * as NextNav from 'next/navigation'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -50,10 +50,10 @@ export const CONTRACT_HTML =
 
 
 const SIDEBAR_ROW_CLASS =
-  'fs-sidebar-item group flex min-h-11 shrink-0 cursor-pointer items-center gap-3 rounded-control px-3 text-sm whitespace-nowrap text-[var(--fs-secondary)] outline-none transition-all duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
+  'fs-sidebar-item group flex min-h-11 shrink-0 cursor-pointer items-center gap-3 rounded-control px-3 text-sm whitespace-nowrap text-[var(--fs-secondary)] outline-none transition-[background-color,color,transform] duration-200 ease-out hover:bg-[var(--fs-hover)] hover:text-[var(--fs-ink)] active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
 
 const SIDEBAR_ICON_CLASS =
-  'grid place-items-center text-[var(--fs-muted)] transition-all duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none motion-reduce:transform-none'
+  'grid place-items-center text-[var(--fs-muted)] transition-colors duration-200 ease-out group-hover:text-[var(--fs-ink)] motion-reduce:transition-none'
 
 /** The single default guest portrait every visitor shares. One fixed generated
  *  character for all guests: no storage, no hydration mismatch, no surprises. */
@@ -62,8 +62,6 @@ const GUEST_AVATAR_SRC = dicebearAvatarUrl('consumit-guest')
 const MEMBER_ARCHIVES = [
   { section: 'watchlist', label: 'Watchlist', icon: Bookmark },
   { section: 'likes', label: 'Likes', icon: Heart },
-  { section: 'films', label: 'Watched', icon: Clapperboard },
-  { section: 'history', label: 'History', icon: History },
   { section: 'lists', label: 'Lists', icon: ListVideo },
 ] as const
 
@@ -111,7 +109,7 @@ function SidebarLink({
       {...(iconOnly ? { 'aria-label': label } : {})}
       className={
         active
-          ? 'fs-sidebar-item group flex min-h-11 shrink-0 items-center gap-3 rounded-control bg-[var(--fs-accent-soft)] px-3 text-sm font-bold whitespace-nowrap text-[var(--fs-ink)] border border-[var(--fs-accent)]/40 outline-none transition-all duration-200 ease-out active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
+          ? 'fs-sidebar-item group flex min-h-11 shrink-0 items-center gap-3 rounded-control bg-[var(--fs-accent-soft)] px-3 text-sm font-bold whitespace-nowrap text-[var(--fs-ink)] border border-[var(--fs-accent)]/40 outline-none transition-[background-color,border-color,color,transform] duration-200 ease-out active:translate-y-0 focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none'
           : SIDEBAR_ROW_CLASS
       }
       href={href}
@@ -228,6 +226,7 @@ export function FilScreenShell({
       <>
         <nav aria-label="Main navigation" className="grid gap-1 lg:place-items-center lg:[&>a]:justify-center lg:[&>a]:px-3" data-scrollrow>
           <SidebarLink active={pathname === '/'} delay={0} href="/" icon={<House aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Home" />
+          <SidebarLink active={pathname.startsWith('/community')} delay={0} href="/community" icon={<Users aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} label="Community" />
           {MEMBER_ARCHIVES.map(({ section, label, icon: Icon }, index) => {
             const href = memberProfileRoot ? `${memberProfileRoot}/${section}` : `/library?section=${section}`
             return <SidebarLink active={pathname === href || pathname.startsWith(`${href}/`)} delay={(index + 1) * 50} href={href} icon={<Icon aria-hidden="true" className="size-[18px]" />} iconOnly={iconOnly} key={section} label={label} />
@@ -347,7 +346,7 @@ export function FilScreenShell({
                 aria-expanded={searchOpen}
                 aria-haspopup="dialog"
                 aria-label="Search titles"
-                className="group flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-4 text-left text-sm outline-none transition-all duration-200 ease-out hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none motion-reduce:transform-none sm:w-64 sm:flex-none"
+                className="group flex h-11 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] px-4 text-left text-sm outline-none transition-[background-color,border-color,color] duration-200 ease-out hover:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none sm:w-64 sm:flex-none"
                 onClick={() => setSearchOpen(true)}
                 ref={searchTriggerRef}
                 type="button"

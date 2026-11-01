@@ -247,6 +247,7 @@ describe('playback session API', () => {
     const refreshed = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/refresh`, headers, payload: { sourceId: session.source.id, reason: 'expired' } })
     expect(refreshed.statusCode).toBe(200)
     expect(refreshed.json().source.id).toBe(session.source.id)
+    expect(refreshed.json().source.videoVersion).toBe(session.source.videoVersion)
     const failed = await app.inject({ method: 'POST', url: `/v1/playback/${session.id}/fallback`, headers, payload: { sourceId: session.source.id, reason: 'network' } })
     expect(failed.statusCode).toBe(200)
     expect(failed.json().source.providerId).toBe('backup')

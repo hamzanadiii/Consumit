@@ -7,8 +7,10 @@ import { allowedMediaUrl, suppliesVideo } from '@consumit/provider-sdk'
 import type { ResolvedSource } from './resolver.ts'
 
 export type RelayDiscovery = Record<string, 'storm-boron-v1' | 'wecollege-city-v1' | 'lookmovie-v1' | 'aether-v1'>
+export type RelayRouteContext = { kind: 'movie' | 'series' | 'anime'; region: string; purpose: 'video' | 'audio' }
+export type RelayRoutePolicy = { version: string; provider: string; kind: RelayRouteContext['kind']; region: string; purpose: RelayRouteContext['purpose']; delivery: 'relay'; media: string; hosts: readonly string[] }
 export type PlaybackRelayNode = { origin: string; secret: string; providers: Record<string, string[]> }
-export type PlaybackRelayConfig = PlaybackRelayNode & { discovery?: RelayDiscovery; node?: PlaybackRelayNode; providerOrigins?: Readonly<Record<string, string>>; controlProviders?: readonly 'rigel'[] }
+export type PlaybackRelayConfig = PlaybackRelayNode & { cloudflareOnly?: boolean; routeVersion?: string; routePolicy?: readonly RelayRoutePolicy[]; discovery?: RelayDiscovery; node?: PlaybackRelayNode; providerOrigins?: Readonly<Record<string, string>>; controlProviders?: readonly 'rigel'[] }
 type RelayControlFetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 export function parseRelayControlProviders(raw: string): 'rigel'[] {
   const value: unknown = JSON.parse(raw)
@@ -18,7 +20,7 @@ export function parseRelayControlProviders(raw: string): 'rigel'[] {
 export function validateRelayNode(node: PlaybackRelayNode) {
   const url = new URL(node.origin)
   if (url.protocol !== 'https:' || url.origin !== node.origin || url.username || url.password || node.secret.length < 32
-    || Object.keys(node.providers).some(id => id !== 'lookmovie')) throw new Error('Invalid approved media node.')
+    || Object.keys(node.providers).some(id => id !== 'lookmovie' && id !== 'mapple')) throw new Error('Invalid approved media node.')
   parseRelayProviders(JSON.stringify(node.providers))
   return node
 }
@@ -37,6 +39,7 @@ export function parseRelayProviders(raw: string): Record<string, string[]> {
   return Object.fromEntries(entries)
 }
 export function createPlaybackRelay(config: PlaybackRelayConfig, transport?: MediaTransport, controlFetch: RelayControlFetch = fetch) {
+  if (config.cloudflareOnly && config.node) throw new Error('VPS relay is forbidden.')
   if (config.controlProviders?.some(id => id !== 'rigel' || !config.providers[id]?.length)) throw new Error('Invalid relay control provider.')
   const edge = createRelayIssuer(config, transport, true, controlFetch)
   const regional = new Map(Object.entries(config.providerOrigins ?? {}).map(([id, origin]) => {
@@ -51,8 +54,8 @@ export function createPlaybackRelay(config: PlaybackRelayConfig, transport?: Med
   return {
     permits: (resolved: Pick<ResolvedSource, 'source' | 'registration'>) => route(resolved.registration.adapter.id).permits(resolved),
     includes: (id: string) => route(id).includes(id),
-    issue: (resolved: ResolvedSource, expiry: number, origin: string) => route(resolved.registration.adapter.id).issue(resolved, expiry, origin),
-    issueAudio: (resolved: ResolvedSource, expiry: number, origin: string) => route(resolved.registration.adapter.id).issue(resolved, expiry, origin, true),
+    issue: (resolved: ResolvedSource, expiry: number, origin: string, context?: RelayRouteContext) => route(resolved.registration.adapter.id).issue(resolved, expiry, origin, false, context),
+    issueAudio: (resolved: ResolvedSource, expiry: number, origin: string, context?: RelayRouteContext) => route(resolved.registration.adapter.id).issue(resolved, expiry, origin, true, context),
     accepts: (src: string, provider: string) => route(provider).accepts(src, provider),
     async manifest(token: string, origin: string, signal: AbortSignal) {
       const grant = await (await codec).open(token)
@@ -74,23 +77,39 @@ function createRelayIssuer(config: PlaybackRelayConfig, transport?: MediaTranspo
   function permits(resolved: Pick<ResolvedSource, 'source' | 'registration'>, audioOnly = false): boolean {
     const { source, registration } = resolved
     const hosts = config.providers[registration.adapter.id] ?? []
+    // NontonFlix is the sole reviewed cookie-forwarding relay: the cookie is
+    // device-bound to media.nontonflix.com and must never travel elsewhere.
+    const cookieExempt = registration.adapter.id === 'nontonflix' && (() => {
+      try { return new URL(source.url).hostname.toLowerCase() === 'media.nontonflix.com' } catch { return false }
+    })()
     return registration.enabled && registration.deliveryMode === 'relay' && (audioOnly ? (registration.role === 'audio' || registration.role === 'both') && source.type === 'hls' : suppliesVideo(registration)) && source.type !== 'dash' && source.type !== 'iframe'
       && hosts.length > 0 && relayDestination(source.url, [...hosts, ...discoveredHosts(source, registration)])
       && hosts.every(host => allowedMediaUrl(`https://${host}/`, registration.mediaHosts, registration.mediaHostPatterns))
-      && Object.entries(source.headers).every(([name, value]) => /^(referer|origin|accept|user-agent)$/i.test(name)
+      && Object.entries(source.headers).every(([name, value]) => (/^(referer|origin|accept|user-agent)$/i.test(name)
+        || cookieExempt && name.toLowerCase() === 'cookie')
         && value.length <= 512 && !/[\r\n]/.test(value))
   }
   return {
     permits,
     includes(providerId: string) { return Boolean(config.providers[providerId]?.length) },
-    async issue(resolved: ResolvedSource, expiry: number, origin: string, audioOnly = false): Promise<string | null> {
+    async issue(resolved: ResolvedSource, expiry: number, origin: string, audioOnly = false, context?: RelayRouteContext): Promise<string | null> {
       const { source, registration } = resolved
       if (source.type === 'dash' || source.type === 'iframe' || !permits(resolved, audioOnly)) return null
+      if (config.cloudflareOnly && config.routeVersion) {
+        const policy = config.routePolicy?.find(row => row.version === config.routeVersion && row.provider === registration.adapter.id
+          && row.kind === context?.kind && row.region === context?.region && row.purpose === context?.purpose
+          && row.delivery === 'relay' && row.media === config.origin
+          && row.hosts.length === (config.providers[registration.adapter.id] ?? []).length
+          && [...row.hosts].sort().every((host, index) => host === [...(config.providers[registration.adapter.id] ?? [])].sort()[index]))
+        if (!context || !policy) return null
+      }
       try {
         const token = await (await codec).seal({ version: 1, provider: registration.adapter.id, url: source.url,
           expires: expiry, origin, headers: source.headers, headerHost: new URL(source.url).hostname, kind: source.type, depth: 0,
+          ...(config.routeVersion ? { routeVersion: config.routeVersion } : {}),
+          ...(context ? { route: context } : {}),
           ...(discoveredHosts(source, registration).length ? { recipe: source.relayRecipe!, hosts: discoveredHosts(source, registration) } : {}) })
-        return controlManifests && registration.adapter.id !== 'lookmovie' && source.type === 'hls' && compilesControl(registration.adapter.id) ? manifestGrantUrl(origin, token) : mediaGrantUrl(config.origin, token)
+        return !config.cloudflareOnly && controlManifests && registration.adapter.id !== 'lookmovie' && source.type === 'hls' && compilesControl(registration.adapter.id) ? manifestGrantUrl(origin, token) : mediaGrantUrl(config.origin, token)
       } catch { return null }
     },
     async accepts(src: string, provider: string): Promise<boolean> {
@@ -107,6 +126,7 @@ function createRelayIssuer(config: PlaybackRelayConfig, transport?: MediaTranspo
       } catch { return false }
     },
     async manifest(token: string, origin: string, signal: AbortSignal): Promise<string> {
+      if (config.cloudflareOnly) throw new Error('Playlist compilation belongs to Cloudflare.')
       const signer = await codec, grant = await signer.open(token)
       if (grant.origin !== origin || grant.kind !== 'hls' || !compilesControl(grant.provider)
         || grant.recipe && config.discovery?.[grant.provider] !== grant.recipe) throw new Error('Invalid control capability.')

@@ -8,12 +8,63 @@ import type { RawSubtitle, SubtitleSearchProvider } from './types.ts'
 
 const signal = new AbortController().signal
 
+it('does not resurrect CineSrc tracks from the legacy search cache', async () => {
+  const store = createMemoryPlaybackStore()
+  await store.set('subsearch:v2:movie:550:1:1:en', JSON.stringify({ subtitles: [{ id: 'sub-cinesrc-test', provider: 'cinesrc', language: 'en', label: 'English', format: 'vtt', url: 'https://subs.example/en.vtt' }] }), 3600)
+  const service = createSubtitleService({ providers: [], store, origin: 'https://api.example', animeTitle: async () => ({ title: 'Example' }) })
+  expect(await service.search({ kind: 'movie', id: 550 }, signal)).toEqual([])
+})
+
+it('does not query a retired subtitle provider', async () => {
+  const search = vi.fn(async () => [direct('cinesrc', 'en', 'https://subs.example/en.vtt')])
+  const service = createSubtitleService({
+    providers: [{ id: 'cinesrc', name: 'CineSrc', supports: () => true, search }],
+    store: createMemoryPlaybackStore(),
+    origin: 'https://api.example',
+    animeTitle: async () => ({ title: 'Example' }),
+  })
+  expect(await service.search({ kind: 'movie', id: 550 }, signal)).toEqual([])
+  expect(search).not.toHaveBeenCalled()
+})
+
 function provider(id: string, raws: RawSubtitle[], supports = true): SubtitleSearchProvider {
   return { id, name: id, supports: () => supports, search: async () => raws }
 }
 
 function direct(provider: string, lang: string, url: string): RawSubtitle {
   return { url, lang, label: `${lang} track`, format: 'vtt', provider }
+}
+
+function storedZip(files: { name: string; data: Buffer }[]): Buffer {
+  const chunks: Buffer[] = []
+  const central: Buffer[] = []
+  let offset = 0
+  for (const file of files) {
+    const name = Buffer.from(file.name, 'utf8')
+    const head = Buffer.alloc(30)
+    head.writeUInt32LE(0x04034b50, 0)
+    head.writeUInt16LE(20, 4)
+    head.writeUInt32LE(file.data.length, 18)
+    head.writeUInt32LE(file.data.length, 22)
+    head.writeUInt16LE(name.length, 26)
+    chunks.push(head, name, file.data)
+    const entry = Buffer.alloc(46)
+    entry.writeUInt32LE(0x02014b50, 0)
+    entry.writeUInt16LE(20, 6)
+    entry.writeUInt32LE(file.data.length, 20)
+    entry.writeUInt32LE(file.data.length, 24)
+    entry.writeUInt16LE(name.length, 28)
+    entry.writeUInt32LE(offset, 42)
+    central.push(entry, name)
+    offset += 30 + name.length + file.data.length
+  }
+  const centralDir = Buffer.concat(central)
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0)
+  eocd.writeUInt16LE(files.length, 10)
+  eocd.writeUInt32LE(centralDir.length, 12)
+  eocd.writeUInt32LE(offset, 16)
+  return Buffer.concat([...chunks, centralDir, eocd])
 }
 
 describe('resolveSubtitles', () => {
@@ -159,6 +210,28 @@ describe('resolveSubtitles', () => {
     expect(tracks[0]?.provider).toBe('yify')
   })
 
+  it('prepares the exact episode from a SubSource archive', async () => {
+    const store = createMemoryPlaybackStore()
+    const files = createStoreFileStore(store)
+    const archive = storedZip([
+      { name: 'Example.Show.S01E01.en.srt', data: Buffer.from('1\n00:00:01,000 --> 00:00:02,000\nPilot\n') },
+      { name: 'Example.Show.S01E02.en.srt', data: Buffer.from('1\n00:00:01,000 --> 00:00:02,000\nWrong episode\n') },
+    ])
+    const tracks = await resolveSubtitles(
+      { type: 'tv', season: 1, episode: 1 },
+      [provider('subsource', [{ url: 'https://subs.example/season.zip', lang: 'en', label: 'Example Show subtitles', format: 'zip', provider: 'subsource', needsExtract: true }])],
+      files,
+      'https://api.example',
+      signal,
+      vi.fn(async () => archive) as never,
+    )
+    expect(tracks).toHaveLength(1)
+    const key = tracks[0]!.url.match(/\/file\/([0-9a-f]{16})$/)![1]!
+    const prepared = await files.getVtt(key)
+    expect(prepared).toContain('Pilot')
+    expect(prepared).not.toContain('Wrong episode')
+  })
+
   it('reuses converted files from the cache without refetching', async () => {
     const store = createMemoryPlaybackStore()
     const fetchFile = vi.fn(async () => { throw new Error('must not fetch') })
@@ -212,12 +285,23 @@ describe('preferred languages', () => {
     const store = createMemoryPlaybackStore()
     const tracks = await resolveSubtitles(
       { type: 'movie', langs: ['ar', 'fr'] },
-      [provider('a', [direct('a', 'en', 'https://cdn.example/en.vtt'), direct('a', 'ar', 'https://cdn.example/ar.vtt'), direct('a', 'fr', 'https://cdn.example/fr.vtt')])],
+      [provider('a', [direct('a', 'en-GB', 'https://cdn.example/en.vtt'), direct('a', 'ar', 'https://cdn.example/ar.vtt'), direct('a', 'fr', 'https://cdn.example/fr.vtt')])],
       createStoreFileStore(store),
       'https://api.example',
       signal,
     )
-    expect(tracks.map((track) => track.language)).toEqual(['ar', 'fr', 'en'])
+    expect(tracks.map((track) => track.language)).toEqual(['ar', 'fr', 'en-gb'])
+  })
+
+  it('matches preferred base languages to regional subtitle tracks', async () => {
+    const tracks = await resolveSubtitles(
+      { type: 'movie', langs: ['en'] },
+      [provider('a', [direct('a', 'fr', 'https://cdn.example/fr.vtt'), direct('a', 'en-GB', 'https://cdn.example/en-gb.vtt')])],
+      createStoreFileStore(createMemoryPlaybackStore()),
+      'https://api.example',
+      signal,
+    )
+    expect(tracks.map(track => track.language)).toEqual(['en-gb', 'fr'])
   })
 
   it('parses the langs query leniently, max three', () => {

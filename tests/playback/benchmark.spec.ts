@@ -17,8 +17,9 @@ test('records controlled first-frame p95 for the selected player core', async ({
         view.__consumitMediaEvents ??= []
         view.__consumitMediaEvents.push({ event: 'error', code: video.error?.code ?? null, message: video.error?.message ?? null, src: video.src, currentSrc: video.currentSrc, readyState: video.readyState })
       })
-      if ('requestVideoFrameCallback' in video) {
-        video.requestVideoFrameCallback(() => { view.__consumitFirstFrame ??= performance.now() })
+      const requestFrame = Reflect.get(video, 'requestVideoFrameCallback')
+      if (typeof requestFrame === 'function') {
+        Reflect.apply(requestFrame, video, [() => { view.__consumitFirstFrame ??= performance.now() }])
       } else {
         video.addEventListener('playing', () => { view.__consumitFirstFrame ??= performance.now() }, { once: true })
       }
@@ -53,8 +54,10 @@ test('records controlled first-frame p95 for the selected player core', async ({
       throw new Error(`No first video frame; media=${JSON.stringify(media)} events=${JSON.stringify(events)} failedRequests=${JSON.stringify(failedRequests)}`, { cause: error })
     }
     const timing = await page.evaluate(() => {
-      const view = window as Window & { __consumitFirstFrame: number; __consumitLoadStart?: number }
-      return { frame: view.__consumitFirstFrame, loadStart: view.__consumitLoadStart }
+      const view = window as Window & { __consumitFirstFrame?: number; __consumitLoadStart?: number }
+      const frame = view.__consumitFirstFrame
+      if (frame === undefined) throw new Error('Expected the first-frame callback to record a timestamp.')
+      return { frame, loadStart: view.__consumitLoadStart }
     })
     if (run > 0) {
       const frameMs = Math.round(timing.frame)
@@ -71,9 +74,14 @@ test('records controlled first-frame p95 for the selected player core', async ({
   samples.sort((a, b) => a - b)
   loadStartSamples.sort((a, b) => a - b)
   mediaSamples.sort((a, b) => a - b)
+  const sampleAt = (index: number) => {
+    const sample = samples[index]
+    if (sample === undefined) throw new Error('Expected playback benchmark samples before calculating percentiles.')
+    return sample
+  }
   const middle = Math.floor(samples.length / 2)
-  const p50 = samples.length % 2 ? samples[middle] : Math.round((samples[middle - 1] + samples[middle]) / 2)
-  const p95 = samples[Math.ceil(samples.length * 0.95) - 1]
+  const p50 = samples.length % 2 ? sampleAt(middle) : Math.round((sampleAt(middle - 1) + sampleAt(middle)) / 2)
+  const p95 = sampleAt(Math.ceil(samples.length * 0.95) - 1)
   const core = process.env.PLAYBACK_BENCHMARK_CORE ?? (process.env.NEXT_PUBLIC_PLAYBACK_CORE === 'next' ? 'next' : 'legacy')
   console.log(JSON.stringify({ core, metric: 'navigation-to-first-video-frame', sampleCount: samples.length, samplesMs: samples, p50Ms: p50, p95Ms: p95, loadStartMs: loadStartSamples, loadStartToFrameMs: mediaSamples, phaseSamplesMs: phaseSamples }))
 })

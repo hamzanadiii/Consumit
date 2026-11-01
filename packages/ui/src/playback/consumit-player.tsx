@@ -3,11 +3,11 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
-  type ComponentProps,
   type CSSProperties,
   type MouseEventHandler,
   type ReactNode,
@@ -30,9 +30,9 @@ import {
   Settings,
   SkipForward,
   SkipBack,
-  TriangleAlert,
   Volume2,
   VolumeX,
+  X,
   ListVideo,
   Keyboard,
   LockKeyhole,
@@ -45,16 +45,17 @@ import { CastPanel } from './cast-panel'
 import { createNativeFullscreenCaptions } from './native-fullscreen-captions'
 import { SubtitleAppearance, SubtitleSync } from './subtitle-panels'
 import { standardQualityHeight } from './quality-tier'
-import type { SkipSegment } from './media-source'
 import { Toggle } from '../selection/selection'
 import { PlayerAdjustment, PlayerPanel, PlayerRadioGroup, PlayerRadioOption, PlayerSettingRow } from './player-panel'
 import { createVolumeBoost } from './volume-boost'
-import { createSeparateAudioPlayer, type SeparateAudioState, type SeparateAudioSource, type SeparateAudioTrack } from './separate-audio'
+import { createSeparateAudioPlayer, type SeparateAudioState } from './separate-audio'
+import { SeparateAudioSyncControl } from './separate-audio-sync-control'
 import { audioMenuOptions } from './audio-menu'
 import { MissingArtwork } from '../media/media'
+import { PlayerRecoveryPanel } from './player-recovery-panel'
+import type { PlayerControlAction, PlayerControlModel, PlayerMediaInput, PlayerMediaObservation, PlayerPresentation } from './player-types'
 import {
   formatPlaybackTime,
-  type ChapterCue,
   type DirectMediaSource,
 } from './media-source'
 import { createPlaybackController, type ControllerEvent, type ControllerSnapshot } from './playback-controller'
@@ -68,6 +69,7 @@ import {
   nativeLanguageName,
   canonicalSubtitleLanguage,
   parseSubtitleCues,
+  serializeSubtitleCues,
   decodeSubtitleBytes,
   readStoredSubtitleDelayMs,
   readStoredSubtitleLanguages,
@@ -109,144 +111,36 @@ import { PlayerShortcuts, PLAYER_SEEK_STEP } from './player-shortcuts'
 import { PlayerSubtitleMenu } from './player-subtitle-menu'
 import { usePlayerMediaEvents } from './use-player-media-events'
 import { usePlayerSkipSegments } from './use-player-skip-segments'
-import type { PlayerMenuId, PlayerOption, PlayerSubtitleCandidate, PlayerSubtitleDiscovery } from './player-types'
+import type { PlayerMenuId, PlayerOption, PlayerSubtitleCandidate } from './player-types'
 
-export type { PlayerMenuId, PlayerOption, PlayerSubtitleCandidate, PlayerSubtitleDiscovery } from './player-types'
+export type { PlaybackRecoveryViewModel, PlayerControlAction, PlayerControlModel, PlayerMediaInput, PlayerMediaObservation, PlayerPresentation, PlayerMenuId, PlayerOption, PlayerSubtitleCandidate, PlayerSubtitleDiscovery } from './player-types'
 
 export type { CaptionBackground, CaptionColor, CaptionFont, CaptionPosition, CaptionSize } from './player-settings'
 
-export type ConsumitPlayerProps = Omit<
-  ComponentProps<'video'>,
-  'className' | 'controls' | 'poster' | 'title'
-> & {
-  /** Authorized direct-media source. Preferred over `src`; validated at the adapter seam. */
-  source?: DirectMediaSource | undefined
-  className?: string | undefined
-  posterSrc?: string | undefined
-  /** Optional preparation backdrop; null explicitly hides an episode poster during startup. */
-  preparationPosterSrc?: string | null | undefined
-  status?: ReactNode | undefined
-  statusTone?: 'healthy' | 'neutral' | 'unavailable' | undefined
+export type ConsumitPlayerProps = {
   title: string
-  videoClassName?: string | undefined
-  /** When set, renders the top bar: back control, title context, quality and subtitle shortcuts. */
-  backHref?: string | undefined
-  onBack?: (() => void) | undefined
-  /** Secondary top-line context, e.g. "Playing from Consumit · 4K". */
-  topMeta?: ReactNode | undefined
-  /** Source resolution belongs to Watch; this only presents its pending state. */
-  preparing?: boolean | undefined
-  preparationMeta?: ReactNode | undefined
-  /** Exact neighboring episode actions supplied by the Watch route. */
-  onPreviousEpisode?: (() => void) | undefined
-  onNextEpisode?: (() => void) | undefined
-  /** Route-owned content, rendered inside the fullscreen boundary. */
-  episodePanel?: ReactNode | undefined
-  /** Route-owned SUB/DUB choice, promoted to the first Settings section for anime. */
-  animeAudioControl?: ReactNode | undefined
-  watchSettings?: ReactNode | undefined
-  watchStatus?: ReactNode | undefined
-  /** Canonical recording identity; changing it clears recording-specific captions. */
-  recordingKey?: string | undefined
-  theater?: boolean | undefined
-  onTheaterChange?: ((enabled: boolean) => void) | undefined
-  /** Pause-overlay facts line, e.g. "2026 · 1h 40m · ★ 6.5 · PG-13". Shown while paused. */
-  pauseFacts?: ReactNode | undefined
-  /** Pause-overlay title artwork logo (TMDB artwork mark). Falls back to the serif title. Shown while paused. */
-  pauseLogoUrl?: string | undefined
-  /** Pause-overlay synopsis, clamped to three lines. Shown while paused. */
-  pauseOverview?: string | undefined
-  /** Pause-overlay title. Defaults to the full title; pass the bare
-   *  series/anime name to keep the paused headline stable across episodes. */
-  pauseTitle?: string | undefined
-  chapters?: readonly ChapterCue[] | undefined
-
-  audioOptions?: readonly PlayerOption[] | undefined
-  selectedAudio?: string | undefined
-  onAudioChange?: ((value: string) => void) | undefined
-  separateAudioTracks?: readonly SeparateAudioTrack[] | undefined
-  separateAudioLoading?: boolean | undefined
-  separateAudioError?: string | null | undefined
-  onAudioRequest?: (() => void) | undefined
-  audioContinuityKey?: string | undefined
-  onSeparateAudioSelect?: ((id: string) => Promise<SeparateAudioSource>) | undefined
-  subtitleOptions?: readonly PlayerOption[] | undefined
-  selectedSubtitle?: string | undefined
-  onSubtitleChange?: ((value: string) => void) | undefined
-  /** Called when captions are opened, so external search can stay lazy. */
-  onSubtitleRequest?: (() => void) | undefined
-  onSubtitleRefresh?: (() => void) | undefined
-  subtitleDiscovery?: PlayerSubtitleDiscovery | undefined
-  onSubtitlePage?: ((language: string, cursor: number) => Promise<{ tracks: PlayerSubtitleCandidate[]; total: number; nextCursor: number | null }>) | undefined
-  onSubtitleSearch?: ((query: string, cursor: number) => Promise<{ tracks: PlayerSubtitleCandidate[]; total: number; nextCursor: number | null }>) | undefined
-  onSubtitleCandidateSelect?: ((candidate: PlayerSubtitleCandidate) => Promise<{ id: string; label: string; language: string; url: string; cues?: readonly SubtitleCue[] | undefined }>) | undefined
-  /** Caption tracks arriving after first frame (e.g. other providers'
-   *  subtitles from the server list). They join the menu live via the
-   *  controller without reloading media. */
-  extraSubtitles?: readonly { id: string; label: string; language: string; url: string }[] | undefined
-  /** Current cue text rendered in the prototype subtitle bar. Native <track> cues still render natively. */
-  caption?: string | undefined
-  /** Caption appearance. Uncontrolled by default: stored on the device and applied after mount. */
-  captionSize?: CaptionSize | undefined
-  captionBackground?: CaptionBackground | undefined
-  captionPosition?: CaptionPosition | undefined
-  captionFont?: CaptionFont | undefined
-  captionColor?: CaptionColor | undefined
-  onCaptionSizeChange?: ((value: CaptionSize) => void) | undefined
-  onCaptionBackgroundChange?: ((value: CaptionBackground) => void) | undefined
-  onCaptionPositionChange?: ((value: CaptionPosition) => void) | undefined
-  onCaptionFontChange?: ((value: CaptionFont) => void) | undefined
-  onCaptionColorChange?: ((value: CaptionColor) => void) | undefined
-  /** Subtitle sync offset in milliseconds (old-player semantics: the cue
-   *  shown at time `t` contains `t + delayMs / 1000`). Uncontrolled by
-   *  default: stored on the device and applied after mount. */
-  subtitleDelayMs?: number | undefined
-  onSubtitleDelayMsChange?: ((value: number) => void) | undefined
-  /** Preferred subtitle languages in priority order (max 3). The engine
-   *  tries these first from every subtitle provider. Uncontrolled by
-   *  default: stored on the device and applied after mount. */
-  subtitleLanguages?: readonly string[] | undefined
-  onSubtitleLanguagesChange?: ((value: string[]) => void) | undefined
-  qualityOptions?: readonly PlayerOption[] | undefined
-  selectedQuality?: string | undefined
-  onQualityChange?: ((value: string) => void) | undefined
-  playbackRates?: readonly number[] | undefined
-  selectedRate?: number | undefined
-  onRateChange?: ((value: number) => void) | undefined
-  brightness?: number | undefined
-  onBrightnessChange?: ((value: number) => void) | undefined
-  /** Skip intro/outro automatically when ranges are known. Uncontrolled by
-   *  default: stored on the device and applied after mount. */
-  autoSkip?: boolean | undefined
-  onAutoSkipChange?: ((value: boolean) => void) | undefined
-  /** Optional title/episode timing lookup after this recording's duration is known. */
-  onSkipSegmentsRequest?: ((durationSeconds: number, signal: AbortSignal) => Promise<readonly SkipSegment[]>) | undefined
-  /** Inactivity delay before the control chrome fades. */
-  autoHideMs?: number | undefined
-  /** Alternative playback providers for manual source switching. */
-  serverOptions?: readonly PlayerOption[] | undefined
-  selectedServer?: string | undefined
-  onServerChange?: ((value: string) => void) | undefined
-  /** Auto keeps the current stream and lets Watch choose replacements. */
-  serverAuto?: boolean | undefined
-  onServerAuto?: (() => void) | undefined
-  serverLoading?: boolean | undefined
-  serverError?: string | null | undefined
-  serverBusy?: boolean | undefined
-  onServerRequest?: (() => void) | undefined
-  onRetry?: (() => void) | undefined
-  /** Cast remains discoverable; the caller owns TV sessions and progress. */
-  castAvailable?: boolean | undefined
-  castConnected?: boolean | undefined
-  onCastClick?: (() => void) | undefined
-  onCastCheck?: (() => Promise<'ready' | 'unconfigured' | 'unavailable'>) | undefined
-  resumeAt?: number | undefined
-  resumePlaying?: boolean | undefined
+  media?: PlayerMediaInput | undefined
+  presentation?: PlayerPresentation | undefined
+  controls?: PlayerControlModel | undefined
+  /** Synchronous UI intents. Routes retain navigation, source and persistence decisions. */
+  onControlAction?: ((action: PlayerControlAction) => void) | undefined
+  /** Playback engine failures and plain media observations remain distinct signals. */
   onSourceError?: ((reason: 'network' | 'media' | 'gone' | 'expired', deliveryFailure?: EngineDeliveryFailure) => void) | undefined
   onPlaybackEvent?: ((event: ControllerEvent) => void) | undefined
-  onMediaPreferencesChange?: ((preferences: MediaPreferences) => void) | undefined
-  initialViewingPreferences?: ViewingPreferences | undefined
-  onViewingPreferencesChange?: ((preferences: Partial<ViewingPreferences>) => void) | undefined
+  onMediaObservation?: ((observation: PlayerMediaObservation) => void) | undefined
+}
+
+function finiteMediaSeconds(value: number) {
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function mediaObservation(type: PlayerMediaObservation['type'], video: HTMLVideoElement): PlayerMediaObservation {
+  const facts = {
+    positionSeconds: finiteMediaSeconds(video.currentTime),
+    durationSeconds: finiteMediaSeconds(video.duration),
+  }
+  if (type === 'playing') return { type, ...facts, videoWidth: video.videoWidth, videoHeight: video.videoHeight }
+  return { type, ...facts }
 }
 
 const DEFAULT_SUBTITLES: readonly PlayerOption[] = [
@@ -343,7 +237,7 @@ function PlayerIconButton({
       data-player-icon-button
       data-player-destination={destination}
       className={cn(
-        'grid size-10 shrink-0 place-items-center rounded-control border outline-none transition-all motion-reduce:transition-none',
+        'grid size-10 shrink-0 place-items-center rounded-control border outline-none transition-[background-color,border-color,color] motion-reduce:transition-none',
         'focus-visible:ring-2 focus-visible:ring-orange',
         active
           ? 'border-orange bg-orange/15 text-orange'
@@ -362,112 +256,93 @@ function PlayerIconButton({
   )
 }
 
-export function ConsumitPlayer({
-  autoPlay,
-  audioOptions: suppliedAudioOptions,
-  autoHideMs = 3000,
-  autoSkip: controlledAutoSkip,
-  onAutoSkipChange,
-  onSkipSegmentsRequest,
-  backHref,
-  brightness: controlledBrightness,
-  caption,
-  castAvailable = false,
-  castConnected = false,
-  onCastClick,
-  onCastCheck,
-  chapters,
-  children,
-  className,
-  extraSubtitles,
-  muted,
-  onAudioChange,
-  separateAudioTracks,
-  separateAudioLoading,
-  separateAudioError,
-  onAudioRequest,
-  audioContinuityKey,
-  onSeparateAudioSelect,
-  onBack,
-  onPreviousEpisode,
-  onNextEpisode,
-  episodePanel,
-  animeAudioControl,
-  watchSettings,
-  watchStatus,
-  recordingKey,
-  theater = false,
-  onTheaterChange,
-  onBrightnessChange,
-  onCaptionBackgroundChange,
-  onCaptionColorChange,
-  onCaptionFontChange,
-  onCaptionPositionChange,
-  onCaptionSizeChange,
-  onSubtitleDelayMsChange,
-  subtitleDelayMs: controlledSubtitleDelayMs,
-  subtitleLanguages: controlledSubtitleLanguages,
-  captionBackground: controlledCaptionBackground,
-  captionColor: controlledCaptionColor,
-  captionFont: controlledCaptionFont,
-  captionPosition: controlledCaptionPosition,
-  captionSize: controlledCaptionSize,
-  onDurationChange,
-  onPause,
-  onPlay,
-  onQualityChange,
-  onRateChange,
-  onRetry,
-  onSourceError,
-  onPlaybackEvent,
-  onMediaPreferencesChange,
-  initialViewingPreferences,
-  onViewingPreferencesChange,
-  resumeAt = 0,
-  resumePlaying = false,
-  serverOptions,
-  selectedServer,
-  onServerChange,
-  serverAuto,
-  onServerAuto,
-  serverLoading,
-  serverError,
-  serverBusy,
-  onServerRequest,
-  onSubtitleChange,
-  onSubtitleRequest,
-  onSubtitleRefresh,
-  subtitleDiscovery,
-  onSubtitlePage,
-  onSubtitleSearch,
-  onSubtitleCandidateSelect,
-  onTimeUpdate,
-  onVolumeChange,
-  pauseFacts,
-  pauseLogoUrl,
-  pauseOverview,
-  pauseTitle,
-  playbackRates = DEFAULT_RATES,
-  posterSrc,
-  preparationPosterSrc,
-  preparing = false,
-  preparationMeta,
-  preload = 'metadata',
-  qualityOptions: suppliedQualityOptions,
-  selectedAudio: controlledAudio,
-  selectedQuality: controlledQuality,
-  selectedRate: controlledRate,
-  selectedSubtitle: controlledSubtitle,
-  source,
-  src,
-  status,
-  statusTone = 'neutral',
-  subtitleOptions: suppliedSubtitleOptions,
-  title,
-  topMeta,
-  videoClassName,
-  ...props
-}: ConsumitPlayerProps) {
+export function ConsumitPlayer({ title, media = {}, presentation = {}, controls = {}, onControlAction, onSourceError, onPlaybackEvent, onMediaObservation }: ConsumitPlayerProps) {
+  const emit = (action: PlayerControlAction) => onControlAction?.(action)
+  const { source, autoPlay, muted, preload = 'metadata', resume: { positionSeconds: resumeAt = 0, playing: resumePlaying = false } = {}, recordingKey } = media
+  const {
+    className, videoClassName, posterSrc, preparationPosterSrc, status, statusTone = 'neutral', backHref,
+    topMeta, preparing = false, preparationMeta, episodePanel, animeAudioControl, watchSettings, watchStatus,
+    recovery, recoveryExtraAction, theater = false, pauseFacts, pauseLogoUrl, pauseOverview, pauseTitle,
+  } = presentation
+  const audio = controls.audio
+  const captions = controls.captions
+  const quality = controls.quality
+  const playback = controls.playback
+  const sourceSelection = controls.sourceSelection
+  const cast = controls.cast
+  const suppliedAudioOptions = audio?.options
+  const controlledAudio = audio?.selected
+  const separateAudioTracks = audio?.separate?.tracks
+  const separateAudioLoading = audio?.separate?.loading
+  const separateAudioError = audio?.separate?.error
+  const audioContinuityKey = audio?.separate?.continuityKey
+  const onSeparateAudioSelect = audio?.separate?.select
+  const onAudioRequest = audio?.requestAvailable ? () => emit({ type: 'audio-request' }) : undefined
+  const onAudioRequestRef = useRef(onAudioRequest)
+  onAudioRequestRef.current = onAudioRequest
+  const onAudioChange = onControlAction ? (value: string) => emit({ type: 'audio-change', value }) : undefined
+  const subtitleContextKey = captions?.contextKey
+  const suppliedSubtitleOptions = captions?.options
+  const controlledSubtitle = captions?.selected
+  const subtitleDiscovery = captions?.discovery
+  const extraSubtitles = captions?.extraTracks
+  const caption = captions?.cue
+  const onSubtitlePage = captions?.page
+  const onSubtitleSearch = captions?.search
+  const onSubtitleCandidateSelect = captions?.prepare
+  const onSubtitleChange = onControlAction ? (value: string) => emit({ type: 'subtitle-change', value }) : undefined
+  const onSubtitleRequest = onControlAction && captions?.requestAvailable ? () => emit({ type: 'subtitle-request' }) : undefined
+  const onSubtitleRefresh = onControlAction && captions?.refreshAvailable ? () => emit({ type: 'subtitle-refresh' }) : undefined
+  const playbackRates = playback?.rates ?? DEFAULT_RATES
+  const controlledRate = playback?.selectedRate
+  const controlledBrightness = playback?.brightness
+  const controlledAutoSkip = playback?.autoSkip
+  const autoHideMs = playback?.autoHideMs ?? 3000
+  const chapters = playback?.chapters
+  const onSkipSegmentsRequest = playback?.skipSegments
+  const sourceOptions = sourceSelection?.options
+  const selectedServer = sourceSelection?.selected
+  const serverAuto = sourceSelection?.auto
+  const serverLoading = sourceSelection?.loading
+  const serverError = sourceSelection?.error
+  const serverBusy = sourceSelection?.busy
+  const serverOptions = sourceOptions
+  const onServerRequest = sourceSelection?.requestAvailable ? () => emit({ type: 'source-request' }) : undefined
+  const onServerChange = onControlAction && sourceSelection ? (value: string) => emit({ type: 'source-change', value }) : undefined
+  const onServerAuto = onControlAction && sourceSelection?.autoAvailable ? () => emit({ type: 'source-auto' }) : undefined
+  const onRetry = onControlAction && sourceSelection?.retryAvailable ? () => emit({ type: 'retry' }) : undefined
+  const castAvailable = cast?.available ?? false
+  const castConnected = cast?.connected ?? false
+  const onCastCheck = cast?.check
+  const onCastClick = onControlAction && cast?.canConnect ? () => emit({ type: 'cast-click' }) : undefined
+  const initialViewingPreferences = controls.preferences?.initialViewing
+  const controlledSubtitleLanguages = controls.preferences?.subtitleLanguages
+  const onMediaPreferencesChange = onControlAction ? (value: MediaPreferences) => emit({ type: 'media-preferences-change', value }) : undefined
+  const onViewingPreferencesChange = onControlAction ? (value: Partial<ViewingPreferences>) => emit({ type: 'viewing-preferences-change', value }) : undefined
+  const onBack = onControlAction && presentation.backActionAvailable ? () => emit({ type: 'back' }) : undefined
+  const onPreviousEpisode = onControlAction && playback?.previousEpisodeAvailable ? () => emit({ type: 'previous-episode' }) : undefined
+  const onNextEpisode = onControlAction && playback?.nextEpisodeAvailable ? () => emit({ type: 'next-episode' }) : undefined
+  const onRecoveryCancel = onControlAction && sourceSelection?.recoveryCancelAvailable ? () => emit({ type: 'recovery-cancel' }) : undefined
+  const onRecoveryChooseSource = onControlAction && sourceSelection?.recoveryChooseAvailable ? () => emit({ type: 'recovery-choose-source' }) : undefined
+  const onTheaterChange = onControlAction && playback?.theaterAvailable ? (enabled: boolean) => emit({ type: 'theater-change', enabled }) : undefined
+  const onAutoSkipChange = onControlAction && playback ? (enabled: boolean) => emit({ type: 'auto-skip-change', enabled }) : undefined
+  const onBrightnessChange = onControlAction ? (value: number) => emit({ type: 'brightness-change', value }) : undefined
+  const onRateChange = onControlAction ? (value: number) => emit({ type: 'rate-change', value }) : undefined
+  const onQualityChange = onControlAction ? (value: string) => emit({ type: 'quality-change', value }) : undefined
+  const onCaptionSizeChange = onControlAction ? (value: CaptionSize) => emit({ type: 'caption-size-change', value }) : undefined
+  const onCaptionBackgroundChange = onControlAction ? (value: CaptionBackground) => emit({ type: 'caption-background-change', value }) : undefined
+  const onCaptionPositionChange = onControlAction ? (value: CaptionPosition) => emit({ type: 'caption-position-change', value }) : undefined
+  const onCaptionFontChange = onControlAction ? (value: CaptionFont) => emit({ type: 'caption-font-change', value }) : undefined
+  const onCaptionColorChange = onControlAction ? (value: CaptionColor) => emit({ type: 'caption-color-change', value }) : undefined
+  const onSubtitleDelayMsChange = onControlAction ? (value: number) => emit({ type: 'subtitle-delay-change', delayMs: value }) : undefined
+  const controlledCaptionSize = captions?.appearance?.size
+  const controlledCaptionBackground = captions?.appearance?.background
+  const controlledCaptionPosition = captions?.appearance?.position
+  const controlledCaptionFont = captions?.appearance?.font
+  const controlledCaptionColor = captions?.appearance?.color
+  const controlledSubtitleDelayMs = captions?.sync?.delayMs
+  const suppliedQualityOptions = quality?.options
+  const controlledQuality = quality?.selected
   const [failedPreparationLogo, setFailedPreparationLogo] = useState<string | undefined>()
   const preparationLogo = pauseLogoUrl && pauseLogoUrl !== failedPreparationLogo ? pauseLogoUrl : undefined
   const preparationPoster = preparationPosterSrc === undefined ? posterSrc : preparationPosterSrc ?? undefined
@@ -563,13 +438,17 @@ export function ConsumitPlayer({
   // their source immediately. This keeps disabled attributes deterministic.
   const mounted = useSyncExternalStore(subscribeHydration, clientHydrationSnapshot, serverHydrationSnapshot)
 
-  const mediaSrc = source?.src ?? (typeof src === 'string' ? src : undefined)
-  const hasSource = mounted && Boolean(mediaSrc || children)
+  const mediaSrc = source?.src
+  const hasSource = mounted && Boolean(mediaSrc)
   const showTopBar = backHref != null || onBack != null || topMeta != null
 
   const [isMuted, setIsMuted] = useState(() => (typeof muted === 'boolean' ? muted : false))
   const [volume, setVolume] = useState(0.9)
-  const [isPlaying, setIsPlaying] = useState(Boolean(autoPlay))
+  const [isPlaying, setIsPlaying] = useState(false)
+  useLayoutEffect(() => {
+    const video = videoRef.current
+    if (video) setIsPlaying(!video.paused)
+  }, [mediaSrc, source?.type, autoPlay, resumeAt, resumePlaying, recordingKey])
   const [browserFullscreen, setBrowserFullscreen] = useState(false)
   const nativeFullscreenCaptions = useRef<ReturnType<typeof createNativeFullscreenCaptions> | null>(null)
   const [viewportFullscreen, setViewportFullscreen] = useState(false)
@@ -581,6 +460,11 @@ export function ConsumitPlayer({
   const [presentedMedia, setPresentedMedia] = useState<string | undefined>(undefined)
   const [hasError, setHasError] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const recoveryView = recovery ?? (hasError && hasSource ? {
+    phase: 'failed' as const,
+    kind: 'interrupted' as const,
+    message: errorMessage ?? 'This source could not keep playing.',
+  } : undefined)
   const startupPending = preparing || (hasSource && (autoPlay || resumePlaying || isPlaying) && isBuffering && presentedMedia !== mediaSrc && !hasError && !engineState?.needsGesture)
   const [activeMenu, setActiveMenu] = useState<PlayerMenuId | null>(null)
   useEffect(() => { if (!isFullscreen || hasError || preparing) setControlsLocked(false) }, [isFullscreen, hasError, preparing])
@@ -604,7 +488,7 @@ export function ConsumitPlayer({
     separateContinuity.current = audioContinuityKey
     separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null)
   }, [mediaSrc, audioContinuityKey])
-  useEffect(() => { if (activeMenu === 'audio') onAudioRequest?.() }, [activeMenu, onAudioRequest])
+  useEffect(() => { if (activeMenu === 'audio') onAudioRequestRef.current?.() }, [activeMenu])
   useEffect(() => {
     const video = videoRef.current
     return () => {
@@ -798,7 +682,6 @@ export function ConsumitPlayer({
     videoRef,
     mediaSrc,
     source,
-    children,
     captionsOn,
     selectedSubtitle,
     subtitleCues,
@@ -982,7 +865,7 @@ export function ConsumitPlayer({
     }
   }, [isPlaying, activeMenu, scheduleHide])
 
-  /* Visual controls subscribe to a headless controller; fixtures may still use src. */
+  /* Visual controls subscribe to the playback controller; media enters through the typed source model. */
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -1428,6 +1311,15 @@ export function ConsumitPlayer({
     closeMenu()
   }
 
+  useEffect(() => {
+    if (!subtitleContextKey) return
+    ++subtitleSelectionGeneration.current
+    manualSubtitleIntent.current = false
+    controllerRef.current?.resetSubtitle()
+    if (!controlledSubtitle) setInternalSubtitle('off')
+    onSubtitleChange?.('off')
+  }, [subtitleContextKey])
+
   async function loadSubtitleLanguage(language: string, more = false) {
     if (!onSubtitlePage || subtitleLanguageRequests.current.has(language)) return
     subtitleLanguageRequests.current.add(language)
@@ -1523,6 +1415,7 @@ export function ConsumitPlayer({
         } catch { /* A stale provider file should not block another same-language release. */ }
       }
       if (!prepared && generation === subtitleSelectionGeneration.current) {
+        void loadSubtitleLanguage(language)
         const fallbackCount = attempts.length - 1
         setSubtitleMenuError(fallbackCount
           ? `That subtitle was unavailable. ${fallbackCount} other track${fallbackCount === 1 ? '' : 's'} in the same language also failed. Try another language or search providers again.`
@@ -1548,7 +1441,7 @@ export function ConsumitPlayer({
       if (generation !== subtitleUploadGeneration.current) return
       const cues = parseSubtitleCues(source)
       if (cues.length === 0) throw new Error('invalid')
-      const url = URL.createObjectURL(new Blob([source], { type: 'text/vtt' }))
+      const url = URL.createObjectURL(new Blob([serializeSubtitleCues(cues)], { type: 'text/vtt' }))
       const track = { id: `upload-${generation}`, label: file.name.slice(0, 100), language: 'und', url }
       if (uploadedUrlRef.current) {
         subtitleCueCache.current.delete(uploadedUrlRef.current)
@@ -1884,11 +1777,10 @@ export function ConsumitPlayer({
         </div>
       ) : null}
       {fullscreenNotice ? <p className="px-4 py-2 text-xs leading-5 text-copy" role="alert">{fullscreenNotice}</p> : null}
-      {subtitleLoadError ? <p className="px-4 py-2 text-xs leading-5 text-copy" role="alert">{subtitleLoadError} <button className="min-h-11 px-2 text-ink underline" onClick={() => setSubtitleFileAttempt(attempt => attempt + 1)} type="button">Retry subtitle</button><button className="min-h-11 px-2 text-ink underline" onClick={() => toggleMenu('subtitles')} type="button">Choose subtitles</button></p> : null}
       <div
         aria-label={`${title} player controls`}
         className={cn(
-          'relative m-auto w-full overflow-hidden bg-black outline-none',
+          'relative m-auto w-full overflow-hidden bg-black outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset',
           /* Inline keeps the catalog aspect box; fullscreen fills the room
              like the old-master fixed inset-0 shell. */
           isFullscreen ? 'aspect-auto h-full max-h-none flex-1' : 'aspect-video max-h-full',
@@ -1918,14 +1810,14 @@ export function ConsumitPlayer({
           <MissingArtwork className="absolute inset-0" label={`${title} playback unavailable`} />
         ) : null}
         <video
-          {...props}
           aria-label={`${title} player`}
           autoPlay={autoPlay}
           className={cn('size-full object-contain', videoClassName)}
-          crossOrigin={props.crossOrigin ?? 'anonymous'}
+          crossOrigin="anonymous"
           data-caption-font={captionFont}
-          style={{ ...props.style, '--consumit-caption-color': CAPTION_COLOR_VALUES[captionColor] } as CSSProperties}
+          style={{ '--consumit-caption-color': CAPTION_COLOR_VALUES[captionColor] } as CSSProperties}
           muted={isMuted}
+          onLoadStart={(event) => setIsPlaying(!event.currentTarget.paused)}
           onClick={() => {
             if (locked) return
             if (activeMenu) { closeMenu(); return }
@@ -1968,64 +1860,62 @@ export function ConsumitPlayer({
             touchTap.current = { at: now, timer }
           }}
           onDurationChange={(event) => {
-            setDuration(event.currentTarget.duration || 0)
-            onDurationChange?.(event)
+            const observation = mediaObservation('duration-change', event.currentTarget)
+            setDuration(observation.durationSeconds)
+            onMediaObservation?.(observation)
           }}
           onEnded={(event) => {
             setIsPlaying(false)
             setIsBuffering(false)
             setControlsVisible(true)
-            props.onEnded?.(event)
+            onMediaObservation?.(mediaObservation('ended', event.currentTarget))
           }}
-          onError={(event) => {
+          onError={() => {
             if (hasSource && !source) {
               setHasError(true)
               setIsBuffering(false)
               setErrorMessage('The current source could not play this title.')
             }
-            props.onError?.(event)
           }}
           onPause={(event) => {
             setIsPlaying(false)
             setControlsVisible(true)
-            onPause?.(event)
+            onMediaObservation?.(mediaObservation('pause', event.currentTarget))
           }}
           onPlay={(event) => {
             setIsPlaying(true)
             setHasError(false)
-            onPlay?.(event)
+            onMediaObservation?.(mediaObservation('play', event.currentTarget))
           }}
           onPlaying={(event) => {
             setIsBuffering(false)
             setPresentedMedia(mediaSrc)
-            props.onPlaying?.(event)
+            onMediaObservation?.(mediaObservation('playing', event.currentTarget))
           }}
           onSeeking={(event) => {
             setIsBuffering(true)
-            props.onSeeking?.(event)
+            onMediaObservation?.(mediaObservation('seeking', event.currentTarget))
           }}
           onSeeked={(event) => {
             setIsBuffering(false)
-            props.onSeeked?.(event)
+            onMediaObservation?.(mediaObservation('seeked', event.currentTarget))
           }}
           onTimeUpdate={(event) => {
-            setCurrentTime(event.currentTarget.currentTime)
-            onTimeUpdate?.(event)
+            const observation = mediaObservation('time-update', event.currentTarget)
+            setCurrentTime(observation.positionSeconds)
+            onMediaObservation?.(observation)
           }}
           onVolumeChange={(event) => {
             setIsMuted(event.currentTarget.muted)
             setVolume(event.currentTarget.volume)
-            onVolumeChange?.(event)
           }}
           onWaiting={() => setIsBuffering(true)}
           playsInline
           poster={posterSrc}
           preload={preload}
           ref={videoRef}
-          src={source ? undefined : src}
-        >
-          {children}
-        </video>
+          src={mediaSrc}
+        />
         {onSeparateAudioSelect ? <audio aria-hidden="true" crossOrigin="anonymous" hidden preload="none" ref={separateAudioRef} /> : null}
         {locked ? <button aria-label="Unlock controls" className="absolute right-4 top-4 z-50 inline-flex min-h-11 items-center gap-2 rounded-control border border-white/25 bg-black/90 px-4 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange" onClick={() => { setControlsLocked(false); pokeControls() }} type="button"><UnlockKeyhole aria-hidden="true" className="size-5" />Unlock</button> : null}
 
@@ -2063,7 +1953,7 @@ export function ConsumitPlayer({
             </div> : null}
             <div className="min-w-0 flex-1 text-center" data-player-title>
               <p data-player-heading className="truncate font-display font-normal tracking-[-0.02em] text-ink drop-shadow-md" title={title}>{title}</p>
-              {topMeta ?? (startupPending ? preparationMeta : undefined) ? <p className="mt-0.5 truncate text-xs leading-4 tabular-nums text-muted drop-shadow-sm">{topMeta ?? preparationMeta}</p> : null}
+              {topMeta ?? (startupPending ? preparationMeta : undefined) ? <p className="mt-0.5 line-clamp-2 [overflow-wrap:anywhere] text-xs leading-4 tabular-nums text-muted drop-shadow-sm sm:line-clamp-1 sm:truncate">{topMeta ?? preparationMeta}</p> : null}
             </div>
             <div className="pointer-events-auto flex shrink-0 items-center gap-1 sm:gap-2" data-player-header-actions>
               <div className="flex shrink-0 items-center gap-1 sm:gap-2" data-player-episode-navigation>
@@ -2110,16 +2000,20 @@ export function ConsumitPlayer({
         ) : null}
 
         {isBuffering && hasSource && !hasError ? (
-          <div className={cn('pointer-events-none absolute inset-0 grid place-items-center', startupPending && 'hidden')} role="status">
-            <span className="sr-only">Buffering video</span>
-            <span className="consumit-player-buffering grid size-16 place-items-center rounded-full bg-black/60">
-              <Loader2 aria-hidden="true" className="size-8 animate-spin text-orange motion-reduce:animate-none" />
+          <div className={cn('pointer-events-none absolute inset-0 z-30 grid place-items-center', startupPending && 'hidden')} role="status">
+            <span className="flex flex-col items-center gap-2">
+              <span className="consumit-player-buffering grid size-16 place-items-center rounded-full bg-black/60">
+                <Loader2 aria-hidden="true" className="size-8 animate-spin text-orange motion-reduce:animate-none" />
+              </span>
+              <span className="rounded-control bg-black/75 px-3 py-1 text-xs text-ink">Buffering video</span>
             </span>
           </div>
         ) : null}
 
         {engineState?.needsGesture && hasSource && !hasError ? (
-          <div className="pointer-events-none absolute inset-x-0 top-1/3 text-center text-sm font-bold text-ink" role="status">Tap play to start watching</div>
+          <div className="pointer-events-none absolute inset-x-3 top-1/3 z-20 flex justify-center px-3" role="status">
+            <span className="max-w-full rounded-control border border-white/20 bg-black/90 px-4 py-3 text-center text-sm font-bold text-ink">Tap play to start watching</span>
+          </div>
         ) : null}
 
         {!isPlaying && !startupPending && hasSource && !hasError && activeMenu == null && (pauseFacts != null || pauseLogoUrl != null || pauseOverview != null) ? (
@@ -2150,50 +2044,11 @@ export function ConsumitPlayer({
           </div>
         ) : null}
 
-        {hasError && hasSource ? (
-          <div className="absolute inset-0 grid place-items-center bg-black/70 p-6" role="alert">
-            <div className="max-w-md text-center">
-              <TriangleAlert aria-hidden="true" className="mx-auto size-8 text-orange" />
-              <p className="mt-3 text-base font-bold text-ink">Playback failed</p>
-              <p className="mt-2 text-sm leading-6 text-copy">{errorMessage ?? 'The current source could not play this title.'}</p>
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <button
-                  className="inline-flex min-h-11 items-center rounded-control bg-ink px-4 text-sm font-bold text-canvas outline-none transition-colors hover:bg-ink/85 focus-visible:ring-2 focus-visible:ring-orange"
-                  onClick={retryPlayback}
-                  type="button"
-                >
-                  Retry
-                </button>
-                {(dedupedServerOptions?.length ?? 0) > 1 ? (
-                  <button
-                    className="inline-flex min-h-11 items-center rounded-control border border-control-outline px-4 text-sm font-bold text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange"
-                    onClick={() => toggleMenu('server')}
-                    title="Switch to another server"
-                    type="button"
-                  >
-                    Try another server
-                  </button>
-                ) : null}
-                <a
-                  className="inline-flex min-h-11 items-center rounded-control px-4 text-sm font-bold text-copy outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange"
-                  href="/report-issue?category=playback"
-                >
-                  Report an issue
-                </a>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {captionsOn && overlayCueText && !hasError && (captionPosition === 'top' || !chromeVisible) ? (
+        {captionsOn && overlayCueText && !hasError && captionPosition === 'top' ? (
           <div
             className={cn(
               'pointer-events-none absolute inset-x-0 z-20 flex justify-center px-6 transition-[top,bottom] duration-300 motion-reduce:transition-none',
-              captionPosition === 'top'
-                ? (isFullscreen ? 'top-24 sm:top-28' : 'top-20 sm:top-24')
-                : isFullscreen
-                  ? (chromeVisible ? 'bottom-28 sm:bottom-32' : 'bottom-8 sm:bottom-10')
-                  : (chromeVisible ? 'bottom-20 sm:bottom-24' : 'bottom-4 sm:bottom-6'),
+              isFullscreen ? 'top-24 sm:top-28' : 'top-20 sm:top-24',
             )}
             data-consumit-player-caption-position={captionPosition}
           >
@@ -2225,6 +2080,7 @@ export function ConsumitPlayer({
         {lastSkip && hasSource && !hasError ? (
           <div
             aria-hidden="true"
+            data-player-skip-feedback
             className={cn(
               'pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 text-center',
               lastSkip.direction === 'forward' ? 'right-[10%] sm:right-[12%]' : 'left-[10%] sm:left-[12%]',
@@ -2233,7 +2089,7 @@ export function ConsumitPlayer({
             <p className="font-display text-4xl leading-none font-normal text-ink [text-shadow:0_2px_24px_rgb(0_0_0/0.8)] sm:text-5xl">
               {lastSkip.direction === 'forward' ? `+${lastSkip.amount}` : `-${lastSkip.amount}`}
             </p>
-            <p className="mt-1 text-[10px] font-bold tracking-[0.2em] text-copy uppercase">Seconds</p>
+            <p className="mt-1 text-[11px] font-bold tracking-[0.2em] text-copy uppercase">Seconds</p>
           </div>
         ) : null}
 
@@ -2254,16 +2110,16 @@ export function ConsumitPlayer({
         <div
           data-player-controls
           ref={controlsRef}
-          inert={!chromeVisible}
-          className={cn(
-            'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent px-4 pt-16 pb-4 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
-            isFullscreen && 'px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10',
-            chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
-          )}
+          className="absolute inset-x-0 bottom-0"
         >
-          <div className="relative flex items-baseline justify-between gap-4 text-xs" data-player-timing>
-          {captionsOn && !hasError && captionPosition === 'bottom' && overlayCueText && chromeVisible ? (
-            <div className={cn('pointer-events-none absolute inset-x-0 bottom-full flex items-center justify-center pb-2', captionSizeClass(captionSize, isFullscreen))} data-player-caption-slot data-consumit-player-caption-position="bottom">
+          {/* Keep captions outside the fading chrome so hiding controls never hides subtitles. */}
+          {captionsOn && !hasError && captionPosition === 'bottom' && overlayCueText ? (
+            <div
+              className={cn('pointer-events-none absolute inset-x-0 z-20 flex items-center justify-center pb-2 transition-[top,bottom] duration-300 motion-reduce:transition-none', captionSizeClass(captionSize, isFullscreen), chromeVisible ? '' : 'bottom-8 sm:bottom-10')}
+              data-player-caption-slot
+              data-consumit-player-caption-position="bottom"
+              style={{ bottom: chromeVisible ? 'calc(100% - var(--player-controls-caption-top, 56px))' : undefined }}
+            >
               <p
                 className={cn('max-w-3xl text-center leading-snug whitespace-pre-line [unicode-bidi:plaintext]', captionFontClass(captionFont), overlayCueUntracked && 'tracking-normal', captionBackgroundClass(captionBackground))}
                 data-consumit-player-caption
@@ -2274,6 +2130,16 @@ export function ConsumitPlayer({
               >{overlayCueText}</p>
             </div>
           ) : null}
+          <div
+            data-player-controls-chrome
+            inert={!chromeVisible}
+            className={cn(
+              'bg-gradient-to-t from-black/95 via-black/60 to-transparent px-4 pt-16 pb-4 transition-opacity duration-300 motion-reduce:transition-none sm:px-6',
+              isFullscreen && 'px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10',
+              chromeVisible ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+          >
+          <div className="relative flex items-baseline justify-between gap-4 text-xs" data-player-timing>
             <p className="min-w-0 truncate font-semibold text-ink drop-shadow-sm">{chapterLabel}</p>
             <p className="shrink-0 tabular-nums text-muted drop-shadow-sm">
               {formatPlaybackTime(currentTime)} / {formatPlaybackTime(duration)}
@@ -2311,7 +2177,7 @@ export function ConsumitPlayer({
                 {formatPlaybackTime(hoverTime)}
               </div>
             ) : null}
-            <div aria-hidden="true" className="absolute inset-x-0 h-1.5 overflow-hidden rounded-full bg-white/20 transition-all duration-200 group-hover:h-2 motion-reduce:transition-none">
+            <div aria-hidden="true" className="absolute inset-x-0 h-2 origin-bottom scale-y-75 overflow-hidden rounded-full bg-white/20 transition-transform duration-200 group-hover:scale-y-100 motion-reduce:transition-none motion-reduce:transform-none">
               <div className="absolute inset-y-0 left-0 bg-white/30" style={{ width: `${bufferedRatio * 100}%` }} />
               <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-orange to-[#ff7a5c]" style={{ width: `${progressRatio * 100}%` }} />
               {duration > 0 ? skipSegments.map((segment) => {
@@ -2373,7 +2239,7 @@ export function ConsumitPlayer({
               <button
                 aria-label="Back 10 seconds"
                 data-player-skip-button="backward"
-                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-all hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
+                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
                 disabled={!hasSource || hasError}
                 onClick={() => seekBy(-SEEK_STEP)}
                 title="Back 10 seconds (J)"
@@ -2381,13 +2247,13 @@ export function ConsumitPlayer({
               >
                 <span aria-hidden="true" className="relative grid place-items-center">
                   <RotateCcw className="size-[22px]" strokeWidth={2} />
-                  <span className="absolute text-[8px] font-bold">10</span>
+                  <span className="absolute text-[11px] font-bold">10</span>
                 </span>
               </button>
               <button
                 aria-label="Forward 10 seconds"
                 data-player-skip-button="forward"
-                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-all hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
+                className="grid size-10 shrink-0 place-items-center rounded-control text-ink outline-none transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
                 disabled={!hasSource || hasError}
                 onClick={() => seekBy(SEEK_STEP)}
                 title="Forward 10 seconds (L)"
@@ -2395,7 +2261,7 @@ export function ConsumitPlayer({
               >
                 <span aria-hidden="true" className="relative grid place-items-center">
                   <RotateCw className="size-[22px]" strokeWidth={2} />
-                  <span className="absolute text-[8px] font-bold">10</span>
+                  <span className="absolute text-[11px] font-bold">10</span>
                 </span>
               </button>
               <div className="consumit-player-volume flex items-center" data-player-volume-control>
@@ -2403,6 +2269,7 @@ export function ConsumitPlayer({
                 {isMuted || volume === 0 ? <VolumeX aria-hidden="true" className="size-[22px]" strokeWidth={2} /> : <Volume2 aria-hidden="true" className="size-[22px]" strokeWidth={2} />}
               </PlayerIconButton>
               <div className="consumit-player-volume-popover">
+                <output aria-hidden="true" className="consumit-player-volume-value">{Math.round((isMuted ? 0 : volume) * 100)}%</output>
                 <input
                   aria-label="Volume"
                   className="consumit-player-volume-slider h-10 cursor-pointer accent-orange"
@@ -2442,7 +2309,7 @@ export function ConsumitPlayer({
         {activeMenu === 'shortcuts' ? <div className="contents" ref={menuRef}><PlayerPanel anchorSelector={'[data-player-destination="settings"]'} aria-label="Keyboard shortcuts" id="consumit-player-menu-shortcuts" onClose={closeMenu} onBack={() => setActiveMenu('settings')} title="Keyboard shortcuts" role="dialog"><PlayerShortcuts /></PlayerPanel></div> : null}
         {activeMenu === 'settings' ? (
           <div className="contents" ref={menuRef}>
-            <PlayerPanel anchorSelector={'[data-player-destination="settings"]'} aria-label="Settings options" id="consumit-player-menu-settings" onClose={closeMenu} title="Settings" className="consumit-settings-panel">
+            <PlayerPanel anchorSelector={'[data-player-destination="settings"]'} aria-label="Settings options" id="consumit-player-menu-settings" onClose={closeMenu} title="Settings" className="consumit-settings-panel" showScrollCue>
               <div className="consumit-settings-content p-3">
                 <section className="consumit-settings-group" aria-labelledby="consumit-settings-playback">
                   <h4 id="consumit-settings-playback">Playback</h4>
@@ -2459,11 +2326,11 @@ export function ConsumitPlayer({
                 </section>
                 <section className="consumit-settings-group" aria-labelledby="consumit-settings-viewing">
                   <h4 id="consumit-settings-viewing">Viewing</h4>
-                  {onTheaterChange ? <PlayerSettingRow icon={<RectangleHorizontal className="size-5" />} label={theater ? 'Exit theater mode' : 'Theater mode'} onClick={() => { closeMenu(); onTheaterChange(!theater) }} /> : null}
-                  {isFullscreen ? <PlayerSettingRow icon={<LockKeyhole className="size-5" />} label="Lock controls" onClick={() => { closeMenu(); setControlsLocked(true); if (touchTap.current) window.clearTimeout(touchTap.current.timer); touchTap.current = null }} /> : null}
-                  <PlayerSettingRow icon={<Keyboard className="size-5" />} label="Keyboard shortcuts" onClick={() => setActiveMenu('shortcuts')} />
-                  <PlayerSettingRow icon={<Cast className="size-5" />} label="TV connection" disabled={!hasSource} value={castConnected ? 'Connected' : 'Cast to TV'} onClick={() => castConnected ? onCastClick?.() : setActiveMenu('cast')} />
-                  <PlayerSettingRow icon={<PictureInPicture2 className="size-5" />} label="Picture in picture" disabled={!hasSource || hasError || !pipSupported} value={!pipSupported ? 'Unavailable in this browser' : isPip ? 'On' : 'Off'} onClick={() => { closeMenu(); void togglePip() }} />
+                  {onTheaterChange ? <PlayerSettingRow quiet icon={<RectangleHorizontal className="size-5" />} label={theater ? 'Exit theater mode' : 'Theater mode'} onClick={() => { closeMenu(); onTheaterChange(!theater) }} /> : null}
+                  {isFullscreen ? <PlayerSettingRow quiet icon={<LockKeyhole className="size-5" />} label="Lock controls" onClick={() => { closeMenu(); setControlsLocked(true); if (touchTap.current) window.clearTimeout(touchTap.current.timer); touchTap.current = null }} /> : null}
+                  <PlayerSettingRow quiet icon={<Keyboard className="size-5" />} label="Keyboard shortcuts" onClick={() => setActiveMenu('shortcuts')} />
+                  <PlayerSettingRow quiet icon={<Cast className="size-5" />} label="Cast to TV" disabled={!hasSource} value={castConnected ? 'Connected' : undefined} onClick={() => castConnected ? onCastClick?.() : setActiveMenu('cast')} />
+                  <PlayerSettingRow quiet icon={<PictureInPicture2 className="size-5" />} label="Picture in picture" disabled={!hasSource || hasError || !pipSupported} value={!pipSupported ? 'Unavailable in this browser' : isPip ? 'On' : 'Off'} onClick={() => { closeMenu(); void togglePip() }} />
                 </section>
                 <section className="consumit-settings-group" aria-labelledby="consumit-settings-watch">
                   <h4 id="consumit-settings-watch">Watch preferences</h4>
@@ -2493,26 +2360,25 @@ export function ConsumitPlayer({
         {activeMenu === 'audio' ? (
           <div className="contents" ref={menuRef}>
             <PlayerPanel anchorSelector={'[data-player-destination="settings"]'} aria-label="Audio" id="consumit-player-menu-audio" onBack={() => setActiveMenu('settings')} onClose={closeMenu} title="Audio">
-              <PlayerRadioGroup className="space-y-1 p-3" label="Audio options">
+              <div className="space-y-1 p-3">
                 {engineState?.audioNotice ? <p className="mb-3 text-sm leading-6 text-copy" role="status">{engineState.audioNotice}</p> : null}
-                {!audioOptions.length ? <button className={settingsRowClass(!separateState.track)} onClick={() => { separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null) }} type="button">Stream audio</button> : null}
-                {unifiedAudio.map(option => {
-                  const selected = separateState.track ? option.separate.some(track => track.id === separateState.track?.id) : option.stream.some(track => track.value === selectedAudio)
-                  const loading = option.separate.some(track => track.id === preparingAudioId || (separateState.loading && track.id === separateState.track?.id))
-                  const stream = option.stream.find(track => track.value === selectedAudio) ?? option.stream[0]
-                  return <PlayerRadioOption selected={selected} busy={loading} className={settingsRowClass(selected)} key={option.key} onSelect={() => stream ? chooseAudio(stream.value) : void chooseSeparateAudio(option.separate[0]!.id)}><span className="min-w-0 flex-1">{option.label}</span>{loading ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : selected ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</PlayerRadioOption>
-                })}
+                <PlayerRadioGroup className="space-y-1" label="Audio options">
+                  {!audioOptions.length ? <PlayerRadioOption selected={!separateState.track} className={settingsRowClass(!separateState.track)} onSelect={() => { separateSelection.current++; separateAudioPlayer.current?.reset(); setPreparingAudioId(null); setAudioPreparationError(null) }}><span className="min-w-0 flex-1">Stream audio</span>{!separateState.track ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</PlayerRadioOption> : null}
+                  {unifiedAudio.map(option => {
+                    const selected = separateState.track ? option.separate.some(track => track.id === separateState.track?.id) : option.stream.some(track => track.value === selectedAudio)
+                    const loading = option.separate.some(track => track.id === preparingAudioId || (separateState.loading && track.id === separateState.track?.id))
+                    const stream = option.stream.find(track => track.value === selectedAudio) ?? option.stream[0]
+                    return <PlayerRadioOption selected={selected} busy={loading} className={settingsRowClass(selected)} key={option.key} onSelect={() => stream ? chooseAudio(stream.value) : void chooseSeparateAudio(option.separate[0]!.id)}><span className="min-w-0 flex-1">{option.label}</span>{loading ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : selected ? <Check aria-hidden="true" className="size-4 text-orange" /> : null}</PlayerRadioOption>
+                  })}
+                </PlayerRadioGroup>
                 {onAudioRequest ? <>
                   {separateAudioLoading ? <p className="pt-2 text-sm text-copy" role="status">Finding languages…</p> : null}
                   {separateAudioError || audioPreparationError || separateState.error ? <p className="mb-2 text-sm leading-6 text-copy" role="status">{audioPreparationError ?? separateState.error ?? separateAudioError}</p> : null}
+                  {separateAudioError && onAudioRequest ? <button className={settingsRowClass(false)} onClick={() => onAudioRequest()} type="button">Retry audio search</button> : null}
                   {separateState.needsGesture ? <button className={settingsRowClass(false)} onClick={() => { const unlock = volumeBoostController.current?.unlock(); const enable = separateAudioPlayer.current?.enable(); void Promise.all([unlock, enable]).then(() => { const track = separateAudioPlayer.current?.currentTrack(); if (track) onViewingPreferencesChange?.({ audioLanguage: track.language }) }, () => setAudioPreparationError('Your browser could not enable audio. Keep the current sound or try again.')) }} type="button">Enable audio</button> : null}
-                  {separateState.track ? <div className="mt-3 border-t border-white/10 pt-3">
-                    <p className="mb-2 text-xs leading-5 text-muted" role="status">{separateState.warning ?? 'Different recordings may need a sync adjustment.'}</p>
-                    <PlayerAdjustment label="Audio sync" valueLabel={`${separateState.offset > 0 ? '+' : ''}${separateState.offset.toFixed(1)}s`} value={separateState.offset} min={-30} max={30} step={0.1} ticks={[]} onChange={value => separateAudioPlayer.current?.offset(value)} />
-                    <button className="mt-2 text-xs text-copy hover:text-ink" onClick={() => separateAudioPlayer.current?.offset(0)} type="button">Reset audio sync</button>
-                  </div> : null}
+                  {separateState.track ? <SeparateAudioSyncControl offset={separateState.offset} warning={separateState.warning ?? null} onChange={value => separateAudioPlayer.current?.offset(value)} onReset={() => separateAudioPlayer.current?.offset(0)} /> : null}
                 </> : null}
-              </PlayerRadioGroup>
+              </div>
             </PlayerPanel>
           </div>
         ) : null}
@@ -2521,6 +2387,7 @@ export function ConsumitPlayer({
             <PlayerPanel anchorSelector={'[data-player-destination="settings"]'} aria-label="Quality" id="consumit-player-menu-quality" onClose={closeMenu} onBack={() => setActiveMenu("settings")} title="Quality">
               <div className="p-3">
                 {decodedHeight > 0 ? <p className="px-2 pb-2 text-xs text-copy" role="status">Playing at {decodedWidth} × {decodedHeight}</p> : null}
+                {engineState?.qualityNotice ? <p className="px-2 pb-2 text-sm leading-5 text-copy" role="status">{engineState.qualityNotice}</p> : null}
                 <PlayerRadioGroup className="space-y-1" label="Quality options">
                   {qualityOptions.map((option) => {
                     const selected = selectedQuality === option.value
@@ -2638,8 +2505,41 @@ export function ConsumitPlayer({
             </PlayerPanel>
           </div>
         ) : null}
-        {watchStatus ? <div data-player-watch-status className="pointer-events-none absolute inset-x-3 top-20 z-20 flex justify-center sm:inset-x-6 [&>*]:pointer-events-auto">{watchStatus}</div> : null}
+        </div>
+        {subtitleLoadError || watchStatus ? (
+          <div className={cn('pointer-events-none absolute inset-x-3 z-30 flex flex-col gap-2 sm:inset-x-6 [&>*]:pointer-events-auto', subtitleLoadError ? 'top-3 items-start' : 'top-20 items-center', isFullscreen && subtitleLoadError && 'top-[max(0.75rem,env(safe-area-inset-top))]')}>
+            {subtitleLoadError ? (
+              <div data-player-toast data-subtitle-notification aria-label="Subtitle loading error" className="pointer-events-auto flex max-w-[min(92vw,520px)] items-start gap-2.5 rounded-control border border-white/12 bg-[#111114]/95 p-2.5 text-left text-ink shadow-lg backdrop-blur-md" role="alert">
+                <span aria-hidden="true" className="mt-1 grid size-8 shrink-0 place-items-center rounded-control bg-orange/10 text-orange"><Captions className="size-4" /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs leading-5 text-copy">This subtitle file could not load.</p>
+                  <div className="mt-1 flex flex-wrap gap-x-1">
+                    <button className="min-h-11 rounded-control px-2 text-xs font-semibold text-ink underline decoration-white/40 underline-offset-4 outline-none transition-colors hover:decoration-orange focus-visible:ring-2 focus-visible:ring-orange" onClick={() => { setSubtitleLoadFailure(null); setSubtitleFileAttempt(attempt => attempt + 1) }} type="button">Retry subtitle</button>
+                    <button className="min-h-11 rounded-control px-2 text-xs font-semibold text-ink underline decoration-white/40 underline-offset-4 outline-none transition-colors hover:decoration-orange focus-visible:ring-2 focus-visible:ring-orange" onClick={() => { setSubtitleLoadFailure(null); toggleMenu('subtitles') }} type="button">Choose subtitles</button>
+                  </div>
+                </div>
+                <button aria-label="Dismiss subtitle notification" className="grid size-11 shrink-0 place-items-center rounded-control text-muted outline-none transition-colors hover:bg-white/10 hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={() => setSubtitleLoadFailure(null)} type="button"><X aria-hidden="true" className="size-4" /></button>
+              </div>
+            ) : null}
+            {watchStatus ? <div data-player-watch-status className="pointer-events-none flex w-full justify-center [&>*]:pointer-events-auto">{watchStatus}</div> : null}
+          </div>
+        ) : null}
       </div>
+      {recoveryView && activeMenu !== 'server' ? (
+        <PlayerRecoveryPanel
+          recovery={recoveryView}
+          title={title}
+          returnHref={backHref}
+          onCancel={recoveryView.phase === 'searching' ? onRecoveryCancel : undefined}
+          onChooseSource={() => {
+            if (recoveryView.phase === 'searching') onRecoveryCancel?.()
+            onRecoveryChooseSource?.()
+            toggleMenu('server')
+          }}
+          onRetryAuto={recoveryView.phase === 'failed' ? retryPlayback : undefined}
+          extraAction={recoveryExtraAction}
+        />
+      ) : null}
     </div>
   )
 }

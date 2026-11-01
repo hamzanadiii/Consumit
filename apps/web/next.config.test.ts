@@ -4,6 +4,20 @@ import { resolve } from 'node:path'
 import config from './next.config'
 
 describe('provider frame security policy', () => {
+  it('permits Kitsu and MAL fallback artwork through CSP and the scoped image optimizer', async () => {
+    const routes = await config.headers!()
+    const policy = routes[0]!.headers.find(header => header.key === 'Content-Security-Policy')!.value
+    const images = policy.split(';').find(directive => directive.trim().startsWith('img-src'))!.trim().split(/\s+/).slice(1)
+    expect(images).toContain('https://media.kitsu.app')
+    expect(images).toContain('https://cdn.myanimelist.net')
+    expect(images).not.toContain('https:')
+    expect(config.images?.remotePatterns).toEqual(expect.arrayContaining([
+      { hostname: 'media.kitsu.app', pathname: '/anime/**', protocol: 'https' },
+      { hostname: 'media.kitsu.app', pathname: '/episodes/**', protocol: 'https' },
+      { hostname: 'cdn.myanimelist.net', pathname: '/images/**', protocol: 'https' },
+    ]))
+  })
+
   it('permits reviewed external players without opening arbitrary frame origins', async () => {
     const routes = await config.headers!()
     const policy = routes[0]!.headers.find(header => header.key === 'Content-Security-Policy')!.value

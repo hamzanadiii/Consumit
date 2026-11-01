@@ -12,11 +12,20 @@ export default function TermsPage() {
   return (
     <LegalDocument
       intro={<>Welcome to Consumit. These Terms of Service (&ldquo;Terms&rdquo;) govern your use of Consumit: its catalog, your personal library, and the Consumit Player. By creating an account or using the product, you agree to these Terms.</>}
+      sections={[
+        { id: 'terms-service', number: 1, title: 'The service' },
+        { id: 'terms-account', number: 2, title: 'Your account' },
+        { id: 'terms-use', number: 3, title: 'Acceptable use' },
+        { id: 'terms-content', number: 4, title: 'Your content' },
+        { id: 'terms-sources', number: 5, title: 'Third-party sources and availability' },
+        { id: 'terms-ip', number: 6, title: 'Intellectual property' },
+        { id: 'terms-changes', number: 7, title: 'Changes and termination' },
+      ]}
       title="Terms of Service"
       lastUpdated="October 19, 2026"
     >
       <LegalSection id="terms-service" number={1} title="The service">
-        <p>Consumit is a personal catalog, journal, and player. It organizes movie, series, and anime metadata from TMDB and AniList, keeps your private Watched records, Diary, History, playback progress, and account data, and plays titles through sources configured for this deployment. Profile identity is public; Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are visible by default and can be hidden separately. New lists are public by default, with a Private option when you create or edit them.</p>
+        <p>Consumit is a personal catalog, journal, and player. It organizes movie, series, and anime metadata from TMDB and AniList, keeps Watched records, Diary, History, playback progress, and account data, and plays titles through sources configured for this deployment. Profile identity and Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, Watchlist, Watched, Diary, History, and Activity are visible by default and can be hidden separately. Active playback, resume progress, and account data remain private. Lists can be Public, Unlisted, or Private. Private lists are limited to the owner and invited editors; editors can change list content and order, while the owner controls visibility and deletion.</p>
         <p>Consumit does not host, upload, or store video files. Media is delivered by third-party sources described in Section 5.</p>
       </LegalSection>
       <LegalSection id="terms-account" number={2} title="Your account">

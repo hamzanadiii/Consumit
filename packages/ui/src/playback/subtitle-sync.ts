@@ -414,3 +414,21 @@ export function parseSubtitleCues(text: string): SubtitleCue[] {
   if (/\[events\]/i.test(text) || /^dialogue:/im.test(text)) return parseAssCues(text)
   return parseVttCues(text)
 }
+
+function formatVttTimestamp(seconds: number): string {
+  const milliseconds = Math.max(0, Math.round(seconds * 1000))
+  const hours = Math.floor(milliseconds / 3_600_000)
+  const minutes = Math.floor(milliseconds % 3_600_000 / 60_000)
+  const wholeSeconds = Math.floor(milliseconds % 60_000 / 1000)
+  const fraction = milliseconds % 1000
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(wholeSeconds).padStart(2, '0')}.${String(fraction).padStart(3, '0')}`
+}
+
+/** Normalize parsed uploads to valid WebVTT for native browser TextTracks. */
+export function serializeSubtitleCues(cues: readonly SubtitleCue[]): string {
+  const blocks = cues.filter(cue => Number.isFinite(cue.startTime) && Number.isFinite(cue.endTime) && cue.endTime > cue.startTime && cue.text.trim()).map((cue, index) => {
+    const text = cue.text.replace(/\n{2,}/g, '\n').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    return `${index + 1}\n${formatVttTimestamp(cue.startTime)} --> ${formatVttTimestamp(cue.endTime)}\n${text}`
+  })
+  return `WEBVTT\n\n${blocks.join('\n\n')}${blocks.length ? '\n' : ''}`
+}

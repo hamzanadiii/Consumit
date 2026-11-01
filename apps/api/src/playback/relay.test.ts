@@ -260,6 +260,24 @@ describe('separate direct and relay provider tiers', () => {
     expect((await playback.resolve('viewer', input, signal)).source).toMatchObject({ providerId: 'relay-primary', delivery: 'relay', type: 'hls' })
     expect(calls).toEqual(['vixsrc', 'backup', 'relay-primary'])
   })
+  it('issues the NontonFlix device cookie only for its bound media host', async () => {
+    const registration: ProviderRegistration = {
+      ...setup().providers[2]!, adapter: createStaticProvider('nontonflix', []),
+      mediaHosts: ['media.nontonflix.com'], deliveryMode: 'relay',
+    }
+    const resolved = {
+      registration,
+      source: { ...source, key: 'nf', url: 'https://media.nontonflix.com/media/grant', headers: { cookie: 'nf_mk=device; nf_web=web', referer: 'https://nontonflix.com/', 'user-agent': 'reviewed-agent' } },
+      subtitles: [], delivery: 'direct' as const,
+    }
+    const relay = createPlaybackRelay({ origin: 'https://edge.example', secret, providers: { nontonflix: ['media.nontonflix.com'] } })
+    expect(relay.permits(resolved)).toBe(true)
+    const src = await relay.issue(resolved, Date.now() + 60_000, 'https://watch.example')
+    const grant = await (await createGrantCodec(secret)).open(new URL(src!).pathname.slice('/media/'.length))
+    expect(grant).toMatchObject({ provider: 'nontonflix', headerHost: 'media.nontonflix.com', headers: { cookie: 'nf_mk=device; nf_web=web' } })
+    expect(relay.permits({ ...resolved, source: { ...resolved.source, url: 'https://other.example/media/grant' } })).toBe(false)
+    expect(relay.permits({ ...resolved, registration: { ...registration, adapter: createStaticProvider('relay-primary', []) } })).toBe(false)
+  })
   it('defaults configured providers to direct and requires an explicit relay declaration', () => {
     const row = { adapter: 'static', id: 'fixture', regions: ['US'], mediaHosts: ['media.example'], entries: [{ ref, sources: [source] }] }
     expect(configuredProviders([row])[0]!.deliveryMode).toBe('direct')

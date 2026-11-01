@@ -23,6 +23,6 @@ describe('profile edit triggers', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit banner' }))
     expect(screen.getByText('banner:open')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit banner' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit banner' })).toHaveAttribute('aria-expanded', 'true')
   })
 })

@@ -1,0 +1,218 @@
+import { expect, test } from '@playwright/test'
+import { mkdir } from 'node:fs/promises'
+import { defaultExperiencePreferences, GUIDE_VERSION } from '../../packages/contracts/src/index'
+
+const api = 'http://127.0.0.1:18563'
+test.beforeEach(async ({ context, request }) => {
+  const { token } = await (await request.get(`${api}/__fixtures/session`)).json()
+  await context.addCookies([{ name: 'consumit_session', value: token, domain: '127.0.0.1', path: '/', httpOnly: true, sameSite: 'Lax' }])
+  await request.post(`${api}/__fixtures/reset`, { data: { collectionFixture: true, publicCollection: true, collectionRole: 'visitor', preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+})
+
+test('saved collections lead to the archive and unavailable bookmarks can retry removal', async ({ page, request }) => {
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/lists/quiet-evenings')
+  await page.getByRole('button', { name: 'Save list', exact: true }).click()
+  await expect(page.getByRole('link', { name: 'View saved lists', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'View saved lists', exact: true }).click()
+  await expect(page).toHaveURL(/\/profile\/experience_fixture\/lists#saved-lists$/)
+  const saved = page.getByRole('region', { name: 'Saved Lists', exact: true })
+  await expect(saved.getByRole('heading', { name: 'Saved Lists', exact: true })).toBeInViewport()
+  await saved.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'View saved lists', exact: true }).click()
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await mkdir('.impeccable/review/collection-journey', { recursive: true })
+  await saved.screenshot({ path: '.impeccable/review/collection-journey/archive-ready-desktop.png' })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await request.post(`${api}/__fixtures/collection-availability`, { data: { visibility: 'private' } })
+  await page.reload()
+  await expect(saved.getByText('Quiet evenings, strange worlds', { exact: true })).toBeVisible()
+  await expect(saved.getByText('Unavailable', { exact: true })).toBeVisible()
+  await expect(saved.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).not.toBeVisible()
+  const removal = '**/v1/me/saved-lists/experience-collection'
+  await page.route(removal, route => route.fulfill({ status: 503, json: { error: { code: 'AUTH_STATE_UNAVAILABLE', message: 'The saved link could not be removed. Try again.', requestId: 'archive-fixture', retryable: true } } }))
+  await saved.getByRole('button', { name: 'Remove Quiet evenings, strange worlds from saved lists', exact: true }).click()
+  await expect(saved.getByRole('alert')).toContainText('The saved link could not be removed. Try again.')
+  await expect(saved.getByRole('button', { name: 'Try again', exact: true })).not.toBeVisible()
+  await mkdir('.impeccable/review/collection-journey', { recursive: true })
+  await saved.screenshot({ path: '.impeccable/review/collection-journey/archive-removal-retry-mobile.png' })
+  await page.unroute(removal)
+  await saved.getByRole('button', { name: 'Retry removing Quiet evenings, strange worlds from saved lists', exact: true }).click()
+  await expect(saved.getByRole('status')).toHaveText('Removed Quiet evenings, strange worlds from saved lists.')
+  await expect(saved.getByRole('heading', { name: 'Saved Lists', exact: true })).toBeFocused()
+  await expect(saved.getByText('Quiet evenings, strange worlds', { exact: true })).not.toBeVisible()
+  await page.reload()
+  await expect(saved.getByText('Quiet evenings, strange worlds', { exact: true })).not.toBeVisible()
+})
+
+
+test('saved archive search explains loaded results and retains them through a failed next page', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { collectionFixture: true, publicCollection: true, collectionRole: 'visitor', savedArchivePages: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/profile/experience_fixture/lists#saved-lists')
+  const saved = page.getByRole('region', { name: 'Saved Lists', exact: true })
+  const search = saved.getByRole('searchbox', { name: 'Search saved lists', exact: true })
+  await search.fill('midnight')
+  await expect(saved.getByText('No loaded saved lists match this search. Load more to include older bookmarks.', { exact: true })).toBeVisible()
+  const pages = '**/v1/me/library/collections/savedLists?*'
+  await page.route(pages, route => route.fulfill({ status: 503, json: { error: { code: 'AUTH_STATE_UNAVAILABLE', message: 'Older saved lists are temporarily unavailable.', requestId: 'archive-fixture', retryable: true } } }))
+  await saved.getByRole('button', { name: 'Load more saved lists', exact: true }).click()
+  await expect(saved.getByRole('alert')).toHaveText('Your next saved lists page could not load. Loaded bookmarks are still here.')
+  await expect(search).toHaveValue('midnight')
+  await search.clear()
+  await expect(saved.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await search.fill('midnight')
+  await page.unroute(pages)
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await page.route(pages, async route => { await gate; await route.continue() })
+  await saved.getByRole('button', { name: 'Retry loading saved lists', exact: true }).click()
+  try {
+    await expect(saved.getByRole('button', { name: 'Loading saved lists…', exact: true })).toBeDisabled()
+    await expect(search).toHaveValue('midnight')
+  } finally { release() }
+  await expect(saved.getByRole('status', { name: 'Saved list loading' })).toHaveText('Saved lists updated.')
+  await expect(saved.getByRole('article', { name: 'Animation after midnight', exact: true })).toBeFocused()
+  await expect(saved.getByText('Animation after midnight', { exact: true })).toBeVisible()
+  await expect(saved.getByText('Unavailable', { exact: true })).toBeVisible()
+  await expect(saved.getByRole('button', { name: 'Load more saved lists', exact: true })).not.toBeVisible()
+  await search.clear()
+  await expect(saved.getByRole('listitem')).toHaveCount(2)
+  await expect(saved.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await mkdir('.impeccable/review/collection-journey', { recursive: true })
+  await saved.screenshot({ path: '.impeccable/review/collection-journey/archive-paged-mobile.png' })
+})
+
+
+test('removing the last loaded bookmark keeps search and older pages available', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { collectionFixture: true, publicCollection: true, collectionRole: 'visitor', savedArchivePages: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/profile/experience_fixture/lists#saved-lists')
+  const saved = page.getByRole('region', { name: 'Saved Lists', exact: true })
+  const search = saved.getByRole('searchbox', { name: 'Search saved lists', exact: true })
+  await search.fill('quiet')
+  await saved.getByRole('button', { name: 'Remove Quiet evenings, strange worlds from saved lists', exact: true }).click()
+  await expect(saved.getByText('No bookmarks are loaded in this view. Load more to continue.', { exact: true })).toBeVisible()
+  await expect(search).toBeVisible()
+  await expect(search).toHaveValue('quiet')
+  await expect(saved.getByText('Save a public or unlisted list from its page and it will be waiting here.', { exact: true })).not.toBeVisible()
+  await search.clear()
+  await saved.getByRole('button', { name: 'Load more saved lists', exact: true }).click()
+  await expect(saved.getByText('Animation after midnight', { exact: true })).toBeVisible()
+  await saved.getByRole('button', { name: 'Remove Animation after midnight from saved lists', exact: true }).click()
+  await expect(saved.getByText('Save a public or unlisted list from its page and it will be waiting here.', { exact: true })).toBeVisible()
+  await expect(saved.getByRole('button', { name: 'Load more saved lists', exact: true })).not.toBeVisible()
+  await page.reload()
+  await expect(saved.getByText('Save a public or unlisted list from its page and it will be waiting here.', { exact: true })).toBeVisible()
+})
+
+
+test('fetched saved records appear before optional artwork and remain usable when it fails', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { collectionFixture: true, publicCollection: true, collectionRole: 'visitor', savedArchivePages: true, archiveOlderAvailable: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.goto('/profile/experience_fixture/lists#saved-lists')
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/v1/lists/animation-after-midnight', async route => {
+    await gate
+    await route.fulfill({ status: 503, json: { error: { code: 'AUTH_STATE_UNAVAILABLE', message: 'Optional cover details are unavailable.', requestId: 'archive-fixture', retryable: true } } })
+  })
+  const saved = page.getByRole('region', { name: 'Saved Lists', exact: true })
+  await saved.getByRole('button', { name: 'Load more saved lists', exact: true }).click()
+  try {
+    await expect(saved.getByRole('link', { name: 'Animation after midnight', exact: true })).toBeVisible()
+    await expect(saved.getByRole('status', { name: 'Saved list loading' })).toHaveText('Saved lists updated.')
+    await expect(saved.getByRole('button', { name: 'Loading saved lists…', exact: true })).not.toBeVisible()
+  } finally { release() }
+  await expect(page.getByRole('status').filter({ hasText: 'Some poster details could not load. Your lists are still available.' })).toBeVisible()
+  await expect(saved.getByRole('link', { name: 'Animation after midnight', exact: true })).toBeVisible()
+  await expect(saved.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await expect(saved.getByRole('alert')).not.toBeVisible()
+})
+
+test('owned archive pages expose fifty collections before optional covers and keep keyboard reading at new records', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { ownedArchivePages: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.setViewportSize({ width: 320, height: 844 })
+  await page.goto('/profile/experience_fixture/lists')
+  const owned = page.getByRole('region', { name: 'Your lists', exact: true })
+  const search = owned.getByRole('searchbox', { name: 'Search your lists', exact: true })
+  await search.fill('night')
+  const items = Array.from({ length: 50 }, (_, index) => ({ id: `owned-night-${index + 1}`, slug: `owned-night-${index + 1}`, name: `Night collection ${String(index + 1).padStart(2, '0')} — films to revisit with friends`, description: 'A personal collection with room for notes.', itemCount: index + 1, visibility: index % 2 ? 'unlisted' : 'private', origin: 'native' }))
+  await page.route('**/v1/me/library/collections/lists?*', route => route.fulfill({ json: { collection: 'lists', items, nextCursor: null } }))
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  await page.route('**/v1/lists/owned-night-*', async route => {
+    await gate
+    await route.fulfill({ status: 503, json: { error: { code: 'AUTH_STATE_UNAVAILABLE', message: 'Optional covers are unavailable.', requestId: 'owned-archive-fixture', retryable: true } } })
+  })
+  await owned.getByRole('button', { name: 'Load more lists', exact: true }).click()
+  try {
+    await expect(owned.getByRole('link', { name: items[0]!.name, exact: true })).toBeVisible()
+    await expect(owned.getByRole('article')).toHaveCount(50)
+    const first = owned.getByRole('article', { name: items[0]!.name, exact: true })
+    await expect(first).toBeFocused()
+    await expect(first).toBeInViewport()
+    await expect(search).toHaveValue('night')
+    await expect(owned.getByRole('button', { name: 'Loading lists…', exact: true })).not.toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(first.getByRole('link', { name: `${items[0]!.name}, 1 title`, exact: true })).toBeFocused()
+  } finally { release() }
+  await expect(page.getByRole('status').filter({ hasText: 'Some poster details could not load. Your lists are still available.' })).toBeVisible()
+  await expect(owned.getByRole('article')).toHaveCount(50)
+  const last = owned.getByRole('article', { name: items[49]!.name, exact: true })
+  await last.scrollIntoViewIfNeeded()
+  await expect(last).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await search.fill('night collection 50')
+  await expect(owned.getByRole('article')).toHaveCount(1)
+  await mkdir('.impeccable/review/collection-journey', { recursive: true })
+  await owned.screenshot({ path: '.impeccable/review/collection-journey/owned-page-filtered-mobile.png' })
+})
+
+test('owned archive search preserves loaded collections through page failure and focuses completion when new records are filtered out', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { collectionFixture: true, ownedArchivePages: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/profile/experience_fixture/lists')
+  const owned = page.getByRole('region', { name: 'Your lists', exact: true })
+  const search = owned.getByRole('searchbox', { name: 'Search your lists', exact: true })
+  await search.fill('astronomy')
+  await expect(owned.getByText('No loaded lists match these filters. Load more to include older collections.', { exact: true })).toBeVisible()
+  const pages = '**/v1/me/library/collections/lists?*'
+  await page.route(pages, route => route.fulfill({ status: 503, json: { error: { code: 'AUTH_STATE_UNAVAILABLE', message: 'Collections are temporarily unavailable.', requestId: 'owned-archive-fixture', retryable: true } } }))
+  await owned.getByRole('button', { name: 'Load more lists', exact: true }).click()
+  await expect(owned.getByRole('alert')).toHaveText('Your next lists page could not load. Loaded collections are still here.')
+  await expect(owned.getByRole('alert')).toBeFocused()
+  await expect(search).toHaveValue('astronomy')
+  await search.clear()
+  await expect(owned.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await search.fill('astronomy')
+  await page.unroute(pages)
+  await page.route(pages, route => route.fulfill({ json: { collection: 'lists', items: [{ id: 'owned-night', slug: 'owned-night', name: 'Night collection', description: null, itemCount: 0, visibility: 'private', origin: 'native' }], nextCursor: null } }))
+  await owned.getByRole('button', { name: 'Retry loading lists', exact: true }).click()
+  await expect(owned.getByRole('status', { name: 'Your list loading', exact: true })).toHaveText('Your lists updated.')
+  await expect(owned.getByRole('status', { name: 'Your list loading', exact: true })).toBeFocused()
+  await expect(search).toHaveValue('astronomy')
+  await expect(owned.getByText('No lists match these filters. Try another search.', { exact: true })).toBeVisible()
+  await search.clear()
+  await expect(owned.getByRole('article')).toHaveCount(2)
+  await expect(owned.getByRole('link', { name: 'Quiet evenings, strange worlds', exact: true })).toBeVisible()
+  await expect(owned.getByRole('link', { name: 'Night collection', exact: true })).toBeVisible()
+})
+
+test('owned archive paging places keyboard focus in the chosen visual sort order', async ({ page, request }) => {
+  await request.post(`${api}/__fixtures/reset`, { data: { ownedArchivePages: true, preferences: { ...defaultExperiencePreferences(), guideVersion: GUIDE_VERSION, guideStatus: 'dismissed' } } })
+  await page.goto('/profile/experience_fixture/lists')
+  const owned = page.getByRole('region', { name: 'Your lists', exact: true })
+  await owned.getByRole('button', { name: /Sort your lists/ }).click()
+  await owned.getByRole('option', { name: 'Most titles', exact: true }).click()
+  await page.route('**/v1/me/library/collections/lists?*', route => route.fulfill({ json: { collection: 'lists', items: [
+    { id: 'owned-sort-small', slug: 'owned-sort-small', name: 'A short evening', description: null, itemCount: 2, visibility: 'private', origin: 'native' },
+    { id: 'owned-sort-large', slug: 'owned-sort-large', name: 'A month of cinema', description: null, itemCount: 30, visibility: 'private', origin: 'native' },
+  ], nextCursor: null } }))
+  await owned.getByRole('button', { name: 'Load more lists', exact: true }).click()
+  await expect(owned.getByRole('article').first()).toHaveAccessibleName('A month of cinema')
+  await expect(owned.getByRole('article', { name: 'A month of cinema', exact: true })).toBeFocused()
+  await expect(owned.getByRole('button', { name: /Sort your lists/ })).toContainText('Most titles')
+  await page.keyboard.press('Tab')
+  await expect(owned.getByRole('link', { name: 'A month of cinema, 30 titles', exact: true })).toBeFocused()
+})

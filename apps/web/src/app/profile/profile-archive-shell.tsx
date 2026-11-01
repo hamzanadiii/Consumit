@@ -14,16 +14,17 @@ export function ProfileArchiveShell({ children, data, heading, owner = false, se
   const statistics = data.statistics
   const ratings = 'ratings' in statistics ? statistics.ratings : data.ratingDistribution?.reduce((total, bin) => total + bin.count, 0)
   const counts = {
+    activity: statistics.activity,
+    films: statistics.watched,
+    diary: 'diary' in statistics ? statistics.diary : statistics.diaryEntries,
+    history: statistics.history,
     lists: statistics.lists,
     reviews: statistics.reviews,
-    ...('watched' in statistics
-      ? { films: statistics.watched, diary: statistics.diaryEntries }
-      : {}),
     ...(ratings === undefined ? {} : { ratings }),
   }
   const visibility = 'viewerIsOwner' in data ? data.sectionVisibility : data.profile.sectionVisibility
   return <FilScreenShell pageHeading={undefined}>
-    <main className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-profile-archive>
+    <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-profile-archive>
       <ProfileArchiveHeader data={data} heading={heading} owner={owner} />
       <ProfileSectionNavigation active={section} counts={counts} name={data.profile.displayName ?? data.profile.username} owner={owner} username={data.profile.username} visibility={visibility} />
       {children}

@@ -6,7 +6,10 @@ import { renderWithProviders as render } from '@/test/render'
 
 import { ListShareActions } from './list-share-actions'
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }) }))
+
 vi.mock('@/lib/identity-browser', () => ({
+  duplicateMemberList: vi.fn(async () => ({ list: { slug: 'best-of-autumn-copy' } })),
   removeSavedMemberList: vi.fn(async () => {}),
   saveMemberList: vi.fn(async () => {}),
 }))
@@ -14,17 +17,23 @@ vi.mock('@/lib/identity-browser', () => ({
 import { removeSavedMemberList, saveMemberList } from '@/lib/identity-browser'
 
 describe('list share actions', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.setAttribute('open', '') } })
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.removeAttribute('open') } })
+  })
 
   it('shares a public list link and toggles its private bookmark', async () => {
     const user = userEvent.setup()
     const writeText = vi.fn(async () => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-    render(<ListShareActions isOwner={false} listId="list-42" saved={false} signedIn slug="best-of-autumn" />)
+    render(<ListShareActions isOwner={false} listId="list-42" name="Best of autumn" saved={false} signedIn slug="best-of-autumn" visibility="public" />)
 
     await user.click(screen.getByRole('button', { name: 'Share list' }))
+    expect(screen.getByRole('dialog', { name: 'Share the feeling' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy link' }))
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/lists/best-of-autumn`)
-    expect(screen.getByRole('status')).toHaveTextContent('List link copied.')
+    expect(screen.getByRole('status')).toHaveTextContent('Link copied.')
 
     await user.click(screen.getByRole('button', { name: 'Save list' }))
     expect(saveMemberList).toHaveBeenCalledWith('best-of-autumn')
@@ -36,8 +45,8 @@ describe('list share actions', () => {
   })
 
   it('keeps public links shareable to guests and routes Save through sign-in', () => {
-    render(<ListShareActions isOwner={false} listId="list-42" saved={false} signedIn={false} slug="best-of-autumn" />)
+    render(<ListShareActions isOwner={false} listId="list-42" name="Best of autumn" saved={false} signedIn={false} slug="best-of-autumn" visibility="public" />)
     expect(screen.getByRole('button', { name: 'Share list' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute('href', '/sign-in?next=%2Flists%2Fbest-of-autumn')
+    expect(screen.getByRole('link', { name: 'Sign in to save' })).toHaveAttribute('href', '/sign-in?next=%2Flists%2Fbest-of-autumn%3FconsumitAction%3Dsave')
   })
 })

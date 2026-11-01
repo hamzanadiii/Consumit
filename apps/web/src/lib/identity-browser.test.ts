@@ -37,4 +37,13 @@ describe('identity request boundaries', () => {
     await expect(getCurrentMember()).rejects.toMatchObject({ status: 429, retryable: true, requestId: 'request-1' })
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store', credentials: 'same-origin', signal: expect.any(AbortSignal) })
   })
+  it('gives malformed server failures a clear retryable account-service message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>unavailable</html>', { status: 503, headers: { 'content-type': 'text/html' } })))
+    await expect(loginMember({ email: 'member@example.com', password: 'a-secure-password' })).rejects.toMatchObject({
+      code: 'INTERNAL',
+      message: 'The account service is temporarily unavailable. Try again.',
+      retryable: true,
+      status: 503,
+    })
+  })
 })

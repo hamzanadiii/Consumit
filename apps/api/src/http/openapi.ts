@@ -5,13 +5,18 @@ import { resolvePlaybackRequestSchema, playbackSessionSchema, playbackSwitchRequ
 import * as contracts from '@consumit/contracts'
 import type { ZodType } from 'zod'
 
-const operations: Record<string, { body?: ZodType; response?: Record<number, ZodType> }> = {
+const operations: Record<string, { body?: ZodType; params?: ZodType; response?: Record<number, ZodType> }> = {
   'POST /v1/auth/register': { body: contracts.registerRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
   'POST /v1/auth/login': { body: contracts.loginRequestSchema, response: { 200: contracts.sessionMemberResponseSchema } },
   'POST /v1/auth/verify-email': { body: contracts.verifyEmailRequestSchema, response: { 200: contracts.sessionMemberResponseSchema } },
   'POST /v1/auth/verification/request': { body: contracts.emailRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
   'POST /v1/auth/recovery/request': { body: contracts.emailRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
+  'POST /v1/auth/recovery/verify': { body: contracts.verifyEmailRequestSchema },
+  'POST /v1/auth/recovery/complete': { body: contracts.recoveryCompleteRequestSchema },
   'POST /v1/auth/recovery/confirm': { body: contracts.recoveryConfirmRequestSchema },
+  'GET /v1/auth/google/pending': { response: { 200: contracts.googleSignupPendingResponseSchema } },
+  'POST /v1/auth/google/complete': { body: contracts.googleSignupCompletionRequestSchema, response: { 200: contracts.googleSignupCompleteResponseSchema, 202: contracts.googleSignupVerificationRequiredResponseSchema } },
+  'GET /v1/usernames/:username/availability': { params: contracts.usernameAvailabilityParamsSchema, response: { 200: contracts.usernameAvailabilityResponseSchema } },
   'POST /v1/auth/password/change': { body: contracts.passwordChangeRequestSchema },
   'GET /v1/me': { response: { 200: contracts.sessionMemberResponseSchema } },
   'GET /v1/me/profile': { response: { 200: contracts.profileSchema } },

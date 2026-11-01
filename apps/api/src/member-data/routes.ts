@@ -3,6 +3,8 @@ import {
   recommendationDismissalsSchema,
   catalogRefSchema,
   createMemberListRequestSchema,
+  duplicateMemberListRequestSchema,
+  addMemberListCollaboratorRequestSchema,
   appendListTitleRequestSchema,
   createDiaryEntryRequestSchema,
   createReviewRequestSchema,
@@ -146,7 +148,8 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
     const parsed = usernameSchema.safeParse((request.params as { username?: unknown }).username)
     if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Use a valid username.')
     const memberId = await viewer(request, false)
-    const owned = memberId ? await deps.memberData.profile(parsed.data, memberId) : null
+    const visitorPreview = (request.query as { visitor?: string }).visitor === 'true'
+    const owned = memberId && !visitorPreview ? await deps.memberData.profile(parsed.data, memberId) : null
     const profile = owned ? { ...owned, viewerIsOwner: true } : await deps.publicMembers?.profile(parsed.data, memberId)
     if (!profile) throw new ApiError('NOT_FOUND', 'Profile not found.')
     return profileReadResponseSchema.parse(profile)
@@ -198,6 +201,7 @@ export function registerMemberDataRoutes(app: FastifyInstance, deps: { env: ApiE
       const validFields = parsed.success && parsed.data.collection === collection.data && (
         ['films', 'likes'].includes(collection.data) ? Boolean(parsed.data.updatedAt)
           : collection.data === 'diary' ? Boolean(parsed.data.createdAt && parsed.data.watchedOn)
+            : collection.data === 'history' ? Boolean(parsed.data.completedAt)
             : ['reviews', 'watchlist', 'lists'].includes(collection.data) ? Boolean(collection.data === 'lists' ? parsed.data.updatedAt : parsed.data.createdAt)
               : ['activity'].includes(collection.data) ? Boolean(parsed.data.createdAt && parsed.data.kind)
                 : false
@@ -299,6 +303,27 @@ app.put('/v1/me/favorites', async (request, reply) => {
     void reply.header('cache-control', 'private, no-store')
     void reply.code(201)
     return memberListDetailSchema.parse(await deps.memberData.createList((await viewer(request, true))!, parsed.data))
+  })
+
+  app.post('/v1/me/lists/:id/collaborators', async (request, reply) => {
+    guardMutation(request)
+    const parsed = addMemberListCollaboratorRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide an existing member username.')
+    const added = await deps.memberData.addListCollaborator((await viewer(request, true))!, recordId(request), parsed.data)
+    if (!added) throw new ApiError('NOT_FOUND', 'List or member not found, or the owner cannot collaborate with themselves.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
+  })
+
+  app.delete('/v1/me/lists/:id/collaborators/:username', async (request, reply) => {
+    guardMutation(request)
+    const params = request.params as { username?: unknown }
+    const username = usernameSchema.safeParse(params.username)
+    if (!username.success) throw new ApiError('BAD_REQUEST', 'Provide a valid collaborator username.')
+    const removed = await deps.memberData.removeListCollaborator((await viewer(request, true))!, recordId(request), username.data)
+    if (!removed) throw new ApiError('NOT_FOUND', 'Collaborator not found.')
+    void reply.header('cache-control', 'private, no-store')
+    return reply.code(204).send()
   })
 
   app.put('/v1/me/lists/:id', async (request, reply) => {
@@ -436,7 +461,21 @@ for (const method of ['PUT', 'DELETE'] as const) {
     if (typeof slug !== 'string' || !slug || slug.length > 200) throw new ApiError('BAD_REQUEST', 'Use a valid list slug.')
     const list = await deps.memberData.list(slug, await viewer(request, false))
     if (!list) throw new ApiError('NOT_FOUND', 'List not found.')
-    return list.viewerIsOwner ? memberListDetailSchema.parse(list) : publicListDetailSchema.parse(list)
+    if (list.list.visibility === 'unlisted') void reply.header('x-robots-tag', 'noindex, nofollow')
+    return list.viewerCanEdit ? memberListDetailSchema.parse(list) : publicListDetailSchema.parse(list)
+  })
+
+  app.post('/v1/lists/:slug/duplicate', async (request, reply) => {
+    guardMutation(request)
+    const params = request.params as { slug?: unknown }
+    if (typeof params.slug !== 'string' || !params.slug || params.slug.length > 200) throw new ApiError('BAD_REQUEST', 'Use a valid list slug.')
+    const parsed = duplicateMemberListRequestSchema.safeParse(request.body)
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', 'Provide a valid name, visibility, and request key.')
+    const duplicate = await deps.memberData.duplicateList((await viewer(request, true))!, params.slug, parsed.data)
+    if (!duplicate) throw new ApiError('NOT_FOUND', 'This public list is no longer available to duplicate.')
+    void reply.header('cache-control', 'private, no-store')
+    void reply.code(201)
+    return memberListDetailSchema.parse(duplicate)
   })
 
   app.put('/v1/ratings', async (request, reply) => {
@@ -533,11 +572,11 @@ for (const method of ['PUT', 'DELETE'] as const) {
   app.get('/v1/reviews/:kind/:id', async (request, reply) => {
     const params = request.params as { id?: unknown; kind?: unknown }
     const ref = catalogRefSchema.safeParse({ id: Number(params.id), kind: params.kind })
-    if (!ref.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie or series identifier.')
+    if (!ref.success) throw new ApiError('BAD_REQUEST', 'Use a valid movie, series, or anime identifier.')
     const query = titleReviewsQuerySchema.safeParse(request.query)
-    if (!query.success) throw new ApiError('BAD_REQUEST', 'Use a valid reviews page, sort, and audience.')
+    if (!query.success) throw new ApiError('BAD_REQUEST', 'Use a valid reviews page and sort.')
     void reply.header('cache-control', 'private, no-store')
-    return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, true)))
+    return titleReviewsPageSchema.parse(await deps.memberData.titleReviews(ref.data, query.data.page, query.data.sort, await viewer(request, false)))
   })
 
 app.post('/v1/me/reviews', async (request, reply) => {

@@ -38,14 +38,14 @@ export function OnboardingHeader({
         <span className="hidden text-sm font-bold tracking-[0.18em] sm:inline">CONSUMIT</span>
       </a>
       <div className="ml-auto w-28 sm:w-56">
-        <p className="text-[0.6875rem] uppercase tracking-[0.1em] text-muted">
+        <p className="text-[0.6875rem] uppercase tracking-[0.1em] text-copy">
           <span className="sm:hidden">Step {safeCurrent} of {safeTotal}</span>
           <span className="hidden sm:inline">Onboarding · {safeCurrent} of {safeTotal}</span>
         </p>
         <ProgressRail className="mt-2" label={`Onboarding step ${safeCurrent} of ${safeTotal}`} value={(safeCurrent / safeTotal) * 100} />
       </div>
       {skipHref ? (
-        <a className="inline-flex min-h-11 shrink-0 items-center rounded-control px-1 text-xs text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:px-2" href={skipHref} onClick={onSkip ? event => { event.preventDefault(); onSkip() } : undefined}>
+        <a className="inline-flex min-h-11 shrink-0 items-center rounded-control px-1 text-xs text-copy outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange sm:px-2" href={skipHref} onClick={onSkip ? event => { event.preventDefault(); onSkip() } : undefined}>
           <span className="sm:hidden">Skip</span>
           <span className="hidden sm:inline">Skip for now</span>
         </a>
@@ -95,7 +95,7 @@ export function SelectableTitle({
           </ArtworkFrame>
         </span>
         <span className="mt-3 block text-sm font-bold text-ink">{title}</span>
-        <span className="mt-1 block text-xs text-muted">{meta}</span>
+        <span className="mt-1 block text-xs text-copy">{meta}</span>
       </span>
     </label>
   )

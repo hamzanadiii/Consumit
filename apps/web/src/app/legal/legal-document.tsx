@@ -15,19 +15,32 @@ export function LegalNotice({ children }: { children: ReactNode }) {
 type LegalDocumentProps = {
   children: ReactNode
   intro: ReactNode
+  sections: readonly { id: string; number: number; title: string }[]
   title: string
   lastUpdated?: string
 }
 
-export function LegalDocument({ children, intro, title, lastUpdated = LEGAL_LAST_UPDATED }: LegalDocumentProps) {
+export function LegalDocument({ children, intro, sections, title, lastUpdated = LEGAL_LAST_UPDATED }: LegalDocumentProps) {
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto min-h-[70vh] w-full max-w-4xl py-10 sm:py-14" data-consumit-legal-document>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto min-h-[70vh] w-full max-w-4xl py-10 sm:py-14" data-consumit-legal-document>
         <header className="text-center">
           <h1 className="text-balance font-display text-[clamp(2.75rem,7vw,4.5rem)] leading-[0.95] tracking-[-0.025em] text-ink">{title}</h1>
           <p className="mt-5 text-sm text-muted">Last updated: {lastUpdated}</p>
         </header>
         <div className="mt-12 max-w-[74ch] text-base leading-7 text-copy">{intro}</div>
+        <nav aria-label="On this page" className="mt-10 border-y border-border py-5">
+          <h2 className="font-display text-xl text-ink">On this page</h2>
+          <ol className="mt-3 grid gap-x-5 sm:grid-cols-2">
+            {sections.map(section => (
+              <li key={section.id}>
+                <a className="inline-flex min-h-[44px] items-center rounded-control py-2 text-sm text-orange underline decoration-orange/50 underline-offset-4 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" href={`#${section.id}`}>
+                  {section.number}. {section.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
         <div className="mt-12 space-y-11">{children}</div>
       </main>
     </FilScreenShell>
@@ -44,7 +57,7 @@ type LegalSectionProps = {
 export function LegalSection({ children, id, number, title }: LegalSectionProps) {
   return (
     <section aria-labelledby={id}>
-      <h2 className="font-display text-2xl leading-tight tracking-[-0.01em] text-ink sm:text-[1.75rem]" id={id}>{number}. {title}</h2>
+      <h2 className="scroll-mt-8 font-display text-2xl leading-tight tracking-[-0.01em] text-ink outline-none focus-visible:ring-2 focus-visible:ring-orange sm:text-[1.75rem]" id={id} tabIndex={-1}>{number}. {title}</h2>
       <div className="mt-4 max-w-[74ch] space-y-4 text-[15px] leading-7 text-copy">{children}</div>
     </section>
   )

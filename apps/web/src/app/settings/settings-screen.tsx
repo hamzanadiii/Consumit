@@ -33,13 +33,13 @@ import { AdStatus } from '../shared/ad-status'
 import { useExperience } from '../experience/experience-provider'
 
 const SETTINGS_ITEMS = [
-  { href: '#account', label: 'Account', index: '01' },
-  { href: '#privacy', label: 'Privacy & social', index: '02' },
-  { href: '#playback', label: 'Streaming & playback', index: '03' },
-  { href: '#language', label: 'Language & subtitles', index: '04' },
-  { href: '#advertising', label: 'Browsing & advertising', index: '05' },
-  { href: '#notifications', label: 'Notifications', index: '06' },
-  { href: '#data', label: 'Data & security', index: '07' },
+  { href: '#account', label: 'Account' },
+  { href: '#privacy', label: 'Privacy & social' },
+  { href: '#playback', label: 'Streaming & playback' },
+  { href: '#language', label: 'Language & subtitles' },
+  { href: '#advertising', label: 'Browsing & advertising' },
+  { href: '#notifications', label: 'Notifications' },
+  { href: '#data', label: 'Data & security' },
 ] as const
 
 export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfile }) {
@@ -51,12 +51,40 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
   const profileSaveLock = useRef(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+  const [profileSaveFailed, setProfileSaveFailed] = useState(false)
+  const retryProfileSaveRef = useRef<HTMLButtonElement>(null)
   const [accountAction, setAccountAction] = useState<'delete' | 'password' | null>(null)
   const [accountError, setAccountError] = useState<string | null>(null)
+  const exportLock = useRef(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportReady, setExportReady] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const exportErrorRef = useRef<HTMLParagraphElement>(null)
+  const passwordChangeLock = useRef(false)
+  const [passwordChanging, setPasswordChanging] = useState(false)
+  const [passwordUpdated, setPasswordUpdated] = useState(false)
+  const passwordErrorRef = useRef<HTMLParagraphElement>(null)
+  const [accountDeleting, setAccountDeleting] = useState(false)
+  const [deleteAcknowledged, setDeleteAcknowledged] = useState(false)
+  const deleteAccountLock = useRef(false)
+  const deleteAccountErrorRef = useRef<HTMLParagraphElement>(null)
   const [dirty, setDirty] = useState(false)
   const [formRevision, setFormRevision] = useState(0)
   const rootRef = useRef<HTMLElement>(null)
   const [activeSection, setActiveSection] = useState<string>('#account')
+  const globalAccountError = accountAction === 'delete' || accountAction === 'password' ? null : accountError
+
+  useEffect(() => {
+    if (accountAction === 'delete' && accountError && !accountDeleting) deleteAccountErrorRef.current?.focus()
+  }, [accountAction, accountDeleting, accountError])
+
+  useEffect(() => {
+    if (accountAction === 'password' && accountError && !passwordChanging) passwordErrorRef.current?.focus()
+  }, [accountAction, accountError, passwordChanging])
+
+  useEffect(() => {
+    if (exportError && !exporting) exportErrorRef.current?.focus()
+  }, [exportError, exporting])
 
   useEffect(() => {
     const root = rootRef.current
@@ -92,16 +120,23 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
     }
   }, [])
 
+  useEffect(() => {
+    if (profileSaveFailed && dirty && !profileSaving) retryProfileSaveRef.current?.focus()
+  }, [dirty, profileSaveFailed, profileSaving])
+
   function markDirty() {
     setDirty(true)
     setProfileSaved(false)
   }
 
   function discardProfile() {
+    if (profileSaving) return
     setFormRevision((revision) => revision + 1)
     setAvatarUrl(profile.avatarUrl)
     setDirty(false)
     setProfileSaved(false)
+    setProfileSaveFailed(false)
+    setAccountError(null)
   }
 
   function saveProfileFromBar() {
@@ -114,6 +149,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
     if (profileSaveLock.current) return
     profileSaveLock.current = true
     setProfileSaving(true)
+    setProfileSaveFailed(false)
     const data = new FormData(event.currentTarget)
     setAccountError(null)
     setProfileSaved(false)
@@ -131,6 +167,10 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
           likes: data.get('sectionVisibility-likes') === 'on',
           tags: data.get('sectionVisibility-tags') === 'on',
           watchlist: data.get('sectionVisibility-watchlist') === 'on',
+          watched: data.get('sectionVisibility-watched') === 'on',
+          diary: data.get('sectionVisibility-diary') === 'on',
+          history: data.get('sectionVisibility-history') === 'on',
+          activity: data.get('sectionVisibility-activity') === 'on',
         },
         username: String(data.get('username')),
       })
@@ -139,8 +179,10 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
       setFormRevision((revision) => revision + 1)
       setDirty(false)
       setProfileSaved(true)
+      setProfileSaveFailed(false)
       router.refresh()
     } catch (error) {
+      setProfileSaveFailed(true)
       setAccountError(error instanceof IdentityApiError ? error.message : 'The profile could not be saved.')
     } finally { profileSaveLock.current = false; setProfileSaving(false) }
   }
@@ -159,19 +201,27 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (passwordChangeLock.current) return
+    passwordChangeLock.current = true
+    setPasswordChanging(true)
     const data = new FormData(event.currentTarget)
     setAccountError(null)
+    setPasswordUpdated(false)
     try {
       await changeMemberPassword({ currentPassword: String(data.get('currentPassword')), newPassword: String(data.get('newPassword')) })
       setAccountAction(null)
+      setPasswordUpdated(true)
       router.refresh()
     } catch (error) {
       setAccountError(error instanceof IdentityApiError ? error.message : 'The password could not be changed.')
-    }
+    } finally { passwordChangeLock.current = false; setPasswordChanging(false) }
   }
 
   async function deleteAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (deleteAccountLock.current || !deleteAcknowledged) return
+    deleteAccountLock.current = true
+    setAccountDeleting(true)
     setAccountError(null)
     try {
       await deleteMemberAccount(String(new FormData(event.currentTarget).get('password')))
@@ -180,22 +230,34 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
       router.refresh()
     } catch (error) {
       setAccountError(error instanceof IdentityApiError ? error.message : 'The account could not be deleted.')
+    } finally {
+      deleteAccountLock.current = false
+      setAccountDeleting(false)
     }
   }
 
   async function exportAccount() {
+    if (exportLock.current) return
+    exportLock.current = true
+    setExporting(true)
+    setExportReady(false)
+    setExportError(null)
     setAccountError(null)
     try {
       await downloadMemberExport()
+      setExportReady(true)
     } catch (error) {
-      setAccountError(error instanceof IdentityApiError ? error.message : 'The export could not be prepared.')
+      setExportError(error instanceof IdentityApiError ? error.message : 'Your export could not be prepared. Try again.')
+    } finally {
+      exportLock.current = false
+      setExporting(false)
     }
   }
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-settings-screen ref={rootRef}>
-        <div className={dirty || accountError ? 'pb-24' : undefined}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-settings-screen ref={rootRef}>
+        <div className={dirty || globalAccountError ? 'pb-24' : undefined}>
         <div className="px-1 sm:px-3 lg:px-4">
         <header className="border-b border-[var(--fs-line)] pb-10 sm:pb-12">
           <h1 className="font-display text-[clamp(2.5rem,5vw,4rem)] leading-[0.95] font-normal tracking-[-0.03em] text-[var(--fs-ink)]">Settings.</h1>
@@ -225,16 +287,17 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               action={(
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <Button disabled={profileSaving} form="profile-settings-form" type="submit" variant="accent"><Save aria-hidden="true" /> {profileSaving ? 'Saving…' : 'Save changes'}</Button>
-                  <p aria-live="polite" className="text-xs text-lime">{profileSaved ? 'Profile saved.' : ''}</p>
+                  <p aria-live="polite" className="text-xs text-[var(--fs-ink)]">{profileSaved ? 'Profile saved.' : ''}</p>
                 </div>
               )}
               description="The identity people see across your profile, reviews, and lists."
               className="scroll-mt-8"
               id="account"
-              index="01"
               title="Account"
             >
-              <form className="grid gap-5 py-5 sm:grid-cols-2" id="profile-settings-form" key={formRevision} onChange={markDirty} onSubmit={saveProfile}>
+              <form aria-busy={profileSaving} className="py-5" id="profile-settings-form" key={formRevision} onChange={markDirty} onSubmit={saveProfile}>
+                <fieldset className="grid gap-5 sm:grid-cols-2" disabled={profileSaving}>
+                  <legend className="sr-only">Profile details</legend>
                 <div className="sm:col-span-2">
                   <span className="text-xs font-bold uppercase tracking-[0.12em] text-copy" id="settings-avatar-label">Avatar portrait</span>
                   <div className="mt-3 flex flex-wrap items-center gap-5">
@@ -256,26 +319,31 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
                 </div>
                 <div>
                   <Label htmlFor="settings-username">Username</Label>
-                  <Input autoCapitalize="none" className="mt-2 w-full" defaultValue={profile.username} id="settings-username" maxLength={30} minLength={3} name="username" pattern="[a-z0-9_]{3,30}" required />
-                  {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted">Next username change: {new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p> : null}
+                  <Input aria-describedby={profile.nextUsernameChangeAt ? 'settings-username-help settings-username-change' : 'settings-username-help'} autoCapitalize="none" autoCorrect="off" className="mt-2 w-full" defaultValue={profile.username} id="settings-username" maxLength={30} minLength={3} name="username" pattern="[a-z0-9_]{3,30}" required spellCheck={false} title="Use 3–30 lowercase letters, numbers, and underscores." />
+                  <p className="mt-2 text-xs leading-5 text-muted" id="settings-username-help">3–30 characters: lowercase letters, numbers, and underscores.</p>
+                  {profile.nextUsernameChangeAt ? <p className="mt-2 text-xs text-muted" id="settings-username-change">Next username change: <time dateTime={profile.nextUsernameChangeAt}>{new Date(profile.nextUsernameChangeAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} UTC</time></p> : null}
                 </div>
                 <div className="sm:col-span-2"><Label htmlFor="settings-bio">Bio</Label><textarea className="mt-2 min-h-28 w-full rounded-control border border-control-outline bg-field px-4 py-3 text-sm text-ink outline-none focus:border-orange focus:ring-2 focus:ring-orange" defaultValue={profile.bio ?? ''} id="settings-bio" maxLength={500} name="bio" /></div>
                 <fieldset className="sm:col-span-2 border-t border-[var(--fs-line)] pt-5">
                   <legend className="text-sm font-bold text-[var(--fs-ink)]">Public profile sections</legend>
-                  <p className="mt-2 max-w-[70ch] text-xs leading-5 text-[var(--fs-muted)]">Your profile identity is public. Choose which parts of your taste visitors can see. Watched titles, Diary, History, active playback, resume progress, and account details always stay private.</p>
+                  <p className="mt-2 max-w-[70ch] text-xs leading-5 text-[var(--fs-muted)]">Your profile identity is public. Choose which sections visitors can see. Watched, Diary, completed History, and Activity are visible by default and can each be hidden. Turning Reviews off also hides your reviews from public title review feeds.</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">{([
                     ['favorites', 'Favorites'], ['ratings', 'Ratings'], ['reviews', 'Reviews'], ['lists', 'Lists'],
                     ['network', 'Network'], ['likes', 'Likes'], ['tags', 'Tags'], ['watchlist', 'Watchlist'],
-                  ] as const).map(([key, label]) => <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-control border border-[var(--fs-field-border)] px-3 text-sm text-[var(--fs-ink)]" key={key}><input className="size-4 accent-[var(--fs-accent)]" defaultChecked={profile.sectionVisibility[key]} name={`sectionVisibility-${key}`} type="checkbox" />{label}</label>)}</div>
+                    ['watched', 'Watched'], ['diary', 'Diary'], ['history', 'History'], ['activity', 'Activity'],
+                  ] as const).map(([key, label]) => <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-control border border-[var(--fs-field-border)] px-3 text-sm text-[var(--fs-ink)]" key={key}><input className="size-4 accent-[var(--fs-accent)]" defaultChecked={profile.sectionVisibility[key]} name={`sectionVisibility-${key}`} type="checkbox" />{label}</label>)}</div>
                 </fieldset>
                 <div className="sm:col-span-2">
                   <Label htmlFor="settings-email">Email</Label>
                   <Input className="mt-2 w-full" defaultValue={session.member?.email ?? ''} id="settings-email" readOnly type="email" />
                 </div>
+                </fieldset>
               </form>
               <PreferenceRow
                 control={(
                   <Button
+                    className="min-h-[44px]"
+                    disabled={accountDeleting || passwordChanging || exporting}
                     onClick={signOut}
                     variant="secondary"
                   >
@@ -291,11 +359,10 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Profiles, watch history, diary, reviews, and lists belong to their member."
               id="privacy"
-              index="02"
               title="Privacy & social"
             >
-              <SettingsFact lead="Your profile identity is public.">Each taste section has its own visibility setting in Account. Public list pages are shareable only when both the list and your Lists section are public.</SettingsFact>
-              <SettingsFact lead="Your private records stay private.">Watched titles, Diary, History, active playback, resume progress, and account data never appear on your public profile.</SettingsFact>
+              <SettingsFact lead="Your profile sections follow your choices.">Watched titles, Diary, completed History, and Activity are visible by default. Hide any of them independently in Account settings.</SettingsFact>
+              <SettingsFact lead="Playback and account data stay private.">Active playback, resume progress, saved provider sources, and account details never appear on your profile. Unlisted lists open by link and stay out of profiles and discovery.</SettingsFact>
               <PreferenceRow
                 className="mt-4"
                 control={<Toggle checked={experience.preferences.shareViewingTrends} disabled={!experience.ready || !experience.owner} label="Share anonymous viewing trends" onCheckedChange={value => { void experience.patch({ shareViewingTrends: value }).catch(() => {}) }} />}
@@ -308,7 +375,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Choose how titles start in Watch. Member preferences sync across devices; available tracks vary by title and source."
               id="playback"
-              index="03"
               title="Streaming & playback"
             >
               <SettingsFact lead="Automatic source recovery.">If a source fails, Consumit switches to the next working source without losing your position. Pick a different server anytime from the player&apos;s Server menu.</SettingsFact>
@@ -320,7 +386,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Keep dialogue readable without making subtitles feel detached from the film."
               id="language"
-              index="04"
               title="Language & subtitles"
             >
               <PreferenceRow
@@ -332,7 +397,7 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               <SettingsFact lead="Adjust a title in Watch.">Track selection, subtitle timing, and text appearance stay available in the player&apos;s Audio and Subtitles menus.</SettingsFact>
             </SettingsSection>
 
-            <SettingsSection className="scroll-mt-8" description="Choose whether Consumit can show sandboxed banner ads while you browse." id="advertising" index="05" title="Browsing & advertising">
+            <SettingsSection className="scroll-mt-8" description="Choose whether our advertising partner can open pop-under ads while you browse." id="advertising" title="Browsing & advertising">
               <AdStatus />
             </SettingsSection>
 
@@ -340,7 +405,6 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Only useful changes—never private chat or attention traps."
               id="notifications"
-              index="06"
               title="Notifications"
             >
               <NotificationPreference />
@@ -350,24 +414,53 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
               className="scroll-mt-8"
               description="Download your contribution or close the account with clear consequences."
               id="data"
-              index="07"
               title="Data & security"
             >
-              <PreferenceRow control={<Button onClick={exportAccount} variant="secondary"><Download aria-hidden="true" /> Request export</Button>} description="Download the member and profile data currently held for your account." label="Export your data" />
-              <PreferenceRow control={<Button onClick={() => setAccountAction(accountAction === 'password' ? null : 'password')} variant="secondary">Change password</Button>} description="You will be asked to confirm your current password first." label="Password" />
+              <PreferenceRow control={<Button aria-busy={exporting} className="min-h-[44px]" disabled={accountDeleting || passwordChanging || exporting} onClick={exportAccount} variant="secondary">{exporting ? <RefreshCw aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Download aria-hidden="true" />}{exporting ? 'Preparing export…' : exportError ? 'Try export again' : 'Request export'}</Button>} description="Download the member and profile data currently held for your account." label="Export your data" />
+              {exporting ? <p className="border-b border-border py-3 text-sm text-[var(--fs-secondary)]" role="status">Preparing your export…</p> : null}
+              {exportError ? <p className="rounded-control border border-danger/40 bg-danger/10 p-3 text-sm leading-6 text-[var(--fs-danger)] outline-none focus:ring-2 focus:ring-[var(--fs-focus)]" ref={exportErrorRef} role="alert" tabIndex={-1}>{exportError}</p> : null}
+              {exportReady ? <p className="border-b border-border py-3 text-sm font-bold text-[var(--fs-ink)]" role="status">Your export file is ready.</p> : null}
+              <PreferenceRow control={<Button className="min-h-[44px]" disabled={accountDeleting || passwordChanging || exporting} onClick={() => { setAccountError(null); setPasswordUpdated(false); setDeleteAcknowledged(false); setAccountAction(accountAction === 'password' ? null : 'password') }} variant="secondary">Change password</Button>} description="You will be asked to confirm your current password first." label="Password" />
+              {passwordUpdated ? <p aria-live="polite" className="border-b border-border py-3 text-sm font-bold text-[var(--fs-ink)]" role="status">Password updated.</p> : null}
               {accountAction === 'password' ? (
-                <form className="grid gap-4 border-t border-border py-5 sm:grid-cols-2" onSubmit={changePassword}>
-                  <div><Label htmlFor="current-password">Current password</Label><Input autoComplete="current-password" className="mt-2 w-full" id="current-password" name="currentPassword" required type="password" /></div>
-                  <div><Label htmlFor="new-password">New password</Label><Input autoComplete="new-password" className="mt-2 w-full" id="new-password" minLength={12} name="newPassword" required type="password" /></div>
-                  <Button className="sm:col-span-2 sm:justify-self-start" type="submit">Update password</Button>
+                <form aria-busy={passwordChanging} aria-label="Change password" className="border-t border-border py-5" onSubmit={changePassword}>
+                  <fieldset className="grid gap-4 sm:grid-cols-2" disabled={passwordChanging}>
+                    <legend className="sr-only">Change password</legend>
+                    <div><Label htmlFor="current-password">Current password</Label><Input autoComplete="current-password" className="mt-2 w-full" id="current-password" maxLength={128} minLength={12} name="currentPassword" required type="password" /></div>
+                    <div><Label htmlFor="new-password">New password</Label><Input autoComplete="new-password" className="mt-2 w-full" id="new-password" maxLength={128} minLength={12} name="newPassword" required type="password" /></div>
+                    {accountError ? <p className="rounded-control border border-danger/40 bg-danger/10 p-3 text-sm leading-6 text-[var(--fs-danger)] sm:col-span-2" ref={passwordErrorRef} role="alert" tabIndex={-1}>{accountError}</p> : null}
+                    <Button className="min-h-11 sm:col-span-2 sm:justify-self-start" disabled={passwordChanging} type="submit">{passwordChanging ? 'Updating password…' : 'Update password'}</Button>
+                  </fieldset>
                 </form>
               ) : null}
-              <PreferenceRow control={<Button onClick={() => setAccountAction(accountAction === 'delete' ? null : 'delete')} variant="danger"><Trash2 aria-hidden="true" /> Delete account</Button>} description="Tombstone and anonymize the account after password confirmation." label="Delete account" />
+              <PreferenceRow control={<Button aria-controls="delete-account-form" aria-expanded={accountAction === 'delete'} className="min-h-[44px]" disabled={accountDeleting || passwordChanging || exporting} onClick={() => { setAccountError(null); setDeleteAcknowledged(false); setAccountAction(accountAction === 'delete' ? null : 'delete') }} variant="danger"><Trash2 aria-hidden="true" /> Delete account</Button>} description="Review what will be removed, then confirm with your password." label="Delete account" />
               {accountAction === 'delete' ? (
-                <form className="border-t border-border py-5" onSubmit={deleteAccount}>
-                  <Label htmlFor="delete-password">Confirm your password</Label>
-                  <Input autoComplete="current-password" className="mt-2 w-full max-w-md" id="delete-password" name="password" required type="password" />
-                  <Button className="mt-4" type="submit" variant="danger"><Trash2 aria-hidden="true" /> Permanently delete account</Button>
+                <form aria-busy={accountDeleting} aria-label="Delete account confirmation" className="border-t border-border py-5" id="delete-account-form" onSubmit={deleteAccount}>
+                  <div className="rounded-control border border-danger/40 bg-danger/10 p-4 sm:p-5">
+                    <h3 className="text-base font-bold text-ink">Before you delete</h3>
+                    <p className="mt-2 text-sm leading-6 text-secondary">This permanently closes your account and deletes your profile, reviews, ratings, saved titles, lists, Watch History, and playback progress. Your username stays reserved, and you’ll be signed out. This can’t be undone.</p>
+                    <p className="mt-2 text-sm leading-6 text-secondary">Want a copy first? Use Request export above before continuing.</p>
+                  </div>
+                  {accountError ? <p className="mt-4 rounded-control border border-danger/40 bg-danger/10 p-3 text-sm leading-6 text-[var(--fs-danger)]" ref={deleteAccountErrorRef} role="alert" tabIndex={-1}>{accountError}</p> : null}
+                  <fieldset className="mt-5 grid min-w-0 gap-4" disabled={accountDeleting}>
+                    <legend className="sr-only">Confirm account deletion</legend>
+                    <div>
+                      <Label htmlFor="delete-password">Confirm your password</Label>
+                      <Input autoComplete="current-password" className="mt-2 w-full max-w-md" id="delete-password" name="password" required type="password" />
+                    </div>
+                    <label className="flex min-h-11 max-w-2xl cursor-pointer items-start gap-3 text-sm leading-6 text-secondary">
+                      <input checked={deleteAcknowledged} className="mt-1 size-5 shrink-0 accent-orange focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas" name="acknowledge" onChange={event => setDeleteAcknowledged(event.currentTarget.checked)} required type="checkbox" />
+                      <span>I understand this permanently deletes my account data and can’t be undone.</span>
+                    </label>
+                    <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
+                      <Button className="min-h-11" disabled={accountDeleting} onClick={() => { setAccountError(null); setDeleteAcknowledged(false); setAccountAction(null) }} type="button" variant="ghost">Cancel</Button>
+                      <Button className="min-h-11" disabled={accountDeleting || !deleteAcknowledged} type="submit" variant="danger">
+                        {accountDeleting ? <RefreshCw aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Trash2 aria-hidden="true" />}
+                        Delete my account permanently
+                      </Button>
+                    </div>
+                  </fieldset>
+                  {accountDeleting ? <p className="sr-only" role="status">Deleting your account…</p> : null}
                 </form>
               ) : null}
             </SettingsSection>
@@ -381,16 +474,16 @@ export function SettingsScreen({ initialProfile }: { initialProfile: MemberProfi
         </div>
         </div>
 
-        {dirty || accountError ? (
-          <div className="consumit-settings-savebar fixed inset-x-0 bottom-0 z-40 border-t border-[var(--fs-line)] bg-[var(--fs-page)]" role={accountError ? 'alert' : 'region'} aria-label={accountError ? 'Settings error' : 'Unsaved profile changes'}>
+        {dirty || globalAccountError ? (
+          <div className="consumit-settings-savebar fixed inset-x-0 bottom-0 z-40 border-t border-[var(--fs-line)] bg-[var(--fs-page)]" role={globalAccountError ? 'alert' : 'region'} aria-label={globalAccountError ? 'Settings error' : 'Unsaved profile changes'}>
             <div className="mx-auto flex w-full max-w-[90rem] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1 py-3 sm:px-3 lg:px-4">
-              <p className={`text-sm font-bold ${accountError ? 'text-danger' : 'text-ink'}`}>
-                {accountError ?? 'You have unsaved changes to your profile.'}
+              <p className={`text-sm font-bold ${globalAccountError ? 'text-danger' : 'text-ink'}`}>
+                {globalAccountError ?? (profileSaving ? 'Saving profile changes…' : 'You have unsaved changes to your profile.')}
               </p>
               <div className="flex items-center gap-2">
-                {dirty ? <Button onClick={discardProfile} variant="ghost">Discard</Button> : null}
-                {dirty ? <Button onClick={saveProfileFromBar} variant="accent"><Save aria-hidden="true" /> Save</Button> : null}
-                {!dirty && accountError ? <Button onClick={() => setAccountError(null)} variant="ghost">Dismiss</Button> : null}
+                {dirty ? <Button disabled={profileSaving} onClick={discardProfile} variant="ghost">Discard</Button> : null}
+                {dirty ? <Button disabled={profileSaving} onClick={saveProfileFromBar} ref={retryProfileSaveRef} variant="accent"><Save aria-hidden="true" /> {profileSaving ? 'Saving…' : profileSaveFailed ? 'Retry save' : 'Save'}</Button> : null}
+                {!dirty && globalAccountError ? <Button onClick={() => setAccountError(null)} variant="ghost">Dismiss</Button> : null}
               </div>
             </div>
           </div>

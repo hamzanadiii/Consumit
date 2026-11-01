@@ -22,8 +22,10 @@ export function contentPath(query: { type: string; tmdbId?: number | undefined; 
 export type OriginalFile = { bytes: Buffer; ext: 'srt' | 'vtt' | 'ass' | 'ssa' }
 
 export interface SubtitleFileStore {
+  resolveKey?(identity: string): Promise<string | null>
+  bindKey?(identity: string, contentKey: string, ttlSeconds: number): Promise<void>
   getVtt(key: string): Promise<string | null>
-  putVtt(key: string, vtt: string, opts: { content: string; ttlSeconds: number }): Promise<void>
+  putVtt(key: string, vtt: string, opts: { content: string; ttlSeconds: number; private?: boolean }): Promise<void>
   getOriginal(key: string): Promise<OriginalFile | null>
   putOriginal(key: string, file: OriginalFile, opts: { content: string; ttlSeconds: number }): Promise<void>
 }
@@ -36,6 +38,8 @@ function validKey(key: string): boolean {
  *  today. Originals are unavailable on this backend (null / no-op). */
 export function createStoreFileStore(store: PlaybackStore): SubtitleFileStore {
   return {
+    async resolveKey(identity) { return store.get(`subvtt:identity:${identity}`) },
+    async bindKey(identity, key, ttl) { await store.set(`subvtt:identity:${identity}`, key, ttl) },
     async getVtt(key: string) {
       if (!validKey(key)) return null
       try {

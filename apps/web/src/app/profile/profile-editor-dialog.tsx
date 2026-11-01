@@ -51,7 +51,10 @@ export function ProfileEditorDialog({ children, description, eyebrow, footer, la
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const focusable = () => [...panel.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')]
       .filter((element) => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true')
-    focusable()[0]?.focus({ preventScroll: true })
+    if (!panel.contains(document.activeElement)) {
+      const preferred = panel.querySelector<HTMLElement>('[data-initial-focus]')
+      ;(preferred ?? focusable()[0])?.focus({ preventScroll: true })
+    }
 
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {

@@ -37,11 +37,11 @@ const groups: readonly HelpGroup[] = [
     questions: [
       {
         question: 'Where do my watches, reviews, and lists appear?',
-        answer: <>Your profile brings together public taste sections and your private Watched, Diary, and History archives. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are public by default; you can hide each section in <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link>. New lists are public, and you can choose Private when creating or editing one. Saved Lists are private bookmarks that follow the curator&rsquo;s edits; if a list is hidden or deleted, you can remove its unavailable bookmark. Member records support movies, series, and anime.</>,
+        answer: <>Your profile brings together sections you choose to show. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, Watchlist, Watched, Diary, History, and Activity are visible by default; you can hide each in <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link>. Active playback and resume progress always stay private. Lists can be Public, Unlisted, or Private. Public lists can appear on your profile and discovery; Unlisted lists work for anyone with the link and stay out of discovery; Private lists are limited to you and editors you invite. Editors can change list details, titles, and order, while only you control visibility and deletion. Saved Lists are private bookmarks to a Public or Unlisted original and follow its edits. Member records support movies, series, and anime.</>,
       },
       {
         question: 'How do I control what appears on my profile?',
-        answer: <>Your profile identity is public. Open <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link> to hide or show each taste section. Watched titles, Diary, History, active playback, resume progress, and account data stay private. Anonymous viewing trends have a separate off-by-default opt-in.</>,
+        answer: <>Your profile identity is public. Open <Link className="font-bold text-[var(--fs-ink)] underline decoration-[var(--fs-accent)] underline-offset-4" href="/settings">Settings</Link> to hide or show each profile section, including Watched, Diary, History, and Activity. Active playback, resume progress, and account data always stay private. Anonymous viewing trends have a separate off-by-default opt-in.</>,
       },
     ],
   },
@@ -63,7 +63,7 @@ const groups: readonly HelpGroup[] = [
 export default function HelpPage() {
   return (
     <SupportShell>
-      <main className="mx-auto max-w-5xl">
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto max-w-5xl">
         <div className="max-w-3xl">
           <h1 className="mt-4 font-display text-4xl leading-[1.02] tracking-[-0.035em] sm:text-6xl">A little help, when you need it.</h1>
           <p className="mt-5 max-w-[62ch] text-sm leading-6 text-[var(--fs-secondary)] sm:text-base sm:leading-7">Find answers about watching, keeping your library, and getting back into your account.</p>

@@ -4,30 +4,27 @@ import { titleHref, type CatalogKind, type CatalogPage, type CatalogTitleSummary
 import { ArtworkFrame, Button, Select } from '@consumit/ui'
 import { ArrowLeft, ArrowRight, SlidersHorizontal, Star } from 'lucide-react'
 import Link from 'next/link'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { catalogBrowseFeed, type BrowseCatalogFeed, type BrowseCatalogQuery } from '@/lib/catalog-browser'
 
 import { BrowseHero } from '../shared/browse-hero'
 import { TitleCard } from '../shared/title-card'
+import { useHorizontalRail } from '../shared/use-horizontal-rail'
 import { useCatalogFeed } from './use-catalog-feed'
 
 function FeaturedRail({ items, kind }: { items: CatalogTitleSummary[]; kind: CatalogKind }) {
-  const railRef = useRef<HTMLUListElement>(null)
+  const { railRef, canScroll, atStart, atEnd, move: moveRail } = useHorizontalRail(Math.min(items.length, 10))
   if (items.length === 0) return null
-  function move(direction: number) {
-    const rail = railRef.current
-    rail?.scrollBy({ left: rail.clientWidth * 0.8 * direction, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
-  }
-  const scrollButtonClass = 'grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]'
+  const scrollButtonClass = 'grid size-11 cursor-pointer place-items-center rounded-xl border border-[var(--fs-field-border)] bg-[var(--fs-field)] text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-accent)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:cursor-default disabled:opacity-40'
   return (
     <section aria-labelledby="featured-heading" className="mb-8 sm:mb-10">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)] sm:text-3xl" id="featured-heading">{kind === 'movie' ? 'Now Playing' : 'Trending Now'}</h2>
-        <div className="flex gap-1.5">
-          <button aria-label="Scroll featured titles left" className={scrollButtonClass} onClick={() => move(-1)} type="button"><ArrowLeft aria-hidden="true" className="size-4" /></button>
-          <button aria-label="Scroll featured titles right" className={scrollButtonClass} onClick={() => move(1)} type="button"><ArrowRight aria-hidden="true" className="size-4" /></button>
-        </div>
+        {canScroll ? <div className="flex gap-1.5">
+          <button aria-label="Scroll featured titles left" className={scrollButtonClass} disabled={atStart} onClick={() => moveRail(-1)} type="button"><ArrowLeft aria-hidden="true" className="size-4" /></button>
+          <button aria-label="Scroll featured titles right" className={scrollButtonClass} disabled={atEnd} onClick={() => moveRail(1)} type="button"><ArrowRight aria-hidden="true" className="size-4" /></button>
+        </div> : null}
       </div>
       <ul className="flex snap-x snap-mandatory scroll-px-2 gap-4 overflow-x-auto overscroll-x-contain -mx-2 px-2 pt-2 pb-6 sm:gap-5" ref={railRef} style={{ scrollbarWidth: 'none' }}>
         {items.slice(0, 10).map((title) => {
@@ -70,7 +67,7 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
     <section aria-labelledby="browse-results-heading">
       <div className="mb-5 flex items-baseline justify-between gap-4 border-b border-[var(--fs-line)] pb-4">
         <h2 className="font-display text-2xl tracking-[-0.02em] text-[var(--fs-ink)]" id="browse-results-heading">{query.feed === 'top-rated' ? 'Top rated' : query.feed === 'trending' ? 'Trending now' : 'Popular now'}</h2>
-        <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} titles shown` : 'Finding titles…'}</p>
+        <p className="text-xs tabular-nums text-[var(--fs-muted)]" role="status">{page ? `${page.items.length.toLocaleString('en-US')} ${page.items.length === 1 ? 'title' : 'titles'} shown` : 'Finding titles…'}</p>
       </div>
       {page?.meta.stale ? <p className="mb-4 text-sm text-[var(--fs-muted)]">Showing saved catalog results. Some details may have changed.</p> : null}
       <ul aria-busy={loading} className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 sm:gap-x-4 sm:gap-y-7 lg:grid-cols-4 xl:grid-cols-6">
@@ -95,28 +92,93 @@ function CatalogFeed({ initialPage, query, reset }: { initialPage?: CatalogPage 
   )
 }
 
-function BrowseSelect({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: readonly { label: string; value: string }[]; value: string }) {
+function BrowseSelect({ disabled = false, label, onChange, options, value }: { disabled?: boolean | undefined; label: string; onChange: (value: string) => void; options: readonly { label: string; value: string }[]; value: string }) {
   return (
     <div className="min-w-0 grow basis-[calc(50%-0.25rem)] sm:w-44 sm:flex-none sm:basis-auto sm:grow-0">
-      <Select hideLabel label={label} onValueChange={onChange} options={options} placeholder={label} value={value} />
+      <Select disabled={disabled} hideLabel label={label} onValueChange={onChange} options={options} placeholder={label} value={value} />
     </div>
   )
 }
 
-export function CatalogBrowseContent({ current, currentYear, initialFeed = 'popular', kind, popular }: { current: CatalogPage; currentYear: number; initialFeed?: BrowseCatalogFeed | undefined; kind: CatalogKind; popular: CatalogPage }) {
-  const [genre, setGenre] = useState('')
-  const [year, setYear] = useState('')
-  const [feed, setFeed] = useState<BrowseCatalogFeed>(initialFeed)
-  const genres = [...new Set([...popular.items, ...current.items].flatMap((title) => title.genreNames))].sort()
+type BrowseState = { feed: BrowseCatalogFeed; genre: string; year: string }
+
+function normalizeBrowseState(state: BrowseState, currentYear: number): BrowseState {
+  const feed = catalogBrowseFeed(state.feed)
+  const genre = feed === 'trending' || state.genre.trim().length > 60 ? '' : state.genre.trim()
+  const yearNumber = Number(state.year)
+  const year = feed !== 'trending' && Number.isInteger(yearNumber) && yearNumber >= 1900 && yearNumber <= currentYear + 1
+    ? String(yearNumber)
+    : ''
+  return { feed, genre, year }
+}
+
+function stateFromSearchParams(params: URLSearchParams, currentYear: number): BrowseState {
+  return normalizeBrowseState({
+    feed: catalogBrowseFeed(params.get('feed') ?? undefined),
+    genre: params.get('genre') ?? '',
+    year: params.get('year') ?? '',
+  }, currentYear)
+}
+
+function browseUrl(state: BrowseState, currentUrl: URL) {
+  const nextUrl = new URL(currentUrl)
+  if (state.feed === 'popular') nextUrl.searchParams.delete('feed')
+  else nextUrl.searchParams.set('feed', state.feed)
+  if (state.genre) nextUrl.searchParams.set('genre', state.genre)
+  else nextUrl.searchParams.delete('genre')
+  if (state.year) nextUrl.searchParams.set('year', state.year)
+  else nextUrl.searchParams.delete('year')
+  return `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`
+}
+
+function currentBrowseUrl() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
+function writeBrowseUrl(state: BrowseState, replace = false) {
+  const nextUrl = browseUrl(state, new URL(window.location.href))
+  if (replace) window.history.replaceState(null, '', nextUrl)
+  else window.history.pushState(null, '', nextUrl)
+}
+
+export function CatalogBrowseContent({ current, currentYear, initialFeed = 'popular', initialGenre = '', initialYear = '', kind, popular }: { current: CatalogPage; currentYear: number; initialFeed?: BrowseCatalogFeed | undefined; initialGenre?: string | undefined; initialYear?: string | undefined; kind: CatalogKind; popular: CatalogPage }) {
+  const initialState = useMemo(() => normalizeBrowseState({ feed: initialFeed, genre: initialGenre, year: initialYear }, currentYear), [currentYear, initialFeed, initialGenre, initialYear])
+  const [genre, setGenre] = useState(initialState.genre)
+  const [year, setYear] = useState(initialState.year)
+  const [feed, setFeed] = useState<BrowseCatalogFeed>(initialState.feed)
+  const genres = [...new Set([...popular.items, ...current.items].flatMap((title) => title.genreNames).concat(genre ? [genre] : []))].sort()
+  const filtersDisabled = feed === 'trending'
   const query = useMemo(() => ({ kind, feed, genre: genre || undefined, year: year ? Number(year) : undefined }), [kind, feed, genre, year])
   const isDefault = !genre && !year && feed === 'popular'
   const backdrops = useMemo(
     () => [...popular.items, ...current.items].map((title) => title.backdropUrl ?? title.posterUrl),
     [current.items, popular.items],
   )
-  function reset() { setGenre(''); setYear(''); setFeed('popular') }
+  useEffect(() => {
+    const canonicalUrl = browseUrl(initialState, new URL(window.location.href))
+    if (currentBrowseUrl() !== canonicalUrl) window.history.replaceState(null, '', canonicalUrl)
+    function restoreFromUrl() {
+      const next = stateFromSearchParams(new URLSearchParams(window.location.search), currentYear)
+      setGenre(next.genre)
+      setYear(next.year)
+      setFeed(next.feed)
+      const normalizedUrl = browseUrl(next, new URL(window.location.href))
+      if (currentBrowseUrl() !== normalizedUrl) window.history.replaceState(null, '', normalizedUrl)
+    }
+    window.addEventListener('popstate', restoreFromUrl)
+    return () => window.removeEventListener('popstate', restoreFromUrl)
+  }, [currentYear, initialState])
+
+  function applyState(nextState: BrowseState) {
+    const next = normalizeBrowseState(nextState, currentYear)
+    setGenre(next.genre)
+    setYear(next.year)
+    setFeed(next.feed)
+    writeBrowseUrl(next)
+  }
+  function reset() { applyState({ feed: 'popular', genre: '', year: '' }) }
   return (
-    <main className="consumit-catalog-browse w-full">
+    <main id="consumit-main-content" tabIndex={-1} className="consumit-catalog-browse w-full">
       <BrowseHero
         backdrops={backdrops}
         description={kind === 'movie' ? 'Find your next great watch.' : 'Find your next can’t-stop-watching.'}
@@ -132,12 +194,16 @@ export function CatalogBrowseContent({ current, currentYear, initialFeed = 'popu
       >
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
           <SlidersHorizontal aria-hidden="true" className="mr-1 hidden size-4 shrink-0 text-[var(--fs-muted)] xl:block" />
-          <BrowseSelect label="Genre" onChange={setGenre} options={[{ label: 'All genres', value: '' }, ...genres.map((name) => ({ label: name, value: name }))]} value={genre} />
-          <BrowseSelect label="Year" onChange={setYear} options={[{ label: 'All years', value: '' }, ...Array.from({ length: currentYear - 1899 }, (_, index) => currentYear + 1 - index).map((value) => ({ label: String(value), value: String(value) }))]} value={year} />
+          <BrowseSelect disabled={filtersDisabled} label="Genre" onChange={(value) => applyState({ feed, genre: value, year })} options={[{ label: 'All genres', value: '' }, ...genres.map((name) => ({ label: name, value: name }))]} value={genre} />
+          <BrowseSelect disabled={filtersDisabled} label="Year" onChange={(value) => applyState({ feed, genre, year: value })} options={[{ label: 'All years', value: '' }, ...Array.from({ length: currentYear - 1899 }, (_, index) => currentYear + 1 - index).map((value) => ({ label: String(value), value: String(value) }))]} value={year} />
+          {filtersDisabled ? <p className="basis-full text-xs text-[var(--fs-muted)]" role="status">Choose Popular or Top rated to filter by genre or year.</p> : null}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {!isDefault ? <Button onClick={reset} size="sm" variant="ghost">Reset</Button> : null}
-          <BrowseSelect label="Sort by" onChange={(value) => setFeed(catalogBrowseFeed(value))} options={[{ label: 'Popular', value: 'popular' }, { label: 'Trending', value: 'trending' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
+          <BrowseSelect label="Sort by" onChange={(value) => {
+            const nextFeed = catalogBrowseFeed(value)
+            applyState({ feed: nextFeed, genre: nextFeed === 'trending' ? '' : genre, year: nextFeed === 'trending' ? '' : year })
+          }} options={[{ label: 'Popular', value: 'popular' }, { label: 'Trending', value: 'trending' }, { label: 'Top rated', value: 'top-rated' }]} value={feed} />
         </div>
       </div>
       <CatalogFeed initialPage={isDefault ? popular : undefined} key={`${kind}:${feed}:${genre}:${year}`} query={query} reset={reset} />

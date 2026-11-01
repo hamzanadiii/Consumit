@@ -1,3 +1,4 @@
+import type { SubtitlePlaybackContext } from './playback-context.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 import type { SubtitleCandidate, SubtitleProviderStatus, SubtitleDiscoveryEvent } from '@consumit/contracts'
@@ -10,8 +11,19 @@ import { fetchSubtitleBytes } from './http.ts'
 import type { SubtitleFileStore } from './storage.ts'
 import type { SubtitleRef } from './subtitles.ts'
 import type { RawSubtitle, SubtitleQuery, SubtitleSearchProvider } from './types.ts'
+import {
+  classifySubtitleMatch,
+  isSubtitleCandidateEligible,
+  isSubtitleProviderEligible,
+  primarySubtitleLanguage,
+  requiresExactEpisodeArchiveMatch,
+  SUBTITLE_POLICY_VERSION,
+  SUBTITLE_RESERVE_LIMIT,
+  subtitleContentChecksum,
+  subtitleLanguageRank,
+} from './selection-policy.ts'
 
-const TTL = 3600
+const TTL = 24 * 3600
 const PROVIDER_TIMEOUT_MS = 8500
 const PAGE_SIZE = 20
 
@@ -21,23 +33,27 @@ type Snapshot = { id: string; ref: SubtitleRef; candidates: Candidate[]; version
 export type ProviderOutcome = SubtitleProviderStatus
 export type DiscoveryEvent = SubtitleDiscoveryEvent
 
-function publicTrack(raw: RawSubtitle, id: string): DiscoveryTrack {
+function publicTrack(raw: RawSubtitle, id: string, context?: { videoVersion?: string; release?: string }): DiscoveryTrack {
   const flags = detectTrackFlags(`${raw.label} ${raw.url}`)
   return {
-    id, language: raw.lang.toLowerCase(), label: raw.label.slice(0, 160), provider: raw.provider.slice(0, 64),
+    id, match: classifySubtitleMatch(raw, context), language: raw.lang.toLowerCase(), label: raw.label.slice(0, 160), provider: raw.provider.slice(0, 64),
     ...(raw.providerName ? { providerName: raw.providerName.slice(0, 160) } : {}),
     ...(raw.release ? { release: raw.release.slice(0, 160) } : {}),
     ...(raw.hi ? { hi: true } : {}),
-    ...(flags.forced ? { forced: true } : {}),
-    ...(flags.sdh ? { sdh: true } : {}),
-    ...(flags.machineTranslated ? { machineTranslated: true } : {}),
+    ...(flags.forced || raw.forced ? { forced: true } : {}),
+    ...(flags.sdh || raw.sdh || raw.hi ? { sdh: true } : {}),
+    ...(flags.signs || raw.signs ? { signs: true } : {}),
+    ...(flags.songs || raw.songs ? { songs: true } : {}),
+    ...(flags.machineTranslated || raw.machineTranslated ? { machineTranslated: true } : {}),
   }
 }
 
-function validRaw(raw: RawSubtitle, provider: SubtitleSearchProvider): boolean {
+function validRaw(raw: RawSubtitle, provider: SubtitleSearchProvider, query: SubtitleQuery): boolean {
+  if (/\.xz(?:[?#]|$)/i.test(raw?.url ?? '')) return false
   if (!raw || typeof raw !== 'object' || raw.provider !== provider.id || typeof raw.lang !== 'string' || raw.lang.length > 32 || !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(raw.lang) ||
       typeof raw.label !== 'string' || typeof raw.url !== 'string' || raw.url.length > 4096 ||
       (raw.identityUrl !== undefined && (typeof raw.identityUrl !== 'string' || raw.identityUrl.length > 4096))) return false
+  if (!isSubtitleCandidateEligible(raw, query)) return false
   try {
     const url = new URL(raw.url.replace(/ /g, '%20'))
     if (url.protocol !== 'https:' || url.username || url.password || ['localhost', '127.0.0.1', '::1'].includes(url.hostname)) return false
@@ -49,14 +65,49 @@ function validRaw(raw: RawSubtitle, provider: SubtitleSearchProvider): boolean {
   } catch { return false }
 }
 
+function isRecommendedCandidate(candidate: Candidate) {
+  const track = candidate.public
+  return track.provider === 'rivesubs' && !track.forced && !track.signs && !track.songs && !track.machineTranslated
+}
+
+function rankedCandidates(candidates: readonly Candidate[], preferred: readonly string[] = []) {
+  const ordered = [...candidates].sort((a, b) =>
+    Number(isRecommendedCandidate(b)) - Number(isRecommendedCandidate(a)) ||
+    Number(b.public.match === 'source') - Number(a.public.match === 'source') ||
+    Number(b.public.match === 'release') - Number(a.public.match === 'release') ||
+    Number(Boolean(a.public.forced || a.public.signs || a.public.songs || a.public.machineTranslated)) - Number(Boolean(b.public.forced || b.public.signs || b.public.songs || b.public.machineTranslated)) ||
+    Number(Boolean(a.public.sdh)) - Number(Boolean(b.public.sdh)) ||
+    Number(b.public.preparedUrl !== undefined) - Number(a.public.preparedUrl !== undefined) ||
+    Number(subtitleLanguageRank(b.public.language, preferred) < preferred.length) - Number(subtitleLanguageRank(a.public.language, preferred) < preferred.length) ||
+    a.public.label.localeCompare(b.public.label))
+  const recommendedByLanguage = new Set<string>()
+  const recommendedIds = new Set<string>()
+  for (const candidate of ordered) {
+    const language = primarySubtitleLanguage(candidate.public.language)
+    if (!isRecommendedCandidate(candidate) || recommendedByLanguage.has(language)) continue
+    recommendedByLanguage.add(language)
+    recommendedIds.add(candidate.public.id)
+  }
+  return ordered.map(({ public: track }) => {
+    const { recommended: _oldRecommendation, ...publicTrack } = track
+    return recommendedIds.has(track.id) ? { ...publicTrack, recommended: true } : publicTrack
+  })
+}
+
 function counts(snapshot: Snapshot): DiscoveryEvent['languages'] {
   const found = new Map<string, number>()
-  for (const candidate of snapshot.candidates) found.set(candidate.public.language, (found.get(candidate.public.language) ?? 0) + 1)
+  for (const candidate of snapshot.candidates.map(entry => entry.public)) {
+    const language = primarySubtitleLanguage(candidate.language)
+    found.set(language, (found.get(language) ?? 0) + 1)
+  }
   return [...found].map(([code, count]) => ({ code, count })).sort((a, b) => a.code.localeCompare(b.code))
 }
 
 export function createSubtitleDiscovery(deps: {
   providers: readonly SubtitleSearchProvider[]
+  matchContext?: { videoVersion?: string; release?: string } | undefined
+  createSearchId?: (() => string) | undefined
+  fetchFile?: typeof fetchSubtitleBytes | undefined
   store: PlaybackStore
   files: SubtitleFileStore
   origin: string
@@ -64,9 +115,12 @@ export function createSubtitleDiscovery(deps: {
   query(ref: SubtitleRef, signal: AbortSignal, preferredLanguages?: readonly string[]): Promise<SubtitleQuery>
   requirements?: Readonly<Record<string, string>> | undefined
 }) {
+  deps = { ...deps, providers: deps.providers.filter(provider => isSubtitleProviderEligible(provider.id)) }
   const outcomes = new Map<string, ProviderOutcome>()
+  const jobs = new Map<string, Promise<DiscoveryEvent[]>>()
+  const discoveryKey = (ref: SubtitleRef, langs: readonly string[]) => createHash('sha256').update(JSON.stringify({ ref, langs: [...new Set(langs.map(primarySubtitleLanguage))].sort(), policy: SUBTITLE_POLICY_VERSION })).digest('hex')
   const key = (id: string) => `subtitle:discovery:${id}`
-  const latestKey = (ref: SubtitleRef) => `subtitle:latest:${ref.kind}:${ref.id}:${ref.season ?? 0}:${ref.episode ?? 0}`
+  const latestKey = (ref: SubtitleRef, langs: readonly string[]) => `subtitle:latest:${discoveryKey(ref, langs)}`
   const preparedFileKey = (url: string | undefined): string | null => {
     const prefix = `${deps.origin.replace(/\/$/, '')}/v1/subtitles/file/`
     if (!url?.startsWith(prefix)) return null
@@ -74,6 +128,7 @@ export function createSubtitleDiscovery(deps: {
     return /^[0-9a-f]{16}$/.test(key) ? key : null
   }
   const available = (candidate: Candidate) => {
+    if (!isSubtitleProviderEligible(candidate.public.provider) || candidate.raw?.expiresAt && Date.parse(candidate.raw.expiresAt) <= Date.now() + 5000) return false
     if (!candidate.public.provider.startsWith('stream-')) return true
     const provider = deps.providers.find(provider => provider.id === candidate.public.provider)
     return Boolean(candidate.raw && provider?.accepts?.(candidate.raw))
@@ -84,6 +139,9 @@ export function createSubtitleDiscovery(deps: {
     if (!raw) return null
     try {
       const parsed = JSON.parse(raw) as Snapshot
+      if (!Array.isArray(parsed.candidates)) return null
+      if (parsed.candidates.some(candidate => !isSubtitleProviderEligible(candidate.public?.provider ?? ''))) return null
+      if ((parsed.version ?? 0) < 4) parsed.candidates = parsed.candidates.filter(candidate => !requiresExactEpisodeArchiveMatch(candidate.public?.provider ?? ''))
       return parsed.id === id && Array.isArray(parsed.candidates) ? parsed : null
     } catch { return null }
   }
@@ -93,24 +151,58 @@ export function createSubtitleDiscovery(deps: {
   }
   function mergeCandidate(snapshot: Snapshot, candidate: Candidate) {
     const fileKey = candidate.raw ? subtitleFileKey(candidate.raw) : candidate.public.preparedUrl?.match(/\/file\/([0-9a-f]{16})$/)?.[1]
-    const existing = snapshot.candidates.find((entry) => entry.public.id === candidate.public.id ||
+    const existing = snapshot.candidates.find((entry) => candidate.raw && entry.raw && (candidate.raw.identityUrl ?? candidate.raw.url) === (entry.raw.identityUrl ?? entry.raw.url) && primarySubtitleLanguage(candidate.raw.lang) === primarySubtitleLanguage(entry.raw.lang) && Boolean(candidate.public.forced) === Boolean(entry.public.forced) && Boolean(candidate.public.sdh) === Boolean(entry.public.sdh) || entry.public.id === candidate.public.id ||
       (fileKey !== undefined && fileKey === (entry.raw ? subtitleFileKey(entry.raw) : entry.public.preparedUrl?.match(/\/file\/([0-9a-f]{16})$/)?.[1])))
     if (existing) {
       // Preserve the visible ID and attach the provider result to its cached
       // file instead of displaying a second, unprepared copy.
-      if (candidate.raw) existing.raw = candidate.raw
+      if (candidate.raw && existing.public.provider === candidate.public.provider) existing.raw = candidate.raw
       if (candidate.prepared) { existing.prepared = candidate.prepared; existing.public.preparedUrl = candidate.prepared.url }
       return false
     }
-    if (snapshot.candidates.length >= 10000) return false
+    if (snapshot.candidates.length >= SUBTITLE_RESERVE_LIMIT) return false
     snapshot.candidates.push(candidate)
     return true
   }
   function add(snapshot: Snapshot, raw: RawSubtitle) {
     const id = candidateId(raw)
-    return mergeCandidate(snapshot, { public: publicTrack(raw, id), raw })
+    return mergeCandidate(snapshot, { public: publicTrack(raw, id, deps.matchContext), raw })
   }
-  async function* discover(ref: SubtitleRef, signal: AbortSignal, cursor?: string, preferredLanguages: readonly string[] = []): AsyncGenerator<DiscoveryEvent> {
+  async function* discover(ref: SubtitleRef, signal: AbortSignal, cursor?: string, preferredLanguages: readonly string[] = [], _context?: SubtitlePlaybackContext): AsyncGenerator<DiscoveryEvent> {
+    if (!cursor) {
+      const cacheKey = `subtitle:shared:${discoveryKey(ref, preferredLanguages)}`
+      const cached = await deps.store.get(cacheKey)
+      let stale: { at: number; events: DiscoveryEvent[] } | undefined
+      if (cached) {
+        try {
+          const value = JSON.parse(cached) as { at: number; events: DiscoveryEvent[]; empty: boolean; failed?: boolean }
+          if (Date.now() - value.at < (value.empty ? value.failed ? 60 : 300 : 3600) * 1000) {
+            for (const event of value.events) yield event
+            return
+          }
+          if (!value.empty && Date.now() - value.at < TTL * 1000) stale = value
+        } catch { /* Invalid cache is a miss. */ }
+      }
+      const existing = jobs.get(cacheKey)
+      if (existing) { for (const event of await existing) { signal.throwIfAborted(); yield event }; return }
+      if (jobs.size >= 100) throw new Error('Subtitle discovery is busy. Try again.')
+      let resolveJob!: (events: DiscoveryEvent[]) => void, rejectJob!: (error: unknown) => void
+      const job = new Promise<DiscoveryEvent[]>((resolve, reject) => { resolveJob = resolve; rejectJob = reject })
+      void job.catch(() => undefined)
+      jobs.set(cacheKey, job)
+      const events: DiscoveryEvent[] = []
+      try {
+        for await (const event of discoverBatch(ref, signal, undefined, preferredLanguages)) { events.push(event); if (!stale) yield event }
+        const failed = events.some(event => event.provider?.state === 'failed' || event.provider?.state === 'timeout')
+        const empty = !events.at(-1)?.languages.length
+        if (failed && !events.some(event => event.provider?.state === 'ready') && stale) { resolveJob(stale.events); for (const event of stale.events) yield event }
+        else { await deps.store.set(cacheKey, JSON.stringify({ at: Date.now(), events, empty, failed }), TTL); resolveJob(events); if (stale) for (const event of events) yield event }
+      } catch (error) {
+        if (stale && !signal.aborted) { resolveJob(stale.events); for (const event of stale.events) yield event }
+        else { rejectJob(error); throw error }
+      } finally { jobs.delete(cacheKey); rejectJob(new Error('Subtitle discovery stopped.')) }
+      return
+    }
     if (cursor && !/^[0-9a-f-]{36}\.[0-9a-f-]{36}$/.test(cursor)) throw new Error('Invalid subtitle continuation.')
     const prior = cursor ? await read(cursor.split('.')[0]!) : null
     if (cursor && (!prior || JSON.stringify(prior.ref) !== JSON.stringify(ref))) throw new Error('Search subtitles again.')
@@ -128,12 +220,12 @@ export function createSubtitleDiscovery(deps: {
     } finally { if (lock) await deps.store.release(lock, lease) }
   }
   async function* discoverBatch(ref: SubtitleRef, signal: AbortSignal, prior?: Snapshot, preferredLanguages: readonly string[] = []): AsyncGenerator<DiscoveryEvent> {
-    const snapshot: Snapshot = prior ?? { id: randomUUID(), ref, candidates: [], version: 3 }
+    const snapshot: Snapshot = prior ?? { id: (deps.createSearchId ?? randomUUID)(), ref, candidates: [], version: SUBTITLE_POLICY_VERSION }
     if (!prior) {
     try {
-      const previousId = await deps.store.get(latestKey(ref))
+      const previousId = await deps.store.get(latestKey(ref, preferredLanguages))
       const previous = previousId ? await read(previousId) : null
-      if (previous?.version === 3) {
+      if (previous?.version === SUBTITLE_POLICY_VERSION) {
         const usable = await Promise.all(previous.candidates.map(async (candidate) => {
           if (candidate.prepared && candidate.public.preparedUrl) {
             const fileKey = candidate.public.preparedUrl.match(/\/file\/([0-9a-f]{16})$/)?.[1]
@@ -145,7 +237,7 @@ export function createSubtitleDiscovery(deps: {
       }
     } catch { /* Cache outages never hold discovery. */ }
     await save(snapshot)
-    await deps.store.set(latestKey(ref), snapshot.id, TTL)
+    await deps.store.set(latestKey(ref, preferredLanguages), snapshot.id, TTL)
     yield { type: 'snapshot', searchId: snapshot.id, languages: counts(snapshot) }
 
     if (deps.catalog) {
@@ -154,10 +246,10 @@ export function createSubtitleDiscovery(deps: {
         const usable = await Promise.all(rows.map(async (row) => await deps.files.getVtt(row.storageKey) ? row : null))
         let added = false
         for (const row of usable) {
-          if (!row || row.provider.startsWith('stream-')) continue
+          if (!row || row.provider.startsWith('stream-') || !isSubtitleProviderEligible(row.provider) || requiresExactEpisodeArchiveMatch(row.provider)) continue
           const track = toServedTracks([row], deps.origin)[0]!
           const inserted = mergeCandidate(snapshot, { public: {
-            id: `catalog-${row.storageKey}`, language: row.language, label: row.label, provider: row.provider,
+            id: `catalog-${row.storageKey}`, match: 'unverified', language: row.language, label: row.label, provider: row.provider,
             preparedUrl: track.url, ...(row.releaseTag ? { release: row.releaseTag } : {}), ...(row.hi ? { hi: true } : {}),
           }, prepared: track })
           added ||= inserted
@@ -173,7 +265,11 @@ export function createSubtitleDiscovery(deps: {
     const query = snapshot.query ?? await deps.query(ref, signal, preferredLanguages)
     snapshot.query = query
     snapshot.remaining ??= deps.providers.filter(provider => { try { return provider.supports(query) } catch { return false } }).map(provider => provider.id)
-    const batch = snapshot.remaining.splice(0, 12)
+    // Source-associated adapters are ordered first; each batch searches up to
+    // twelve subtitle providers before offering the continuation.
+    const attached = snapshot.remaining.filter(id => id.startsWith('stream-current-'))
+    snapshot.remaining = snapshot.remaining.filter(id => !attached.includes(id))
+    const batch = [...attached, ...snapshot.remaining.splice(0, 12)]
     await save(snapshot)
     const pending = new Map<string, Promise<{ provider: SubtitleSearchProvider; raws: RawSubtitle[]; durationMs: number; error?: 'failed' | 'timeout' }>>()
     for (const provider of deps.providers) {
@@ -209,13 +305,14 @@ export function createSubtitleDiscovery(deps: {
     while (pending.size && !signal.aborted) {
       const result = await Promise.race(pending.values())
       pending.delete(result.provider.id)
-      const valid = Array.isArray(result.raws) ? result.raws.slice(0, 2000).filter((raw) => validRaw(raw, result.provider) && (!result.provider.accepts || result.provider.accepts(raw))) : []
+      const valid = Array.isArray(result.raws) ? result.raws.slice(0, 2000).filter((raw) => validRaw(raw, result.provider, query) && (!result.provider.accepts || result.provider.accepts(raw))) : []
       for (const raw of valid) add(snapshot, raw)
       await save(snapshot)
       const status: ProviderOutcome = {
         id: result.provider.id, name: result.provider.name,
         state: result.error === 'timeout' ? 'timeout' : result.error ? 'failed' : valid.length ? 'ready' : 'no_match',
         durationMs: result.durationMs, found: valid.length,
+        ...(!valid.length && Array.isArray(result.raws) && result.raws.some(raw => /\.xz(?:[?#]|$)/i.test(raw?.url ?? '')) ? { reason: 'unsupported_format' as const } : {}),
         ...(result.error ? { failure: 'search' as const } : Array.isArray(result.raws) && valid.length < result.raws.length ? { failure: 'parse' as const } : {}),
       }
       outcomes.set(result.provider.id, status)
@@ -229,11 +326,10 @@ export function createSubtitleDiscovery(deps: {
   async function page(searchId: string, language: string, cursor = 0, preferred: readonly string[] = []) {
     const snapshot = await read(searchId)
     if (!snapshot) return null
-    const ranked = snapshot.candidates.filter((candidate) => candidate.public.language === language && available(candidate))
-      .sort((a, b) => Number(b.public.preparedUrl !== undefined) - Number(a.public.preparedUrl !== undefined) ||
-        Number(preferred.includes(b.public.language)) - Number(preferred.includes(a.public.language)) || a.public.label.localeCompare(b.public.label))
-    const tracks = ranked.slice(cursor, cursor + PAGE_SIZE).map((candidate) => candidate.public)
-    return { tracks, total: ranked.length, nextCursor: cursor + PAGE_SIZE < ranked.length ? cursor + PAGE_SIZE : null }
+    const ranked = snapshot.candidates.filter((candidate) => primarySubtitleLanguage(candidate.public.language) === primarySubtitleLanguage(language) && available(candidate))
+    const choices = rankedCandidates(ranked, preferred)
+    const tracks = choices.slice(cursor, cursor + PAGE_SIZE)
+    return { tracks, total: choices.length, nextCursor: cursor + PAGE_SIZE < choices.length ? cursor + PAGE_SIZE : null }
   }
   async function search(searchId: string, term: string, cursor = 0) {
     const snapshot = await read(searchId)
@@ -241,7 +337,8 @@ export function createSubtitleDiscovery(deps: {
     const query = term.trim().toLowerCase().slice(0, 80)
     const matches = snapshot.candidates.filter((candidate) => available(candidate) &&
       `${candidate.public.language} ${langLabel(candidate.public.language)} ${candidate.public.label} ${candidate.public.provider} ${candidate.public.release ?? ''}`.toLowerCase().includes(query))
-    return { tracks: matches.slice(cursor, cursor + PAGE_SIZE).map((candidate) => candidate.public), total: matches.length, nextCursor: cursor + PAGE_SIZE < matches.length ? cursor + PAGE_SIZE : null }
+    const choices = rankedCandidates(matches)
+    return { tracks: choices.slice(cursor, cursor + PAGE_SIZE), total: choices.length, nextCursor: cursor + PAGE_SIZE < choices.length ? cursor + PAGE_SIZE : null }
   }
   async function testCandidates(searchId: string): Promise<string[]> {
     const snapshot = await read(searchId)
@@ -253,7 +350,7 @@ export function createSubtitleDiscovery(deps: {
       return true
     }).map((candidate) => candidate.public.id)
   }
-  async function prepare(searchId: string, candidateId: string, signal: AbortSignal): Promise<ServedSubtitle | null> {
+  async function prepareCandidate(searchId: string, candidateId: string, signal: AbortSignal): Promise<ServedSubtitle | null> {
     const snapshot = await read(searchId)
     const candidate = snapshot?.candidates.find((entry) => entry.public.id === candidateId)
     if (!snapshot || !candidate || !available(candidate)) return null
@@ -277,7 +374,12 @@ export function createSubtitleDiscovery(deps: {
     try {
       // Preparation already has an exact candidate. It must not repeat
       // optional catalog lookups before downloading the selected file.
-      const query: SubtitleQuery = { type: snapshot.ref.kind === 'series' ? 'tv' : snapshot.ref.kind }
+      const query: SubtitleQuery = snapshot.query ?? {
+        type: snapshot.ref.kind === 'series' ? 'tv' : snapshot.ref.kind,
+        ...(snapshot.ref.season !== undefined ? { season: snapshot.ref.season } : {}),
+        ...(snapshot.ref.episode !== undefined ? { episode: snapshot.ref.episode } : {}),
+        ...(snapshot.ref.kind === 'anime' && snapshot.ref.episode !== undefined ? { absoluteEpisode: snapshot.ref.episode } : {}),
+      }
       const configured = deps.providers.find(provider => provider.id === candidate.raw!.provider)
       // The shim inherits the real provider's declared file scope so the
       // engine enforces the same destination rules on this single-candidate
@@ -289,12 +391,14 @@ export function createSubtitleDiscovery(deps: {
       }
       let downloadFailed = false
       const fetchFile: typeof fetchSubtitleBytes = async (...args) => {
-        try { return configured?.download ? await configured.download(candidate.raw!, args[3]) : await fetchSubtitleBytes(...args) }
+        try { return configured?.download ? await configured.download(candidate.raw!, args[3]) : await (deps.fetchFile ?? fetchSubtitleBytes)(...args) }
         catch (error) { downloadFailed = true; throw error }
       }
       const track = (await resolveSubtitles(query, [provider], deps.files, deps.origin, signal, fetchFile, true))[0] ?? null
       if (!available(candidate)) return null
       if (!track) {
+        snapshot.candidates = snapshot.candidates.filter(entry => entry !== candidate)
+        await save(snapshot)
         outcomes.set(candidate.raw.provider, { id: candidate.raw.provider, name: candidate.raw.provider, state: 'failed', durationMs: 0, found: 0, failure: downloadFailed ? 'download' : 'conversion' })
         return null
       }
@@ -302,10 +406,30 @@ export function createSubtitleDiscovery(deps: {
       // browser-facing discovery contract only accepts first-party files.
       const fileKey = preparedFileKey(track.url)
       if (!fileKey || !await deps.files.getVtt(fileKey)) return null
+      const preparedVtt = await deps.files.getVtt(fileKey)
+      if (preparedVtt) {
+        const checksum = subtitleContentChecksum(preparedVtt)
+        candidate.public.contentChecksum = checksum
+        track.contentChecksum = checksum
+        track.match = candidate.public.match ?? 'unverified'
+        if (track.match === 'unverified' && track.provider !== 'rivesubs') track.recommended = false
+        if (candidate.public.recommended && track.provider === 'rivesubs') {
+          track.recommended = true
+          if (!track.label.endsWith(' · Recommended')) track.label = `${track.label} · Recommended`
+        }
+        const duplicate = snapshot.candidates.find(entry => entry !== candidate && entry.prepared && entry.public.contentChecksum === checksum &&
+          primarySubtitleLanguage(entry.public.language) === primarySubtitleLanguage(candidate.public.language) &&
+          Boolean(entry.public.forced) === Boolean(candidate.public.forced) && Boolean(entry.public.sdh) === Boolean(candidate.public.sdh) && Boolean(entry.public.signs) === Boolean(candidate.public.signs) && Boolean(entry.public.songs) === Boolean(candidate.public.songs))
+        if (duplicate?.prepared) {
+          snapshot.candidates = snapshot.candidates.filter(entry => entry !== candidate)
+          await save(snapshot)
+          return duplicate.prepared
+        }
+      }
       candidate.prepared = track
       candidate.public.preparedUrl = track.url
       await save(snapshot)
-      if (deps.catalog && !candidate.public.provider.startsWith('stream-')) {
+      if (deps.catalog && !candidate.public.provider.startsWith('stream-') && !requiresExactEpisodeArchiveMatch(candidate.public.provider)) {
         try {
           const vtt = await deps.files.getVtt(fileKey)
           if (vtt) await deps.catalog.save(snapshot.ref, [{
@@ -321,6 +445,17 @@ export function createSubtitleDiscovery(deps: {
       outcomes.set(candidate.raw.provider, { id: candidate.raw.provider, name: candidate.raw.provider, state: 'failed', durationMs: 0, found: 0, failure: 'download' })
       return null
     }
+  }
+  const preparations = new Map<string, Promise<ServedSubtitle | null>>()
+  let preparationTail = Promise.resolve()
+  function prepare(searchId: string, candidateId: string, signal: AbortSignal): Promise<ServedSubtitle | null> {
+    const key = `${searchId}:${candidateId}`, existing = preparations.get(key)
+    if (existing) return existing
+    if (preparations.size >= 10) return Promise.resolve(null)
+    const result = preparationTail.then(() => { signal.throwIfAborted(); return prepareCandidate(searchId, candidateId, signal) }).finally(() => preparations.delete(key))
+    preparationTail = result.then(() => undefined, () => undefined)
+    preparations.set(key, result)
+    return result
   }
   function diagnostics() {
     return deps.providers.map((provider) => ({

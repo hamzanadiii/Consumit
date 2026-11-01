@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 function shellTheme() {
-  return screen.getByRole('heading', { name: 'Consumit home' }).closest('[data-filscreen-home]')?.getAttribute('data-theme')
+  return document.querySelector('[data-filscreen-home]')?.getAttribute('data-theme')
 }
 
 const hero = { ...movieSummary, tagline: 'Long live the fighters.' }
@@ -46,6 +46,27 @@ const popular = [
 ]
 
 describe('filscreen live home', () => {
+  it('returns focus to Home and announces when retry recovers recommendations', () => {
+    const { rerender } = render(<ShellStateProvider><FilScreenHome catalogState="unavailable" hero={hero} /></ShellStateProvider>)
+    const main = screen.getByRole('main')
+
+    rerender(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={trendingMovies} /></ShellStateProvider>)
+
+    expect(main).toHaveFocus()
+    expect(screen.getByRole('status')).toHaveTextContent('Home recommendations refreshed.')
+  })
+
+  it('returns focus to Home when retry succeeds with no fresh recommendations', () => {
+    const { rerender } = render(<ShellStateProvider><FilScreenHome catalogState="unavailable" hero={hero} /></ShellStateProvider>)
+    const main = screen.getByRole('main')
+
+    rerender(<ShellStateProvider><FilScreenHome catalogState="empty" hero={hero} /></ShellStateProvider>)
+
+    expect(main).toHaveFocus()
+    expect(screen.getByRole('status')).toHaveTextContent('No fresh recommendations are available yet.')
+    expect(screen.queryByText('Home recommendations refreshed.')).not.toBeInTheDocument()
+  })
+
   it('keeps the shelf feed in movie and series View all destinations', () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} trendingMovies={trendingMovies} trendingSeries={trendingSeries} topRatedMovies={popular} topRatedSeries={trendingSeries} /></ShellStateProvider>)
     for (const [title, href] of [
@@ -94,7 +115,7 @@ describe('filscreen live home', () => {
 
     rerender(<ShellStateProvider><FilScreenHome hero={hero} trendingWithMembers={[{ ...movieSummary, id: 987, title: 'A shared pulse' }]} /></ShellStateProvider>)
 
-    const rail = screen.getByRole('region', { name: 'Trending with members titles' })
+    const rail = screen.getByRole('list', { name: 'Trending with members titles' })
     expect(within(rail).getByText('A shared pulse')).toBeInTheDocument()
     expect(within(rail).queryByText(/\b\d+\s+(viewers?|members)\b|watching now|live now/i)).not.toBeInTheDocument()
   })
@@ -117,6 +138,7 @@ describe('filscreen live home', () => {
   it('offers sign in to guests and marks Home as current', () => {
     render(<ShellStateProvider><FilScreenHome hero={hero} popular={popular} trending={trending} /></ShellStateProvider>)
 
+    expect(within(screen.getByRole('main')).getByRole('heading', { level: 1, name: 'Discover your next watch' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
     expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument()
@@ -129,7 +151,7 @@ describe('filscreen live home', () => {
     expect(screen.queryByRole('link', { name: 'Categories' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Search titles' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('link', { name: 'History' })).toHaveAttribute('href', '/library?section=history')
+    expect(screen.getByRole('link', { name: 'Community' })).toHaveAttribute('href', '/community')
   })
 
   it('renders dark by default and persists the member theme choice', async () => {

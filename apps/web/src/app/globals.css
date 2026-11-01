@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import '@consumit/ui/styles.css';
-@import 'lenis/dist/lenis.css';
 @source '../../../../packages/ui/src';
 
 /* Embeds size controls against the iframe itself, not the host page viewport. */
@@ -46,6 +45,42 @@ body {
   font-family: var(--consumit-font-interface);
   caret-color: var(--consumit-orange);
   text-rendering: optimizeLegibility;
+}
+
+.consumit-skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  width: 1px;
+  height: 1px;
+  align-items: center;
+  overflow: hidden;
+  clip-path: inset(50%);
+  padding: 0;
+  border: 0;
+  border-radius: var(--consumit-radius-control);
+  background: var(--consumit-ink);
+  color: var(--consumit-canvas);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.consumit-skip-link:focus-visible {
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding-inline: 16px;
+  border: 2px solid var(--consumit-orange);
+  clip-path: none;
+  outline: 2px solid var(--consumit-orange);
+  outline-offset: 3px;
+}
+
+main#consumit-main-content {
+  scroll-margin-block-start: 16px;
 }
 
 button,
@@ -106,6 +141,20 @@ select {
 .fs-mobile-menu a, .fs-mobile-menu button { min-height: 44px; }
 .fs-mobile-menu .fs-navigation-label { display: inline; }
 .consumit-settings-savebar { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Keep the shared shell's navigation and utility actions touch-safe across
+   tablet, desktop and hybrid-input breakpoints. */
+.fs-utility button,
+.fs-utility a,
+.fs-sidebar-rail > a,
+.fs-sidebar-item {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+[data-consumit-search-screen] [data-search-hero-overlay] {
+  background: linear-gradient(90deg, var(--fs-search-hero-left), var(--fs-search-hero-mid) 58%, var(--fs-search-hero-edge));
+}
 .fs-profile-editor-overlay {
   padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
@@ -126,9 +175,6 @@ select {
     padding-top: max(12px, env(safe-area-inset-top));
   }
   .fs-utility { gap: 8px; }
-  .fs-utility > button, .fs-utility > a { min-height: 44px; }
-  .fs-utility > a, .fs-menu-trigger { min-width: 44px; }
-  .fs-utility nav a { min-height: 44px; }
   .fs-utility > nav { scrollbar-width: none; }
   .fs-utility > nav::-webkit-scrollbar { display: none; }
 }

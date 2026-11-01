@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '@/test/render'
@@ -31,15 +31,33 @@ describe('legal pages', () => {
     expect(screen.getByText(/does not host, upload, or store video files/)).toBeInTheDocument()
   })
 
+  it('offers a keyboard-readable section index for every legal document', () => {
+    for (const Page of [PrivacyPage, TermsPage, DmcaPage]) {
+      const { unmount } = renderWithProviders(<Page />)
+      const contents = screen.getByRole('navigation', { name: 'On this page' })
+      const links = within(contents).getAllByRole('link')
+
+      expect(links.length).toBeGreaterThan(0)
+      for (const link of links) {
+        const id = link.getAttribute('href')?.slice(1)
+        const heading = document.getElementById(id ?? '')
+        expect(heading?.tagName).toBe('H2')
+        expect(heading?.textContent).toBe(link.textContent)
+        expect(heading).toHaveAttribute('tabindex', '-1')
+      }
+      unmount()
+    }
+  })
+
   it('states the privacy data notice and routes data questions', () => {
     renderWithProviders(<PrivacyPage />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeInTheDocument()
     expect(screen.getByText(/Consumit does not host any media/)).toBeInTheDocument()
     expect(screen.getByText(/advertising partner profitableratecpmnetwork/)).toBeInTheDocument()
-    expect(screen.getByText(/Profile identity is public, and those sections are visible by default/)).toBeInTheDocument()
+    expect(screen.getByText(/Profile identity is public, and these sections are visible by default/)).toBeInTheDocument()
     expect(screen.getByText(/The setting is off by default and independent of profile visibility/)).toBeInTheDocument()
-    expect(screen.getByText(/A member's Saved Lists are private/)).toBeInTheDocument()
+    expect(screen.getByText(/Saved Lists are private bookmarks/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'contact us through the report form' })).toHaveAttribute('href', '/report-issue')
   })
 

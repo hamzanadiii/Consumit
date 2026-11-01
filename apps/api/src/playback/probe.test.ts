@@ -61,6 +61,22 @@ describe('provider probe scheduler', () => {
     expect(seen).toMatchObject([{ kind: 'anime', id: 172463, episode: 1 }])
   })
 
+  it('probes video and separate audio on distinct keys for both-role providers', async () => {
+    const seen: Array<{ purpose?: string | undefined }> = []
+    const both = registration('both', async input => {
+      seen.push({ purpose: input.purpose })
+      return { ok: true as const, sources: [source] }
+    })
+    both.role = 'both'
+    both.mediaKinds = ['movie']
+    const scheduler = createProbeScheduler({ providers: [both], region: 'US', intervalMs: 60_000, gapMs: 0 })
+    await scheduler.runOnce()
+    expect(seen).toEqual([{ purpose: undefined }, { purpose: 'audio' }])
+    const status = await scheduler.status()
+    expect(status['both:movie:US']).toMatchObject({ ok: true, purpose: 'video', stage: 'lookup' })
+    expect(status['both:audio:movie:US']).toMatchObject({ ok: true, purpose: 'audio', stage: 'lookup' })
+  })
+
   it('keeps probe results separate for configured regions', async () => {
     const seen: string[] = []
     const provider = registration('regional', async (input) => { seen.push(input.region); return { ok: true as const, sources: [source] } })

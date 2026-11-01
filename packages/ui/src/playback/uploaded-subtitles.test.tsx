@@ -16,7 +16,7 @@ it.each(['srt', 'vtt'])('selects an uploaded %s and renders its cues after track
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
   const source = { type: 'native' as const, src: 'https://media.example/movie.mp4', subtitles: [{ id: 'english', label: 'English', language: 'en', url: 'https://media.example/english.vtt' }] }
   // jsdom has no native cue loader; use the player's parsed-cue sync path.
-  const view = render(<ConsumitPlayer title="Upload fixture" source={source} subtitleDelayMs={50} initialViewingPreferences={{ qualityHeight: null, subtitlesEnabled: true, subtitleLanguages: ['en'] }} />)
+  const view = render(<ConsumitPlayer title="Upload fixture" media={{ source }} controls={{ captions: { sync: { delayMs: 50 } }, preferences: { initialViewing: { qualityHeight: null, subtitlesEnabled: true, subtitleLanguages: ['en'] } } }} />)
   const video = view.container.querySelector('video')!
   fireEvent.loadedMetadata(video)
   fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
@@ -37,7 +37,7 @@ it.each(['srt', 'vtt'])('keeps uploaded %s lines visible across the timeline wit
   vi.stubGlobal('fetch', fetch)
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => `blob:${window.location.origin}/uploaded`) })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-  const view = render(<ConsumitPlayer title="Upload timeline" source={{ type: 'native', src: 'https://media.example/movie.mp4' }} />)
+  const view = render(<ConsumitPlayer title="Upload timeline" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
   const video = view.container.querySelector('video')!
   const file = new File([], `captions.${extension}`)
   const body = '00:00:01.000 --> 00:00:04.000\nFirst line\n\n00:00:30.000 --> 00:00:35.000\nLater line\n\n00:01:10.000 --> 00:01:15.000\nLast line\n'
@@ -60,7 +60,7 @@ it('decodes a legacy Windows-1256 Arabic upload and renders its cues', async () 
   vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('Uploaded cues are cached locally') }))
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => `blob:${window.location.origin}/arabic-upload`) })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-  const view = render(<ConsumitPlayer title="Arabic upload" source={{ type: 'native', src: 'https://media.example/movie.mp4' }} />)
+  const view = render(<ConsumitPlayer title="Arabic upload" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
   const video = view.container.querySelector('video')!
   const file = new File([], 'arabic.vtt')
   fireEvent.click(screen.getByRole('button', { name: 'Captions' }))

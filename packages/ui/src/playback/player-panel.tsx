@@ -1,11 +1,11 @@
 'use client'
 
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from 'react'
-import { ArrowLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /** Shared first-party player panels; the backdrop and transport remain visible. */
-export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, role = 'dialog', anchorSelector, anchorElement, ...props }: Omit<ComponentProps<'div'>, 'title'> & {
+export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 'Back to settings', onClose, children, className, role = 'dialog', anchorSelector, anchorElement, placementSide = 'above', size = 'default', scrollableBody = false, showScrollCue = false, scrollCueTargetSelector, scrollCueLabel = 'More settings below', ...props }: Omit<ComponentProps<'div'>, 'title'> & {
   title: string
   heading?: string
   meta?: ReactNode
@@ -16,11 +16,47 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
   anchorSelector?: string
   /** External wrapper trigger; supplied directly to avoid cross-root selectors. */
   anchorElement?: HTMLElement | null
+  /** Place a top-toolbar panel below its trigger; the default player deck opens upward. */
+  placementSide?: 'above' | 'below'
+  /** Give source menus more room without changing the compact in-player panels. */
+  size?: 'default' | 'large'
+  /** Let scrollable menus use the upper safe inset and more height on short viewports. */
+  scrollableBody?: boolean
+  /** Show a visual continuation cue while a panel body still has content below. */
+  showScrollCue?: boolean
+  /** Measure a nested scroll region when a panel has fixed controls outside its list. */
+  scrollCueTargetSelector?: string
+  /** Explain which content continues below the current view. */
+  scrollCueLabel?: string
 }) {
   const panel = useRef<HTMLDivElement>(null)
+  const panelBody = useRef<HTMLDivElement>(null)
   const headingId = useId()
   const [placement, setPlacement] = useState<CSSProperties | null>(null)
+  const [hasMoreBody, setHasMoreBody] = useState(false)
   useEffect(() => { panel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true }) }, [title])
+  useLayoutEffect(() => {
+    const element = scrollCueTargetSelector
+      ? panel.current?.querySelector<HTMLElement>(scrollCueTargetSelector) ?? null
+      : panelBody.current
+    if (!showScrollCue || !element) return
+    const update = () => {
+      const nextHasMoreBody = element.scrollTop + element.clientHeight < element.scrollHeight - 2
+      setHasMoreBody(current => current === nextHasMoreBody ? current : nextHasMoreBody)
+    }
+    update()
+    element.addEventListener('scroll', update, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(element)
+    for (const child of Array.from(element.children)) observer?.observe(child)
+    const mutationObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(update)
+    mutationObserver?.observe(element, { childList: true, characterData: true, subtree: true })
+    return () => {
+      element.removeEventListener('scroll', update)
+      observer?.disconnect()
+      mutationObserver?.disconnect()
+    }
+  }, [scrollCueTargetSelector, showScrollCue])
   useLayoutEffect(() => {
     const element = panel.current
     const root = element?.closest<HTMLElement>('[data-consumit-player], [data-provider-frame]')
@@ -35,23 +71,31 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
       const rootWidth = root.clientWidth || rootRect.width
       const viewportWidth = window.visualViewport?.width ?? window.innerWidth
       const viewportHeight = window.visualViewport?.height ?? window.innerHeight
-      const width = Math.max(0, Math.min(380, rootWidth - 24, viewportWidth - 24))
+      const width = Math.max(0, Math.min(size === 'large' ? 480 : 380, rootWidth - 24, viewportWidth - 24))
       const minLeft = Math.max(12, rootLeft + 12)
       const maxLeft = Math.min(rootLeft + rootWidth - width - 12, viewportWidth - width - 12)
       const screenLeft = Math.max(minLeft, Math.min(maxLeft, anchorRect.left + anchorRect.width / 2 - width / 2))
-      const viewportLimit = Math.min(viewportHeight * 0.84, 520)
-      const availableAbove = Math.max(0, anchorRect.top - 8 - Math.max(rootTop, 12))
+      const viewportLimit = size === 'large'
+        ? Math.min(viewportHeight * 0.84, 440)
+        : scrollableBody && viewportHeight <= 480
+          ? Math.min(viewportHeight * 0.84, 520)
+          : Math.min(viewportHeight * 0.62, 520)
+      const availableAbove = Math.max(0, anchorRect.top - 8 - Math.max(rootTop, scrollableBody ? 8 : 12))
+      const rootBottom = rootTop + (root.clientHeight || rootRect.height)
+      const availableBelow = Math.max(0, Math.min(viewportHeight, rootBottom) - anchorRect.bottom - 8)
       const containingBlock = element.offsetParent instanceof HTMLElement ? element.offsetParent : root
       const blockRect = containingBlock.getBoundingClientRect()
       const blockLeft = blockRect.left + containingBlock.clientLeft
       const blockTop = blockRect.top + containingBlock.clientTop
       const blockBottom = blockTop + (containingBlock.clientHeight || blockRect.height)
+      const placeBelow = placementSide === 'below'
       const nextPlacement: CSSProperties = {
-        position: 'absolute', inset: 'auto', top: 'auto', right: 'auto',
-        left: screenLeft - blockLeft, bottom: Math.max(0, blockBottom - anchorRect.top + 8), width,
-        maxWidth: 'none', maxHeight: Math.min(viewportLimit, availableAbove),
+        position: 'absolute', inset: 'auto', right: 'auto',
+        left: screenLeft - blockLeft,
+        ...(placeBelow ? { top: anchorRect.bottom + 8 - blockTop, bottom: 'auto' } : { top: 'auto', bottom: Math.max(0, blockBottom - anchorRect.top + 8) }),
+        width, maxWidth: 'none', maxHeight: Math.min(viewportLimit, placeBelow ? availableBelow : availableAbove),
       }
-      setPlacement(current => current && current.left === nextPlacement.left && current.bottom === nextPlacement.bottom && current.width === nextPlacement.width && current.maxHeight === nextPlacement.maxHeight ? current : nextPlacement)
+      setPlacement(current => current && current.left === nextPlacement.left && current.top === nextPlacement.top && current.bottom === nextPlacement.bottom && current.width === nextPlacement.width && current.maxHeight === nextPlacement.maxHeight ? current : nextPlacement)
     }
     position()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(position)
@@ -68,9 +112,9 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
       window.visualViewport?.removeEventListener('resize', position)
       window.visualViewport?.removeEventListener('scroll', position)
     }
-  }, [anchorElement, anchorSelector])
+  }, [anchorElement, anchorSelector, placementSide, scrollableBody, size])
   const content = (
-    <div aria-labelledby={props['aria-label'] ? undefined : headingId} {...props} className={cn('consumit-player-panel z-30 overflow-hidden overscroll-contain rounded-card border border-white/15 bg-canvas', className)} data-player-panel ref={panel} role={role} style={{ position: 'absolute', inset: 'auto 12px 72px auto', width: 'min(380px, calc(100% - 24px))', maxHeight: 'min(84dvh, 520px)', ...placement, ...props.style }} aria-modal={role === 'dialog' ? true : undefined} onKeyDown={event => {
+    <div aria-labelledby={props['aria-label'] ? undefined : headingId} {...props} className={cn('consumit-player-panel z-30 overflow-hidden overscroll-contain rounded-card border border-white/15 bg-canvas', className)} data-player-panel ref={panel} data-player-panel-has-more={hasMoreBody || undefined} role={role} style={{ position: 'absolute', inset: 'auto 12px 72px auto', width: `min(${size === 'large' ? 480 : 380}px, calc(100% - 24px))`, height: size === 'large' ? 'min(440px, 84dvh)' : undefined, maxHeight: size === 'large' ? 'min(440px, 84dvh)' : 'min(62dvh, 520px)', ...placement, ...props.style }} aria-modal={role === 'dialog' ? true : undefined} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
       if (event.key !== 'Tab') return
       const candidates = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), [tabindex="0"]') ?? []).filter(item => !item.closest('[hidden]'))
@@ -82,27 +126,29 @@ export function PlayerPanel({ title, heading = title, meta, onBack, backLabel = 
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }}>
       <header className="consumit-player-panel-header">
-        {onBack ? <button aria-label={backLabel} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" className="size-5" /></button> : null}
+        {onBack ? <button aria-label={backLabel} className="consumit-player-panel-action grid size-11 shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" className="size-5" /></button> : null}
         <h3 className="min-w-0 flex-1 text-base font-semibold text-ink" id={headingId}>{heading}</h3>
         {meta ? <span className="text-xs tabular-nums text-muted">{meta}</span> : null}
-        <button aria-label={`Close ${title.toLowerCase()}`} className="consumit-player-panel-action grid size-[40px] shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
+        <button aria-label={`Close ${title.toLowerCase()}`} className="consumit-player-panel-action grid size-11 shrink-0 place-items-center rounded-control text-muted outline-none hover:bg-surface-raised hover:text-ink focus-visible:ring-2 focus-visible:ring-orange" onClick={onClose} type="button"><X aria-hidden="true" className="size-5" /></button>
       </header>
-      <div className="consumit-player-panel-body">{children}</div>
+      <div className={cn('consumit-player-panel-body', showScrollCue && !scrollCueTargetSelector && 'consumit-player-panel-body-with-cue')} ref={panelBody}>{children}</div>
+      {showScrollCue && hasMoreBody ? <span aria-hidden="true" className="consumit-player-panel-scroll-cue" data-player-panel-scroll-cue>{scrollCueLabel}<ChevronDown className="size-4" /></span> : null}
     </div>
   )
   return content
 }
 
-export function PlayerSettingRow({ icon, label, value, onClick, disabled }: {
+export function PlayerSettingRow({ icon, label, value, onClick, disabled, quiet = false }: {
   icon: ReactNode
   label: string
   value?: ReactNode
   onClick: () => void
   disabled?: boolean
+  quiet?: boolean
 }) {
   return <button className="consumit-player-setting-row flex min-h-[44px] w-full items-center gap-3 rounded-control px-3 text-sm text-ink outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-orange disabled:cursor-default disabled:opacity-50" disabled={disabled} onClick={onClick} type="button">
     <span aria-hidden="true" className="consumit-player-setting-icon">{icon}</span>
-    <span className="min-w-0 flex-1 text-left font-medium">{label}</span>
+    <span className={`min-w-0 flex-1 text-left ${quiet ? 'font-normal text-copy' : 'font-medium'}`}>{label}</span>
     {value ? <span className="max-w-[40%] truncate text-xs text-muted">{value}</span> : null}
     <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted" />
   </button>

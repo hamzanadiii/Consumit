@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ArtworkFrame } from '@consumit/ui'
 
-import { browserCatalogBatch } from '@/lib/catalog-browser'
+import { browserCatalogTitlesForRefs } from '@/lib/catalog-browser'
 import { catalogKey } from '@/lib/catalog-registry'
 import { loadResumeEntries, hideResumeEntry, type ResumeEntry } from '@/lib/continue-watching'
 import { useSession } from '../session/session'
@@ -41,9 +41,9 @@ export function ContinueRail() {
     void loadResumeEntries(memberId, controller.signal).then(async entries => {
       if(cancelled) return
       if(!entries.length) {setRows([]);setStatus('empty');return}
-      const batch=await browserCatalogBatch(entries.map(entry=>({kind:entry.kind,id:entry.id})),controller.signal)
+      const batch=await browserCatalogTitlesForRefs(entries.map(entry=>({kind:entry.kind,id:entry.id})),controller.signal)
       if(cancelled) return
-      const byKey=new Map(batch.items.map(item=>[catalogKey(item),item]))
+      const byKey=new Map(batch.titles.map(item=>[catalogKey(item),item]))
       const resolved=entries.flatMap(entry=>{const title=byKey.get(catalogKey(entry));return title?[{entry,title}]:[]})
       setRows(resolved);setRowsOwner(memberId);setStatus(resolved.length?'ready':'empty')
     }).catch(()=>{if(!cancelled){setRows([]);setStatus('error')}})
@@ -91,7 +91,7 @@ export function ContinueRail() {
       </div>
 
         {editError?<p className="text-sm text-[var(--fs-secondary)]" role="alert">{editError}</p>:null}
-        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" role="region" tabIndex={0}>
+        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" tabIndex={0}>
           {rows.map(({ entry, title }) => {
         const href=entry.href
         const episodeLabel=entry.kind==='anime'?`E${entry.episode??1} · `:entry.kind==='series'?`S${entry.season??1} E${entry.episode??1} · `:''
@@ -161,7 +161,7 @@ export function ContinueRail() {
                 {editing ? (
                   <button
                     aria-label={`Remove ${title.title} from Continue watching`}
-                    className="absolute top-3 right-3 z-20 grid size-9 cursor-pointer place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="absolute top-3 right-3 z-20 grid size-9 cursor-pointer place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     onClick={(e) => { e.stopPropagation(); removeEntry(entry.storageKey); }}
                     type="button"
                   >
@@ -170,14 +170,14 @@ export function ContinueRail() {
                 ) : (
                 <div className={`absolute top-3 right-3 z-10 flex items-center gap-1.5 ${styles.actions}`}>
                   <SaveTitleButton
-                    className="!size-9 !h-9 !w-9 !p-0 [&_svg]:!size-4 rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="!size-9 !h-9 !w-9 !p-0 [&_svg]:!size-4 rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     id={title.id}
                     kind={title.kind}
                     title={title.title}
                   />
                   <Link
                     aria-label={`Open ${title.title} details`}
-                    className="grid size-9 shrink-0 place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="grid size-9 shrink-0 place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     href={titleHref(title)}
                     onClick={(e) => e.stopPropagation()}
                   >

@@ -1,0 +1,12 @@
+{
+  "name": "consumit-subtitles",
+  "main": "../../packages/media-relay/src/subtitle-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": { "SUBTITLES_ENABLED": "false", "R2_VERIFIED": "false", "APP_ORIGIN": "https://consumit.online" },
+  "durable_objects": { "bindings": [{ "name": "SUBTITLE_SEARCHES", "class_name": "SubtitleSearch" }, { "name": "SUBTITLE_PROVIDERS", "class_name": "SubtitleProviderSearch" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SubtitleSearch", "SubtitleProviderSearch"] }],
+  "r2_buckets": [{ "binding": "SUBTITLE_FILES", "bucket_name": "consumit-subtitles" }],
+  "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } }
+}

@@ -7,6 +7,7 @@ import { RatingDisplay } from '../signals/signals'
 export type DiaryRowProps = Omit<ComponentProps<'article'>, 'children'> & {
   action?: ReactNode | undefined
   artworkSrc?: string | undefined
+  artworkFallbackSrc?: string | undefined
   date: string
   detail?: ReactNode | undefined
   href?: string | undefined
@@ -18,6 +19,7 @@ export type DiaryRowProps = Omit<ComponentProps<'article'>, 'children'> & {
 export function DiaryRow({
   action,
   artworkSrc,
+  artworkFallbackSrc,
   className,
   date,
   detail,
@@ -42,6 +44,7 @@ export function DiaryRow({
       <ArtworkFrame
         alt={`${title} artwork`}
         className="rounded-control"
+        fallbackSrc={artworkFallbackSrc}
         ratio="square"
         src={artworkSrc}
       />
@@ -60,7 +63,7 @@ export function DiaryRow({
           <RatingDisplay className="mt-1" value={rating} />
         ) : null}
         {detail ? <div className="mt-1 text-xs text-muted">{detail}</div> : null}
-        {note ? <p className="mt-2 text-sm leading-6 text-copy">“{note}”</p> : null}
+        {note ? <p className="mt-2 line-clamp-6 break-words whitespace-pre-wrap text-sm leading-6 text-copy">“{note}”</p> : null}
       </div>
       {action ? <div className="col-start-3 sm:col-start-auto">{action}</div> : null}
     </article>

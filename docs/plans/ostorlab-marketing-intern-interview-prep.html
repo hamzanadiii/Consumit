@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ec">
+  <meta name="description" content="A practical, interactive field guide for preparing for the Ostorlab Marketing Intern live project interview.">
+  <title>Ostorlab Marketing Interview — Field Guide</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f4f2ec;
+      --paper-deep: #eae8df;
+      --white: #fffefa;
+      --ink: #182c32;
+      --ink-soft: #42565a;
+      --muted: #596b6d;
+      --line: #d5d8d0;
+      --teal: #087e83;
+      --teal-dark: #075f65;
+      --teal-pale: #e4f1ee;
+      --orange: #c4512d;
+      --orange-pale: #f9e9dc;
+      --green: #356d4c;
+      --green-pale: #e8f1e7;
+      --shadow: 0 18px 42px rgba(24, 44, 50, .09);
+      --body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --display: Georgia, "Times New Roman", serif;
+      --measure: 72ch;
+      --radius: 15px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--body);
+      font-size: 16px;
+      line-height: 1.65;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: #bce1d9; color: #102d32; }
+    a { color: var(--teal-dark); text-decoration-thickness: 1px; text-underline-offset: .2em; }
+    a:hover { color: var(--orange); }
+    button, input { font: inherit; }
+    button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid #d57948;
+      outline-offset: 3px;
+      border-radius: 4px;
+    }
+    .skip-link {
+      position: fixed; z-index: 20; top: 10px; left: 10px;
+      padding: 10px 14px; transform: translateY(-150%);
+      background: var(--ink); color: white; border-radius: 8px;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .topline {
+      min-height: 42px; display: flex; justify-content: space-between; align-items: center;
+      padding: 7px clamp(18px, 5vw, 72px); background: var(--ink); color: #edf3ed;
+      font-size: 12px; letter-spacing: .045em;
+    }
+    .topline strong { color: white; font-weight: 700; }
+    .topline .status { color: #bddbd1; }
+    .page-shell { width: min(1440px, 100%); margin: auto; padding: 0 clamp(18px, 5vw, 72px) 80px; }
+    .hero {
+      position: relative; overflow: hidden; margin: 30px 0 36px; padding: clamp(28px, 5vw, 62px);
+      border-radius: 22px; background: #17343a; color: #f6f5ef;
+      box-shadow: var(--shadow);
+    }
+    .hero::after {
+      content: ""; position: absolute; width: 290px; height: 290px; right: -95px; bottom: -150px;
+      border: 1px solid rgba(172, 219, 207, .34); border-radius: 50%;
+      box-shadow: 0 0 0 28px rgba(172, 219, 207, .045), 0 0 0 58px rgba(172, 219, 207, .035);
+      pointer-events: none;
+    }
+    .hero-label { display: none; }
+    h1, h2, h3, h4, p { margin-top: 0; }
+    h1 { position: relative; z-index: 1; max-width: 780px; margin-bottom: 15px; font: 500 clamp(2.45rem, 4.8vw, 4.4rem)/1.02 var(--display); letter-spacing: -.035em; }
+    .hero-intro { position: relative; z-index: 1; max-width: 680px; margin: 0; color: #e4ece6; font-size: clamp(1rem, 1.5vw, 1.22rem); }
+    .hero-ribbon { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; position: relative; z-index: 1; }
+    .hero-ribbon span { padding: 7px 11px; border: 1px solid rgba(233, 244, 236, .28); border-radius: 99px; color: #eef4eb; font-size: 12px; }
+    .hero-ribbon b { color: #bee3d6; }
+    .truth-strip { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-bottom: 44px; }
+    .truth { padding: 21px 23px; border-radius: var(--radius); background: var(--white); }
+    .truth.known { background: var(--teal-pale); }
+    .truth.unknown { background: var(--orange-pale); }
+    .truth h2 { margin-bottom: 8px; font-size: 15px; letter-spacing: .01em; }
+    .truth p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+    .truth p strong { color: var(--ink); }
+    .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+    .rail { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 15px 0 20px; }
+    .rail-label { margin: 0 0 10px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .rail nav { display: grid; gap: 2px; }
+    .rail a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--ink-soft); font-size: 13px; text-decoration: none; }
+    .rail a:hover, .rail a[aria-current="location"] { background: var(--teal-pale); color: var(--teal-dark); }
+    .readiness-box { margin-top: 24px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,254,250,.55); }
+    .readiness-box strong { display: block; margin-bottom: 8px; font-size: 13px; }
+    .readiness-count { color: var(--teal-dark); font-size: 12px; font-weight: 700; }
+    .reset-progress { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    main { min-width: 0; }
+    section { margin-bottom: 68px; scroll-margin-top: 24px; }
+    .section-heading { max-width: 790px; margin-bottom: 25px; }
+    .section-heading h2 { margin-bottom: 9px; font: 500 clamp(2rem, 3.5vw, 3.15rem)/1.05 var(--display); letter-spacing: -.03em; }
+    .section-heading p { max-width: var(--measure); margin-bottom: 0; color: var(--ink-soft); }
+    h3 { margin-bottom: 8px; font-size: 18px; line-height: 1.3; letter-spacing: -.015em; }
+    h4 { margin-bottom: 7px; font-size: 14px; }
+    .lead { max-width: var(--measure); color: var(--ink-soft); }
+    .callout { margin: 22px 0; padding: 18px 20px; border-radius: 0 12px 12px 0; background: var(--teal-pale); color: var(--ink); }
+    .callout.warning { background: var(--orange-pale); }
+    .callout.success { background: var(--green-pale); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { color: var(--teal-dark); }
+    .callout.warning strong { color: #8e391f; }
+    .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+    .plain-block { padding: 3px 0 14px; border-bottom: 1px solid var(--line); }
+    .plain-block p { margin-bottom: 0; color: var(--ink-soft); font-size: 14px; }
+    .workflow { display: grid; grid-template-columns: 90px 1fr; }
+    .workflow-row { display: contents; }
+    .workflow time, .workflow .workflow-copy { padding: 15px 0; border-bottom: 1px solid var(--line); }
+    .workflow time { color: var(--teal-dark); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .workflow-copy h3 { margin-bottom: 4px; font-size: 15px; }
+    .workflow-copy p { margin-bottom: 0; color: var(--ink-soft); font-size: 14px; }
+    .canvas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--white); }
+    .canvas-part { min-height: 116px; padding: 18px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .canvas-part:nth-child(2n) { border-right: 0; }
+    .canvas-part:nth-last-child(-n+2) { border-bottom: 0; }
+    .canvas-part span { display: block; margin-bottom: 7px; color: var(--teal-dark); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .canvas-part p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+    .skill-route { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; counter-reset: steps; }
+    .skill-stop { position: relative; padding: 18px 0 18px 44px; border-top: 1px solid var(--line); }
+    .skill-stop::before { counter-increment: steps; content: counter(steps, decimal-leading-zero); position: absolute; left: 0; top: 17px; color: var(--orange); font: 700 15px var(--display); }
+    .skill-stop h3 { font-size: 15px; }
+    .skill-stop p { margin-bottom: 0; color: var(--ink-soft); font-size: 13px; }
+    .mini-label { display: inline-block; margin-top: 9px; color: var(--teal-dark); font-size: 11px; font-weight: 750; }
+    .task-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 20px; }
+    .filter-button { padding: 8px 12px; border: 1px solid #aab8b4; border-radius: 99px; background: transparent; color: var(--ink); cursor: pointer; font-size: 13px; }
+    .filter-button[aria-pressed="true"] { border-color: var(--teal-dark); background: var(--teal-dark); color: white; }
+    .tool-results { padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); }
+    .tool-results h3 { margin-bottom: 12px; }
+    .tool-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .tool-list li { padding: 6px 10px; border-radius: 7px; background: var(--paper); color: var(--ink-soft); font-size: 13px; }
+    .tool-note { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
+    .practice-list { border-top: 0; }
+    details.practice { border-bottom: 1px solid var(--line); }
+    details.practice summary { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 17px 4px; cursor: pointer; list-style: none; }
+    details.practice summary::-webkit-details-marker { display: none; }
+    .practice-index { color: var(--orange); font: 700 18px var(--display); }
+    .practice-title { font-weight: 750; }
+    .practice-tag { padding: 4px 8px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .practice-body { max-width: 760px; padding: 0 0 20px 46px; color: var(--ink-soft); }
+    .practice-body p { margin-bottom: 8px; font-size: 14px; }
+    .practice-body ul { margin: 7px 0 0; padding-left: 20px; font-size: 14px; }
+    .practice-body li { margin: 4px 0; }
+    .practice-meta { color: var(--teal-dark); font-size: 12px !important; font-weight: 750; }
+    .prompt-stack { display: grid; gap: 12px; }
+    details.prompt { border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
+    details.prompt summary { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 15px 17px; cursor: pointer; font-weight: 750; list-style: none; }
+    details.prompt summary::-webkit-details-marker { display: none; }
+    details.prompt summary::after { content: "+"; color: var(--teal-dark); font-size: 21px; line-height: 1; }
+    details.prompt[open] summary::after { content: "−"; }
+    .prompt-content { padding: 0 17px 17px; }
+    .prompt-content p { margin-bottom: 9px; color: var(--ink-soft); font-size: 13px; }
+    pre { overflow-x: auto; margin: 0; padding: 15px; border-radius: 9px; background: #183238; color: #edf4ec; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
+    .copy-button { margin-top: 9px; padding: 7px 10px; border: 1px solid #98aaa6; border-radius: 6px; background: transparent; color: var(--teal-dark); cursor: pointer; font-size: 12px; font-weight: 700; }
+    .copy-button:hover { background: var(--teal-pale); }
+    .copy-status { min-height: 20px; color: var(--green); font-size: 12px; }
+    .scorecard { width: 100%; border-collapse: collapse; background: var(--white); border-radius: 12px; overflow: hidden; font-size: 14px; }
+    .scorecard th, .scorecard td { padding: 11px 13px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .scorecard th { background: #e8eeea; font-size: 12px; letter-spacing: .04em; }
+    .scorecard tr:last-child td { border-bottom: 0; }
+    .scorecard td:first-child { font-weight: 700; }
+    .metric-formulas { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-top: 18px; }
+    .formula { padding: 15px 16px; border-radius: 11px; background: var(--paper-deep); }
+    .formula b { display: block; margin-bottom: 3px; color: var(--teal-dark); font-size: 13px; }
+    .formula code { color: var(--ink); font-size: 12px; }
+    .checklist { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+    .checklist label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; cursor: pointer; }
+    .checklist input { margin-top: 5px; accent-color: var(--teal); }
+    .checklist input:checked + span { color: var(--muted); text-decoration: line-through; text-decoration-color: #80928b; }
+    .question-list { display: grid; gap: 10px; margin: 0; padding-left: 20px; color: var(--ink-soft); }
+    .question-list strong { color: var(--ink); }
+    .source-list { display: grid; gap: 11px; margin: 0; padding: 0; list-style: none; }
+    .source-list li { padding: 0 0 11px; border-bottom: 1px solid var(--line); font-size: 13px; }
+    .source-list span { display: block; margin-top: 2px; color: var(--muted); }
+    .footer { padding: 24px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .mobile-nav { display: none; }
+    .print-button { position: fixed; right: 22px; bottom: 20px; z-index: 5; padding: 11px 15px; border: 0; border-radius: 99px; background: var(--teal-dark); color: white; cursor: pointer; box-shadow: 0 6px 16px rgba(0,0,0,.14); font-size: 13px; font-weight: 750; }
+    .print-button:hover { background: var(--ink); }
+    .fade-in { animation: arrive .65s cubic-bezier(.16,1,.3,1) both; }
+    @keyframes arrive { from { opacity: .2; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 175px minmax(0,1fr); gap: 28px; }
+      .skill-route { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    }
+    @media (max-width: 680px) {
+      .topline { padding-inline: 18px; }
+      .topline .status { display: none; }
+      .page-shell { padding-inline: 16px; }
+      .hero { margin-top: 16px; padding: 29px 23px; border-radius: 16px; }
+      .hero::after { width: 210px; height: 210px; right: -125px; bottom: -130px; }
+      .truth-strip { grid-template-columns: 1fr; gap: 10px; margin-bottom: 28px; }
+      .truth { padding: 16px; }
+      .layout { display: block; }
+      .rail { display: none; }
+      .mobile-nav { display: block; margin: 0 0 33px; }
+      .mobile-nav summary { padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); cursor: pointer; font-size: 13px; font-weight: 750; }
+      .mobile-nav nav { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 5px; margin-top: 8px; padding: 10px; border-radius: 10px; background: var(--white); }
+      .mobile-nav a { padding: 5px 7px; font-size: 12px; }
+      section { margin-bottom: 52px; }
+      .split, .canvas { grid-template-columns: 1fr; }
+      .canvas-part, .canvas-part:nth-child(2n), .canvas-part:nth-last-child(-n+2) { border-right: 0; border-bottom: 1px solid var(--line); }
+      .canvas-part:last-child { border-bottom: 0; }
+      .workflow { grid-template-columns: 68px 1fr; }
+      .skill-route { grid-template-columns: 1fr; }
+      .metric-formulas { grid-template-columns: 1fr; }
+      details.practice summary { grid-template-columns: 28px 1fr; gap: 8px; }
+      .practice-tag { grid-column: 2; justify-self: start; }
+      .practice-body { padding-left: 36px; }
+      .scorecard { display: block; overflow-x: auto; white-space: nowrap; }
+      .print-button { right: 12px; bottom: 12px; padding: 10px 13px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+    @media print {
+      :root { --paper: white; --white: white; --ink: #111; --ink-soft: #333; --muted: #444; --line: #bbb; }
+      body { background: white; font-size: 10.5pt; line-height: 1.45; }
+      .topline, .rail, .mobile-nav, .print-button, .copy-button, .readiness-box, .task-filter { display: none !important; }
+      .page-shell { width: auto; padding: 0; }
+      .hero { margin: 0 0 18px; padding: 24px; border-radius: 0; background: #17343a !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; box-shadow: none; }
+      h1 { font-size: 34pt; }
+      .truth-strip { margin-bottom: 20px; }
+      .layout { display: block; }
+      section { margin-bottom: 30px; break-inside: auto; }
+      .plain-block, .practice, .workflow-row, .canvas-part, .formula, .callout { break-inside: avoid; }
+      details > * { display: block !important; }
+      details summary::after { display: none !important; }
+      a { color: #075f65; }
+      .skill-route { grid-template-columns: repeat(3, 1fr); }
+      .metric-formulas { grid-template-columns: repeat(3,1fr); }
+      pre { white-space: pre-wrap; font-size: 8pt; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .footer { margin-top: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the guide</a>
+  <div class="topline"><strong>OSTORLAB · MARKETING INTERN</strong><span class="status">INTERVIEW FIELD GUIDE · WORKS OFFLINE</span></div>
+  <div class="page-shell">
+    <header class="hero fade-in">
+      <h1>Think clearly.<br>Make useful work.</h1>
+      <p class="hero-intro">A calm, practical guide to understanding the assignment, choosing a direction, using AI well, and explaining your marketing decisions in a one-hour remote interview.</p>
+      <div class="hero-ribbon" aria-label="Interview facts">
+        <span><b>Format</b> 1-hour remote interview</span>
+        <span><b>Live work</b> Project during the call</span>
+        <span><b>AI</b> Allowed by the invitation</span>
+        <span><b>Code?</b> Only if the brief asks for it</span>
+      </div>
+    </header>
+
+    <div class="truth-strip" aria-label="What is known and unknown">
+      <article class="truth known"><h2>What the invitation confirms</h2><p>You passed the project-submission stage and have a <strong>one-hour remote interview</strong>. You will work on a project during the interview. The email explicitly allows AI coding tools such as Claude Code, Codex, or Cursor, and asks you to have them set up beforehand.</p></article>
+      <article class="truth unknown"><h2>What it does not tell us</h2><p>It does <strong>not</strong> reveal the live brief, deliverable, or whether coding will be needed. The GitHub examples are retired references. Prepare to think and communicate clearly; do not guess the exact assignment.</p></article>
+    </div>
+
+    <div class="layout">
+      <aside class="rail" aria-label="Guide navigation">
+        <p class="rail-label">On this page</p>
+        <nav>
+          <a href="#meaning">What “project” means</a>
+          <a href="#method">Your 60-minute method</a>
+          <a href="#canvas">Live-work canvas</a>
+          <a href="#skills">Marketing skill stack</a>
+          <a href="#repo">Practice from the repo</a>
+          <a href="#tools">Choose useful tools</a>
+          <a href="#agents">Work with AI agents</a>
+          <a href="#mock">Mock interview brief</a>
+          <a href="#review">Quality check</a>
+          <a href="#questions">Interview conversation</a>
+          <a href="#ready">Setup checklist</a>
+          <a href="#sources">Sources and limits</a>
+        </nav>
+        <div class="readiness-box">
+          <strong>Preparation progress</strong>
+          <span class="readiness-count" id="progressCount" aria-live="polite">0 of 8 checked</span>
+          <br><button class="reset-progress" id="resetProgress" type="button">Reset checklist</button>
+        </div>
+      </aside>
+
+      <details class="mobile-nav">
+        <summary>Jump to a section</summary>
+        <nav>
+          <a href="#meaning">What it means</a><a href="#method">60-minute method</a>
+          <a href="#canvas">Live-work canvas</a><a href="#skills">Skill stack</a>
+          <a href="#repo">Practice projects</a><a href="#tools">Tools</a>
+          <a href="#agents">AI agent use</a><a href="#mock">Mock brief</a>
+          <a href="#review">Quality check</a><a href="#questions">Interview chat</a>
+          <a href="#ready">Setup</a><a href="#sources">Sources</a>
+        </nav>
+      </details>
+
+      <main id="main">
+        <section id="meaning">
+          <div class="section-heading"><h2>First: what does “work on a project” mean?</h2><p>It means you and the interviewer will solve a small work problem together. “Project” describes the exercise; it does not automatically mean software development.</p></div>
+          <div class="split">
+            <div class="plain-block"><h3>Possible marketing outputs</h3><p>A campaign idea, a short launch plan, landing-page copy, social content, a customer journey, a measurement recommendation, an event follow-up sequence, or a small prototype.</p></div>
+            <div class="plain-block"><h3>When you should code</h3><p>Only when the brief asks for a working page, prototype, data task, or another technical deliverable. Ask whether they want a concept, a draft, or a working implementation before you start building.</p></div>
+            <div class="plain-block"><h3>What they can observe</h3><p>How you clarify the goal, choose an audience, use evidence, make trade-offs, communicate while working, respond to feedback, and check whether the result is useful.</p></div>
+            <div class="plain-block"><h3>What to build beforehand</h3><p>Practice exercises and a reliable working setup. Don’t prebuild a guessed answer. You do not yet know their actual brief, constraints, or requested output.</p></div>
+          </div>
+          <div class="callout warning"><p><strong>Use this order:</strong> understand the problem → agree on the output → choose a direction → make the deliverable → review it. If the assignment is ambiguous, asking one useful question is better than confidently solving the wrong problem.</p></div>
+        </section>
+
+        <section id="method">
+          <div class="section-heading"><h2>A steady method for the hour</h2><p>Use this as a flexible rhythm, not a rigid timer. If the interviewer changes direction or gives feedback, pause and adapt. Keep your reasoning audible while you work.</p></div>
+          <div class="workflow" aria-label="Suggested one-hour workflow">
+            <div class="workflow-row"><time>00–05</time><div class="workflow-copy"><h3>Read, restate, and clarify</h3><p>Summarize the goal in your own words. Ask who the audience is, what action matters, which channel or constraints apply, and what format they expect.</p></div></div>
+            <div class="workflow-row"><time>05–12</time><div class="workflow-copy"><h3>Separate facts from assumptions</h3><p>Write down what the brief gives you, what you still need, and the assumptions you can safely make. Label assumptions instead of presenting them as research.</p></div></div>
+            <div class="workflow-row"><time>12–18</time><div class="workflow-copy"><h3>Choose one direction</h3><p>Offer a couple of plausible routes, compare them against the goal, and recommend one. Explain the trade-off in one or two sentences.</p></div></div>
+            <div class="workflow-row"><time>18–40</time><div class="workflow-copy"><h3>Make the requested thing</h3><p>Produce the smallest complete deliverable: copy, plan, journey, analysis, prototype, or code as specified. Use AI for a bounded task and keep ownership of the decisions.</p></div></div>
+            <div class="workflow-row"><time>40–50</time><div class="workflow-copy"><h3>Review claims, clarity, and usability</h3><p>Check every factual product statement, audience fit, call to action, constraints, and obvious edge cases. Remove unsupported claims and filler.</p></div></div>
+            <div class="workflow-row"><time>50–56</time><div class="workflow-copy"><h3>Say how you would measure and improve it</h3><p>Pick one primary success metric, one useful guardrail, and a sensible next experiment or learning step. Don’t invent performance results.</p></div></div>
+            <div class="workflow-row"><time>56–60</time><div class="workflow-copy"><h3>Walk them through the result</h3><p>State the goal, recommendation, deliverable, evidence or assumptions, and next step. Invite one final question or piece of feedback.</p></div></div>
+          </div>
+          <div class="callout"><p><strong>Useful opening line:</strong> “Let me make sure I understand the outcome you want. Who is the priority audience, what should they do next, and what would make this exercise successful?”</p></div>
+        </section>
+
+        <section id="canvas">
+          <div class="section-heading"><h2>Keep the work organized with one canvas</h2><p>Use these prompts in a blank document or notebook. You do not need a fancy template or a slide deck for a one-hour exercise.</p></div>
+          <div class="canvas" aria-label="Live project canvas">
+            <div class="canvas-part"><span>Outcome</span><p>What business or user outcome does the brief ask for?</p></div>
+            <div class="canvas-part"><span>Audience + problem</span><p>Who is this for, what do they care about, and what is blocking them?</p></div>
+            <div class="canvas-part"><span>Known / assumed</span><p>Which points come from the brief or a source? Which are hypotheses?</p></div>
+            <div class="canvas-part"><span>Recommendation</span><p>What is the one direction you recommend, and why this one?</p></div>
+            <div class="canvas-part"><span>Deliverable</span><p>What exact output did the interviewer request? Is it finished enough to review?</p></div>
+            <div class="canvas-part"><span>Measure + next</span><p>What would success look like, what could go wrong, and what would you learn next?</p></div>
+          </div>
+          <p class="lead" style="margin-top:14px">A strong marketing chain is: <strong>audience need → relevant value → credible proof → clear next action → measurable learning.</strong></p>
+        </section>
+
+        <section id="skills">
+          <div class="section-heading"><h2>Marketing skills to practise</h2><p>The Marketing Skills library is a set of playbooks for AI agents. Treat it as a coach for a specific job—not a magic shortcut and not a requirement for this interview.</p></div>
+          <div class="skill-route">
+            <div class="skill-stop"><h3>Product marketing</h3><p>Clarify the audience, problem, positioning, value, and proof. Start here when the task is about what to say and to whom.</p><span class="mini-label">Foundation</span></div>
+            <div class="skill-stop"><h3>Customer research</h3><p>Separate what customers actually said from team assumptions. Look for repeated pains, language, objections, and buying triggers.</p><span class="mini-label">When evidence matters</span></div>
+            <div class="skill-stop"><h3>Copywriting + editing</h3><p>Make the message specific, concrete, audience-led, and easy to act on. Edit out vague claims and jargon.</p><span class="mini-label">When writing is requested</span></div>
+            <div class="skill-stop"><h3>CRO</h3><p>Find friction in a landing page or journey, rank changes by user impact and effort, and say what evidence could validate a change.</p><span class="mini-label">When conversion is the goal</span></div>
+            <div class="skill-stop"><h3>Analytics + experiments</h3><p>Define the funnel and primary metric, inspect the right denominator, and propose a test only when it can answer a useful question.</p><span class="mini-label">When performance is the task</span></div>
+            <div class="skill-stop"><h3>Launch + content strategy</h3><p>Coordinate message, channel, timing, audience, owners, and follow-up. Fit each format to the role it plays in the journey.</p><span class="mini-label">When planning is requested</span></div>
+          </div>
+          <div class="callout warning"><p><strong>AI skills are third-party guidance.</strong> The Marketing Skills library is not an Ostorlab product or an endorsement from Ostorlab. The live brief and interviewer’s instructions always take priority. Install only if you have time to try the setup before the call; don’t change your working environment at the last minute.</p></div>
+          <details class="prompt">
+            <summary>Optional setup: install a small set of Marketing Skills</summary>
+            <div class="prompt-content">
+              <p>The library’s site lists Codex, Claude Code, Cursor, and other compatible agents. A selective install example from its repository is below. Review the repository and install instructions before running commands; you do not need this to pass.</p>
+              <pre><code>npx skills add coreyhaines31/marketingskills --skill product-marketing customer-research copywriting cro analytics</code></pre>
+              <p style="margin-top:10px">Try one skill on a practice brief, inspect its output, and confirm you know how to invoke it. Keep the actual interview setup simple.</p>
+            </div>
+          </details>
+        </section>
+
+        <section id="repo">
+          <div class="section-heading"><h2>Practice with the Ostorlab examples</h2><p>Open the repository’s <strong>01-24h_projects</strong> folder and work through the marketing briefs. These are useful practice because they resemble real work outputs.</p></div>
+          <div class="callout warning"><p><strong>Important:</strong> Ostorlab labels the repository examples as retired and says they will not be used in future interviews. Its README separates 24-hour take-home exercises from one-hour live projects. Use the marketing briefs to practise skills and format; do not assume the live interview will reuse one of them.</p></div>
+          <div class="practice-list">
+            <details class="practice"><summary><span class="practice-index">01</span><span class="practice-title">Conversion journey — SignalDesk</span><span class="practice-tag">Audience · CRO · CTA</span></summary><div class="practice-body"><p>Practise turning a target audience and conversion goal into a focused journey or landing-page recommendation.</p><ul><li>Name the audience and their decision problem.</li><li>Choose one primary conversion action and make the value clear.</li><li>Set simple decision rules, QA checks, and a baseline metric.</li></ul><p class="practice-meta">Your output: a one-page journey or page outline with a primary CTA and measurement plan.</p></div></details>
+            <details class="practice"><summary><span class="practice-index">02</span><span class="practice-title">Evidence-led launch — FenceNote</span><span class="practice-tag">Positioning · Claims · Launch</span></summary><div class="practice-body"><p>Practise deciding which product statements are supported well enough to use in a launch message.</p><ul><li>Sort statements into supported, needs evidence, and do not use.</li><li>Write a short launch announcement and email using only supported claims.</li><li>Suggest a lightweight way to review claims before publication.</li></ul><p class="practice-meta">Your output: a claim review plus a concise launch message.</p></div></details>
+            <details class="practice"><summary><span class="practice-index">03</span><span class="practice-title">Content operations — QueueHarbor</span><span class="practice-tag">Content · Repurposing · Workflow</span></summary><div class="practice-body"><p>Practise adapting one useful message across formats while keeping a consistent promise and review process.</p><ul><li>Draft a social post, a short carousel outline, an email, and an FAQ.</li><li>Give each asset a job in the audience journey.</li><li>Set a simple approval, owner, and distribution sequence.</li></ul><p class="practice-meta">Your output: a small coherent content pack with a publishing workflow.</p></div></details>
+            <details class="practice"><summary><span class="practice-index">04</span><span class="practice-title">Campaign measurement — TriageLane</span><span class="practice-tag">Analytics · Rates · Experiment</span></summary><div class="practice-body"><p>Practise checking campaign data before making a recommendation.</p><ul><li>Verify totals, rates, costs, and denominators.</li><li>State what the data does and does not support.</li><li>Recommend one bounded experiment and a repeatable reporting view.</li></ul><p class="practice-meta">Your output: a corrected short analysis with a clear next action.</p></div></details>
+            <details class="practice"><summary><span class="practice-index">05</span><span class="practice-title">Webinar journey — HarborBoard</span><span class="practice-tag">Lifecycle · Event · Consent</span></summary><div class="practice-body"><p>Practise designing the steps around a webinar instead of treating registration as the whole campaign.</p><ul><li>Map registration, confirmation, reminder, waitlist, and follow-up states.</li><li>Make consent and audience expectations explicit.</li><li>Write useful follow-up messages for attendees and no-shows.</li></ul><p class="practice-meta">Your output: a lifecycle map with a few sample messages and safeguards.</p></div></details>
+          </div>
+          <p style="margin-top:18px"><a href="https://github.com/Ostorlab/interview-project-examples" target="_blank" rel="noreferrer">Open Ostorlab’s interview project examples on GitHub ↗</a></p>
+        </section>
+
+        <section id="tools">
+          <div class="section-heading"><h2>Pick tools for the task in front of you</h2><p>Choose a small working set. Tools help you get evidence or produce the requested format; they do not replace judgment.</p></div>
+          <div class="task-filter" role="group" aria-label="Choose a project type">
+            <button class="filter-button" type="button" data-kind="campaign" aria-pressed="true">Campaign / copy</button>
+            <button class="filter-button" type="button" data-kind="measurement" aria-pressed="false">Analytics</button>
+            <button class="filter-button" type="button" data-kind="seo" aria-pressed="false">SEO</button>
+            <button class="filter-button" type="button" data-kind="visual" aria-pressed="false">Visual asset</button>
+            <button class="filter-button" type="button" data-kind="prototype" aria-pressed="false">Prototype / code</button>
+          </div>
+          <div class="tool-results" aria-live="polite" aria-atomic="true">
+            <h3 id="toolTitle">For a campaign or copy task</h3>
+            <ul class="tool-list" id="toolList"><li>Brief + notes in a doc</li><li>AI agent for options and editing</li><li>Marketing Skills: product-marketing, copywriting</li><li>Official Ostorlab pages for product facts</li></ul>
+            <p class="tool-note" id="toolNote">Keep a source beside every factual claim. A spreadsheet is useful only if you need to compare options or track a plan.</p>
+          </div>
+          <div class="split" style="margin-top:20px">
+            <div class="plain-block"><h3>For analytics practice</h3><p>Google Analytics’ demo account lets you explore sample GA4 data without changing your own account. Search Console reports can show clicks, impressions, CTR, and average position—but only for a property you can access.</p></div>
+            <div class="plain-block"><h3>For trend or visual work</h3><p>Google Trends is directional, normalized interest—not absolute search volume. Canva is useful if a visual is explicitly requested. Don’t spend interview time designing slides when a clear written outline is enough.</p></div>
+          </div>
+        </section>
+
+        <section id="agents">
+          <div class="section-heading"><h2>Use AI as a teammate you direct</h2><p>The invitation allows AI coding tools. A marketing assignment may need a general AI assistant or agent rather than a coding agent. Use one you already know; say what it did and verify the output.</p></div>
+          <div class="split">
+            <div class="plain-block"><h3>Good uses</h3><p>Summarize a long brief, surface questions, generate alternative angles, edit for clarity, check calculations, flag unsupported claims, review edge cases, or create a small first draft.</p></div>
+            <div class="plain-block"><h3>Your job stays yours</h3><p>Choose the audience, goal, recommendation, evidence standard, trade-offs, and final wording. Correct the agent if it misunderstands the brief. Don’t present invented research as real customer evidence.</p></div>
+          </div>
+          <div class="callout success"><p><strong>Think: one driver, a few focused jobs.</strong> You do not need a swarm of agents. Have one agent analyze the brief, another pass review the draft if time allows, and make the final decision yourself. Avoid feeding private or confidential material into an external tool.</p></div>
+          <div class="prompt-stack">
+            <details class="prompt"><summary>Prompt 1 · Turn the brief into a work plan</summary><div class="prompt-content"><p>Use at the start. Paste only the interview brief or permitted information.</p><pre><code>Act as a careful marketing project partner. First, restate the requested outcome and deliverable. Then list: (1) facts explicitly provided, (2) assumptions, (3) the 3 most important clarifying questions, (4) risks or constraints, and (5) a small step-by-step plan that fits the time available. Do not invent customer research, product capabilities, or performance data. If something is unknown, label it unknown.</code></pre><button class="copy-button" type="button">Copy prompt</button><p class="copy-status" aria-live="polite"></p></div></details>
+            <details class="prompt"><summary>Prompt 2 · Generate and compare message options</summary><div class="prompt-content"><p>Use after agreeing on the goal and audience.</p><pre><code>Given this audience, goal, approved product facts, and channel: suggest 3 genuinely different message angles. For each, explain the audience insight, core promise, evidence needed, likely objection, and best next action. Mark any unsupported claim as [NEEDS PROOF]. Recommend one option against the stated goal, but leave the final choice to me. Keep the language concrete and avoid security guarantees unless the brief supplies proof.</code></pre><button class="copy-button" type="button">Copy prompt</button><p class="copy-status" aria-live="polite"></p></div></details>
+            <details class="prompt"><summary>Prompt 3 · Review copy for trust and clarity</summary><div class="prompt-content"><p>Use on a draft, then personally accept or reject each suggestion.</p><pre><code>Review this draft for the specified audience and action. Flag vague language, jargon, unclear benefits, missing proof, unsupported factual claims, confusing CTA, and mismatch with the brief. Do not rewrite everything. Give the 5 highest-impact fixes first, explain why each matters, and show a revised version that preserves only supported facts. Tell me what you could not verify.</code></pre><button class="copy-button" type="button">Copy prompt</button><p class="copy-status" aria-live="polite"></p></div></details>
+            <details class="prompt"><summary>Prompt 4 · Check a metric or campaign table</summary><div class="prompt-content"><p>Use for arithmetic and interpretation; verify the math yourself.</p><pre><code>Check these campaign figures. Show the formula and denominator for every calculated rate or cost. Identify inconsistent totals, missing data, and comparisons that would be misleading. Separate observed facts from possible explanations. Recommend one next analysis or bounded experiment. Do not claim causation from a simple before/after comparison.</code></pre><button class="copy-button" type="button">Copy prompt</button><p class="copy-status" aria-live="polite"></p></div></details>
+            <details class="prompt"><summary>Prompt 5 · Build only if the brief asks for a prototype</summary><div class="prompt-content"><p>Use this only if they explicitly request a working page, prototype, or code deliverable.</p><pre><code>Before writing code, restate the requested user, goal, required behavior, and constraints. Ask only critical questions. Build the smallest working prototype that meets the brief; do not invent APIs, claims, analytics, or integrations. Keep copy editable, use accessible labels and keyboard focus, and tell me how to run and inspect the result. After building, list what works, what is incomplete, and the next highest-value improvement.</code></pre><button class="copy-button" type="button">Copy prompt</button><p class="copy-status" aria-live="polite"></p></div></details>
+          </div>
+          <div class="callout warning"><p><strong>Don’t let AI use consume the hour.</strong> If the setup fails, continue with your own notes. If you use AI, state the task you gave it, check the response, and explain what you changed.</p></div>
+        </section>
+
+        <section id="mock">
+          <div class="section-heading"><h2>Mock practice: a small B2B security campaign</h2><p>This is a practice scenario only—not Ostorlab’s disclosed interview assignment. Use official company information as the source of facts and label any audience insight as a hypothesis unless you have evidence.</p></div>
+          <div class="callout"><p><strong>Practice brief:</strong> “Help a security team understand why they should consider a security assessment for their mobile app. Propose one useful campaign asset and explain how you’d judge whether it worked.” Give yourself 35 minutes to create, then 5 minutes to present.</p></div>
+          <div class="split">
+            <div class="plain-block"><h3>Step 1 · Narrow it</h3><p>Ask which security role, which action (for example, learn more or request a demo), which channel, and what proof is approved. If unanswered, state your assumptions.</p></div>
+            <div class="plain-block"><h3>Step 2 · Make it credible</h3><p>Use only product facts supported by current official Ostorlab materials. Do not promise that a product “prevents breaches” or guarantees security unless the brief explicitly provides substantiation.</p></div>
+            <div class="plain-block"><h3>Step 3 · Produce one asset</h3><p>Choose a single format, such as a landing-page outline or short campaign email. Make the audience, problem, value, proof, and next action easy to spot.</p></div>
+            <div class="plain-block"><h3>Step 4 · Measure and explain</h3><p>Name one primary metric connected to the action, one quality guardrail, and one next test. Explain what you would need to learn before spending money or scaling.</p></div>
+          </div>
+          <div class="callout success"><p><strong>Finish with a 45-second walkthrough:</strong> “I focused on [audience] because [reason/assumption]. I recommend [idea] to help them [action]. The key proof is [approved evidence]. I’d measure [metric] and check [guardrail]. The biggest unknown is [unknown], so my next step would be [test or research].”</p></div>
+        </section>
+
+        <section id="review">
+          <div class="section-heading"><h2>Review the work before you present it</h2><p>Score yourself from 0 (missing), 1 (partly there), or 2 (clear and supported). This is a practice aid, not Ostorlab’s official evaluation rubric.</p></div>
+          <table class="scorecard">
+            <thead><tr><th>Check</th><th>Ask yourself</th><th>Score</th></tr></thead>
+            <tbody>
+              <tr><td>Brief fit</td><td>Did I deliver what was asked, for the right audience and outcome?</td><td>0 / 1 / 2</td></tr>
+              <tr><td>Evidence</td><td>Did I distinguish supplied facts from assumptions and unsupported claims?</td><td>0 / 1 / 2</td></tr>
+              <tr><td>Clarity</td><td>Can someone understand the message, recommendation, and next action quickly?</td><td>0 / 1 / 2</td></tr>
+              <tr><td>Execution</td><td>Is the requested asset or analysis complete enough to inspect?</td><td>0 / 1 / 2</td></tr>
+              <tr><td>Communication</td><td>Did I narrate useful decisions, take feedback, and explain what I would do next?</td><td>0 / 1 / 2</td></tr>
+            </tbody>
+          </table>
+          <p class="lead" style="margin-top:15px"><strong>Target:</strong> improve any 0s first. A small, well-reasoned deliverable is usually easier to trust than a large, polished answer built on guesses.</p>
+          <div class="metric-formulas" aria-label="Useful basic marketing formulas">
+            <div class="formula"><b>Click-through rate</b><code>clicks ÷ impressions</code></div>
+            <div class="formula"><b>Conversion rate</b><code>conversions ÷ eligible visits</code></div>
+            <div class="formula"><b>Cost per lead</b><code>campaign spend ÷ leads</code></div>
+          </div>
+          <p style="margin-top:11px;color:var(--muted);font-size:13px">Always use the denominator that matches the question. Label the source and period. Rates alone do not explain why a result changed.</p>
+        </section>
+
+        <section id="questions">
+          <div class="section-heading"><h2>Be ready to talk through your decisions</h2><p>The work matters, and so does how you think with another person. Practise answers that are short, specific, and honest.</p></div>
+          <div class="split">
+            <div class="plain-block"><h3>“Tell me about your approach.”</h3><p>Explain how you clarified the objective, identified the audience, chose your direction, and checked the result. Give a real example from your submitted project if it fits.</p></div>
+            <div class="plain-block"><h3>“Why did you choose this idea?”</h3><p>Connect the choice to the audience, goal, constraints, and evidence. Mention one trade-off and what information could change your mind.</p></div>
+            <div class="plain-block"><h3>“How did you use AI?”</h3><p>Say what task you delegated, how you checked the output, and what judgment or editing you contributed. Don’t claim the tool performed work it did not do.</p></div>
+            <div class="plain-block"><h3>“What would you do with more time?”</h3><p>Choose the next step that reduces the biggest uncertainty: customer evidence, claim validation, a usability check, or a properly scoped experiment.</p></div>
+          </div>
+          <h3 style="margin-top:24px">Useful questions to ask the interviewer</h3>
+          <ul class="question-list">
+            <li><strong>About the task:</strong> “What is the most important outcome you want from this exercise?”</li>
+            <li><strong>About the audience:</strong> “Is there a particular buyer or user segment I should prioritize?”</li>
+            <li><strong>About the output:</strong> “Would you prefer a rough recommendation, a polished asset, or a working prototype?”</li>
+            <li><strong>About feedback:</strong> “Would you like me to talk through decisions as I work?”</li>
+            <li><strong>At the end:</strong> “What would you expect a successful version of this work to achieve?”</li>
+          </ul>
+        </section>
+
+        <section id="ready">
+          <div class="section-heading"><h2>Get ready without cramming</h2><p>Use these as independent sessions whenever you have time. The goal is several focused repetitions, not building a finished campaign in advance.</p></div>
+          <div class="split">
+            <div class="plain-block"><h3>Practice session A · Understand the examples</h3><p>Read the repository overview and one marketing brief. Summarize the goal, audience, deliverable, evidence, and risks in your own words.</p></div>
+            <div class="plain-block"><h3>Practice session B · Make a first deliverable</h3><p>Timebox one brief. Use a blank document. Clarify, choose, produce, review, and present. Keep the AI closed for the first pass if you tend to over-rely on it.</p></div>
+            <div class="plain-block"><h3>Practice session C · Add tools intentionally</h3><p>Repeat a different brief with one AI agent. Try one marketing skill only if already installed. Compare the result with your own thinking and note corrections.</p></div>
+            <div class="plain-block"><h3>Practice session D · Explain under time pressure</h3><p>Give a 2-minute walkthrough and answer “why this?”, “what is uncertain?”, and “how would you measure it?” out loud. Ask someone to give you one piece of feedback.</p></div>
+          </div>
+          <h3 style="margin-top:25px">Interview setup checklist</h3>
+          <ul class="checklist" id="checklist">
+            <li><label><input type="checkbox" data-check="quiet"><span>Find a quiet place and test the internet connection, as the invitation requests.</span></label></li>
+            <li><label><input type="checkbox" data-check="audio"><span>Check camera, microphone, headphones, charger, and meeting link.</span></label></li>
+            <li><label><input type="checkbox" data-check="workspace"><span>Open your usual working setup and close distracting tabs.</span></label></li>
+            <li><label><input type="checkbox" data-check="agent"><span>If you plan to use an AI tool, install, configure, and try it before the interview.</span></label></li>
+            <li><label><input type="checkbox" data-check="fallback"><span>Know your no-AI fallback: notes + a document + your own reasoning.</span></label></li>
+            <li><label><input type="checkbox" data-check="repo"><span>Read at least two retired marketing examples and complete one timed practice.</span></label></li>
+            <li><label><input type="checkbox" data-check="story"><span>Prepare a clear story about the project you already submitted.</span></label></li>
+            <li><label><input type="checkbox" data-check="water"><span>Keep water, a blank working document, and the key questions nearby.</span></label></li>
+          </ul>
+          <div class="callout"><p><strong>Booking suggestion:</strong> choose a slot that gives you enough time to complete at least two focused practice sessions and test your setup. Don’t choose a later date just to keep preparing indefinitely; the date range in the booking page is the source of truth for availability.</p></div>
+        </section>
+
+        <section id="sources">
+          <div class="section-heading"><h2>Sources, facts, and limits</h2><p>Keep these distinctions clear. Some details come from your invitation, some from public references, and some are preparation recommendations.</p></div>
+          <ul class="source-list">
+            <li><a href="https://github.com/Ostorlab/interview-project-examples" target="_blank" rel="noreferrer">Ostorlab interview-project-examples repository ↗</a><span>Repository README says examples are retired, fictional, and kept for reference; 24-hour take-home and one-hour live projects are separate folders.</span></li>
+            <li><a href="https://ostorlab.co/" target="_blank" rel="noreferrer">Ostorlab official website ↗</a><span>Use current official product materials to verify any company or product claims. The task brief may define a narrower source of truth.</span></li>
+            <li><a href="https://marketing-skills.com/" target="_blank" rel="noreferrer">Marketing Skills for AI Agents ↗</a> · <a href="https://github.com/coreyhaines31/marketingskills" target="_blank" rel="noreferrer">GitHub repository ↗</a><span>Third-party, open-source marketing playbooks; compatible with several agent tools. Optional study aid, not an Ostorlab requirement.</span></li>
+            <li><a href="https://support.google.com/analytics/answer/10993011?hl=en" target="_blank" rel="noreferrer">Google Analytics demo account ↗</a><span>Official demo data for practicing GA4 analysis without affecting your own account.</span></li>
+            <li><a href="https://support.google.com/webmasters/answer/7576553?hl=en" target="_blank" rel="noreferrer">Search Console Performance report ↗</a><span>Official definitions for search clicks, impressions, click-through rate, and average position.</span></li>
+            <li><a href="https://newsinitiative.withgoogle.com/resources/trainings/google-trends-understanding-the-data/" target="_blank" rel="noreferrer">Google Trends: understanding the data ↗</a><span>Use trend interest directionally; it is normalized and should not be described as absolute search volume.</span></li>
+            <li><a href="https://academy.hubspot.com/courses/digital-marketing" target="_blank" rel="noreferrer">HubSpot Academy digital marketing course ↗</a> · <a href="https://www.canva.com/design-school/resources/design-for-social-media/" target="_blank" rel="noreferrer">Canva Design School ↗</a><span>Optional refreshers. Select a relevant module; do not try to complete a long course at the expense of timed practice.</span></li>
+          </ul>
+          <div class="callout warning"><p><strong>Limits:</strong> the exact live assignment, scoring rubric, and required deliverable are not disclosed in the invitation. No preparation plan can guarantee a pass. This guide helps you prepare a clear process, useful practice, and a dependable setup—not predict the interview task.</p></div>
+        </section>
+        <footer class="footer"><p>Ostorlab Marketing Intern interview preparation · Standalone candidate guide · Save or print this page for offline reference.</p></footer>
+      </main>
+    </div>
+  </div>
+  <button class="print-button" id="printButton" type="button" aria-label="Print or save this guide as PDF">Print / Save PDF</button>
+  <script>
+    (() => {
+      const key = 'ostorlab-interview-prep-checklist-v2';
+      const checks = [...document.querySelectorAll('[data-check]')];
+      const count = document.getElementById('progressCount');
+      const readState = () => {
+        try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; }
+      };
+      const saveState = (state) => {
+        try { localStorage.setItem(key, JSON.stringify(state)); } catch { /* checklist still works for this visit */ }
+      };
+      const updateCount = () => {
+        const done = checks.filter((input) => input.checked).length;
+        count.textContent = `${done} of ${checks.length} checked`;
+      };
+      const state = readState();
+      checks.forEach((input) => {
+        input.checked = Boolean(state[input.dataset.check]);
+        input.addEventListener('change', () => {
+          const next = readState();
+          next[input.dataset.check] = input.checked;
+          saveState(next);
+          updateCount();
+        });
+      });
+      updateCount();
+      document.getElementById('resetProgress').addEventListener('click', () => {
+        checks.forEach((input) => { input.checked = false; });
+        saveState({});
+        updateCount();
+      });
+
+      const toolsByKind = {
+        campaign: { title: 'For a campaign or copy task', items: ['Brief + notes in a doc', 'AI agent for options and editing', 'Marketing Skills: product-marketing, copywriting', 'Official Ostorlab pages for product facts'], note: 'Keep a source beside every factual claim. A spreadsheet is useful only if you need to compare options or track a plan.' },
+        measurement: { title: 'For a measurement task', items: ['Spreadsheet for formulas and checks', 'GA4 demo account for sample data', 'Search Console only for an authorized property', 'Marketing Skills: analytics, ab-testing'], note: 'State the time period and denominator. Separate observed results from possible explanations.' },
+        seo: { title: 'For an SEO task', items: ['Search Console Performance report', 'Google Trends for directional interest', 'Marketing Skills: seo-audit, content-strategy', 'A small keyword list, if requested'], note: 'Do not call Trends data absolute volume. Avoid setting up paid tools or billing accounts just for an interview.' },
+        visual: { title: 'For a visual or social asset', items: ['A clear one-page brief', 'Canva only if design output is requested', 'Marketing Skills: content-strategy, copywriting', 'A simple review checklist'], note: 'Prioritize message, audience, and CTA. Don’t overdesign when the task asks for a concept or outline.' },
+        prototype: { title: 'For a prototype or coding task', items: ['The coding agent you already know', 'A minimal local project or editor', 'Marketing Skills: CRO, product-marketing', 'A short QA checklist'], note: 'Build only the requested behavior. Verify copy, keyboard use, responsive layout, and how to run it before presenting.' }
+      };
+      document.querySelectorAll('.filter-button').forEach((button) => {
+        button.addEventListener('click', () => {
+          document.querySelectorAll('.filter-button').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+          const data = toolsByKind[button.dataset.kind];
+          document.getElementById('toolTitle').textContent = data.title;
+          document.getElementById('toolList').replaceChildren(...data.items.map((item) => {
+            const li = document.createElement('li'); li.textContent = item; return li;
+          }));
+          document.getElementById('toolNote').textContent = data.note;
+        });
+      });
+      document.querySelectorAll('.copy-button').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const prompt = button.parentElement.querySelector('pre').innerText;
+          const status = button.parentElement.querySelector('.copy-status');
+          try {
+            await navigator.clipboard.writeText(prompt);
+            status.textContent = 'Copied. You remain responsible for checking the output.';
+          } catch {
+            status.textContent = 'Clipboard access is unavailable here. Select and copy the prompt text above.';
+          }
+        });
+      });
+      document.getElementById('printButton').addEventListener('click', () => window.print());
+    })();
+  </script>
+</body>
+</html>

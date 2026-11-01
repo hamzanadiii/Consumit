@@ -40,7 +40,7 @@ export function Tabs({
             <li key={item.value}>
               <a
                 aria-label={item.count === undefined ? undefined : `${item.label}, ${item.count}`}
-                aria-current={isActive ? 'page' : undefined}
+                aria-current={isActive ? (item.href.startsWith('#') ? 'location' : 'page') : undefined}
                 className={cn(
                   'relative flex min-h-14 items-center gap-2 text-sm font-bold text-muted outline-none transition-colors hover:text-ink focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange motion-reduce:transition-none',
                   isActive && 'text-ink',
@@ -380,7 +380,7 @@ export function Select({
                   aria-selected={isSelected}
                   aria-label={option.group ? `${option.group}: ${option.label}` : undefined}
                   className={cn(
-                    'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors motion-reduce:transition-none',
+                    'flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-inset motion-reduce:transition-none',
                     isSelected
                       ? 'bg-orange/10 font-bold text-ink'
                       : 'text-copy hover:bg-surface-raised hover:text-ink focus-visible:bg-surface-raised focus-visible:text-ink',

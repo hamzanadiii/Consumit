@@ -23,6 +23,18 @@ describe('provider contract', () => {
     }
     expect(validatedSources({ ok: true, sources: [source, source] }, registration)).toHaveLength(1)
   })
+  it('permits only the reviewed NontonFlix cookie on its exact media host', () => {
+    const nontonflix: ProviderRegistration = {
+      ...registration, mediaHosts: ['media.nontonflix.com'],
+      adapter: createStaticProvider('nontonflix', [{ ref, sources: [source] }]),
+    }
+    const media = { ...source, url: 'https://media.nontonflix.com/media/grant', type: 'hls' as const }
+    expect(validatedSources({ ok: true, sources: [{ ...media, headers: { cookie: 'nf_mk=device; nf_web=web' } }] }, nontonflix)).toHaveLength(1)
+    expect(validatedSources({ ok: true, sources: [{ ...media, headers: { authorization: 'Bearer secret' } }] }, nontonflix)).toEqual([])
+    expect(validatedSources({ ok: true, sources: [{ ...source, headers: { cookie: 'nf_mk=device' } }] }, nontonflix)).toEqual([])
+    expect(validatedSources({ ok: true, sources: [{ ...media, headers: { cookie: 'x'.repeat(513) } }] }, nontonflix)).toEqual([])
+    expect(validatedSources({ ok: true, sources: [{ ...media, headers: { cookie: 'nf_mk=device' } }] }, registration)).toEqual([])
+  })
   it('rejects relay-wrapped sources even on configured hosts', () => {
     for (const url of ['https://media.example/proxy?url=https%3A%2F%2Fupstream.example%2Fv.m3u8', 'https://media.example/v.m3u8?target=https%3A%2F%2Fupstream.example%2Fv.m3u8']) {
       expect(validatedSources({ ok: true, sources: [{ ...source, url }] }, registration)).toEqual([])

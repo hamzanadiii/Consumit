@@ -49,7 +49,7 @@ export function PreferenceFields({ value, onChange }: { value: ExperiencePrefere
   </div>
 }
 
-function PreferenceEditorReady({ onSaved, label }: { onSaved?: (() => void) | undefined; label: string }) {
+function PreferenceEditorReady({ onSaved, label, ariaLabel, mobileStickyActions }: { onSaved?: (() => void) | undefined; label: string; ariaLabel?: string | undefined; mobileStickyActions: boolean }) {
   const experience = useExperience()
   const [draft, setDraft] = useState(experience.preferences)
   const [busy, setBusy] = useState(false)
@@ -70,14 +70,20 @@ function PreferenceEditorReady({ onSaved, label }: { onSaved?: (() => void) | un
   }
   return <div>
     {!experience.preferences.playbackConfigured && experience.owner ? <div className="mb-6 border-b border-[var(--fs-line)] pb-5"><p className="text-sm text-[var(--fs-secondary)]">Set up this account, or start with your guest choices from this device.</p><Button className="mt-3" variant="secondary" onClick={() => { dirty.current = true; setDraft(experience.deviceChoices()); setSaved(false) }}>Use device choices</Button></div> : null}
+    {error && mobileStickyActions ? <p className="mt-5 text-sm text-[var(--fs-ink)]" role="alert">{error}</p> : null}
     <PreferenceFields value={draft} onChange={value => { dirty.current = true; setDraft(value); setSaved(false) }} />
     {experience.error ? <div className="mt-5 text-sm" role="alert">{experience.error}<Button className="ml-2" variant="ghost" onClick={() => { void experience.retry().catch(() => {}) }}>Retry account sync</Button></div> : null}
-    {error ? <p className="mt-6 text-sm text-[var(--fs-ink)]" role="alert">{error}</p> : null}
-    <div className="mt-7 flex flex-wrap items-center gap-4"><Button loading={busy} onClick={() => void save()} variant="accent">{error ? 'Retry save' : label}</Button><p className="text-xs text-[var(--fs-muted)]" role="status">{saved ? 'Preferences saved.' : experience.owner ? 'Your choices sync to your account and this device.' : 'Your choices stay on this device. No account needed.'}</p></div>
+    {error && !mobileStickyActions ? <p className="mt-6 text-sm text-[var(--fs-ink)]" role="alert">{error}</p> : null}
+    <div data-consumit-onboarding-actions={mobileStickyActions ? '' : undefined} className={mobileStickyActions ? 'fixed inset-x-0 bottom-0 z-30 border-t border-[var(--fs-line)] bg-[var(--fs-page)] px-5 pt-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:static sm:mt-7 sm:border-0 sm:bg-transparent sm:p-0' : 'mt-7 flex flex-wrap items-center gap-4'}>
+      <div className={mobileStickyActions ? 'mx-auto flex w-full max-w-5xl flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4' : 'flex flex-wrap items-center gap-4'}>
+        <Button aria-label={error ? 'Retry save' : ariaLabel} className={mobileStickyActions ? 'w-full sm:w-auto' : undefined} loading={busy} onClick={() => void save()} variant="accent">{error ? 'Retry save' : label}</Button>
+        <p className="text-xs text-[var(--fs-muted)]" role="status">{saved ? 'Preferences saved.' : error && mobileStickyActions ? 'Your choices stay on this device until they sync.' : experience.owner ? 'Your choices sync to your account and this device.' : 'Your choices stay on this device. No account needed.'}</p>
+      </div>
+    </div>
   </div>
 }
-export function PreferenceEditor({ onSaved, label = 'Save viewing preferences' }: { onSaved?: (() => void) | undefined; label?: string }) {
+export function PreferenceEditor({ onSaved, label = 'Save viewing preferences', ariaLabel, mobileStickyActions = false }: { onSaved?: (() => void) | undefined; label?: string; ariaLabel?: string | undefined; mobileStickyActions?: boolean | undefined }) {
   const experience = useExperience()
   if (!experience.ready) return <div className="py-6 text-sm text-[var(--fs-secondary)]"><p role="status">Loading your viewing preferences…</p><Button variant="ghost" onClick={() => window.location.reload()}>Retry loading preferences</Button></div>
-  return <PreferenceEditorReady key={experience.owner ?? 'guest'} onSaved={onSaved} label={label} />
+  return <PreferenceEditorReady key={experience.owner ?? 'guest'} onSaved={onSaved} label={label} ariaLabel={ariaLabel} mobileStickyActions={mobileStickyActions} />
 }

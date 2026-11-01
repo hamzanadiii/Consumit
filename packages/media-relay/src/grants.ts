@@ -1,6 +1,8 @@
 /** Opaque, authenticated, expiring media capabilities. No member identity. */
 export type RelayGrant = {
   version: 1
+  routeVersion?: string
+  route?: { kind: 'movie' | 'series' | 'anime'; region: string; purpose: 'video' | 'audio' }
   provider: string
   url: string
   expires: number
@@ -44,12 +46,21 @@ function validGrant(value: unknown, now: number, allowExpired = false): value is
       || !relayDestination(grant.url ?? '', grant.hosts)) return false
   }
   if (grant.version !== 1 || !/^[a-z0-9-]{1,40}$/.test(grant.provider ?? '') || typeof grant.url !== 'string'
+      || grant.routeVersion !== undefined && !/^edge-v1-[a-f0-9]{16}$/.test(grant.routeVersion)
+      || grant.route !== undefined && (!grant.route || !['movie', 'series', 'anime'].includes(grant.route.kind)
+        || !/^[A-Z]{2}$/.test(grant.route.region) || !['video', 'audio'].includes(grant.route.purpose))
       || !Number.isSafeInteger(grant.expires) || (!allowExpired && grant.expires! <= now) || grant.expires! > now + MAX_GRANT_MS
       || !['hls', 'native', 'auto'].includes(grant.kind ?? '') || !Number.isInteger(grant.depth) || grant.depth! < 0 || grant.depth! > 5
       || typeof grant.origin !== 'string' || typeof grant.headerHost !== 'string' || !exactMediaHost(grant.headerHost)
       || !grant.headers || typeof grant.headers !== 'object' || Array.isArray(grant.headers)) return false
   try { if (new URL(grant.origin).origin !== grant.origin) return false } catch { return false }
-  return Object.entries(grant.headers).every(([name, value]) => /^(referer|origin|accept|user-agent)$/i.test(name)
+  // NontonFlix is the sole reviewed cookie forwarding exception. Bind it to
+  // the exact provider and media host so a grant can never leak the cookie to
+  // a child or unrelated destination.
+  const cookieExempt = grant.provider === 'nontonflix' && grant.headerHost === 'media.nontonflix.com'
+    && (() => { try { return new URL(grant.url).hostname === 'media.nontonflix.com' } catch { return false } })()
+  return Object.entries(grant.headers).every(([name, value]) => (/^(referer|origin|accept|user-agent)$/i.test(name)
+      || cookieExempt && name.toLowerCase() === 'cookie')
     && typeof value === 'string' && value.length <= 512 && !/[\r\n]/.test(value))
 }
 export async function createGrantCodec(secret: string) {
@@ -62,7 +73,9 @@ export async function createGrantCodec(secret: string) {
       const iv = crypto.getRandomValues(new Uint8Array(12))
       // Compact wire representation keeps full binding while reducing the
       // repeated JSON/encoding work for long VOD playlists on Workers Free.
-      const compact = [grant.version, grant.provider, grant.url, grant.expires, grant.origin, grant.headers, grant.headerHost, grant.kind, grant.depth, ...(grant.recipe ? [grant.recipe, grant.hosts] : [])]
+      const compact = [grant.version, grant.provider, grant.url, grant.expires, grant.origin, grant.headers, grant.headerHost, grant.kind, grant.depth,
+        ...(grant.routeVersion ? ['r', grant.routeVersion] : []), ...(grant.route ? ['t', grant.route.kind, grant.route.region, grant.route.purpose] : []),
+        ...(grant.recipe ? ['x', grant.recipe, grant.hosts] : [])]
       const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode('consumit-media-v1') }, key, encoder.encode(JSON.stringify(compact)))
       const bytes = new Uint8Array(iv.length + data.byteLength)
       bytes.set(iv); bytes.set(new Uint8Array(data), iv.length)
@@ -77,10 +90,29 @@ export async function createGrantCodec(secret: string) {
       const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: encoder.encode('consumit-media-v1') }, key, bytes.slice(12))
       const parsed: unknown = JSON.parse(decoder.decode(data))
       // Keep previously issued object grants valid until their expiry.
-      const value: unknown = Array.isArray(parsed) && [9, 11].includes(parsed.length) ? {
+      let compactRoute: Partial<RelayGrant> = {}
+      if (Array.isArray(parsed) && ['r', 't', 'x'].includes(parsed[9])) {
+        let index = 9
+        while (index < parsed.length) {
+          if (parsed[index] === 'r' && index + 1 < parsed.length) { compactRoute.routeVersion = parsed[index + 1]; index += 2 }
+          else if (parsed[index] === 't' && index + 3 < parsed.length) {
+            compactRoute.route = { kind: parsed[index + 1], region: parsed[index + 2], purpose: parsed[index + 3] } as NonNullable<RelayGrant['route']>
+            index += 4
+          } else if (parsed[index] === 'x' && index + 2 < parsed.length) {
+            compactRoute.recipe = parsed[index + 1]; compactRoute.hosts = parsed[index + 2]; index += 3
+          } else { compactRoute = {}; break }
+        }
+        if (index !== parsed.length) compactRoute = {}
+      }
+      const value: unknown = Array.isArray(parsed) && ['r', 't', 'x'].includes(parsed[9]) && Object.keys(compactRoute).length ? {
+        version: parsed[0], provider: parsed[1], url: parsed[2], expires: parsed[3], origin: parsed[4],
+        headers: parsed[5], headerHost: parsed[6], kind: parsed[7], depth: parsed[8], ...compactRoute,
+      } : Array.isArray(parsed) && [9, 10, 11, 12].includes(parsed.length) ? {
         version: parsed[0], provider: parsed[1], url: parsed[2], expires: parsed[3], origin: parsed[4],
         headers: parsed[5], headerHost: parsed[6], kind: parsed[7], depth: parsed[8],
+        ...(parsed.length === 10 ? { routeVersion: parsed[9] } : {}),
         ...(parsed.length === 11 ? { recipe: parsed[9], hosts: parsed[10] } : {}),
+        ...(parsed.length === 12 ? { routeVersion: parsed[9], recipe: parsed[10], hosts: parsed[11] } : {}),
       } : parsed
       if (!validGrant(value, now, allowExpired)) throw new Error('Invalid grant.')
       return value

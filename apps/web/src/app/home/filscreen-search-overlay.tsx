@@ -47,6 +47,7 @@ type OverlayEntry = {
   key: string
   meta: string
   posterUrl?: string | undefined
+  backdropUrl?: string | undefined
   ratingLabel?: string | undefined
   title: string
 }
@@ -57,6 +58,7 @@ function catalogEntry(item: CatalogTitleSummary): OverlayEntry {
     key: `${item.kind}:${item.id}`,
     meta: [item.year ? String(item.year) : null, kindLabel(item.kind)].filter(Boolean).join(' · '),
     posterUrl: item.posterUrl ?? undefined,
+    backdropUrl: item.backdropUrl ?? undefined,
     ratingLabel: typeof item.tmdbRating === 'number' ? `★ ${item.tmdbRating.toFixed(1)}` : undefined,
     title: item.title,
   }
@@ -69,6 +71,7 @@ function animeEntry(anime: AnimeTitleSummary): OverlayEntry {
     key: `anime:${anime.anilistId}`,
     meta: [anime.seasonYear ? String(anime.seasonYear) : null, 'Anime', anime.genres.slice(0, 2).join(' · ') || null].filter(Boolean).join(' · '),
     posterUrl: anime.coverImage.url ?? undefined,
+    backdropUrl: anime.bannerImage ?? undefined,
     ratingLabel: score ? `★ ${score}` : undefined,
     title: anime.titles.preferred,
   }
@@ -357,9 +360,9 @@ export function FilScreenSearchOverlay({ onClose, open }: { onClose: () => void;
                     role="option"
                   >
                     {item.member ? <Avatar name={item.title} size="md" src={memberAvatarSrc(item.member)} treatment={item.member.avatarStyle} /> : <span aria-hidden="true" className="grid h-20 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-[var(--fs-rail)] text-base font-bold text-[var(--fs-muted)]">
-                      {item.posterUrl ? (
+                      {item.posterUrl || item.backdropUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- tiny command-palette thumb avoids Next image overhead
-                        <img alt="" className="h-full w-full object-cover" loading="lazy" src={item.posterUrl} />
+                        <img alt="" className="h-full w-full object-cover" loading="lazy" src={item.posterUrl ?? item.backdropUrl} />
                       ) : (
                         item.title.charAt(0)
                       )}

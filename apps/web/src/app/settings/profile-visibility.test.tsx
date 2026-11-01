@@ -53,7 +53,7 @@ const profile: MemberProfile = {
   createdAt: '2026-09-07T12:00:00.000Z',
   displayName: 'Hamza',
   nextUsernameChangeAt: null,
-  sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true },
+  sectionVisibility: { favorites: true, ratings: true, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true },
   username: 'hamzanadi',
   usernameChangedAt: null,
 }
@@ -72,12 +72,24 @@ describe('profile section privacy', () => {
     screenWithProfile()
     expect(screen.queryByRole('radio', { name: 'Private' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
-    expect(screen.getByText('Your profile identity is public.', { exact: true })).toBeInTheDocument()
-    expect(screen.getByText(/Watched titles, Diary, History, active playback, resume progress, and account details always stay private/)).toBeInTheDocument()
+    expect(screen.getByText(/Your profile identity is public/)).toBeInTheDocument()
+    expect(screen.getByText(/Watched, Diary, completed History, and Activity are visible by default/)).toBeInTheDocument()
+    expect(screen.getByText(/Active playback, resume progress, saved provider sources, and account details never appear on your profile/)).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: 'Ratings' })).toBeChecked()
     await userEvent.click(screen.getByRole('checkbox', { name: 'Ratings' }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!)
-    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({ sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true } })))
+    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({ sectionVisibility: { favorites: true, ratings: false, reviews: true, lists: true, network: true, likes: true, tags: true, watchlist: true, watched: true, diary: true, history: true, activity: true } })))
+    expect(await screen.findByText('Profile saved.')).toBeVisible()
+  })
+  it('explains and saves the Reviews choice for public title feeds', async () => {
+    mocks.updateMemberProfile.mockResolvedValue({ ...profile, sectionVisibility: { ...profile.sectionVisibility, reviews: false } })
+    screenWithProfile()
+    expect(screen.getByText(/Turning Reviews off also hides your reviews from public title review feeds\./)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Reviews' }))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Save changes' })[0]!)
+    await waitFor(() => expect(mocks.updateMemberProfile).toHaveBeenCalledWith(expect.objectContaining({
+      sectionVisibility: { ...profile.sectionVisibility, reviews: false },
+    })))
     expect(await screen.findByText('Profile saved.')).toBeVisible()
   })
   it('retains a selected section setting after a failed save and permits a retry', async () => {

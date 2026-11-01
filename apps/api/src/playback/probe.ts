@@ -10,7 +10,7 @@ import { acquireProviderBudget } from './provider-budget.ts'
  *  circuits; they are signal, not traffic shaping. */
 
 export type ProbeRef = PlaybackRef
-export type ProbeResult = { ok: boolean; ms: number; at: number; code?: string | undefined }
+export type ProbeResult = { ok: boolean; ms: number; at: number; stage?: 'lookup' | undefined; purpose?: 'video' | 'audio' | undefined; code?: string | undefined }
 export type ProbeStatus = Record<string, ProbeResult>
 
 const MOVIE_REF: ProbeRef = { kind: 'movie', id: 550 }
@@ -40,13 +40,13 @@ export function createProbeScheduler(deps: {
   let running = false
   const regionsFor = (registration: ProviderRegistration) => [...new Set(registration.approvedRegions)]
     .sort((left, right) => left === region ? -1 : right === region ? 1 : left.localeCompare(right)).slice(0, 4)
-  const retentionSeconds = () => Math.max(600, Math.ceil(intervalMs / 1000) * 3, providers.reduce((count, row) => count + row.mediaKinds.length * regionsFor(row).length, 0) * (15 + Math.ceil(gapMs / 1000)) * 3)
+  const retentionSeconds = () => Math.max(600, Math.ceil(intervalMs / 1000) * 3, providers.reduce((count, row) => count + row.mediaKinds.length * regionsFor(row).length * (row.role === 'audio' || row.role === 'both' ? 2 : 1), 0) * (15 + Math.ceil(gapMs / 1000)) * 3)
 
-  async function probe(registration: ProviderRegistration, kind: MediaKind, probeRegion: string): Promise<void> {
+  async function probe(registration: ProviderRegistration, kind: MediaKind, probeRegion: string, purpose: 'video' | 'audio'): Promise<void> {
     const release = await acquireProviderBudget(registration, probeRegion, deps.store).catch(() => null)
     if (!release) return
     const started = clock()
-    const key = `${registration.adapter.id}:${kind}:${probeRegion}`
+    const key = purpose === 'audio' ? `${registration.adapter.id}:audio:${kind}:${probeRegion}` : `${registration.adapter.id}:${kind}:${probeRegion}`
     const controller = new AbortController()
     const budgetMs = Math.min(Math.max(timeoutMs, registration.attemptMs ?? 0), 15_000)
     const timeout = setTimeout(() => controller.abort(new DOMException('Probe timed out', 'TimeoutError')), budgetMs)
@@ -56,20 +56,21 @@ export function createProbeScheduler(deps: {
           ref: registration.probes?.[kind]?.ref ?? refFor(kind),
           region: probeRegion,
           audioLanguage: registration.probes?.[kind]?.audioLanguage ?? 'en',
+          ...(purpose === 'audio' ? { purpose: 'audio' as const } : {}),
         }, controller.signal),
         new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true })),
       ])
       const ms = clock() - started
       const parsed = providerResultSchema.safeParse(result)
-      const record: ProbeResult = !parsed.success ? { ok: false, ms, at: started, code: 'invalid-source' }
-        : parsed.data.ok ? validatedSources(parsed.data, registration, clock()).length > 0 ? { ok: true, ms, at: started } : { ok: false, ms, at: started, code: 'invalid-source' }
-        : { ok: false, ms, at: started, code: parsed.data.code }
+      const record: ProbeResult = !parsed.success ? { ok: false, ms, at: started, stage: 'lookup', purpose, code: 'invalid-source' }
+        : parsed.data.ok ? validatedSources(parsed.data, registration, clock()).length > 0 ? { ok: true, ms, at: started, stage: 'lookup', purpose } : { ok: false, ms, at: started, stage: 'lookup', purpose, code: 'invalid-source' }
+        : { ok: false, ms, at: started, stage: 'lookup', purpose, code: parsed.data.code }
       results.set(key, record)
       if (deps.store) await deps.store.set(`probe:${key}`, JSON.stringify(record), retentionSeconds()).catch(() => undefined)
       deps.log?.({ provider: registration.adapter.id, ok: record.ok, ms, ...(record.code ? { code: record.code } : {}) })
     } catch {
       const ms = clock() - started
-      const record = { ok: false, ms, at: started, code: 'error' }
+      const record = { ok: false, ms, at: started, stage: 'lookup' as const, purpose, code: 'error' }
       results.set(key, record)
       if (deps.store) await deps.store.set(`probe:${key}`, JSON.stringify(record), retentionSeconds()).catch(() => undefined)
       deps.log?.({ provider: registration.adapter.id, ok: false, ms, code: 'error' })
@@ -86,27 +87,33 @@ export function createProbeScheduler(deps: {
     const deadline = options ? clock() + Math.min(60_000, Math.max(0, options.budgetMs)) : Infinity
     try {
       if (deps.store && !await deps.store.claim('probe:scheduler', lock, options ? 65 : Math.max(60, Math.ceil(intervalMs / 1000))).catch(() => false)) return
-      const work: { registration: ProviderRegistration; kind: MediaKind; probeRegion: string; at: number }[] = []
+      const work: { registration: ProviderRegistration; kind: MediaKind; probeRegion: string; purpose: 'video' | 'audio'; at: number }[] = []
       for (const registration of providers) {
-        if (!registration.enabled || !suppliesVideo(registration)) continue
+        if (!registration.enabled) continue
+        const purposes: ('video' | 'audio')[] = [
+          ...(suppliesVideo(registration) ? ['video' as const] : []),
+          ...(registration.role === 'audio' || registration.role === 'both' ? ['audio' as const] : []),
+        ]
         for (const kind of registration.mediaKinds) {
           for (const probeRegion of regionsFor(registration)) {
             if (clock() >= deadline) return
-            const key = `${registration.adapter.id}:${kind}:${probeRegion}`
-            let at = results.get(key)?.at ?? 0
-            if (options?.onlyDue && deps.store) {
-              const raw = await deps.store.get(`probe:${key}`)
-              try { const parsed = raw ? JSON.parse(raw) : null; if (Number.isFinite(parsed?.at)) at = parsed.at } catch { /* A malformed record is due for a new check. */ }
+            for (const purpose of purposes) {
+              const key = purpose === 'audio' ? `${registration.adapter.id}:audio:${kind}:${probeRegion}` : `${registration.adapter.id}:${kind}:${probeRegion}`
+              let at = results.get(key)?.at ?? 0
+              if (options?.onlyDue && deps.store) {
+                const raw = await deps.store.get(`probe:${key}`)
+                try { const parsed = raw ? JSON.parse(raw) : null; if (Number.isFinite(parsed?.at)) at = parsed.at } catch { /* A malformed record is due for a new check. */ }
+              }
+              if (!options?.onlyDue || !at || at + intervalMs <= clock()) work.push({ registration, kind, probeRegion, purpose, at })
             }
-            if (!options?.onlyDue || !at || at + intervalMs <= clock()) work.push({ registration, kind, probeRegion, at })
           }
         }
       }
       // Oldest evidence first gives every configured leg a turn across bounded jobs.
       if (options) work.sort((left, right) => left.at - right.at)
-      for (const { registration, kind, probeRegion } of work) {
+      for (const { registration, kind, probeRegion, purpose } of work) {
         if (clock() + Math.min(Math.max(timeoutMs, registration.attemptMs ?? 0), 15_000) + gapMs > deadline) break
-        await probe(registration, kind, probeRegion)
+        await probe(registration, kind, probeRegion, purpose)
         await new Promise((resolve) => setTimeout(resolve, gapMs))
       }
     } finally {
@@ -127,14 +134,20 @@ export function createProbeScheduler(deps: {
     },
     async status() {
       if (!deps.store) return Object.fromEntries(results)
-      const shared = await Promise.all(providers.flatMap((provider) => provider.mediaKinds.flatMap((kind) => regionsFor(provider).map(async (probeRegion) => {
-        const key = `${provider.adapter.id}:${kind}:${probeRegion}`
+      const shared = await Promise.all(providers.flatMap((provider) => provider.mediaKinds.flatMap((kind) => regionsFor(provider).flatMap(probeRegion => {
+        const purposes: ('video' | 'audio')[] = [
+          ...(suppliesVideo(provider) ? ['video' as const] : []),
+          ...(provider.role === 'audio' || provider.role === 'both' ? ['audio' as const] : []),
+        ]
+        return purposes.map(async purpose => {
+        const key = purpose === 'audio' ? `${provider.adapter.id}:audio:${kind}:${probeRegion}` : `${provider.adapter.id}:${kind}:${probeRegion}`
         const raw = await deps.store!.get(`probe:${key}`).catch(() => null)
         if (!raw) return [key, results.get(key)] as const
         try {
           const parsed = JSON.parse(raw) as ProbeResult
           return [key, Number.isFinite(parsed.at) && Number.isFinite(parsed.ms) && typeof parsed.ok === 'boolean' ? parsed : undefined] as const
         } catch { return [key, undefined] as const }
+        })
       }))))
       return Object.fromEntries(shared.filter((entry) => entry[1] !== undefined)) as ProbeStatus
     },

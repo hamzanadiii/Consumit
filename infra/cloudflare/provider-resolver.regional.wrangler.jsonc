@@ -6,5 +6,7 @@
   "workers_dev": true,
   "placement": { "region": "aws:eu-west-3" },
   "observability": { "enabled": true, "head_sampling_rate": 0.01, "logs": { "enabled": true, "invocation_logs": false } },
-  "vars": { "RESOLVER_ENABLED": "true", "RESOLVER_COMPUTE_ORIGIN": "https://consumit.online" }
+  "vars": { "RESOLVER_ENABLED": "true", "RESOLVER_COORDINATION_ENABLED": "true", "RESOLVER_ROUTE_POLICY": "[]", "RESOLVER_ROUTE_POLICY_REQUIRED": "true", "RESOLVER_COMPUTE_ORIGIN": "https://consumit.online" },
+  "durable_objects": { "bindings": [{ "name": "PROVIDER_COORDINATORS", "class_name": "ProviderCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ProviderCoordinator"] }]
 }
