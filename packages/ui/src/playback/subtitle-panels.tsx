@@ -36,7 +36,7 @@ export function SubtitleAppearance({ size, background, position, font, color, pr
   onPosition: (value: CaptionPosition) => void; onFont: (value: CaptionFont) => void; onColor: (value: CaptionColor) => void
 }) {
   return <div className="px-3 py-2">
-    <div aria-label="Subtitle preview" className="flex min-h-24 items-center justify-center overflow-hidden border-b border-border py-4">{preview}</div>
+    <div aria-label="Subtitle preview" className="flex min-h-16 items-center justify-center overflow-hidden border-b border-border py-3">{preview}</div>
     <ChoiceRow label="Size" value={size} onChange={onSize} options={[{ value: 'small', label: 'Small', short: 'S' }, { value: 'medium', label: 'Medium', short: 'M' }, { value: 'large', label: 'Large', short: 'L' }, { value: 'xlarge', label: 'Extra large', short: 'XL' }]} />
     <ChoiceRow label="Style" value={background} onChange={onBackground} options={[{ value: 'cinematic', label: 'Cinematic' }, { value: 'boxed', label: 'Boxed' }, { value: 'subtle', label: 'Subtle' }]} />
     <ChoiceRow label="Position" value={position} onChange={onPosition} options={[{ value: 'bottom', label: 'Bottom' }, { value: 'top', label: 'Top' }]} />
@@ -57,7 +57,7 @@ export function SubtitleSync({ delay, cues, activeIndex, captionsOn, status, lis
       <button aria-label="Reset subtitle sync offset" onClick={onReset} type="button"><RotateCcw aria-hidden="true" className="size-3.5" />Reset</button>
       <button aria-label="Shift subtitles forwards 50 milliseconds" onClick={() => onAdjust(50)} type="button"><Plus aria-hidden="true" className="size-3.5" />50 ms</button>
     </div>
-    <p className="text-xs leading-5 text-copy">Select a line when you hear it spoken.</p>
+    {cues.length > 0 ? <p className="text-xs leading-5 text-copy">Select a line when you hear it spoken. If timing keeps drifting, choose a different release.</p> : null}
     <div aria-label="Subtitle lines" className="consumit-sync-lines" onMouseEnter={() => onHover(true)} onMouseLeave={() => onHover(false)} onTouchStart={() => onHover(true)} ref={listRef} role="group">
       {cues.length === 0 ? <p className="grid h-full place-items-center text-center text-xs text-muted">{captionsOn ? 'No subtitles loaded' : 'Subtitles are off'}</p> : cues.map((cue, index) => <button aria-current={index === activeIndex ? 'true' : undefined} className="consumit-sync-line" key={`${cue.startTime}-${index}`} onClick={() => onCue(cue)} type="button"><bdi className="line-clamp-2" dir="auto">{cue.text}</bdi></button>)}
     </div>

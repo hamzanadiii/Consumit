@@ -27,6 +27,8 @@ services:
       NODE_ENV: production
       PORT: 3001
       APP_ORIGIN: ${APP_ORIGIN:-https://consumit.online}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       AUTH_CODE_PEPPER: ${AUTH_CODE_PEPPER:-missing-auth-pepper}
       AUTH_EMAIL_FROM: ${AUTH_EMAIL_FROM:-Consumit <auth@consumit.online>}
       AUTH_EMAIL_PROVIDER: ses
@@ -39,6 +41,7 @@ services:
       DATABASE_SSL_CA_FILE: /run/secrets/db-ca.crt
       VALKEY_URL: valkey://valkey:6379/0
       TMDB_API_READ_TOKEN: ${TMDB_API_READ_TOKEN:-missing-catalog-token}
+      MAL_CLIENT_ID: ${MAL_CLIENT_ID:-}
       TMDB_LANGUAGE: ${TMDB_LANGUAGE:-en-US}
       TMDB_REGION: ${TMDB_REGION:-US}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}

@@ -11,7 +11,7 @@ import { registerErrorHandlers } from '../http/errors.ts'
 const counters = vi.hoisted(() => new Map<string, ReturnType<typeof vi.fn>>())
 vi.mock('@opentelemetry/api', async importOriginal => {
   const original = await importOriginal<typeof import('@opentelemetry/api')>()
-  return { ...original, metrics: { ...original.metrics, getMeter: () => ({ createCounter(name: string) { const add = vi.fn(); counters.set(name, add); return { add } }, createHistogram: () => ({ record: vi.fn() }) }) } }
+  return { ...original, metrics: { ...original.metrics, getMeter: () => ({ createCounter(name: string) { const add = vi.fn(); counters.set(name, add); return { add } }, createGauge: () => ({ record: vi.fn() }), createHistogram: () => ({ record: vi.fn() }) }) } }
 })
 const ref = { kind: 'movie' as const, id: 550 }
 const input = { ref, audioLanguage: 'en', capabilities: { hls: true, dash: false, native: true, nativeHls: false } }

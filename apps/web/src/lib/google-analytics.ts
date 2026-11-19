@@ -6,7 +6,7 @@ export const ANALYTICS_TAG_REQUEST_EVENT = 'consumit:analytics-tag-request'
 export type ConsumitAnalyticsEvent =
   | { name: 'title_opened' }
   | { name: 'playback_started' | 'playback_30s'; playerType: 'html5' | 'cast' }
-  | { name: 'sign_up' }
+  | { name: 'sign_up'; method?: 'email' | 'google' }
 
 export function analyticsMeasurementId(value: string | undefined): string | null {
   return value && /^G-[A-Z0-9]+$/.test(value) ? value : null
@@ -66,8 +66,9 @@ function eventContext(event: ConsumitAnalyticsEvent, pathname: string): {
       parameters: { content_type: contentType, player_type: event.playerType },
     } : null
   }
-  return pathname === '/sign-up'
-    ? { page: { path: '/sign-up', title: 'Sign up' }, parameters: { method: 'email' } }
+  if (event.name !== 'sign_up') return null
+  return pathname === '/sign-up' || pathname === '/sign-up/google'
+    ? { page: { path: '/sign-up', title: 'Sign up' }, parameters: { method: event.method ?? 'email' } }
     : null
 }
 

@@ -20,7 +20,7 @@ export async function resolveReleaseProbeSource(provider: ProviderRegistration, 
       if (!source || source.type === 'iframe' || !provider.enabled || revision !== providerRevision(provider)) return null
       const expiresAt = new Date(Math.min(Date.parse(source.expiresAt), Date.now() + 90_000)).toISOString()
       const src = provider.deliveryMode === 'relay'
-        ? await deps.relay?.issue({ source, registration: provider, subtitles: [], delivery: 'direct' }, Date.parse(expiresAt), deps.origin)
+        ? await deps.relay?.issue({ source, registration: provider, subtitles: [], delivery: 'direct' }, Date.parse(expiresAt), deps.origin, { kind: ref.kind, region: deps.region, purpose: 'video' })
         : source.url
       if (!src) return null
       const preview = { src, type: source.type, expiresAt, providerId: provider.adapter.id, revision, region: deps.region, audioLanguage,

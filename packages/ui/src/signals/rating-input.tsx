@@ -71,13 +71,14 @@ export function RatingInput({
                   }}
                 >
                   <input
-                    aria-label={`Rate ${step} out of 10`}
+                    aria-label={`Rate ${step / 2} out of 5 stars`}
                     checked={value === step}
                     className="peer sr-only"
                     disabled={disabled}
                     name={name}
                     onChange={() => onChange?.(step)}
                     onClick={() => {
+                      setHover(null)
                       if (step === value) onChange?.(null)
                     }}
                     type="radio"

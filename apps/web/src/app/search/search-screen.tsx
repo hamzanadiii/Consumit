@@ -2,14 +2,16 @@
 
 import { titleHref, watchHref, type AnimeTitleSummary, type CatalogPage } from '@consumit/contracts'
 import { ArrowRight, Play, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useTransition } from 'react'
 
 import {
   buttonVariants,
   Button,
   EmptyState,
+  ErrorState,
   FilterChip,
   SectionHeading,
 } from '@consumit/ui'
@@ -24,9 +26,13 @@ type SearchScreenProps = {
   animeResults?: readonly AnimeTitleSummary[] | undefined
   /** Anime search needs a session. Say so instead of reporting an empty match set. */
   animeSignInRequired?: boolean | undefined
+  /** The AniList request failed, so the screen must not imply there were no matches. */
+  animeUnavailable?: boolean | undefined
+  /** TMDB failed while AniList remains independently available in All scope. */
+  catalogUnavailable?: boolean | undefined
   initialKind?: 'all' | 'movie' | 'series' | 'anime'
   initialQuery: string
-  page: CatalogPage
+  page: CatalogPage | null
   queryTooShort: boolean
 }
 
@@ -38,29 +44,54 @@ function AnimeSearchCard({ anime }: { anime: AnimeTitleSummary }) {
       href={watchHref({ kind: 'anime', id: anime.anilistId })}
       meta={meta}
       titleHref={`/anime/${anime.anilistId}`}
-      title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, year: anime.seasonYear, posterUrl: anime.coverImage.url, tmdbRating: anime.averageScore === null ? null : anime.averageScore / 10 }}
+      title={{ id: anime.anilistId, kind: 'anime', title: anime.titles.preferred, year: anime.seasonYear, posterUrl: anime.coverImage.url, backdropUrl: anime.bannerImage, tmdbRating: anime.averageScore === null ? null : anime.averageScore / 10 }}
     />
   )
 }
 
-export function SearchScreen({ animeResults, animeSignInRequired = false, initialKind = 'all', initialQuery, page, queryTooShort }: SearchScreenProps) {
-  const [activeKind, setActiveKind] = useState<'all' | 'movie' | 'series' | 'anime'>(initialKind)
+export function SearchScreen({ animeResults, animeSignInRequired = false, animeUnavailable = false, catalogUnavailable = false, initialKind = 'all', initialQuery, page, queryTooShort }: SearchScreenProps) {
+  const router = useRouter()
+  const [refreshing, startRefresh] = useTransition()
+  const activeKind = initialKind
   // TMDB serves movies and series only — anime matches come from AniList.
   const animeItems = animeResults ?? []
-  const results = useMemo(() => {
-    if (activeKind === 'anime') return []
-    return activeKind === 'all' ? page.items : page.items.filter((item) => item.kind === activeKind)
-  }, [activeKind, page.items])
-  const animeSectionVisible = (activeKind === 'all' || activeKind === 'anime') && (animeItems.length > 0 || animeSignInRequired)
+  const catalogItems = page?.items ?? []
+  const results = activeKind === 'anime' ? [] : activeKind === 'all' ? catalogItems : catalogItems.filter((item) => item.kind === activeKind)
+  const animeSectionVisible = (activeKind === 'all' || activeKind === 'anime') && (activeKind === 'anime' || animeItems.length > 0 || animeSignInRequired || animeUnavailable)
   const showAnime = (activeKind === 'all' || activeKind === 'anime') && animeItems.length > 0
-  const best = results[0] ?? page.items[0]
+  const best = results[0]
+  const catalogUnavailableDescription = activeKind === 'all'
+    ? 'Retry to load movie and series results. Anime search is shown separately below.'
+    : `Retry to search ${activeKind === 'movie' ? 'movies' : 'series'}. Your query and filter will stay in place.`
+  const catalogUnavailableTitle = activeKind === 'all'
+    ? 'Movie and series search is temporarily unavailable.'
+    : `${activeKind === 'movie' ? 'Movie' : 'Series'} search is temporarily unavailable.`
+  const catalogUnavailableSummary = activeKind === 'movie'
+    ? 'Movie results could not be loaded'
+    : activeKind === 'series'
+      ? 'Series results could not be loaded'
+      : 'Movie and series results could not be loaded'
+
+  const animeQuery = new URLSearchParams()
+  if (initialQuery) animeQuery.set('q', initialQuery)
+  animeQuery.set('type', 'anime')
+  const animeSignInHref = `/sign-in?${new URLSearchParams({ next: `/search?${animeQuery.toString()}` })}`
+
+  function selectKind(kind: 'all' | 'movie' | 'series' | 'anime') {
+    if (kind === activeKind) return
+    const params = new URLSearchParams()
+    if (initialQuery) params.set('q', initialQuery)
+    if (kind !== 'all') params.set('type', kind)
+    const query = params.toString()
+    router.push(query ? `/search?${query}` : '/search', { scroll: false })
+  }
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-search-screen>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-search-screen>
         <section className="relative isolate overflow-hidden border-b border-[var(--fs-line)] px-5 py-16 sm:px-8 sm:py-20 lg:px-[50px] lg:py-24">
           {best?.backdropUrl ? <Image alt="" className="-z-20 object-cover opacity-35" fill priority sizes="100vw" src={best.backdropUrl} /> : null}
-          <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(9,9,11,.98),rgba(9,9,11,.76)_58%,rgba(9,9,11,.42))]" />
+          <span aria-hidden="true" className="absolute inset-0 -z-10" data-search-hero-overlay />
           <div className="max-w-4xl">
             <h1 className="max-w-[13ch] text-balance font-display text-5xl leading-[0.95] tracking-[-0.03em] text-[var(--fs-ink)] sm:text-6xl lg:text-[5.25rem]">Find the thing that stays with you.</h1>
             <p className="mt-6 max-w-[62ch] text-sm leading-7 text-[var(--fs-secondary)] sm:text-base">Search real movies, series, and anime, explore the details, and choose what deserves tonight.</p>
@@ -68,6 +99,7 @@ export function SearchScreen({ animeResults, animeSignInRequired = false, initia
               <label className="sr-only" htmlFor="explore-search">Search movies, series, and anime</label>
               <Search aria-hidden="true" className="absolute top-1/2 left-5 size-5 -translate-y-1/2 text-[var(--fs-muted)]" />
               <input className="h-16 w-full rounded-control border border-[var(--fs-field-border)] bg-[var(--fs-field)] pr-36 pl-14 text-base text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)] focus-visible:border-[var(--fs-focus)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:pr-40" defaultValue={initialQuery} id="explore-search" maxLength={100} name="q" placeholder="Try ‘Dune’ or ‘Severance’" type="search" />
+              {activeKind !== 'all' ? <input name="type" type="hidden" value={activeKind} /> : null}
               <Button className="absolute top-2 right-2 h-12" type="submit" variant="accent">Search</Button>
             </form>
             {queryTooShort ? <p className="mt-3 text-xs text-[var(--fs-accent)]" role="alert">Type at least two characters. Discovery titles are shown below.</p> : null}
@@ -96,15 +128,21 @@ export function SearchScreen({ animeResults, animeSignInRequired = false, initia
 
           <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="results" aria-labelledby="results-heading">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <SectionHeading description={activeKind === 'anime' ? `${animeItems.length} AniList ${animeItems.length === 1 ? 'match' : 'matches'}` : `${results.length} real catalog ${results.length === 1 ? 'match' : 'matches'}`} id="results-heading" title={initialQuery.length >= 2 ? 'Search results' : 'Explore the catalog'} />
+              <SectionHeading description={activeKind === 'anime' ? `${animeItems.length} AniList ${animeItems.length === 1 ? 'match' : 'matches'}` : catalogUnavailable ? catalogUnavailableSummary : `${results.length} real catalog ${results.length === 1 ? 'match' : 'matches'}`} id="results-heading" title={initialQuery.length >= 2 ? 'Search results' : 'Explore the catalog'} />
               <div className="flex flex-wrap gap-2" role="group" aria-label="Filter results">
-                {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => <FilterChip key={value} onClick={() => setActiveKind(value)} selected={activeKind === value}>{label}</FilterChip>)}
+                {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => <FilterChip key={value} onClick={() => selectKind(value)} selected={activeKind === value}>{label}</FilterChip>)}
                 <Link className="inline-flex min-h-11 items-center rounded-control border border-[var(--fs-line)] px-4 text-sm text-[var(--fs-secondary)] hover:text-[var(--fs-ink)]" href={`/search?q=${encodeURIComponent(initialQuery)}&type=people`}>People</Link>
               </div>
             </div>
             {activeKind === 'anime' ? null : (
               <div className="mt-9">
-                {results.length > 0 ? <CatalogGrid items={results} /> : <EmptyState description="Try a different title, spelling, or switch back to all results." title="No titles found" />}
+                {catalogUnavailable ? (
+                  <ErrorState
+                    action={<Button loading={refreshing} onClick={() => startRefresh(() => router.refresh())} variant="secondary">{refreshing ? 'Retrying title search…' : 'Retry title search'}</Button>}
+                    description={catalogUnavailableDescription}
+                    title={catalogUnavailableTitle}
+                  />
+                ) : results.length > 0 ? <CatalogGrid items={results} /> : <EmptyState description="Try a different title, spelling, or switch back to all results." title="No titles found" />}
               </div>
             )}
           </section>
@@ -112,13 +150,20 @@ export function SearchScreen({ animeResults, animeSignInRequired = false, initia
           {animeSectionVisible ? (
             <section className="border-t border-[var(--fs-line)] py-14 sm:py-16 lg:py-20" id="anime-results" aria-labelledby="anime-results-heading">
               <SectionHeading description={showAnime ? `Anime metadata by AniList · ${animeItems.length} ${animeItems.length === 1 ? 'match' : 'matches'}` : 'Anime metadata by AniList'} id="anime-results-heading" title="Anime" />
-              {showAnime ? (
+              {animeUnavailable ? (
+                <ErrorState
+                  action={<Button loading={refreshing} onClick={() => startRefresh(() => router.refresh())} variant="secondary">{refreshing ? 'Retrying anime search…' : 'Retry anime search'}</Button>}
+                  className="mt-9"
+                  description={activeKind === 'all' ? 'AniList could not load anime. Retry when ready; your movie and series results remain available.' : 'AniList could not load anime. Retry in a moment.'}
+                  title="Anime search is temporarily unavailable."
+                />
+              ) : showAnime ? (
                 <ul className="mt-9 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {animeItems.map((anime) => <AnimeSearchCard anime={anime} key={`anime:${anime.anilistId}`} />)}
                 </ul>
               ) : (
                 <div className="mt-9">
-                  <EmptyState description={animeSignInRequired ? 'Anime search is available to signed-in members. Sign in to see AniList matches for this query.' : 'Try a different title, spelling, or switch back to all results.'} title={animeSignInRequired ? 'Sign in to search anime' : 'No anime found'} />
+                  <EmptyState action={animeSignInRequired ? <Link className={`${buttonVariants({ variant: 'secondary' })} min-h-[44px]`} href={animeSignInHref}>Sign in</Link> : undefined} description={animeSignInRequired ? 'Anime search is available to signed-in members. Sign in to return to this query.' : 'Try a different title, spelling, or switch back to all results.'} title={animeSignInRequired ? 'Sign in to search anime' : 'No anime found'} />
                 </div>
               )}
             </section>

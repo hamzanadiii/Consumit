@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, progressKey, readPlaybackProgress, readTitleProgress, writePlaybackProgress } from './playback-progress'
+import { PROGRESS_SYNC_INTERVAL_MS, hasMeaningfulProgressChange, progressKey, readEpisodeTracking, readPlaybackProgress, readTitleProgress, writeEpisodeTracking, writePlaybackProgress } from './playback-progress'
 
 const ref = { kind: 'series' as const, id: 7, season: 2, episode: 3 }
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals() })
@@ -68,6 +68,24 @@ describe('canonical playback progress', () => {
     expect(request[1].keepalive).toBe(true)
     expect(JSON.parse(String(request[1].body))).toMatchObject({ completed: true, completionId, episode: 3, positionSeconds: 42 })
   })
+  it('syncs an exact episode choice through the private endpoint and retains it on this device if sync fails', async () => {
+    const member = 'member'
+    await writePlaybackProgress(ref, 80, 900, false)
+    const input = { ...ref, episodeTracking: 'continue' as const }
+    const fetchMock = vi.fn()
+      .mockRejectedValue(new Error('Offline'))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await writeEpisodeTracking(input, member)).toBe('device')
+    expect(await readTitleProgress(ref, AbortSignal.abort(), member)).toMatchObject({ episodeTracking: 'continue', positionSeconds: 0 })
+    fetchMock.mockResolvedValueOnce(Response.json({ ...input, positionSeconds: 95, durationSeconds: 900, completed: false, updatedAt: new Date().toISOString() }))
+    expect(await writeEpisodeTracking(input, member)).toBe('account')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/v1/progress/episode')
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1].body))).toEqual(input)
+    expect(await readEpisodeTracking(ref, AbortSignal.abort(), member)).toBe('continue')
+    expect(await readPlaybackProgress(ref, AbortSignal.abort(), member)).toBe(95)
+    expect(await readPlaybackProgress(ref, AbortSignal.abort())).toBe(80)
+  })
+
   it('coalesces interval writes to meaningful changes within a 20-30 second cadence', () => {
     expect(PROGRESS_SYNC_INTERVAL_MS).toBeGreaterThanOrEqual(20000)
     expect(PROGRESS_SYNC_INTERVAL_MS).toBeLessThanOrEqual(30000)

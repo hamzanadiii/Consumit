@@ -76,6 +76,7 @@ export type WatchCardProps = Omit<ComponentProps<'article'>, 'children'> & {
   action?: ReactNode | undefined
   badge?: ReactNode | undefined
   artworkSrc?: string | undefined
+  artworkFallbackSrc?: string | undefined
   bookmark?: ReactNode | undefined
   footer?: ReactNode | undefined
   href?: string | undefined
@@ -91,6 +92,7 @@ export type WatchCardProps = Omit<ComponentProps<'article'>, 'children'> & {
 
 export function WatchCard({
   artworkSrc,
+  artworkFallbackSrc,
   action,
   badge,
   bookmark,
@@ -120,6 +122,7 @@ export function WatchCard({
       <ArtworkFrame
         alt={`${title} poster`}
         className="consumit-poster-frame transition-[border-color,box-shadow] duration-150 group-hover:border-orange group-focus-within:border-orange group-focus-within:ring-2 group-focus-within:ring-orange motion-reduce:transition-none"
+        fallbackSrc={artworkFallbackSrc}
         src={artworkSrc}
       >
         {badge ? <div className="absolute top-3 left-3 z-10">{badge}</div> : null}
@@ -128,11 +131,6 @@ export function WatchCard({
             <Check aria-hidden="true" className="size-4" />
             <span className="sr-only">Saved</span>
           </span>
-        ) : null}
-        {cornerAction ? (
-          <div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-            {cornerAction}
-          </div>
         ) : null}
         {titleDestination ? (
           <LinkComponent
@@ -168,6 +166,11 @@ export function WatchCard({
             </span>
           </div>
         )}
+        {cornerAction ? (
+          <div className="absolute top-3 right-3 z-10 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+            {cornerAction}
+          </div>
+        ) : null}
         {safeProgress !== undefined ? (
           <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 bg-surface-raised">
             <span className="block h-full bg-orange" style={{ width: `${safeProgress}%` }} />

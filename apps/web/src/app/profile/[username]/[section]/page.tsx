@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 function refsInPage(page: MemberProfileArchivePage): CatalogRef[] {
   switch (page.collection) {
     case 'activity': return page.items.map((event) => ({ id: event.item.id, kind: event.item.kind }))
-    case 'diary': case 'films': case 'likes': case 'reviews': case 'watchlist': return page.items.map(({ id, kind }) => ({ id, kind }))
+    case 'diary': case 'films': case 'history': case 'likes': case 'reviews': case 'watchlist': return page.items.map(({ id, kind }) => ({ id, kind }))
     default: return []
   }
 }
@@ -65,20 +65,24 @@ export default async function ProfileArchivePage({ params, searchParams }: Profi
     if (error instanceof MemberApiError && error.status === 404) notFound()
     throw error
   }
-  const canonicalQuery = [selectedRating !== undefined ? `rating=${selectedRating}` : '', networkView !== undefined ? `view=${networkView}` : ''].filter(Boolean).join('&')
+  const canonicalParams = new URLSearchParams()
+  if (selectedRating !== undefined) canonicalParams.set('rating', String(selectedRating))
+  if (networkView !== undefined) canonicalParams.set('view', networkView)
+  if (selectedTag) canonicalParams.set('tag', selectedTag)
+  const canonicalQuery = canonicalParams.toString()
   if (profile.canonicalUsername !== normalizedUsername) redirect(`/profile/${profile.canonicalUsername}/${section}${canonicalQuery ? `?${canonicalQuery}` : ''}`)
   if (section === 'followers' || section === 'following') redirect(`/profile/${profile.canonicalUsername}/network?view=${section}`)
   const owner = profile.viewerIsOwner && session.status === 'authenticated' && session.member.username === profile.canonicalUsername
   if (profile.viewerIsOwner && !owner) notFound()
-  if (!profile.viewerIsOwner && ['likes', 'tags', 'watchlist'].includes(section)) {
-    const collection = section as 'likes' | 'tags' | 'watchlist'
+  if (!profile.viewerIsOwner && ['activity', 'diary', 'films', 'history', 'likes', 'tags', 'watchlist'].includes(section)) {
+    const collection = section as Extract<MemberProfileArchiveKind, 'activity' | 'diary' | 'films' | 'history' | 'likes' | 'tags' | 'watchlist'>
     let initialPage: MemberProfileArchivePage
     try { initialPage = await getPublicProfileArchivePage(profile.canonicalUsername, collection) }
     catch (error) { if (error instanceof MemberApiError && error.status === 404) notFound(); throw error }
     let titles: CatalogTitleSummary[] = []
     const refs = refsInPage(initialPage)
     if (refs.length) try { titles = (await getCatalogBatchForRefs(refs.slice(0, MAX_PAGE_CATALOG_ENRICHMENT)))?.items ?? [] } catch { /* Public title references remain navigable without catalog details. */ }
-    return <VisitorProfileScreen data={profile} section={activeSection}><VisitorProfileArchive collection={collection} initialPage={initialPage} initialTitles={titles} username={profile.canonicalUsername} /></VisitorProfileScreen>
+    return <VisitorProfileScreen data={profile} section={activeSection}><VisitorProfileArchive collection={collection} initialPage={initialPage} initialTitles={titles} {...(selectedTag ? { selectedTag } : {})} username={profile.canonicalUsername} /></VisitorProfileScreen>
   }
   if (!profile.viewerIsOwner || ['ratings', 'network'].includes(section)) {
     if (section === 'network') {

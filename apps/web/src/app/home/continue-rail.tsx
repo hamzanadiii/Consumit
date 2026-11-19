@@ -7,9 +7,10 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ArtworkFrame } from '@consumit/ui'
 
-import { browserCatalogBatch } from '@/lib/catalog-browser'
+import { browserCatalogTitlesForRefs } from '@/lib/catalog-browser'
 import { catalogKey } from '@/lib/catalog-registry'
 import { loadResumeEntries, hideResumeEntry, type ResumeEntry } from '@/lib/continue-watching'
+import { EPISODE_TRACKING_EVENT } from '@/lib/playback-progress'
 import { useSession } from '../session/session'
 
 import { SaveTitleButton } from '../catalog/save-title-button'
@@ -41,9 +42,9 @@ export function ContinueRail() {
     void loadResumeEntries(memberId, controller.signal).then(async entries => {
       if(cancelled) return
       if(!entries.length) {setRows([]);setStatus('empty');return}
-      const batch=await browserCatalogBatch(entries.map(entry=>({kind:entry.kind,id:entry.id})),controller.signal)
+      const batch=await browserCatalogTitlesForRefs(entries.map(entry=>({kind:entry.kind,id:entry.id})),controller.signal)
       if(cancelled) return
-      const byKey=new Map(batch.items.map(item=>[catalogKey(item),item]))
+      const byKey=new Map(batch.titles.map(item=>[catalogKey(item),item]))
       const resolved=entries.flatMap(entry=>{const title=byKey.get(catalogKey(entry));return title?[{entry,title}]:[]})
       setRows(resolved);setRowsOwner(memberId);setStatus(resolved.length?'ready':'empty')
     }).catch(()=>{if(!cancelled){setRows([]);setStatus('error')}})
@@ -60,10 +61,19 @@ export function ContinueRail() {
     catch(error){setEditError(error instanceof Error?error.message:'This title could not be hidden.')}
   }
 
-  // State follows the awaited batch response; the empty path resolves the
-  // mount default synchronously so no network work starts without progress.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => {if(sessionStatus==='loading'){setRows([]);return}return load()}, [load,sessionStatus])
+  useEffect(() => {
+    if (sessionStatus === 'loading') return
+    let disposed = false
+    let cancel: (() => void) | undefined
+    const refresh = () => { cancel?.(); cancel = load() }
+    queueMicrotask(() => { if (!disposed && !cancel) refresh() })
+    window.addEventListener(EPISODE_TRACKING_EVENT, refresh)
+    return () => {
+      disposed = true
+      window.removeEventListener(EPISODE_TRACKING_EVENT, refresh)
+      cancel?.()
+    }
+  }, [load, sessionStatus])
 
   if (sessionStatus === 'loading' || sessionStatus === 'unavailable' || rowsOwner !== memberId || status !== 'ready' || rows.length === 0) return null
 
@@ -91,14 +101,16 @@ export function ContinueRail() {
       </div>
 
         {editError?<p className="text-sm text-[var(--fs-secondary)]" role="alert">{editError}</p>:null}
-        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" role="region" tabIndex={0}>
+        <ul aria-label="Your in-progress titles" className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain rounded-xl py-1 pr-1 pb-5 fs-noscroll outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" tabIndex={0}>
           {rows.map(({ entry, title }) => {
         const href=entry.href
-        const episodeLabel=entry.kind==='anime'?`E${entry.episode??1} · `:entry.kind==='series'?`S${entry.season??1} E${entry.episode??1} · `:''
+        const episodeLabel = entry.kind === 'anime' ? 'E' + (entry.episode ?? 1) : entry.kind === 'series' ? 'S' + (entry.season ?? 1) + ' · E' + (entry.episode ?? 1) : ''
         const remaining = remainingLabel(entry.positionSeconds, entry.durationSeconds)
         const positionMinutes = Math.floor(entry.positionSeconds / 60)
         const totalMinutes = entry.durationSeconds ? Math.max(1, Math.round(entry.durationSeconds / 60)) : null
-        const metaText = `${episodeLabel}${remaining ?? (entry.percent > 0 ? `${entry.percent}% watched` : title.year)}`
+        const progressLabel = entry.tracking === 'next' ? 'Next episode' : remaining ?? (entry.tracking === 'saved' ? 'Episode saved' : entry.percent > 0 ? entry.percent + '% watched' : title.year)
+        const metaText = [episodeLabel, progressLabel].filter(Boolean).join(' · ')
+        const showTime = !entry.tracking || entry.positionSeconds > 0
         const coverKey = `${entry.kind}:${entry.id}:${entry.season ?? 0}:${entry.episode ?? 0}`
         return (
           <li
@@ -114,7 +126,7 @@ export function ContinueRail() {
                     would otherwise swallow every click) and below the
                     action buttons (z-10) and edit-mode remove (z-20). */}
                 <Link
-                  aria-label={`Continue ${title.title}`}
+                  aria-label={['Continue ' + title.title, entry.tracking ? episodeLabel : ''].filter(Boolean).join(' · ')}
                   className="absolute inset-0 z-[1] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                   href={href}
                 />
@@ -143,17 +155,17 @@ export function ContinueRail() {
                     </p>
                     <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs tabular-nums text-white/70">
                       {metaText ? <span className="min-w-0 break-words text-white/85">{metaText}</span> : <span />}
-                      <span className="shrink-0 font-medium text-white/80">
+                      {showTime ? <span className="shrink-0 font-medium text-white/80">
                         {totalMinutes === null ? `${positionMinutes}m` : `${positionMinutes}m of ${totalMinutes}m`}
-                      </span>
+                      </span> : null}
                     </div>
-                    <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
+                    {showTime ? <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/20">
                       <div
                         className="relative h-full rounded-full bg-[var(--fs-accent)]"
                         style={{ width: `${entry.percent}%` }}
                       >
                       </div>
-                    </div>
+                    </div> : null}
                   </div>
                 </ArtworkFrame>
 
@@ -161,7 +173,7 @@ export function ContinueRail() {
                 {editing ? (
                   <button
                     aria-label={`Remove ${title.title} from Continue watching`}
-                    className="absolute top-3 right-3 z-20 grid size-9 cursor-pointer place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="absolute top-3 right-3 z-20 grid size-9 cursor-pointer place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     onClick={(e) => { e.stopPropagation(); removeEntry(entry.storageKey); }}
                     type="button"
                   >
@@ -170,14 +182,14 @@ export function ContinueRail() {
                 ) : (
                 <div className={`absolute top-3 right-3 z-10 flex items-center gap-1.5 ${styles.actions}`}>
                   <SaveTitleButton
-                    className="!size-9 !h-9 !w-9 !p-0 [&_svg]:!size-4 rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="!size-9 !h-9 !w-9 !p-0 [&_svg]:!size-4 rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     id={title.id}
                     kind={title.kind}
                     title={title.title}
                   />
                   <Link
                     aria-label={`Open ${title.title} details`}
-                    className="grid size-9 shrink-0 place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-all duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white"
+                    className="grid size-9 shrink-0 place-items-center rounded-control border border-white/20 bg-black/60 text-white shadow-sm backdrop-blur-md outline-none transition-[transform,border-color,background-color] duration-150 hover:scale-105 hover:border-white/40 hover:bg-white/20 active:scale-95 focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none motion-reduce:transform-none"
                     href={titleHref(title)}
                     onClick={(e) => e.stopPropagation()}
                   >

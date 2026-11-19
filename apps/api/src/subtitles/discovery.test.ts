@@ -22,6 +22,24 @@ function fixture(providers: SubtitleSearchProvider[]) {
 }
 
 describe('subtitle discovery', () => {
+  it('excludes retired CineSrc catalog rows and rejects snapshots that still contain them', async () => {
+    const { store, files } = fixture([])
+    const storageKey = '1234567890abcdef'
+    await files.putVtt(storageKey, 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello\n', { content: 'fixture', ttlSeconds: 3600 })
+    const catalog: SubtitleCatalog = {
+      find: async () => [{ language: 'en', label: 'English', format: 'vtt', provider: 'cinesrc', storageKey, originalExt: null, hi: false, rating: null, releaseTag: null }],
+      save: async () => {},
+    }
+    const discovery = createSubtitleDiscovery({ providers: [], store, files, catalog, origin: 'https://api.example', query: async () => ({ type: 'movie' }) })
+    const events = await Array.fromAsync(discovery.discover(ref, signal))
+    expect((await discovery.page(events[0]!.searchId, 'en'))?.tracks).toEqual([])
+    const oldId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    await store.set(`subtitle:discovery:${oldId}`, JSON.stringify({ id: oldId, ref, candidates: [{ public: { id: 'old', provider: 'cinesrc', language: 'en', label: 'English' } }] }), 3600)
+    expect(await discovery.page(oldId, 'en')).toBeNull()
+    expect(await discovery.prepare(oldId, 'old', signal)).toBeNull()
+    expect(await files.getVtt(storageKey)).toContain('Hello')
+  })
+
   it('passes preferred languages into the first provider batch', async () => {
     const seen: (readonly string[] | undefined)[] = []
     const store = createMemoryPlaybackStore()
@@ -35,6 +53,43 @@ describe('subtitle discovery', () => {
     expect(seen).toEqual([['ar', 'en']])
   })
 
+  it('rejects an explicitly mismatched episode while keeping the exact candidate', async () => {
+    const store = createMemoryPlaybackStore()
+    const files = createStoreFileStore(store)
+    const wrongEpisode = { ...raw('episode-source', 'en', 1), label: 'Example.Show.S01E02' }
+    const exactEpisode = { ...raw('episode-source', 'en', 2), label: 'Example.Show.S01E01' }
+    const discovery = createSubtitleDiscovery({
+      providers: [provider('episode-source', async () => [wrongEpisode, exactEpisode])],
+      store,
+      files,
+      origin: 'https://api.example',
+      query: async () => ({ type: 'tv', tmdbId: 1396, season: 1, episode: 1 }),
+    })
+    const events = await Array.fromAsync(discovery.discover({ kind: 'series', id: 1396, season: 1, episode: 1 }, signal))
+    const page = await discovery.page(events[0]!.searchId, 'en')
+    expect(page?.tracks.map(track => track.label)).toEqual(['Example.Show.S01E01'])
+  })
+
+  it('orders the recommended full track ahead of other candidates for its language', async () => {
+    const { discovery } = fixture([
+      provider('other', async () => [raw('other', 'en', 1)]),
+      provider('rivesubs', async () => [raw('rivesubs', 'en', 2)]),
+    ])
+    const events = await Array.fromAsync(discovery.discover(ref, signal))
+    const page = await discovery.page(events[0]!.searchId, 'en')
+    expect(page?.tracks[0]).toMatchObject({ provider: 'rivesubs', recommended: true })
+  })
+
+  it('applies preferred base-language ranking to regional variants', async () => {
+    const { discovery } = fixture([provider('one', async () => [
+      { ...raw('one', 'en-GB', 1), label: 'A regional track' },
+      { ...raw('one', 'en', 2), label: 'Z base track' },
+    ])])
+    const events = await Array.fromAsync(discovery.discover(ref, signal))
+    const page = await discovery.page(events[0]!.searchId, 'en', 0, ['en'])
+    expect(page?.tracks.map(track => track.language)).toEqual(['en-gb', 'en'])
+  })
+
   it('continues a large roster without losing late providers and replays a batch without duplicate searches', async () => {
     const searches = Array.from({ length: 29 }, (_, index) => vi.fn(async () => [raw(`p${index}`, index === 28 ? 'pt-BR' : 'en', index)]))
     const { discovery } = fixture(searches.map((search, index) => provider(`p${index}`, search)))
@@ -45,10 +100,13 @@ describe('subtitle discovery', () => {
     const second = await Array.fromAsync(discovery.discover(ref, signal, cursor))
     expect(await Array.fromAsync(discovery.discover(ref, signal, cursor))).toEqual(second)
     cursor = second.at(-1)!.nextCursor!
-    await Array.fromAsync(discovery.discover(ref, signal, cursor))
+    while (cursor) {
+      const next = await Array.fromAsync(discovery.discover(ref, signal, cursor))
+      cursor = next.at(-1)!.nextCursor!
+    }
     expect(searches.every(search => search.mock.calls.length === 1)).toBe(true)
     expect((await discovery.page(id, 'pt-br'))?.tracks).toHaveLength(1)
-    await expect(Array.fromAsync(discovery.discover({ kind: 'movie', id: 999 }, signal, cursor))).rejects.toThrow('Search subtitles again')
+    await expect(Array.fromAsync(discovery.discover({ kind: 'movie', id: 999 }, signal, second.at(-1)!.nextCursor!))).rejects.toThrow('Search subtitles again')
   })
   it('does not add the saved subtitle again when a fresh discovery finds its upstream candidate', async () => {
     const selected = raw('one', 'ar', 1)
@@ -97,7 +155,7 @@ describe('subtitle discovery', () => {
     for await (const event of discovery.discover(ref, signal)) searchId = event.searchId
     expect(await discovery.page(searchId, 'ar')).toMatchObject({ total: 1, tracks: [{ id: firstId, preparedUrl: prepared!.url }] })
     const snapshot = JSON.parse((await store.get(`subtitle:discovery:${searchId}`))!)
-    expect(snapshot.candidates[0].raw.url).toBe(`${identityUrl}?Signature=second`)
+    expect(snapshot.candidates[0].raw.url).toBe(`${identityUrl}?Signature=first`)
     expect(await discovery.prepare(searchId, firstId, signal)).toEqual(prepared)
   })
   it('rejects candidates outside a declared provider file scope at intake', async () => {
@@ -114,34 +172,25 @@ describe('subtitle discovery', () => {
     expect((await discovery.page(searchId, 'en'))?.total).toBe(1)
     expect((await discovery.page(searchId, 'fr'))?.total).toBe(0)
   })
-  it('emits cached snapshot first, then independent provider outcomes and all language counts', async () => {
-    let finishSlow!: (raws: RawSubtitle[]) => void
-    const slow = new Promise<RawSubtitle[]>((resolve) => { finishSlow = resolve })
-    const providers = [
-      provider('a', async () => Array.from({ length: 27 }, (_, i) => raw('a', 'en', i))),
-      provider('b', async () => [raw('b', 'ar', 1), raw('b', 'fr', 1)]),
-      provider('c', async () => { throw new Error('upstream unavailable') }),
-      provider('d', async () => [], false),
-      provider('e', async () => slow),
-      ...Array.from({ length: 7 }, (_, i) => provider(`empty-${i}`, async () => [])),
-    ]
-    const { discovery } = fixture(providers)
-    const iterator = discovery.discover(ref, signal)
-    const first = await iterator.next()
-    expect(first.value).toMatchObject({ type: 'snapshot', languages: [] })
-    const events = []
-    for (let i = 0; i < 11; i++) events.push((await iterator.next()).value)
-    expect(events.some((event) => event?.provider?.state === 'failed')).toBe(true)
-    expect(events.some((event) => event?.provider?.state === 'skipped')).toBe(true)
-    expect(events.some((event) => event?.languages?.some((language: { code: string; count: number }) => language.code === 'en' && language.count === 27))).toBe(true)
-    finishSlow([])
-    const rest = [await iterator.next(), await iterator.next()]
-    expect(rest.at(-1)?.value?.type).toBe('complete')
-    const searchId = first.value!.searchId
-    expect(await discovery.page(searchId, 'en')).toMatchObject({ total: 27, nextCursor: 20 })
-    expect(await discovery.page(searchId, 'en', 20)).toMatchObject({ total: 27, nextCursor: null })
-    expect((await discovery.page(searchId, 'en', 20))?.tracks).toHaveLength(7)
-    expect((await discovery.page(searchId, 'ar'))?.total).toBe(1)
+  it('keeps and pages all choices for a primary language', async () => {
+    const { discovery } = fixture([provider('a', async () => Array.from({ length: 100 }, (_, i) => raw('a', i % 2 ? 'en-us' : 'en-gb', i)))])
+    const events = await Array.fromAsync(discovery.discover(ref, signal))
+    expect(events.at(-1)?.languages).toEqual([{ code: 'en', count: 100 }])
+    expect(await discovery.page(events[0]!.searchId, 'en')).toMatchObject({ total: 100, nextCursor: 20 })
+    expect((await discovery.page(events[0]!.searchId, 'en'))?.tracks).toHaveLength(20)
+    expect(await discovery.search(events[0]!.searchId, 'en')).toMatchObject({ total: 100, nextCursor: 20 })
+  })
+
+  it('shares identical simultaneous searches and performs no warm provider searches', async () => {
+    const search = vi.fn(async () => [raw('one', 'en', 1)])
+    const { discovery } = fixture([provider('one', search)])
+    const result = await Promise.all(Array.from({ length: 25 }, () => Array.fromAsync(discovery.discover(ref, signal))))
+    expect(search).toHaveBeenCalledTimes(1)
+    expect(new Set(result.map(events => events[0]!.searchId)).size).toBe(1)
+    await Array.fromAsync(discovery.discover(ref, signal))
+    expect(search).toHaveBeenCalledTimes(1)
+    await Array.fromAsync(discovery.discover(ref, signal, undefined, ['fr']))
+    expect(search).toHaveBeenCalledTimes(2)
   })
 
   it('prepares only a selected candidate and never exposes its raw URL in a page', async () => {

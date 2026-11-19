@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadResumeEntries, readOwnedProgress, hideResumeEntry } from './continue-watching'
+import { writeEpisodeTracking } from './playback-progress'
+
+vi.mock('./anime-browser', () => ({ browserAnimeEpisode: vi.fn(async (_id: number, episode: number) => ({
+  number: episode, airDate: episode === 4 ? '2026-10-14' : '2099-01-01',
+})) }))
 const record = (kind = 'anime', id = 21, episode = 3, updatedAt = '2026-10-14T12:00:00Z') => ({ kind, id, ...(kind === 'anime' ? { episode } : {}), positionSeconds: 120, durationSeconds: 1200, completed: false, updatedAt })
 function store(owner: string, row: ReturnType<typeof record>) { localStorage.setItem(`consumit.progress:${owner}:${row.kind}:${row.id}:0:${row.episode ?? 0}`, JSON.stringify(row)) }
 afterEach(() => { localStorage.clear(); vi.unstubAllGlobals() })
@@ -11,6 +16,20 @@ describe('owned Continue watching', () => {
     expect(rows.find(row => row.kind === 'anime')?.href).toBe('/watch/anime/21?episode=3')
     expect(readOwnedProgress('alice').map(row => row.id)).toEqual([999])
   })
+  it('keeps a guest’s exact saved episode with an unknown clock and advances after an explicit watch', async () => {
+    const ref = { kind: 'anime' as const, id: 21, episode: 3 }
+    await writeEpisodeTracking({ ...ref, episodeTracking: 'continue' })
+    expect(await loadResumeEntries()).toEqual([expect.objectContaining({
+      href: '/watch/anime/21?episode=3', positionSeconds: 0, durationSeconds: null, tracking: 'saved',
+    })])
+    await writeEpisodeTracking({ ...ref, episodeTracking: 'watched' })
+    expect(await loadResumeEntries()).toEqual([expect.objectContaining({
+      href: '/watch/anime/21?episode=4', positionSeconds: 0, durationSeconds: null, tracking: 'next',
+    })])
+    await writeEpisodeTracking({ ...ref, episode: 4, episodeTracking: 'watched' })
+    expect(await loadResumeEntries()).toEqual([])
+  })
+
   it('resumes account-only episodes and chooses the fresher device/account destination', async () => {
     store('alice', record('anime', 21, 2, '2026-10-13T12:00:00Z')); store('guest', record('movie', 999))
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [{ ...record('anime', 21, 4), hiddenAt: null }, { ...record('movie', 55), hiddenAt: null }], nextCursor: null })))

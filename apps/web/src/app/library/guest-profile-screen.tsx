@@ -15,7 +15,7 @@ export function GuestProfileScreen({ nextPath }: { nextPath: string }) {
   const signInHref = `/sign-in?next=${encodeURIComponent(nextPath)}`
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-2xl px-1 py-14 text-center sm:px-3 sm:py-20 lg:px-4" data-consumit-guest-profile>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-2xl px-1 py-14 text-center sm:px-3 sm:py-20 lg:px-4" data-consumit-guest-profile>
         <div className="flex justify-center">
           <Avatar imageAlt="Guest portrait" name="Guest" size="xl" src={dicebearAvatarUrl('consumit-guest')} treatment="noir" />
         </div>

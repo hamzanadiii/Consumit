@@ -13,7 +13,7 @@ The private access record through which a member authenticates and controls secu
 _Avoid_: Member, profile
 
 **Profile**:
-A member’s public identity and selected expression of taste. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, and Watchlist are individually visible by default and can be hidden section by section. Watched titles, Diary, History, active playback, resume progress, and account data stay private. Profile location is not collected.
+A member’s public identity and selected expression of taste. Favorites, Ratings, Reviews, Lists, Network, Likes, Tags, Watchlist, Watched, Diary, History, and Activity are independently visible by default and can be hidden section by section. Active playback, resume progress, and account data stay private. Profile location is not collected.
 _Avoid_: Account page
 
 **Username**:
@@ -33,15 +33,19 @@ The single profile tab that groups a member's Followers and Following collection
 _Avoid_: Friends, Circle feed, mutuals
 
 **Taste**:
-A member's evolving expression through favorites, ratings, reviews, visible lists, and other individually published sections. Watched history and diary remain private records.
+A member's evolving expression through favorites, ratings, reviews, visible lists, and other individually published sections, including Watched, Diary, History, and Activity. Active playback and resume progress remain private records.
 _Avoid_: Profile data, preferences
 
+**Title Recommendation**:
+A private title card a member sends to someone they currently follow. The recipient can Save, mark it Already seen, or choose Not interested. It carries no message, creates no public event, and does not open a private conversation.
+_Avoid_: Direct message, public post
+
 **List**:
-A member-curated, ordered collection of titles with optional notes and a description. New lists are public; the curator can make each list private. A public list is readable only while its owner’s Lists section is public.
+A member-curated, ordered collection of titles with optional notes and a description. Public lists appear on profiles and discovery while the owner's Lists section is visible. Unlisted lists are available to anyone with the link and stay out of profiles and discovery. Private lists are limited to the owner and invited editors. Editors can change titles and order; only the owner can change visibility or delete the list.
 _Avoid_: Playlist, shared document
 
 **Saved List**:
-A private bookmark to another member’s original public list. It follows edits by the curator; if the source becomes private or is deleted, the bookmark stays as an unavailable reference until the viewer removes it.
+A private bookmark to another member's original public or unlisted list. It follows edits by the curator; if the source becomes private or is deleted, the bookmark stays as an unavailable reference until the viewer removes it.
 _Avoid_: Copy, collaborative list
 
 **Popular with members**:
@@ -57,7 +61,7 @@ A personalized estimate of how well a title, list, or another member aligns with
 _Avoid_: Compatibility score, recommendation score
 
 **Activity**:
-A personal event created by watching, rating, reviewing, or curating a list.
+A profile archive of member-authored diary and review events. Its visibility is controlled independently from Watched, Diary, and History. Active playback and resume progress are never activity events.
 _Avoid_: Feed item, notification
 
 ## Catalog and curation
@@ -75,7 +79,7 @@ An episodic title organized into seasons and episodes.
 _Avoid_: TV item, show asset
 
 **Anime**:
-A title sourced from AniList, identified by AniList ID, with episodes organized by canonical episode number. Anime follows the movie/series classification for playback but has its own metadata domain (AniList), episode identity engine, and provider mapping system. Member records (saves, favorites, progress, ratings, reviews, diary) store anime under the same title kind as movies and series, keyed by AniList ID, so an anime and a TMDB title may share a numeric ID without colliding.
+A title sourced primarily from AniList, identified by AniList ID, with episodes organized by canonical episode number. MyAnimeList and Kitsu can fill missing catalog metadata only when an exact mapping to the AniList title is available. Anime follows the movie/series classification for playback but has its own metadata domain, episode identity engine, and provider mapping system. Member records (saves, favorites, progress, ratings, reviews, diary) store anime under the same title kind as movies and series, keyed by AniList ID, so an anime and a TMDB title may share a numeric ID without colliding.
 _Avoid_: Japanese animation, anime series
 
 **Episode**:
@@ -95,8 +99,32 @@ A member's numeric evaluation of a title.
 _Avoid_: Score, reaction
 
 **Review**:
-A member's written evaluation of a title, optionally paired with a rating.
+A member's written evaluation of a title, optionally paired with a rating and exact series/anime episode context. Publishing a review does not log a watch. Its stable page retains the rating at publication and an optional spoiler warning; the current title rating can change independently.
 _Avoid_: Comment, note
+
+**Collection**:
+The reading presentation of a List: an introduction, ordered titles and notes, optional chapters, cover artwork, and up to three genre tags. Collection, Ranking, and Watch order are presentation choices for the same List, not separate library records. The dedicated collection creation flow starts Private.
+_Avoid_: Playlist, new catalog kind
+
+**Private Draft**:
+An unfinished member-authored review, watch log, collection edit, or monthly edition stored for its author. Saving a draft does not publish it or replace a published edition. Collection drafts require Save private draft; review and watch-log drafts also save while writing and on close.
+_Avoid_: Published work, automatic activity
+
+**Monthly Edition**:
+A member-authored publication for one calendar month, with a title, introduction, optional cover, exactly three distinct picks and a reason for each, plus optional featured review and public list. It stays private until deliberately published; unpublishing preserves its editable draft.
+_Avoid_: Automatic recap, listening report
+
+**Taste Comparison**:
+Exact title evidence shared by a signed-in viewer and another member: shared Favorites, titles both rated highly, and differing ratings. The visited member's section visibility controls eligible evidence. It carries no compatibility percentage or Taste Match score.
+_Avoid_: Taste Match, member score
+
+**Community**:
+The active discovery surface for public collections and authored work from followed curators. Following contains published reviews, explicit collection updates, and monthly editions; it contains no automatic playback activity. Curator/list update notifications require a separate opt-in.
+_Avoid_: Circle, live viewing feed
+
+**Discussion**:
+Comments and replies on reviews and lists, with spoiler disclosure, editing/deletion, muting, blocking, reporting and moderation. It is not a private messaging channel; monthly edition pages do not expose discussion.
+_Avoid_: Review, chat
 
 **Watch History**:
 The factual record of titles and episodes a member has started or completed.

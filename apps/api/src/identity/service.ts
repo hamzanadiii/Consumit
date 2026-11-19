@@ -4,10 +4,11 @@ import type { MemberProfile, SafeMember } from '@consumit/contracts'
 
 import type { AuthStateStore, RegistrationChallenge } from './auth-state.ts'
 import { IdentityError } from './errors.ts'
-import { normalizeEmail, type AuthenticatedMember, type Identity } from './identity.ts'
+import { normalizeEmail, type AuthenticatedMember, type GoogleIdentityInput, type GoogleSignupResult, type Identity } from './identity.ts'
 import type { AuthNotifier } from './notifier.ts'
 import { hashPassword, verifyPassword } from './password.ts'
 import type { IdentityRecord, IdentityRepository } from './repository.ts'
+import { newSessionToken } from './session.ts'
 
 const invalidCredentials = () => new IdentityError('INVALID_CREDENTIALS', 'Invalid email or password.')
 const invalidCode = () => new IdentityError('INVALID_VERIFICATION_CODE', 'The code is invalid or has expired.')
@@ -52,7 +53,7 @@ function profileView(member: IdentityRecord, now: Date): MemberProfile {
 }
 
 function verificationCode(): string {
-  return randomInt(0, 100_000_000).toString().padStart(8, '0')
+  return randomInt(0, 1_000_000).toString().padStart(6, '0')
 }
 
 function challengeIdempotencyKey(purpose: 'recovery' | 'verification', email: string, code: string): string {
@@ -169,7 +170,7 @@ export function createIdentity(options: {
       const valid = await verifyPassword(password, passwordHash)
       if (!member || member.status !== 'ACTIVE' || !valid || !attemptAllowed) {
         const pending = await state.pendingRegistration(normalized)
-        if (pending && await verifyPassword(password, pending.passwordHash)) {
+        if (pending?.passwordHash && await verifyPassword(password, pending.passwordHash)) {
           throw new IdentityError('EMAIL_NOT_VERIFIED', 'Verify your email before signing in.')
         }
         throw invalidCredentials()
@@ -177,6 +178,26 @@ export function createIdentity(options: {
       await state.clearFailedLogins(normalized)
       if (!member.emailVerifiedAt) throw new IdentityError('EMAIL_NOT_VERIFIED', 'Verify your email before signing in.')
       return issue(member)
+    },
+    async loginWithGoogle(input: GoogleIdentityInput) {
+      const member = await repository.findByGoogleSubject(input.googleSubject)
+      if (member) {
+        if (member.status !== 'ACTIVE' || !member.emailVerifiedAt) throw invalidCredentials()
+        return issue(member)
+      }
+      const matchingEmail = await repository.findByEmail(normalizeEmail(input.email))
+      if (!matchingEmail) return null
+      if (matchingEmail.status !== 'ACTIVE' || !matchingEmail.emailVerifiedAt || !input.emailAuthoritative) {
+        throw new IdentityError('CONFLICT', 'This email already has a Consumit account. Sign in with that account first.')
+      }
+      try {
+        const linked = await repository.linkGoogleSubject(matchingEmail.id, input.googleSubject)
+        if (!linked) throw new IdentityError('CONFLICT', 'This Google account is already linked to another member.')
+        return issue(linked)
+      } catch (error) {
+        if (error instanceof IdentityError) throw error
+        throw new IdentityError('CONFLICT', 'This Google account is already linked to another member.')
+      }
     },
     async logout(sessionToken) {
       await state.revokeSession(sessionToken)
@@ -195,6 +216,24 @@ export function createIdentity(options: {
       if (!updated) throw invalidCode()
       await state.revokeMemberSessions(updated.id)
     },
+    async verifyRecoveryCode({ code, email }) {
+      const normalized = normalizeEmail(email)
+      const challenge = await state.consumeChallenge({ code, email: normalized, purpose: 'recovery' })
+      if (challenge === 'locked') throw lockedCode()
+      if (!challenge || challenge.kind !== 'recovery') throw invalidCode()
+
+      const recoveryToken = newSessionToken()
+      await state.storeRecoveryGrant({ memberId: challenge.memberId, token: recoveryToken })
+      return recoveryToken
+    },
+    async completePasswordRecovery({ newPassword, recoveryToken }) {
+      const memberId = await state.consumeRecoveryGrant(recoveryToken)
+      if (!memberId) throw invalidCode()
+
+      const updated = await repository.changePassword(memberId, await hashPassword(newPassword))
+      if (!updated) throw invalidCode()
+      await state.revokeMemberSessions(updated.id)
+    },
     async register({ email, password, username }) {
       const normalized = normalizeEmail(email)
       const existing = await repository.findByEmail(normalized)
@@ -210,6 +249,68 @@ export function createIdentity(options: {
         return
       }
       await startRegistrationChallenge({ email: normalized, kind: 'registration', passwordHash, username })
+    },
+    async registerWithGoogle(input): Promise<GoogleSignupResult> {
+      const email = normalizeEmail(input.email)
+      const existingSubject = await repository.findByGoogleSubject(input.googleSubject)
+      if (existingSubject) {
+        if (existingSubject.status !== 'ACTIVE' || !existingSubject.emailVerifiedAt) throw invalidCredentials()
+        return { authenticated: await issue(existingSubject), kind: 'complete' }
+      }
+      const existingEmail = await repository.findByEmail(email)
+      if (existingEmail) {
+        if (input.emailAuthoritative && existingEmail.status === 'ACTIVE' && existingEmail.emailVerifiedAt) {
+          try {
+            const linked = await repository.linkGoogleSubject(existingEmail.id, input.googleSubject)
+            if (linked) return { authenticated: await issue(linked), kind: 'complete' }
+          } catch {
+            const subjectOwner = await repository.findByGoogleSubject(input.googleSubject)
+            if (subjectOwner?.status === 'ACTIVE' && subjectOwner.emailVerifiedAt) {
+              return { authenticated: await issue(subjectOwner), kind: 'complete' }
+            }
+          }
+        }
+        throw new IdentityError('CONFLICT', 'This email already has a Consumit account. Sign in with that account first.')
+      }
+      if (!await repository.isUsernameAvailable(input.username) || await state.isUsernameReserved(input.username)) {
+        throw new IdentityError('USERNAME_UNAVAILABLE', 'That username is unavailable.')
+      }
+      const suppliedName = input.displayName?.trim().replace(/\s+/g, ' ').slice(0, 80)
+      const displayName = suppliedName || input.name
+      if (!input.emailAuthoritative) {
+        await startRegistrationChallenge({
+          displayName,
+          email,
+          googleSubject: input.googleSubject,
+          kind: 'registration',
+          passwordHash: null,
+          username: input.username,
+        })
+        return { kind: 'verification-required' }
+      }
+      try {
+        const member = await repository.createVerifiedAccount({
+          createdAt: clock(),
+          displayName,
+          email,
+          googleSubject: input.googleSubject,
+          passwordHash: null,
+          username: input.username,
+        })
+        return { authenticated: await issue(member), kind: 'complete' }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'IDENTITY_USERNAME_CONFLICT') {
+          throw new IdentityError('USERNAME_UNAVAILABLE', 'That username is unavailable.')
+        }
+        if (error instanceof Error && (error.message === 'IDENTITY_EMAIL_CONFLICT' || error.message === 'IDENTITY_GOOGLE_CONFLICT')) {
+          const subjectOwner = await repository.findByGoogleSubject(input.googleSubject)
+          if (subjectOwner?.status === 'ACTIVE' && subjectOwner.emailVerifiedAt) {
+            return { authenticated: await issue(subjectOwner), kind: 'complete' }
+          }
+          throw new IdentityError('CONFLICT', 'This Google account already has a Consumit account. Sign in instead.')
+        }
+        throw error
+      }
     },
     async requestRecovery(email) {
       const normalized = normalizeEmail(email)
@@ -274,7 +375,14 @@ export function createIdentity(options: {
       if (!challenge || challenge.kind !== 'registration') throw invalidCode()
       let member: IdentityRecord
       try {
-        member = await repository.createVerifiedAccount({ createdAt: clock(), email: normalized, passwordHash: challenge.passwordHash, username: challenge.username })
+        member = await repository.createVerifiedAccount({
+          createdAt: clock(),
+          email: normalized,
+          passwordHash: challenge.passwordHash,
+          username: challenge.username,
+          ...(challenge.googleSubject ? { googleSubject: challenge.googleSubject } : {}),
+          ...(challenge.displayName !== undefined ? { displayName: challenge.displayName } : {}),
+        })
       } catch (error) {
         if (error instanceof Error && error.message === 'IDENTITY_EMAIL_CONFLICT') {
           throw new IdentityError('CONFLICT', 'This email is already verified. Sign in instead.')

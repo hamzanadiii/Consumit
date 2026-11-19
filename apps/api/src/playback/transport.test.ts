@@ -56,6 +56,20 @@ describe('provider network boundary', () => {
     expect(mocks.request).toHaveBeenCalledOnce()
     resolved.body.destroy()
   })
+  it('pins IPv4 when DNS publishes AAAA before A', async () => {
+    mocks.lookup.mockResolvedValue([{ address: '2606:4700:130:436c:6f75:6466:6c61:7265', family: 6 }, { address: '8.8.8.8', family: 4 }])
+    mocks.request.mockImplementation(response())
+    const result = await fetchMedia('https://media.example/a', ['media.example'], {}, new AbortController().signal)
+    const options = mocks.request.mock.calls[0]![1] as RequestOptions
+    const pinned = await new Promise<{ address: string; family: number }>((resolve, reject) => {
+      options.lookup!('media.example', {}, (error, address, family) => {
+        if (error) reject(error)
+        else resolve({ address: String(address), family: Number(family) })
+      })
+    })
+    expect(pinned).toEqual({ address: '8.8.8.8', family: 4 })
+    result.body.destroy()
+  })
   it('cancels DNS immediately when the caller leaves, without opening a socket', async () => {
     mocks.lookup.mockImplementation(() => new Promise(() => {}))
     const controller = new AbortController()

@@ -4,7 +4,7 @@ import type { ProviderAdapter, ProviderInput, ProviderRegistration, ProviderResu
 
 const resultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), sources: z.array(z.unknown()).max(32) }),
-  z.object({ ok: z.literal(false), code: z.enum(['empty', 'timeout', 'malformed', 'unavailable', 'cancelled']), retryable: z.boolean() }),
+  z.object({ ok: z.literal(false), code: z.enum(['empty', 'timeout', 'malformed', 'unavailable', 'cancelled', 'blocked', 'rate_limited']), retryable: z.boolean(), retryAfterMs: z.number().int().min(0).max(900_000).optional() }),
 ])
 const titleMetadataProviders = new Set(['wecollege', 'cinejoylisbon', 'purstream', 'lookmovie', 'castletv', 'bingebangymovies', 'kisskh', 'videasy', 'streamingunity', 'aurorascreen', 'movienight'])
 const identityProviders = new Set(['vaplayer', 'cinehd', 'filmu', 'filmuainary'])
@@ -31,7 +31,7 @@ async function boundedResponseText(response: Response, limit: number) {
 }
 const animeMetaProviders = new Set(['zoko'])
 
-export type CloudflareResolverConfig = { origin: string; secret: string; apiProviders?: readonly 'wecollege-miami'[]; providerOrigins?: Readonly<Record<string, string>>; computeSecret?: string }
+export type CloudflareResolverConfig = { origin: string; secret: string; cloudflareOnly?: boolean; providerOrigins?: Readonly<Record<string, string>>; computeSecret?: string }
 export function parseResolverOrigins(raw: string): Record<string, string> {
   const value: unknown = JSON.parse(raw)
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length > 64) throw new Error('Invalid resolver routes.')
@@ -52,6 +52,7 @@ export type ResolverMetadata = {
   malId?: number | null | undefined
 }
 export type CloudflareResolverOptions = {
+  route?: ((input: ProviderInput) => { version: string; policy: string; purpose: 'video' | 'audio' } | null) | undefined
   config: CloudflareResolverConfig
   currentConfig: (provider: ProviderRegistration) => Record<string, unknown>
   metadata: (providerId: string, ref: PlaybackRef, signal: AbortSignal) => Promise<ResolverMetadata>
@@ -67,9 +68,6 @@ export function createCloudflareResolverAdapter(provider: ProviderRegistration, 
     ...nativeAdapter,
     async resolve(input: ProviderInput, signal: AbortSignal): Promise<ProviderResult> {
       try {
-        // Explicit API lookup routes are fixed provider integrations; the normal API source validation and Cloudflare media grant still apply.
-        if (nativeAdapter.id === 'wecollege-miami' && provider.deliveryMode === 'relay'
-          && options.config.apiProviders?.includes(nativeAdapter.id)) return await nativeAdapter.resolve(input, signal)
         const current = options.currentConfig(provider)
         if (current.adapter === 'static' && Array.isArray(current.entries)) {
           current.entries = current.entries.filter(entry => entry && typeof entry === 'object'
@@ -77,6 +75,7 @@ export function createCloudflareResolverAdapter(provider: ProviderRegistration, 
         }
         const metadata = await options.metadata(String(current.adapter ?? provider.adapter.id), input.ref, signal)
         const requestBody = JSON.stringify({
+          ...(options.route ? { route: options.route(input) } : {}),
           providerId: provider.adapter.id,
           config: current,
           input,
@@ -90,7 +89,15 @@ export function createCloudflareResolverAdapter(provider: ProviderRegistration, 
           signal,
           redirect: 'error',
         })
-        if (!response.ok) return { ok: false, code: response.status === 404 ? 'empty' : 'unavailable', retryable: response.status !== 404 }
+        if (!response.ok) {
+          const value = response.headers.get('retry-after')
+          const seconds = value && /^\d{1,7}(?:\.\d+)?$/.test(value) ? Number(value) : value ? (Date.parse(value) - Date.now()) / 1000 : 0
+          const retryAfterMs = response.status === 429 && Number.isFinite(seconds) && seconds > 0 ? Math.min(900_000, Math.ceil(seconds * 1000)) : undefined
+          await response.body?.cancel().catch(() => undefined)
+          return response.status === 429
+            ? { ok: false, code: 'rate_limited', retryable: true, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) }
+            : { ok: false, code: response.status === 404 ? 'empty' : 'unavailable', retryable: response.status !== 404 }
+        }
         const raw = await boundedResponseText(response, 256 * 1024)
         return resultSchema.parse(JSON.parse(raw)) as ProviderResult
       } catch {

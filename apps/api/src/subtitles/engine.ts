@@ -1,8 +1,9 @@
+import { subtitleContentChecksum } from './selection-policy.ts'
 import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
 import { allowedMediaUrl } from '@consumit/provider-sdk'
 import { assToVtt } from './ass.ts'
 import { langLabel, normLang } from './lang.ts'
+import { isSubtitleCandidateEligible, isSubtitleProviderEligible, matchesSubtitleEpisode, requiresExactEpisodeArchiveMatch, subtitleLanguageRank } from './selection-policy.ts'
 import { decodeSubtitleText, srtToVtt, unzipEntries } from './srt.ts'
 import { contentPath, type OriginalFile, type SubtitleFileStore } from './storage.ts'
 import { fetchSubtitleBytes } from './http.ts'
@@ -19,14 +20,16 @@ export function entryMatchesLang(filename: string, lang: string): boolean {
   return name.includes(langLabel(code).toLowerCase())
 }
 
-function pickArchiveEntry(entries: { name: string; data: Buffer }[], ext: RegExp, lang: string): { name: string; data: Buffer } | undefined {
+function pickArchiveEntry(entries: { name: string; data: Buffer }[], ext: RegExp, lang: string, accept: (name: string) => boolean = () => true): { name: string; data: Buffer } | undefined {
   return entries
-    .filter((entry) => ext.test(entry.name))
+    .filter((entry) => ext.test(entry.name) && accept(entry.name))
     .map((entry) => ({ entry, hit: entryMatchesLang(entry.name, lang) ? 1 : 0 }))
     .sort((a, b) => b.hit - a.hit || b.entry.data.length - a.entry.data.length)[0]?.entry
 }
 
 export type ServedSubtitle = {
+  contentChecksum?: string | undefined
+  match?: 'source' | 'release' | 'unverified' | undefined
   id: string
   label: string
   language: string
@@ -91,39 +94,10 @@ function isZip(raw: RawSubtitle): boolean {
 
 const XZ_MAGIC = Buffer.from([0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00])
 
-/** XZ single-file archives (AnimeTosho serves .ass.xz). Node and Bun ship
- *  no XZ decoder, so this shells to the system `xz` binary the API image
- *  carries (see Dockerfile); where the binary is absent the candidate is
- *  skipped and other providers cover the title. Exported for tests. */
+/** XZ stays unavailable until a bounded edge decoder is accepted. Never
+ * shell out or redirect conversion to a VPS. */
 export function isXz(buf: Buffer): boolean {
   return buf.length > 6 && buf.subarray(0, 6).equals(XZ_MAGIC)
-}
-
-let xzAvailable: boolean | null = null
-
-async function unxz(buf: Buffer): Promise<Buffer | null> {
-  try {
-    if (xzAvailable === null) {
-      xzAvailable = await new Promise<boolean>((resolve) => {
-        execFile('xz', ['--version'], { timeout: 5000 }, (error) => resolve(!error))
-      })
-    }
-    if (!xzAvailable) return null
-    return await new Promise<Buffer | null>((resolve) => {
-      const child = execFile(
-        'xz',
-        ['-dc', '--memlimit=64M'],
-        { timeout: 8000, maxBuffer: MAX_FILE_BYTES, encoding: 'buffer' },
-        (error, stdout) => {
-          if (error) return resolve(null)
-          resolve(Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout))
-        },
-      )
-      child.stdin?.end(buf)
-    })
-  } catch {
-    return null
-  }
 }
 
 function validVtt(text: string): boolean {
@@ -187,7 +161,7 @@ function originalExt(name: string, fallback: OriginalFile['ext']): OriginalFile[
   return fallback
 }
 
-async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile, scope: FileScope | null): Promise<NormalizedSubtitle | null> {
+async function toVtt(raw: RawSubtitle, query: SubtitleQuery, signal: AbortSignal, fetchFile: FetchFile, scope: FileScope | null): Promise<NormalizedSubtitle | null> {
   // Upstream file URLs sometimes carry raw spaces (notably TVSubtitles);
   // encode them like browsers do instead of rejecting the candidate.
   const href = raw.url.replace(/ /g, '%20')
@@ -211,20 +185,22 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
     } catch {
       return null
     }
-    const srt = pickArchiveEntry(entries, /\.srt$/i, raw.lang)
+    const episodeScoped = requiresExactEpisodeArchiveMatch(raw.provider) && query.type !== 'movie'
+    const acceptsEntry = episodeScoped ? (name: string) => matchesSubtitleEpisode(name, query) : undefined
+    const srt = pickArchiveEntry(entries, /\.srt$/i, raw.lang, acceptsEntry)
     if (srt && srt.data.length <= MAX_VTT_BYTES) {
       const vtt = srtToVtt(decodeSubtitleText(srt.data))
       if (!validVtt(vtt)) return null
       return { vtt, original: { bytes: srt.data, ext: 'srt' } }
     }
-    const vttEntry = pickArchiveEntry(entries, /\.vtt$/i, raw.lang)
+    const vttEntry = pickArchiveEntry(entries, /\.vtt$/i, raw.lang, acceptsEntry)
     if (vttEntry && vttEntry.data.length <= MAX_VTT_BYTES) {
       const text = decodeSubtitleText(vttEntry.data)
       const vtt = text.startsWith('WEBVTT') ? text : `WEBVTT\n\n${text}`
       if (!validVtt(vtt)) return null
       return { vtt, original: { bytes: vttEntry.data, ext: 'vtt' } }
     }
-    const assEntry = pickArchiveEntry(entries, /\.ass|\.ssa$/i, raw.lang)
+    const assEntry = pickArchiveEntry(entries, /\.ass|\.ssa$/i, raw.lang, acceptsEntry)
     if (assEntry && assEntry.data.length <= MAX_VTT_BYTES) {
       const vtt = assToVtt(decodeSubtitleText(assEntry.data))
       if (!vtt || !validVtt(vtt)) return null
@@ -232,9 +208,9 @@ async function toVtt(raw: RawSubtitle, signal: AbortSignal, fetchFile: FetchFile
     }
     return null
   }
-  if (raw.format === 'ass' || (raw.format === 'other' && /\.ass|\.ssa$/i.test(fileUrl))) {
+  if (raw.format === 'ass' || /\.(?:ass|ssa)(?:[?#]|$)/i.test(fileUrl)) {
     const buf = await fetchFile(fileUrl, hosts, headers, signal, MAX_FILE_BYTES, patterns)
-    const source = isXz(buf) ? await unxz(buf) : buf
+    const source = isXz(buf) ? null : buf
     if (!source) return null
     const vtt = assToVtt(decodeSubtitleText(source))
     if (!vtt || !validVtt(vtt)) return null
@@ -274,7 +250,7 @@ export async function resolveSubtitles(
   const wantLangs = (query.langs?.length ? query.langs : ['en']).map((lang) => lang.toLowerCase())
   const usable = providers.filter((provider) => {
     try {
-      return provider.supports(query)
+      return isSubtitleProviderEligible(provider.id) && provider.supports(query)
     } catch {
       return false
     }
@@ -297,15 +273,12 @@ export async function resolveSubtitles(
       ]),
     ),
   )
-  const raw: RawSubtitle[] = []
+  let raw: RawSubtitle[] = []
   settled.forEach((result) => {
     if (result.status !== 'fulfilled' || !Array.isArray(result.value)) return
     raw.push(...result.value)
   })
-  const langRank = (lang: string) => {
-    const index = wantLangs.indexOf(lang.toLowerCase())
-    return index === -1 ? 100 + lang.toLowerCase().charCodeAt(0) : index
-  }
+  raw = raw.filter(entry => isSubtitleProviderEligible(entry.provider) && isSubtitleCandidateEligible(entry, query))
   // Scoring v2 (within each language): full human tracks first, then
   // forced foreign-parts, signs/songs adjuncts, and machine translations
   // last; hearing-impaired sorts after same-kind full tracks; provider
@@ -329,9 +302,10 @@ export async function resolveSubtitles(
   }
   raw.sort(
     (a, b) =>
-      langRank(a.lang) - langRank(b.lang) ||
+      subtitleLanguageRank(a.lang, wantLangs) - subtitleLanguageRank(b.lang, wantLangs) ||
       kindRank(a) - kindRank(b) ||
       Number(a.hi ?? false) - Number(b.hi ?? false) ||
+      Number(b.provider === 'rivesubs') - Number(a.provider === 'rivesubs') ||
       (b.rating || 0) - (a.rating || 0),
   )
   // Rank order drives everything: take candidates in order, convert each
@@ -404,7 +378,8 @@ export async function resolveSubtitles(
           return track ? { kind: 'direct', track } : null
         }
         const lang = entry.lang.toLowerCase()
-        const key = subtitleFileKey(entry)
+        const identityKey = subtitleFileKey(entry)
+        let key = await files.resolveKey?.(identityKey) ?? identityKey
         const content = contentPath(query, lang)
         // Converted files cached by earlier views cost no I/O at all.
         try {
@@ -414,6 +389,7 @@ export async function resolveSubtitles(
             return {
               kind: 'served',
               track: {
+                contentChecksum: subtitleContentChecksum(cached),
                 id: trackId(entry.provider, key.slice(0, 8)),
                 label: labelFor(entry),
                 language: lang,
@@ -433,10 +409,16 @@ export async function resolveSubtitles(
         }
         // Each file fetch is independently bounded: one slow zip must not
         // hold the whole aggregation past the route deadline.
-        const normalized = await Promise.race([
-          toVtt(entry, signal, fetchFile, scope),
-          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Subtitle file timed out.')), fileTimeout)),
-        ])
+        const normalized = await (async () => {
+          const controller = new AbortController()
+          let timer: ReturnType<typeof setTimeout> | undefined
+          try {
+            return await Promise.race([
+              toVtt(entry, query, AbortSignal.any([signal, controller.signal]), fetchFile, scope),
+              new Promise<null>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Subtitle file timed out.')) }, fileTimeout) }),
+            ])
+          } finally { clearTimeout(timer); controller.abort() }
+        })()
         if (!normalized) {
           // Preserve the existing usable-upstream fallback when normalization
           // cannot fetch the file; the track remains selectable and its
@@ -447,8 +429,10 @@ export async function resolveSubtitles(
           }
           return null
         }
+        if (files.bindKey) key = subtitleContentChecksum(normalized.vtt).slice(0, 16)
         try {
-          await files.putVtt(key, normalized.vtt, { content, ttlSeconds: FILE_TTL_SECONDS })
+          await files.putVtt(key, normalized.vtt, { content, ttlSeconds: FILE_TTL_SECONDS, private: Boolean(entry.authority || Object.keys(entry.headers ?? {}).some(name => /^(cookie|authorization)$/i.test(name))) })
+          await files.bindKey?.(identityKey, key, FILE_TTL_SECONDS)
           if (normalized.original) {
             await files.putOriginal(key, normalized.original, { content, ttlSeconds: FILE_TTL_SECONDS })
           }
@@ -459,6 +443,7 @@ export async function resolveSubtitles(
         return {
           kind: 'served',
           track: {
+            contentChecksum: subtitleContentChecksum(normalized.vtt),
             id: trackId(entry.provider, key.slice(0, 8)),
             label: labelFor(entry),
             language: lang,
@@ -501,23 +486,31 @@ export async function resolveSubtitles(
   }
   tracks.sort(
     (a, b) =>
-      langRank(a.language) - langRank(b.language) ||
+      subtitleLanguageRank(a.language, wantLangs) - subtitleLanguageRank(b.language, wantLangs) ||
       trackKindRank(a) - trackKindRank(b) ||
       Number(a.hi ?? false) - Number(b.hi ?? false) ||
+      Number(b.provider === 'rivesubs') - Number(a.provider === 'rivesubs') ||
       (b.rating || 0) - (a.rating || 0) ||
       (b.cueCount || 0) - (a.cueCount || 0),
   )
   const ordered = [...tracks, ...direct]
-  // Mark the top pick per wanted language: first full (non-forced,
-  // non-adjunct, human) track. The menu surfaces it as Recommended.
+  // RiveSubs stays in sync reliably, so its first full human track wins the
+  // recommendation for a wanted language whenever one is available.
+  // Otherwise retain the usual first-full-track recommendation.
   const recommendedLangs = new Set<string>()
-  for (const track of ordered) {
+  const recommend = (track: ServedSubtitle) => {
     const lang = track.language.toLowerCase()
-    if (!wantLangs.includes(lang) || recommendedLangs.has(lang)) continue
-    if (track.forced || track.signs || track.songs || track.machineTranslated) continue
+    if (!wantLangs.includes(lang) || recommendedLangs.has(lang)) return
+    if (track.forced || track.signs || track.songs || track.machineTranslated) return
     recommendedLangs.add(lang)
     track.recommended = true
-    track.label = `${track.label} · Recommended`
+    if (!track.label.endsWith(' · Recommended')) track.label = `${track.label} · Recommended`
+  }
+  for (const track of ordered) {
+    if (track.provider === 'rivesubs') recommend(track)
+  }
+  for (const track of ordered) {
+    recommend(track)
   }
   return ordered
 }

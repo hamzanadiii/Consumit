@@ -23,7 +23,7 @@ describe('profile privacy after public identity migration', () => {
       ...record,
       profile: { ...record.profile, visibility },
       diaryEntries: [], favorites: [], lists: [], reviews: [],
-      _count: { diaryEntries: 0, followers: 2, following: 3, lists: 0, reviews: 0, watchedTitles: 0 },
+      _count: { diaryEntries: 0, followers: 2, following: 3, lists: 0, reviews: 0, savedTitles: 0, watchHistory: 0, watchedTitles: 0 },
     }
     const prisma = {
       profile: { findUnique: vi.fn(async () => ({ memberId: record.id })) },

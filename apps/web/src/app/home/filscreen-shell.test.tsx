@@ -100,36 +100,43 @@ describe('FilScreenShell', () => {
   it('links directly to personal archives and keeps profile access through the avatar', () => {
     renderShell()
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
-    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Watched', 'films'], ['History', 'history'], ['Lists', 'lists']] as const) {
+    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Lists', 'lists']] as const) {
       expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute('href', `/profile/hamzanadi/${section}`)
     }
+    expect(within(navigation).queryByRole('link', { name: 'Watched' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: 'History' })).not.toBeInTheDocument()
     expect(within(navigation).queryByRole('link', { name: 'Profile' })).not.toBeInTheDocument()
     expect(within(navigation).queryByRole('link', { name: 'Diary' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Your library, signed in as hamzanadi' })).toHaveAttribute('href', '/profile/hamzanadi')
   })
 
-  it.each(['/profile/hamzanadi/films', '/profile/hamzanadi/films/ratings/8'])('highlights only Watched at %s', (pathname) => {
+  it.each(['/profile/hamzanadi/films', '/profile/hamzanadi/films/ratings/8'])('keeps watched archives out of the sidebar at %s', (pathname) => {
     renderShell(undefined, pathname)
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
-    expect(within(navigation).getByRole('link', { name: 'Watched' })).toHaveAttribute('aria-current', 'page')
-    expect(within(navigation).getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))).toHaveLength(1)
+    expect(within(navigation).queryByRole('link', { name: 'Watched' })).not.toBeInTheDocument()
+    expect(within(navigation).getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))).toHaveLength(0)
   })
 
-  it('keeps archive destinations accessible in the desktop icon rail', () => {
+  it('keeps the remaining archive destinations accessible in the desktop icon rail', () => {
     renderShell(undefined, '/profile/hamzanadi/likes')
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(within(navigation).getByRole('link', { name: 'Likes' })).toHaveAttribute('aria-current', 'page')
     expect(within(navigation).getByRole('link', { name: 'Watchlist' })).toHaveAttribute('title', 'Watchlist')
+    expect(within(navigation).getByRole('link', { name: 'Lists' })).toHaveAttribute('title', 'Lists')
+    expect(within(navigation).queryByRole('link', { name: 'Watched' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: 'History' })).not.toBeInTheDocument()
   })
 
   it('keeps personal shortcuts visible with a shared guest avatar while sending archive guests through authentication', async () => {
     render(<SessionProvider initialStatus="anonymous"><ShellStateProvider><FilScreenShell currentPathname="/"><p>Content</p></FilScreenShell></ShellStateProvider></SessionProvider>)
     const navigation = screen.getByRole('navigation', { name: 'Main navigation' })
-    expect(within(navigation).getAllByRole('link')).toHaveLength(6)
+    expect(within(navigation).getAllByRole('link')).toHaveLength(5)
     expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
-    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Watched', 'films'], ['History', 'history'], ['Lists', 'lists']] as const) {
+    for (const [label, section] of [['Watchlist', 'watchlist'], ['Likes', 'likes'], ['Lists', 'lists']] as const) {
       expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute('href', `/library?section=${section}`)
     }
+    expect(within(navigation).queryByRole('link', { name: 'Watched' })).not.toBeInTheDocument()
+    expect(within(navigation).queryByRole('link', { name: 'History' })).not.toBeInTheDocument()
     const guest = screen.getByRole('link', { name: 'Guest profile' })
     expect(guest).toHaveAttribute('href', '/library?section=profile')
     expect(within(guest).getByRole('img', { hidden: true, name: 'Guest portrait' })).toHaveAttribute('src', expect.stringContaining('seed=consumit-guest'))

@@ -1,9 +1,24 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
+import axe from 'axe-core'
 import { defaultExperiencePreferences } from '../../packages/contracts/src/index'
+
+async function expectProfileAccessible(page: Page, label: string) {
+  await page.addScriptTag({ content: axe.source })
+  const violations = await page.evaluate(async () => {
+    const axeApi = (window as unknown as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document.querySelector('main#consumit-main-content')!, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+    })
+    return report.violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) }))
+  })
+  expect(violations, `${label} should meet WCAG 2.2 AA`).toEqual([])
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${label} should fit the viewport`).toBe(true)
+}
 
 test.beforeEach(async ({ page, request }) => {
   await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: {} })
+  await page.addInitScript(() => localStorage.setItem('consumit.share-welcome-dismissed.v1', 'true'))
   // Pre-existing local artwork makes every capture independent of image/CDN outages.
   const artwork = await readFile('apps/web/public/assets/posters/northbound.svg')
   const avatar = await readFile('apps/web/public/assets/hamza-avatar.svg')
@@ -11,6 +26,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.route('https://api.dicebear.com/**', route => route.fulfill({ contentType: 'image/svg+xml', body: avatar }))
   await page.route('https://image.tmdb.org/**', route => route.fulfill({ contentType: 'image/svg+xml', body: artwork }))
   await page.route('**/v1/telemetry/web-vitals', route => route.fulfill({ status: 204 }))
+  await page.route('**/v1/taste/drafts/**', route => route.fulfill({ json: { revision: 1, data: {} } }))
   await page.route('**/v1/me/notifications?*', route => route.fulfill({ json: { items: [], nextCursor: null, unreadCount: 0 } }))
   await page.route('**/v1/me/notification-preferences', route => route.fulfill({ json: { newEpisodes: false } }))
   await page.route('**/v1/me/experience-preferences', route => route.fulfill({ json: { preferences: { ...defaultExperiencePreferences(), guideVersion: 1, guideStatus: 'completed' }, saved: true } }))
@@ -37,6 +53,220 @@ test('guests browse canonical public taste and sign in without automatically fol
   await expect(page.getByRole('button', { name: 'Following' })).toBeVisible()
   await page.getByRole('button', { name: 'Following' }).click()
   await expect(page.getByRole('button', { name: 'Follow', exact: true })).toBeVisible()
+})
+
+test('public profile archive tabs open only visible sections and keep History read-only', async ({ page, request }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { publicArchives: true } })
+  await page.goto('/profile/cinephile')
+
+  const tabs = page.locator('[data-profile-section-navigation]')
+  for (const [label, section] of [['Activity', 'activity'], ['Watched', 'films'], ['Diary', 'diary'], ['History', 'history']] as const) {
+    await expect(tabs.getByRole('link', { name: new RegExp(`^${label}`) })).toHaveAttribute('href', `/profile/cinephile/${section}`)
+  }
+  await expect(tabs.getByRole('link', { name: /^Tags/ })).toBeVisible()
+
+  await page.goto('/profile/cinephile/activity')
+  await expect(page.getByRole('link', { name: 'Dune: Part Two' }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toBeVisible()
+  await expectProfileAccessible(page, 'Public Activity')
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/public-activity-320x720.png' })
+
+  await page.goto('/profile/cinephile/tags')
+  const publicReviewTag = page.getByRole('link', { name: /#after-hours/ })
+  await expect(publicReviewTag).toHaveAttribute('href', '/profile/cinephile/activity?tag=after-hours')
+  await publicReviewTag.click()
+  await expect(page).toHaveURL('/profile/cinephile/activity?tag=after-hours')
+  await expect(page.locator('[data-public-activity-tag-status]')).toHaveText('Showing activity tagged “after-hours”.')
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toBeVisible()
+  await expectProfileAccessible(page, 'Public Activity filtered by tag')
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/public-activity-tag-320x720.png' })
+  const showAllActivity = page.getByRole('link', { name: 'Show all activity' })
+  expect((await showAllActivity.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await showAllActivity.click()
+  await expect(page).toHaveURL('/profile/cinephile/activity')
+  await page.goto('/profile/cinephile/activity?tag=unlisted-tag')
+  await expect(page.getByText('No public activity tagged “unlisted-tag”.')).toBeVisible()
+
+  await page.goto('/profile/cinephile/films')
+  await expect(page.getByRole('link', { name: 'Dune: Part Two' })).toBeVisible()
+  await expectProfileAccessible(page, 'Public Watched')
+  await page.goto('/profile/cinephile/diary')
+  await expect(page.locator('[data-consumit-diary-row]')).toBeVisible()
+  await expect(page.getByText(/#after-hours/)).toBeVisible()
+  const loadMoreDiary = page.getByRole('button', { name: 'Load more diary' })
+  expect((await loadMoreDiary.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
+  await expectProfileAccessible(page, 'Public Diary')
+  await mkdir('.impeccable/review/social', { recursive: true })
+  await page.screenshot({ animations: 'disabled', fullPage: true, path: '.impeccable/review/social/public-diary-320x720.png' })
+  await page.goto('/profile/cinephile/history')
+  await expect(page.locator('[data-consumit-diary-row]')).toContainText('Completed')
+  await expect(page.getByRole('link', { name: 'Watch again' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /log .* to diary/i })).toHaveCount(0)
+  await expect(page.getByText(/progress|checkpoint/i)).toHaveCount(0)
+  await expectProfileAccessible(page, 'Public History')
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/public-history-320x720.png' })
+
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { publicArchives: true, hideReviews: true } })
+  await page.goto('/profile/cinephile')
+  await expect(page.locator('[data-profile-section-navigation]').getByRole('link', { name: /^Reviews/ })).toHaveCount(0)
+  await expect(page.locator('[data-profile-section-navigation]').getByRole('link', { name: /^Tags/ })).toHaveCount(0)
+  await page.goto('/profile/cinephile/activity')
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toHaveCount(0)
+  await page.goto('/profile/cinephile/tags')
+  await expect(page.getByRole('heading', { name: 'We couldn’t find that page' })).toBeVisible()
+
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: {} })
+  await page.goto('/profile/cinephile/history')
+  await expect(page.getByRole('heading', { name: 'We couldn’t find that page' })).toBeVisible()
+})
+
+test('public Activity pagination retains entries and returns keyboard focus after retry', async ({ page, request }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { publicArchives: true, archiveMoreError: true } })
+  await page.goto('/profile/cinephile/activity')
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toBeVisible()
+
+  const loadMore = page.getByRole('button', { name: 'Load more activity' })
+  await loadMore.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('p[role="alert"]')).toHaveText('This archive page could not load. Try again.')
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toBeVisible()
+  const retry = page.getByRole('button', { name: 'Try again', exact: true })
+  await expect(retry).toBeFocused()
+
+  await request.post('http://127.0.0.1:18562/__fixtures/archive-more-recover')
+  await retry.press('Enter')
+  await expect(page.getByText('A second look reveals another story.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Activity', level: 2 })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Load more activity' })).toHaveCount(0)
+  await expectProfileAccessible(page, 'Recovered Public Activity')
+})
+
+test('public Activity and History keep readable layouts in desktop light and phone dark themes', async ({ page, request }) => {
+  await mkdir('.impeccable/review/social', { recursive: true })
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { publicArchives: true } })
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/profile/cinephile/activity')
+  await page.evaluate(() => localStorage.setItem('consumit.home-theme', 'light'))
+  await page.reload()
+  await expect(page.locator('[data-theme="light"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Activity', level: 2 })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Read and discuss review/ })).toBeVisible()
+  await expectProfileAccessible(page, 'Public Activity at desktop width in light theme')
+  await page.screenshot({ animations: 'disabled', path: '.impeccable/review/social/public-activity-light-1440x960.png', fullPage: true })
+
+  await page.goto('/profile/cinephile/diary')
+  await expect(page.locator('[data-theme="light"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Diary', level: 2 })).toBeVisible()
+  await expect(page.locator('[data-consumit-diary-row]')).toContainText('#after-hours')
+  await expect(page.getByRole('button', { name: /Edit diary entry|Delete diary entry/ })).toHaveCount(0)
+  await expectProfileAccessible(page, 'Public Diary at desktop width in light theme')
+  await page.screenshot({ animations: 'disabled', path: '.impeccable/review/social/public-diary-light-1440x960.png', fullPage: true })
+
+  await page.evaluate(() => localStorage.setItem('consumit.home-theme', 'dark'))
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/profile/cinephile/history')
+  await expect(page.locator('[data-theme="dark"]')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'History', level: 2 })).toBeVisible()
+  await expect(page.locator('[data-consumit-diary-row]')).toContainText('Completed')
+  await expect(page.getByText(/progress|checkpoint/i)).toHaveCount(0)
+  await expectProfileAccessible(page, 'Public History at phone width in dark theme')
+  await page.screenshot({ animations: 'disabled', path: '.impeccable/review/social/public-history-dark-390x844.png', fullPage: true })
+})
+
+test('public Diary and Settings dates hydrate consistently across server and browser timezones', async ({ browser, request }) => {
+  const { token } = await (await request.get('http://127.0.0.1:18562/__fixtures/session')).json()
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { publicArchives: true } })
+  const context = await browser.newContext({ baseURL: 'http://127.0.0.1:28113', timezoneId: 'America/Los_Angeles', viewport: { width: 1280, height: 900 } })
+  await context.addCookies([{ name: 'consumit_session', value: token, domain: '127.0.0.1', path: '/' }])
+  const page = await context.newPage()
+  await page.addInitScript(() => localStorage.setItem('consumit.share-welcome-dismissed.v1', 'true'))
+  const hydrationErrors: string[] = []
+  page.on('pageerror', error => hydrationErrors.push(error.message))
+  try {
+    await page.goto('/profile/cinephile/diary')
+    await expect(page.locator('[data-consumit-diary-row] time').first()).toHaveText('Oct 1, 2026')
+    expect(hydrationErrors).toEqual([])
+    hydrationErrors.length = 0
+    await page.goto('/settings')
+    await expect(page.getByText(/^Next username change:/)).toBeVisible()
+    expect(await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone)).toBe('America/Los_Angeles')
+    const nextChange = page.locator('#settings-username-change time')
+    const dateTime = await nextChange.getAttribute('datetime')
+    expect(dateTime).not.toBeNull()
+    const expectedDate = await page.evaluate(value => `${new Date(value!).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} UTC`, dateTime)
+    await expect(nextChange).toHaveText(expectedDate)
+    const ratings = page.getByRole('checkbox', { name: 'Ratings', exact: true })
+    await expect(ratings).toBeChecked()
+    await ratings.uncheck()
+    expect(hydrationErrors).toEqual([])
+  } finally {
+    await context.close()
+  }
+})
+
+test('guest Following entry returns to the feed after sign-in', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.goto('/community')
+  await expect(page.getByRole('heading', { name: 'Find your kind of people.' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const followingTab = page.getByRole('navigation', { name: 'Community' }).getByRole('link', { name: 'Following' })
+  expect((await followingTab.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await page.addScriptTag({ content: axe.source })
+  const discoverViolations = await page.evaluate(async () => {
+    const axeApi = (window as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })
+  expect(discoverViolations, 'Community Discover at 320px').toEqual([])
+  await page.getByRole('link', { name: 'Following' }).click()
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fcommunity%3Fmode%3Dfollowing$/)
+
+  await page.getByLabel('Email', { exact: true }).fill('social_owner@example.test')
+  await page.getByLabel('Password', { exact: true }).fill('social-fixture-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+
+  await expect(page).toHaveURL('/community?mode=following')
+  const activeFollowingTab = page.getByRole('navigation', { name: 'Community' }).getByRole('link', { name: 'Following' })
+  await expect(activeFollowingTab).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: 'Find your kind of people.' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Quiet evenings', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const followingViolations = await page.evaluate(async () => {
+    const axeApi = (window as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })
+  expect(followingViolations, 'Community Following after sign-in at 320px').toEqual([])
+})
+
+test('Community settings keeps block state clear and retries a failed unblock', async ({ page, context, request }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await mkdir('.impeccable/review/social', { recursive: true })
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { blockedTarget: true, unblockError: true } })
+  const { token } = await (await request.get('http://127.0.0.1:18562/__fixtures/session')).json()
+  await context.addCookies([{ name: 'consumit_session', value: token, domain: '127.0.0.1', path: '/' }])
+
+  await page.goto('/community/settings')
+  await expect(page.getByRole('heading', { name: 'Your community, your boundaries.' })).toBeVisible()
+  const row = page.locator('.taste-order-row').filter({ hasText: '@cinephile' })
+  await expect(row).toBeVisible()
+  await row.getByRole('button', { name: 'Unblock' }).click()
+  await expect(page.getByText('The unblock could not be saved.')).toBeVisible()
+  await expect(row).toBeVisible()
+  await page.getByRole('button', { name: 'Retry unblock' }).click()
+  await expect(page.getByText('No blocked members.')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+  await page.addScriptTag({ content: axe.source })
+  const violations = await page.evaluate(async () => {
+    const axeApi = (window as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })
+  expect(violations, 'Community settings after unblock at 320px').toEqual([])
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/community-settings-320x720.png' })
 })
 
 test('desktop and mobile publish, search, follow, share and browse visitor collections', async ({ page, context, request }) => {
@@ -69,26 +299,29 @@ test('desktop and mobile publish, search, follow, share and browse visitor colle
     await expect(page.getByRole('button', { name: 'Following' })).toBeVisible()
     await page.getByRole('button', { name: 'Following' }).click()
     await page.goto('/settings')
-    await expect(page.getByRole('radio', { name: 'Private', exact: true })).toBeChecked()
-    await page.getByRole('radio', { name: 'Public', exact: true }).check()
+    await expect(page.getByRole('checkbox', { name: 'Ratings', exact: true })).toBeChecked()
+    await page.getByRole('checkbox', { name: 'Ratings', exact: true }).uncheck()
     await page.getByRole('button', { name: 'Save changes', exact: true }).first().click()
     await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible()
     await page.goto('/settings')
-    await expect(page.getByRole('radio', { name: 'Public', exact: true })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Ratings', exact: true })).not.toBeChecked()
     await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ fullPage: true, path: `.impeccable/review/social/${name}-publishing.png` })
-    await page.goto('/lists/social-list')
-    const editor = page.getByRole('region', { name: 'Shape the order' })
-    await expect(editor.getByRole('heading', { name: 'Shape the order' })).toBeVisible()
+    await page.goto('/lists/social-list/edit')
+    const editor = page.getByRole('main')
+    await expect(editor.getByRole('heading', { name: 'Give your idea a shape.' })).toBeVisible()
     await expect(editor.getByText('List editor', { exact: true })).toHaveCount(0)
     await editor.screenshot({ path: `.impeccable/review/social/${name}-list-editor.png` })
-    await page.getByRole('radio', { name: 'Public', exact: true }).check()
-    const listWrite = page.waitForResponse(response => response.url().endsWith('/v1/me/lists/fixture-list') && response.request().method() === 'PUT')
-    await page.getByRole('button', { name: 'Save changes', exact: true }).click()
-    expect((await listWrite).status()).toBe(204)
+    await page.getByLabel('Visibility').selectOption('public')
+    const listWrite = page.waitForResponse(response => response.url().endsWith('/v1/taste/lists/fixture-list') && response.request().method() === 'PUT')
+    await page.getByRole('button', { name: 'Save collection', exact: true }).click()
+    expect((await listWrite).status()).toBe(200)
     await page.goto('/lists/social-list')
-    await expect(page.getByText('public list', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Collection · public/)).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.goto('/community')
+    await expect(page.getByRole('heading', { name: 'Find your kind of people.' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Quiet evenings', exact: true })).toBeVisible()
     await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: {} })
   }
   expect(errors).toEqual([])
@@ -106,5 +339,119 @@ test('people search recovers independently and follow failure keeps the action r
   await page.getByRole('button', { name: 'Follow', exact: true }).click()
   await expect(page.getByRole('alert').filter({ hasText: 'Follow could not be saved' })).toBeVisible()
   await page.getByRole('button', { name: 'Follow', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Following' })).toBeVisible()
+})
+
+test('people pagination keeps results through a failed page and restores keyboard focus after retry', async ({ page, request }) => {
+  await request.post('http://127.0.0.1:18562/__fixtures/reset', { data: { searchMoreError: true } })
+  await page.goto('/search?q=cine&type=people')
+  await expect(page.getByRole('link', { name: /Samira/ })).toBeVisible()
+  await expect(page.getByText('1 curator shown')).toBeVisible()
+
+  const more = page.getByRole('button', { name: 'Load more people' })
+  await more.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('alert').filter({ hasText: 'People search could not load' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Samira/ })).toBeVisible()
+  const retry = page.getByRole('button', { name: 'Try again', exact: true })
+  await expect(retry).toBeFocused()
+
+  await request.post('http://127.0.0.1:18562/__fixtures/search-more-recover')
+  await retry.press('Enter')
+  await expect(page.getByRole('link', { name: /Nour/ })).toBeVisible()
+  await expect(page.getByText('2 curators shown')).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('1 person loaded; 2 people shown.')
+  await expect(page.getByRole('heading', { name: 'People to meet' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Load more people' })).toHaveCount(0)
+
+  await page.getByRole('link', { name: /Nour/ }).click()
+  await expect(page).toHaveURL(/\/profile\/cine_curator$/)
+  await expect(page.getByRole('heading', { name: 'Nour — Frame by frame' })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL(/\/search\?q=cine&type=people$/)
+  await expect(page.getByRole('link', { name: /Nour/ })).toBeVisible()
+})
+
+test('People no-match suggestions open a curator and return to the same search', async ({ page }) => {
+  await mkdir('.impeccable/review/social', { recursive: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/search?q=unheardname&type=people')
+
+  const query = page.getByRole('searchbox', { name: 'Search people by name or username' })
+  const noMatches = page.getByRole('heading', { name: 'No people found for “unheardname”.' })
+  const suggestedProfile = page.getByRole('link', { name: /Samira — Cinema after midnight/ })
+  await expect(page).toHaveURL('/search?q=unheardname&type=people')
+  await expect(query).toHaveValue('unheardname')
+  await expect(noMatches).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Curators to explore' })).toBeVisible()
+  await expect(suggestedProfile).toHaveAttribute('href', '/profile/cinephile')
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/people-no-match-390x844.png' })
+
+  await suggestedProfile.click()
+  await expect(page).toHaveURL('/profile/cinephile')
+  await expect(page.getByRole('heading', { name: 'Samira — Cinema after midnight' })).toBeVisible()
+  await page.goBack()
+  await expect(page).toHaveURL('/search?q=unheardname&type=people')
+  await expect(noMatches).toBeVisible()
+  await expect(page.getByRole('link', { name: /Samira — Cinema after midnight/ })).toBeVisible()
+
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.evaluate(() => localStorage.setItem('consumit.home-theme', 'light'))
+  await page.reload()
+  await expect(noMatches).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const findPeople = page.getByRole('button', { name: 'Find people', exact: true })
+  expect((await findPeople.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  const exploreCollections = page.getByRole('link', { name: 'Explore collections' })
+  expect((await exploreCollections.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  const curatorProfile = page.getByRole('link', { name: /Samira — Cinema after midnight/ })
+  expect((await curatorProfile.boundingBox())!.width).toBeGreaterThanOrEqual(140)
+  await page.addScriptTag({ content: axe.source })
+  const violations = await page.evaluate(async () => {
+    const axeApi = (window as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })
+  expect(violations, 'People no-match suggestions at 320px in light theme').toEqual([])
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/people-no-match-light-320x720.png' })
+})
+
+test('People query changes survive sign-in before a guest intentionally follows', async ({ page }) => {
+  await mkdir('.impeccable/review/social', { recursive: true })
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.goto('/search?q=unheardname&type=people')
+
+  const query = page.getByRole('searchbox', { name: 'Search people by name or username' })
+  await expect(page.getByRole('heading', { name: 'No people found for “unheardname”.' })).toBeVisible()
+  await query.fill('cine')
+  await page.getByRole('button', { name: 'Find people', exact: true }).click()
+  await expect(page).toHaveURL('/search?q=cine&type=people')
+  await expect(query).toHaveValue('cine')
+  await expect(page.getByRole('link', { name: /Samira — Cinema after midnight/ })).toBeVisible()
+
+  await page.getByRole('link', { name: 'Sign in to follow' }).click()
+  await expect(page).toHaveURL('/sign-in?next=%2Fsearch%3Ftype%3Dpeople%26q%3Dcine')
+  await page.getByLabel('Email', { exact: true }).fill('social_owner@example.test')
+  await page.getByLabel('Password', { exact: true }).fill('social-fixture-password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+
+  await expect(page).toHaveURL('/search?type=people&q=cine')
+  await expect(query).toHaveValue('cine')
+  const follow = page.getByRole('button', { name: 'Follow', exact: true })
+  await expect(follow).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Following' })).toHaveCount(0)
+  expect((await follow.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+  await page.addScriptTag({ content: axe.source })
+  const violations = await page.evaluate(async () => {
+    const axeApi = (window as Window & { axe: typeof axe }).axe
+    const report = await axeApi.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } })
+    return report.violations.map(violation => ({ id: violation.id, targets: violation.nodes.map(node => node.target) }))
+  })
+  expect(violations, 'People search after guest sign-in at 320px').toEqual([])
+  await page.screenshot({ fullPage: true, path: '.impeccable/review/social/people-sign-in-return-320x720.png' })
+
+  await follow.click()
   await expect(page.getByRole('button', { name: 'Following' })).toBeVisible()
 })

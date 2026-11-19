@@ -72,6 +72,15 @@ describe('bounded playback resolution', () => {
     expect((await resolver.resolve({ ...input, preferences: { qualityHeight: 720 } }, new AbortController().signal))?.source.height).toBe(720)
     expect((await resolver.resolve({ ...input, preferences: { qualityHeight: 1080 } }, new AbortController().signal))?.source.height).toBe(1080)
   })
+  it('honors an adapter server priority before rendition height', async () => {
+    const registration = provider('video')
+    registration.adapter = createStaticProvider('video', [{ ref: input.ref, sources: [
+      { ...source, key: 'fallback', height: 1080 },
+      { ...source, key: 'preferred', height: 2160, priority: 100 },
+    ] }])
+    const resolver = createResolver([registration], { region: 'US' })
+    expect((await resolver.resolve(input, new AbortController().signal))?.source.key).toBe('preferred')
+  })
   it('prefers a matching language family over unspecified original audio', async () => {
     const registration = provider('video')
     registration.adapter = createStaticProvider('video', [{ ref: input.ref, sources: [{ ...source, key: 'original', language: 'original', height: 1080 }, { ...source, key: 'french', language: 'fra', height: 720 }] }])

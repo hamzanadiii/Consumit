@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto'
+import { subtitlePlaybackContextSchema, type SubtitlePlaybackContext } from '../subtitles/playback-context.ts'
+import { createHash, randomUUID } from 'node:crypto'
 import { metrics } from '@opentelemetry/api'
 import { frameDiagnosticsSchema, type FrameDiagnostics } from '@consumit/contracts'
 import { playbackProviderListSchema, playbackSessionSchema, type PlaybackEvents, type PlaybackFailureRequest, type PlaybackProvider, type PlaybackSession, type PlaybackPreferences, type ResolvePlaybackRequest } from '@consumit/contracts'
@@ -11,12 +12,13 @@ import { supportsRequestedAudio } from './audio-policy.ts'
 import { createSeparateAudio } from './separate-audio.ts'
 import type { PlaybackRelay } from './relay.ts'
 
-type SessionRecord = { owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; excludedAt?: Record<string, number>; group: string; fallbackAt?: number[]; restartFallback?: boolean }
+type SessionRecord = { subtitleContext?: SubtitlePlaybackContext | undefined; owner: string; input: ResolvePlaybackRequest; session: PlaybackSession; excluded: string[]; excludedAt?: Record<string, number>; group: string; fallbackAt?: number[]; restartFallback?: boolean }
 function withPreferences(input: ResolvePlaybackRequest, preferences?: PlaybackPreferences): ResolvePlaybackRequest {
   if (!preferences) return input
   return { ...input, preferences: { ...input.preferences, ...preferences }, ...(preferences.audioLanguage ? { audioLanguage: preferences.audioLanguage } : {}) }
 }
 export interface Playback {
+  subtitleContext?(owner: string, id: string): Promise<SubtitlePlaybackContext | null>
   beginAttempt?(owner: string, input: ResolvePlaybackRequest, signal: AbortSignal, sessionId?: string, failure?: PlaybackFailureRequest): Promise<import('@consumit/contracts').PlaybackAttempt>
   continueAttempt?(owner: string, id: string, signal: AbortSignal): Promise<import('@consumit/contracts').PlaybackAttempt>
   cancelAttempt?(owner: string, id: string): Promise<void>
@@ -90,6 +92,7 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     return state.openUntil > Date.now() || state.failures >= 3 ? 'degraded' : 'ok'
   }
   const events = metrics.getMeter('consumit.playback').createCounter('playback.events')
+  const routeLastSuccess = metrics.getMeter('consumit.playback').createGauge('playback.route.last.success.timestamp', { unit: 's' })
   const timing = metrics.getMeter('consumit.playback').createHistogram('playback.client.duration', { unit: 'ms' })
   const selected = metrics.getMeter('consumit.playback').createCounter('playback.source.selected')
   const recoveries = metrics.getMeter('consumit.playback').createCounter('playback.recovery')
@@ -133,8 +136,20 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     const cutoff = Date.now() + MAX_GRANT_MS - (delivery === 'relay' ? 5000 : 0)
     const expiry = delivery === 'relay' && source.expiryEstimated === true ? cutoff
       : Math.min(Date.parse(source.expiresAt) - 5000, cutoff)
-    const src = delivery === 'relay' ? await relay?.issue(resolved, expiry, relayOrigin ?? audioOrigin ?? '') : source.url
+    const src = delivery === 'relay' ? await relay?.issue(resolved, expiry, relayOrigin ?? audioOrigin ?? '', { kind: input.ref.kind, region, purpose: 'video' }) : source.url
     if (!src || (registration.deliveryMode ?? 'direct') !== delivery) throw unavailable(input)
+    const sourceId = sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : '')
+    // A lease refresh rotates transport URLs while keeping the selected
+    // rendition attached. Keep its content scope stable too, so Watch does
+    // not discard subtitle selection or sync context on every renewal. An
+    // adapter-provided recordingKey still distinguishes known content cuts.
+    const knownRecordingVersion = source.recordingKey
+      ? 'vv-' + createHash('sha256').update(JSON.stringify([input.ref, registration.adapter.id, source.recordingKey])).digest('hex')
+      : undefined
+    const sameSelectedSource = previous?.session.source.id === sourceId &&
+      previous.session.source.providerId === registration.adapter.id && previous.session.source.delivery === delivery
+    const videoVersion = knownRecordingVersion ?? (sameSelectedSource ? previous.session.source.videoVersion : undefined) ??
+      'vv-' + createHash('sha256').update(JSON.stringify([input.ref, registration.adapter.id, randomUUID()])).digest('hex')
     // Captions aggregate across every provider that answered, plus the tracks
     // the member already had: a video fallback never takes the subtitles down
     // with it. Only upstream https WebVTT survives — legacy lease paths from
@@ -152,13 +167,15 @@ export function createPlayback({ providers, store, region, providerOrders, audio
     const windowedFallbacks = prunedFallbacks(previous?.fallbackAt)
     const session: PlaybackSession = {
       id: previous?.session.id ?? randomUUID(), ref: input.ref,
-      source: { id: sourceIdentity(registration.adapter.id, input.ref, source.key) + (delivery === 'relay' ? ':relay' : ''), providerId: registration.adapter.id, ...(source.serverName ? { serverId: source.key, serverName: source.serverName.slice(0, 80) } : {}), type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.type === 'iframe' ? { frameSandbox: 'none' as const } : {}), ...(source.type === 'hls' && source.hlsSubtitlePlaylistFormat ? { hlsSubtitlePlaylistFormat: source.hlsSubtitlePlaylistFormat } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: delivery === 'embed' ? [] : subtitles, skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
+      source: { videoVersion, id: sourceId, providerId: registration.adapter.id, ...(source.serverName ? { serverId: source.key, serverName: source.serverName.slice(0, 80) } : {}), type: source.type, src, ...(qualityHint ? { qualityHint } : {}), ...(qualityHeights.length > 1 ? { qualityHeights } : {}), delivery, ...(source.type === 'iframe' ? { frameSandbox: 'none' as const } : {}), ...(source.type === 'hls' && source.hlsSubtitlePlaylistFormat ? { hlsSubtitlePlaylistFormat: 'vtt' } : {}), expiresAt: new Date(expiry).toISOString(), subtitles: delivery === 'embed' ? [] : subtitles, skipSegments: delivery === 'embed' ? [] : source.skipSegments ?? [] },
       expiresAt: previous?.session.expiresAt ?? new Date(Date.now() + 4 * 3600_000).toISOString(),
       fallbackCount: windowedFallbacks.length,
       capabilities: { refresh: delivery !== 'embed', fallback: windowedFallbacks.length < fallbackLimit(input), externalSubtitles: delivery !== 'embed' && subtitles.length > 0 },
     }
     playbackSessionSchema.parse(session)
-    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session, group: groupKey(registration.upstreamGroup, delivery), excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
+    await store.set(`session:${session.id}`, JSON.stringify({ owner, input, session,
+      subtitleContext: subtitlePlaybackContextSchema.parse({ ref: input.ref, videoVersion: session.source.videoVersion, providerId: registration.adapter.id, hosts: [...registration.mediaHosts].filter(host => !host.includes('*') || host.startsWith('*.')), expiresAt: source.expiresAt, captions: source.subtitles, ...(source.recordingRelease ? { release: source.recordingRelease } : {}), ...(source.recordingRuntimeSec ? { runtimeSec: source.recordingRuntimeSec } : {}), headers: Object.fromEntries(Object.entries(source.headers).filter(([name, value]) => /^(referer|origin|user-agent|accept)$/i.test(name) && value.length <= 512)) }),
+      group: groupKey(registration.upstreamGroup, delivery), excluded: previous?.excluded ?? [], excludedAt: previous?.excludedAt ?? {}, fallbackAt: windowedFallbacks, restartFallback: previous?.restartFallback ?? false } satisfies SessionRecord), (Date.parse(session.expiresAt) - Date.now()) / 1000)
     selected.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region, delivery, surface: owner.startsWith('embed') ? 'embed' : 'watch', action: previous ? previous.session.source.providerId === registration.adapter.id ? 'refresh' : 'switch' : 'resolve' })
     return session
   }
@@ -235,6 +252,12 @@ export function createPlayback({ providers, store, region, providerOrders, audio
   }
 
   return {
+    async subtitleContext(owner, id) {
+      const record = await read(owner, id)
+      const provider = providers.find(provider => provider.adapter.id === record.session.source.providerId && provider.enabled)
+      if (!provider || !record.subtitleContext || Date.parse(record.subtitleContext.expiresAt) <= Date.now() + 5000) return null
+      return record.subtitleContext
+    },
     async beginAttempt(owner, input, signal, sessionId, failure) {
       const lock = sessionId ? await claimRecovery(sessionId) : undefined
       try {
@@ -445,8 +468,13 @@ export function createPlayback({ providers, store, region, providerOrders, audio
       if (record.session.source.delivery === 'embed') return
       for (const event of batch.events) {
         const delivery = event.delivery ?? record.session.source.delivery
-        const attributes = { provider: record.session.source.providerId, kind: record.input.ref.kind, region, delivery, surface: record.owner.startsWith('embed') ? 'embed' : 'watch', browser: event.browser ?? 'unknown', event: event.type }
+        const registration = providers.find(row => row.adapter.id === record.session.source.providerId)
+        const attributes = { provider: record.session.source.providerId, kind: record.input.ref.kind, region, delivery, routeVersion: registration?.routeVersion ?? 'local', purpose: 'video', surface: record.owner.startsWith('embed') ? 'embed' : 'watch', browser: event.browser ?? 'unknown', event: event.type }
         events.add(1, attributes)
+        if (event.type === 'resumed') routeLastSuccess.record(Date.now() / 1000, {
+          provider: attributes.provider, kind: attributes.kind, region: attributes.region,
+          delivery: attributes.delivery, routeVersion: attributes.routeVersion, purpose: attributes.purpose,
+        })
         if (event.type === 'viewing' && event.elapsedMs !== undefined) viewing.add(Math.min(event.elapsedMs, 60_000) / 1000, attributes)
         else if (event.elapsedMs !== undefined) timing.record(event.elapsedMs, attributes)
       }

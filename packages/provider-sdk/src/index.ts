@@ -16,6 +16,7 @@ export { createVidapiProvider } from './adapters/vidapi.ts'
 
 export { createScreenscapeProvider } from './adapters/screenscape.ts'
 export { createVidrockProvider } from './adapters/vidrock.ts'
+export { createVidboltProvider } from './adapters/vidbolt.ts'
 export { createVidnestProvider, decipherPayload, type VidnestScope } from './adapters/vidnest.ts'
 export { createPoseidonProvider } from './adapters/poseidon.ts'
 export { createNetmirrorProvider } from './adapters/netmirror.ts'
@@ -93,10 +94,18 @@ export const skipSegmentSchema = z.object({
 export type SkipSegment = z.infer<typeof skipSegmentSchema>
 
 export const providerSourceSchema = z.object({
+  /** Set only when the compiled adapter establishes an unchanged recording. */
+  edgeAudio: z.boolean().optional(),
+  audioDurationSec: z.number().positive().max(86400).optional(),
+  recordingRelease: z.string().min(1).max(160).optional(),
+  recordingRuntimeSec: z.number().positive().max(86400).optional(),
+  recordingKey: z.string().min(1).max(160).optional(),
   // This key describes the rendition, never its temporary URL signature.
   key: z.string().min(1).max(100),
   /** Stable, member-facing name for one upstream server within a provider. */
   serverName: z.string().min(1).max(80).optional(),
+  /** Adapter-declared server preference within one provider; higher wins. */
+  priority: z.int().min(-1000).max(1000).optional(),
   url: z.url().max(4096), type: z.enum(['hls', 'dash', 'native', 'iframe']),
   /** Frame-only sandbox policy declared by the adapter. Absent keeps
    *  Consumit's standard frame sandbox (ADR 0006). */
@@ -118,11 +127,11 @@ export const providerSourceSchema = z.object({
 })
 export const providerResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), sources: z.array(providerSourceSchema).max(32) }),
-  z.object({ ok: z.literal(false), code: z.enum(['empty', 'timeout', 'malformed', 'unavailable', 'cancelled']), retryable: z.boolean() }),
+  z.object({ ok: z.literal(false), code: z.enum(['empty', 'timeout', 'malformed', 'unavailable', 'cancelled', 'blocked', 'rate_limited']), retryable: z.boolean(), retryAfterMs: z.int().min(0).max(900_000).optional() }),
 ])
 export type ProviderSource = z.infer<typeof providerSourceSchema>
 export type ProviderResult = z.infer<typeof providerResultSchema>
-export type ProviderInput = { ref: PlaybackRef; region: string; audioLanguage: string }
+export type ProviderInput = { purpose?: 'audio' | undefined; audioTrackKey?: string | undefined; ref: PlaybackRef; region: string; audioLanguage: string }
 export type ProviderIdentityResolver = (ref: PlaybackRef, signal: AbortSignal) => Promise<{ imdbId?: string | undefined }>
 export interface ProviderAdapter {
   readonly id: string
@@ -139,6 +148,10 @@ export interface ProviderAdapter {
 }
 export type MediaKind = 'movie' | 'series' | 'anime'
 export type ProviderRegistration = {
+  /** Edge coordinator owns upstream admission; API still validates sources. */
+  execution?: 'cloudflare' | undefined
+  /** Compiled registry version used for diagnostic evidence attribution. */
+  routeVersion?: string | undefined
   adapter: ProviderAdapter
   enabled: boolean
   /** Operator assignment, not proof of separate audio availability. */
@@ -249,9 +262,17 @@ export function validatedSources(result: unknown, registration: ProviderRegistra
     const discovered = registration.deliveryMode === 'relay' && registration.relayHostDiscovery && registration.relayHostDiscovery === source.relayRecipe ? source.relayHosts ?? [] : []
     if (!allowedMediaUrl(source.url, [...registration.mediaHosts, ...discovered], registration.mediaHostPatterns)) continue
     // Browser playback cannot attach provider-specific headers. Declared
-    // Referer/Origin hints ride with the source, but credentials are
-    // never allowed to cross this seam.
-    if (Object.keys(source.headers).some((name) => /^(cookie|authorization)$/i.test(name))) continue
+    // Referer/Origin hints ride with the source. NontonFlix is the sole
+    // reviewed relay exception: its device-bound media grant only accepts the
+    // cookie minted for media.nontonflix.com, and the relay never forwards it
+    // to another host.
+    const credentials = Object.keys(source.headers).filter((name) => /^(cookie|authorization)$/i.test(name))
+    const mediaHost = (() => { try { return new URL(source.url).hostname.toLowerCase() } catch { return '' } })()
+    const cookieExempt = credentials.length === 1 && credentials[0]!.toLowerCase() === 'cookie'
+      && registration.adapter.id === 'nontonflix' && mediaHost === 'media.nontonflix.com'
+    if (credentials.length && !cookieExempt) continue
+    if (cookieExempt && Object.entries(source.headers).some(([name, value]) => name.toLowerCase() === 'cookie'
+      && (value.length > 512 || /[\r\n]/.test(value)))) continue
     if (source.segmentTransform) continue
     if (Object.entries(source.headers).some(([key, value]) => !/^(referer|origin|user-agent|authorization|cookie|accept)$/i.test(key) || /[\r\n]/.test(value) || value.length > 4096)) continue
     seen.add(source.key)
@@ -277,3 +298,8 @@ export function createStaticProvider(id: string, entries: readonly { ref: Playba
 
 export { createFrameProvider, isFrameProviderId, MOVIE_FRAME_HOSTS, FRAME_HOSTS, FRAME_IDS, type FrameId } from './adapters/frames.ts'
 export { createRigelProvider } from './adapters/rigel.ts'
+export { createNontonflixProvider } from './adapters/nontonflix.ts'
+export { createEmbedmasterProvider } from './adapters/embedmaster.ts'
+export { createCnoProvider } from './adapters/cno.ts'
+export { createNexaProvider } from './adapters/nexa.ts'
+export { createZenoxProvider } from './adapters/zenox.ts'

@@ -4,7 +4,7 @@ import type { PlaybackStore } from './state.ts'
 
 /** Shared admission only. Synthetic work never updates playback health. */
 export async function acquireProviderBudget(provider: ProviderRegistration, region: string, store?: PlaybackStore): Promise<(() => Promise<void>) | null> {
-  if (!store) return async () => {}
+  if (provider.execution === 'cloudflare' || !store) return async () => {}
   const key = `provider-budget:v1:${region}:${provider.upstreamGroup}`
   const token = randomUUID(), mutex = `${key}:lock`
   if (!await store.claim(mutex, token, 2)) return null

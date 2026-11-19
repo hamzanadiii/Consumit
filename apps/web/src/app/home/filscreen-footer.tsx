@@ -3,8 +3,8 @@ import Image from 'next/image'
 
 import { OnDemandLink as Link } from '../shared/on-demand-link'
 
-const LINK_CLASS = 'inline-flex min-h-11 items-center gap-1.5 rounded-control text-sm text-[var(--fs-secondary)] underline-offset-4 outline-none transition-colors duration-150 hover:text-[var(--fs-ink)] hover:underline focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none'
-const CREDIT_CLASS = 'inline-flex min-h-11 items-center gap-1 rounded-control font-medium text-[var(--fs-secondary)] underline decoration-[var(--fs-line)] underline-offset-4 outline-none transition-colors duration-150 hover:text-[var(--fs-accent)] hover:decoration-current focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none'
+const LINK_CLASS = 'inline-flex min-h-[44px] items-center gap-1.5 rounded-control text-sm text-[var(--fs-secondary)] underline-offset-4 outline-none transition-colors duration-150 hover:text-[var(--fs-ink)] hover:underline focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none'
+const CREDIT_CLASS = 'inline-flex min-h-[44px] items-center gap-1 rounded-control font-medium text-[var(--fs-secondary)] underline decoration-[var(--fs-line)] underline-offset-4 outline-none transition-colors duration-150 hover:text-[var(--fs-accent)] hover:decoration-current focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] motion-reduce:transition-none'
 
 /** Catalog provenance stays at the content boundary, beside the desktop rail. */
 export function FilScreenFooter() {

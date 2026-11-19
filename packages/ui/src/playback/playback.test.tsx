@@ -1,8 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToString } from 'react-dom/server'
 
-import { ConsumitPlayer } from './consumit-player'
+import { ConsumitPlayer, type PlayerControlAction } from './consumit-player'
 import { WatchHeader } from './playback'
 import * as volumeBoost from './volume-boost'
 afterEach(() => vi.restoreAllMocks())
@@ -14,7 +15,7 @@ const chapters = [
 
 it('offers an exact metadata intro and seeks to its end without guessing', async () => {
   const request = vi.fn().mockResolvedValue([{ kind: 'intro', start: 10, end: 90 }])
-  const view = render(<ConsumitPlayer src="/fixture.mp4" title="Exact intro" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const view = render(<ConsumitPlayer title="Exact intro" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ playback: { autoSkip: false, skipSegments: request } }} />)
   const video = view.container.querySelector('video')!
   Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
   video.currentTime = 20
@@ -29,7 +30,7 @@ it('offers an exact metadata intro and seeks to its end without guessing', async
 
 it('keeps skip intro hidden when timing metadata is missing or fails', async () => {
   const request = vi.fn().mockResolvedValue([])
-  const view = render(<ConsumitPlayer src="/fixture.mp4" title="Missing intro" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const view = render(<ConsumitPlayer title="Missing intro" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ playback: { autoSkip: false, skipSegments: request } }} />)
   const video = view.container.querySelector('video')!
   Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
   video.currentTime = 20; fireEvent.loadedMetadata(video)
@@ -45,13 +46,13 @@ it('keeps skip intro hidden when timing metadata is missing or fails', async () 
 it('cancels stale timings and waits for new source metadata before requesting again', async () => {
   let finish!: (segments: Array<{ kind: 'intro'; start: number; end: number }>) => void
   const request = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finish = resolve })).mockResolvedValue([])
-  const view = render(<ConsumitPlayer src="/first.mp4" title="First cut" autoSkip={false} onSkipSegmentsRequest={request} />)
+  const view = render(<ConsumitPlayer title="First cut" media={{ source: { type: 'native', src: 'https://media.example/first.mp4' } }} controls={{ playback: { autoSkip: false, skipSegments: request } }} />)
   const video = view.container.querySelector('video')!
   Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
   video.currentTime = 20; fireEvent.loadedMetadata(video)
   await waitFor(() => expect(request).toHaveBeenCalledTimes(1))
   const signal = request.mock.calls[0]![1] as AbortSignal
-  view.rerender(<ConsumitPlayer src="/second.mp4" title="Second cut" autoSkip={false} onSkipSegmentsRequest={request} />)
+  view.rerender(<ConsumitPlayer title="Second cut" media={{ source: { type: 'native', src: 'https://media.example/second.mp4' } }} controls={{ playback: { autoSkip: false, skipSegments: request } }} />)
   expect(signal.aborted).toBe(true)
   expect(request).toHaveBeenCalledTimes(1)
   await act(async () => finish([{ kind: 'intro', start: 10, end: 90 }]))
@@ -63,8 +64,8 @@ it('cancels stale timings and waits for new source metadata before requesting ag
 
 it('prefers the source exact intro and offers its button while paused even with auto-skip enabled', async () => {
   const request = vi.fn().mockResolvedValue([{ kind: 'intro', start: 10, end: 90 }])
-  const source = { src: '/fixture.mp4', type: 'native' as const, skipSegments: [{ kind: 'intro' as const, start: 10, end: 85 }] }
-  const view = render(<ConsumitPlayer source={source} title="Provider intro" autoSkip onSkipSegmentsRequest={request} />)
+  const source = { src: 'https://media.example/fixture.mp4', type: 'native' as const, skipSegments: [{ kind: 'intro' as const, start: 10, end: 85 }] }
+  const view = render(<ConsumitPlayer title="Provider intro" media={{ source: source }} controls={{ playback: { autoSkip: true, skipSegments: request } }} />)
   const video = view.container.querySelector('video')!
   Object.defineProperty(video, 'duration', { configurable: true, value: 1440 })
   video.currentTime = 20; fireEvent.loadedMetadata(video)
@@ -74,7 +75,7 @@ it('prefers the source exact intro and offers its button while paused even with 
 })
 
 it('groups ISO aliases into one subtitle language while retaining both tracks', () => {
-  render(<ConsumitPlayer title="Aliases" src="/fixture.mp4" subtitleOptions={[{ value: 'one', label: 'English', language: 'en' }, { value: 'two', label: 'English', language: 'eng' }, { value: 'off', label: 'Off' }]} />)
+  render(<ConsumitPlayer title="Aliases" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ captions: { options: [{ value: 'one', label: 'English', language: 'en' }, { value: 'two', label: 'English', language: 'eng' }, { value: 'off', label: 'Off' }] } }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
   const menu = screen.getByRole('dialog', { name: 'Captions' })
   expect(within(menu).getAllByRole('button', { name: /English.*\d/ })).toHaveLength(1)
@@ -84,7 +85,7 @@ it('groups ISO aliases into one subtitle language while retaining both tracks', 
 
 it('pages original subtitle alias codes under one group while keeping regional variants distinct', async () => {
   const page = vi.fn(async (code: string, cursor: number) => ({ tracks: [{ id: `${code}:${cursor}`, label: 'English', language: code, provider: `provider-${code}-${cursor}` }], total: 3, nextCursor: code === 'eng' && cursor === 0 ? 1 : null }))
-  render(<ConsumitPlayer title="Paged aliases" src="/fixture.mp4" subtitleDiscovery={{ languages: [{ code: 'en', count: 1 }, { code: 'eng', count: 2 }, { code: 'en-US', count: 1 }], providers: [], loading: false, error: null }} onSubtitlePage={page} />)
+  render(<ConsumitPlayer title="Paged aliases" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ captions: { discovery: { languages: [{ code: 'en', count: 1 }, { code: 'eng', count: 2 }, { code: 'en-US', count: 1 }], providers: [], loading: false, error: null }, page: page } }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
   const menu = screen.getByRole('dialog', { name: 'Captions' })
   fireEvent.click(within(menu).getByRole('button', { name: /^English\s*3$/ }))
@@ -99,7 +100,7 @@ it('pages original subtitle alias codes under one group while keeping regional v
 })
 
 it('shows standard quality in settings for a cropped 1080p recording', () => {
-  const { container } = render(<ConsumitPlayer title="Cropped" src="/fixture.mp4" selectedQuality="1080" qualityOptions={[{ value: '1080', label: '1080p' }]} />)
+  const { container } = render(<ConsumitPlayer title="Cropped" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ quality: { selected: "1080", options: [{ value: '1080', label: '1080p' }] } }} />)
   const video = container.querySelector('video')!
   Object.defineProperty(video, 'videoWidth', { configurable: true, value: 1921 })
   Object.defineProperty(video, 'videoHeight', { configurable: true, value: 802 })
@@ -110,7 +111,7 @@ it('shows standard quality in settings for a cropped 1080p recording', () => {
 })
 
 it('surfaces the route-owned SUB/DUB selector at the top of Playback settings', () => {
-  render(<ConsumitPlayer title="Anime fixture" src="/fixture.mp4" animeAudioControl={<div aria-label="Anime audio language" role="group"><button>SUB</button><button>DUB</button></div>} />)
+  render(<ConsumitPlayer title="Anime fixture" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} presentation={{ animeAudioControl: <div aria-label="Anime audio language" role="group"><button>SUB</button><button>DUB</button></div> }} />)
   fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
   const settings = screen.getByRole('dialog', { name: 'Settings options' })
   const playback = within(settings).getByRole('region', { name: 'Playback' })
@@ -123,7 +124,7 @@ it('surfaces the route-owned SUB/DUB selector at the top of Playback settings', 
 it('keeps focused transport controls visible across playback start and pointer movement', () => {
   vi.useFakeTimers()
   try {
-    const view = render(<ConsumitPlayer title="Focus fixture" src="/fixture.mp4" autoHideMs={100} />)
+    const view = render(<ConsumitPlayer title="Focus fixture" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ playback: { autoHideMs: 100 } }} />)
     const play = screen.getByRole('button', { name: 'Play' })
     fireEvent.keyDown(document, { key: 'Tab' })
     act(() => play.focus())
@@ -141,7 +142,7 @@ it('keeps focused transport controls visible across playback start and pointer m
 
 it('opens Auto server selection from Sources, shows the playing server, and restores focus', () => {
   const request = vi.fn(), auto = vi.fn(), change = vi.fn()
-  render(<ConsumitPlayer title="Fixture" src="/fixture.mp4" serverOptions={[{ value: 'primary', label: 'Primary' }, { value: 'backup', label: 'Backup' }]} selectedServer="primary" serverAuto onServerAuto={auto} onServerRequest={request} onServerChange={change} />)
+  render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ sourceSelection: { options: [{ value: 'primary', label: 'Primary' }, { value: 'backup', label: 'Backup' }], selected: "primary", auto: true, autoAvailable: Boolean(auto), requestAvailable: Boolean(request), recoveryChooseAvailable: Boolean([{ value: 'primary', label: 'Primary' }, { value: 'backup', label: 'Backup' }]?.length) } }} onControlAction={action => { switch (action.type) { case 'source-auto': (auto)?.(); break; case 'source-request': (request)?.(); break; case 'source-change': (change)?.(action.value); break } }} />)
   expect(screen.getByRole('button', { name: 'Sources' })).toBeInTheDocument()
   const trigger = screen.getByRole('button', { name: 'Sources' })
   trigger.focus(); fireEvent.click(trigger)
@@ -161,17 +162,25 @@ it('opens Auto server selection from Sources, shows the playing server, and rest
 
 it('keeps server loading, retry, empty and switching states inside the existing panel', () => {
   const request = vi.fn(), auto = vi.fn()
-  const props = { title: 'Fixture', src: '/fixture.mp4', serverOptions: [{ value: 'primary', label: 'Primary' }], selectedServer: 'primary', serverAuto: true, onServerAuto: auto, onServerRequest: request }
-  const view = render(<ConsumitPlayer {...props} serverLoading />)
+  const props = {
+    title: 'Fixture',
+    media: { source: { type: 'native' as const, src: 'https://media.example/fixture.mp4' } },
+    controls: { sourceSelection: { options: [{ value: 'primary', label: 'Primary' }], selected: 'primary', auto: true, autoAvailable: true, requestAvailable: true } },
+    onControlAction: (action: PlayerControlAction) => {
+      if (action.type === 'source-auto') auto()
+      if (action.type === 'source-request') request()
+    },
+  }
+  const view = render(<ConsumitPlayer {...props} controls={{ ...props.controls, sourceSelection: { ...props.controls.sourceSelection, loading: true } }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
   expect(screen.getByText('Finding sources…')).toBeInTheDocument()
   expect(screen.queryByText('No other servers are available for this title.')).not.toBeInTheDocument()
-  view.rerender(<ConsumitPlayer {...props} serverError="Servers are unavailable right now. Playback can continue." />)
+  view.rerender(<ConsumitPlayer {...props} controls={{ ...props.controls, sourceSelection: { ...props.controls.sourceSelection, error: 'Servers are unavailable right now. Playback can continue.' } }} />)
   fireEvent.click(within(screen.getByRole('dialog', { name: 'Sources' })).getByRole('button', { name: 'Try again' }))
   expect(request).toHaveBeenCalledTimes(2)
   view.rerender(<ConsumitPlayer {...props} />)
   expect(screen.getByText('No other servers are available for this title.')).toBeInTheDocument()
-  view.rerender(<ConsumitPlayer {...props} serverBusy />)
+  view.rerender(<ConsumitPlayer {...props} controls={{ ...props.controls, sourceSelection: { ...props.controls.sourceSelection, busy: true } }} />)
   expect(screen.getByRole('button', { name: /Auto/ })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Primary' })).toBeDisabled()
   expect(screen.getByText('Switching source…')).toBeInTheDocument()
@@ -179,7 +188,7 @@ it('keeps server loading, retry, empty and switching states inside the existing 
 
 it('shows fixed source qualities in one player and delegates their selection to its owner', () => {
   const change = vi.fn()
-  render(<ConsumitPlayer title="Miami" src="/fixture.mp4" qualityOptions={[2160, 1080, 720, 480].map(height => ({ value: String(height), label: `${height}p` }))} selectedQuality="1080" onQualityChange={change} />)
+  render(<ConsumitPlayer title="Miami" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ quality: { options: [2160, 1080, 720, 480].map(height => ({ value: String(height), label: `${height}p` })), selected: "1080" } }} onControlAction={action => { switch (action.type) { case 'quality-change': (change)?.(action.value); break } }} />)
   fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
   fireEvent.click(screen.getByRole('button', { name: /Quality/ }))
   const panel = screen.getByRole('dialog', { name: 'Quality' })
@@ -191,7 +200,7 @@ it('shows fixed source qualities in one player and delegates their selection to 
 it('merges stream and separate languages without provider labels and retains video after failed preparation', async () => {
   vi.spyOn(volumeBoost, 'createVolumeBoost').mockReturnValue({ unlock: vi.fn(async () => {}), output: vi.fn(async () => {}), set: vi.fn(async value => value), dispose: vi.fn() })
   const request = vi.fn(), select = vi.fn().mockRejectedValue(new Error('Unavailable')), change = vi.fn()
-  const { container } = render(<ConsumitPlayer title="Lanterns" src="/episode.mp4" audioOptions={[{ value: 'main-en', label: '1. English', language: 'eng' }, { value: 'duplicate-en', label: '2. English', language: 'en' }]} selectedAudio="main-en" onAudioChange={change} onAudioRequest={request} onSeparateAudioSelect={select} separateAudioTracks={[{ id: 'en', label: '3. English', language: 'en', provider: 'Apogee' }, { id: 'hi', label: '4. Hindi', language: 'hi', provider: 'Apogee' }, { id: 'hi-duplicate', label: 'Hindi', language: 'hin', provider: 'Another provider' }]} />)
+  const { container } = render(<ConsumitPlayer title="Lanterns" media={{ source: { type: 'native', src: 'https://media.example/episode.mp4' } }} controls={{ audio: { options: [{ value: 'main-en', label: '1. English', language: 'eng' }, { value: 'duplicate-en', label: '2. English', language: 'en' }], selected: "main-en", separate: { select: select, tracks: [{ id: 'en', label: '3. English', language: 'en', provider: 'Apogee' }, { id: 'hi', label: '4. Hindi', language: 'hi', provider: 'Apogee' }, { id: 'hi-duplicate', label: 'Hindi', language: 'hin', provider: 'Another provider' }] }, requestAvailable: Boolean(request) } }} onControlAction={action => { switch (action.type) { case 'audio-change': (change)?.(action.value); break; case 'audio-request': (request)?.(); break } }} />)
   const video = container.querySelector('video')!
   fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
   fireEvent.click(screen.getByRole('button', { name: /Audio/ }))
@@ -204,7 +213,7 @@ it('merges stream and separate languages without provider labels and retains vid
   await waitFor(() => expect(screen.getByText(/No compatible recording of this language could start/)).toBeVisible())
   expect(select).toHaveBeenCalledWith('hi')
   expect(container.querySelector('video')).toBe(video)
-  expect(video.getAttribute('src')).toBe('/episode.mp4')
+  expect(video.getAttribute('src')).toBe('https://media.example/episode.mp4')
   fireEvent.click(within(panel).getByRole('radio', { name: 'English' }))
   expect(change).not.toHaveBeenCalled()
   expect(within(panel).getByRole('radio', { name: 'English' })).toBeChecked()
@@ -213,17 +222,20 @@ it('merges stream and separate languages without provider labels and retains vid
 })
 
 function prototypePlayer() {
-  return render(
-    <ConsumitPlayer
-      backHref="/title/693134"
-      caption="Some places disappear long before anyone leaves them."
-      chapters={chapters}
-      posterSrc="/poster.jpg"
-      src="/movie.mp4"
-      title="The Last City After Rain"
-      topMeta="Playing from Consumit · 4K"
-    />,
-  )
+  return render(<PrototypePlayer />)
+}
+
+function PrototypePlayer() {
+  const [selectedSubtitle, setSelectedSubtitle] = useState('english')
+  return <ConsumitPlayer
+    title="The Last City After Rain"
+    media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }}
+    presentation={{ backHref: '/title/693134', posterSrc: '/poster.jpg', topMeta: 'Playing from Consumit · 4K' }}
+    controls={{ captions: { cue: 'Some places disappear long before anyone leaves them.', selected: selectedSubtitle }, playback: { chapters } }}
+    onControlAction={action => {
+      if (action.type === 'subtitle-change') setSelectedSubtitle(action.value)
+    }}
+  />
 }
 
 function setClock(video: HTMLVideoElement, currentTime: number, duration: number) {
@@ -233,13 +245,13 @@ function setClock(video: HTMLVideoElement, currentTime: number, duration: number
 
 describe('playback shell components', () => {
   it('uses catalog title artwork during preparation and keeps episode metadata separate', () => {
-    const { container, rerender } = render(<ConsumitPlayer preparing title="Takopi's Original Sin · To You in 2016" preparationMeta="E1 — To You in 2016" pauseLogoUrl="/takopi-logo.png" />)
+    const { container, rerender } = render(<ConsumitPlayer title="Takopi's Original Sin · To You in 2016" presentation={{ preparing: true, preparationMeta: "E1 — To You in 2016", pauseLogoUrl: "/takopi-logo.png" }} />)
     const preparation = container.querySelector('[data-player-preparation]')!
     expect(preparation.querySelector('img')).toHaveAttribute('src', '/takopi-logo.png')
     expect(preparation).toHaveTextContent("Takopi's Original Sin · To You in 2016")
     expect(preparation).toHaveTextContent('E1 — To You in 2016')
     expect(preparation.querySelector('.consumit-player-preparation-title')).not.toBeInTheDocument()
-    rerender(<ConsumitPlayer autoPlay src="/episode.mp4" title="Takopi's Original Sin · To You in 2016" preparationMeta="E1 — To You in 2016" pauseLogoUrl="/takopi-logo.png" />)
+    rerender(<ConsumitPlayer title="Takopi's Original Sin · To You in 2016" media={{ autoPlay: true, source: { type: 'native', src: 'https://media.example/episode.mp4' } }} presentation={{ preparationMeta: "E1 — To You in 2016", pauseLogoUrl: "/takopi-logo.png" }} />)
     fireEvent.waiting(container.querySelector('video')!)
     expect(container.querySelector('[data-player-preparation] img')).toHaveAttribute('src', '/takopi-logo.png')
     fireEvent.playing(container.querySelector('video')!)
@@ -247,21 +259,21 @@ describe('playback shell components', () => {
   })
 
   it('falls back to readable preparation text for missing or broken artwork and accepts a replacement logo', () => {
-    const { container, rerender } = render(<ConsumitPlayer preparing title="Sea of Names" preparationMeta="E2 — The crossing" />)
+    const { container, rerender } = render(<ConsumitPlayer title="Sea of Names" presentation={{ preparing: true, preparationMeta: "E2 — The crossing" }} />)
     expect(container.querySelector('.consumit-player-preparation-title')).toHaveTextContent('Sea of Names')
-    rerender(<ConsumitPlayer preparing title="Sea of Names" preparationMeta="E2 — The crossing" pauseLogoUrl="/broken-logo.png" />)
+    rerender(<ConsumitPlayer title="Sea of Names" presentation={{ preparing: true, preparationMeta: "E2 — The crossing", pauseLogoUrl: "/broken-logo.png" }} />)
     fireEvent.error(container.querySelector('[data-player-preparation] img')!)
     expect(container.querySelector('[data-player-preparation] img')).not.toBeInTheDocument()
     expect(container.querySelector('.consumit-player-preparation-title')).toHaveTextContent('Sea of Names')
     expect(container.querySelector('[data-player-preparation]')).toHaveTextContent('E2 — The crossing')
-    rerender(<ConsumitPlayer preparing title="Another title" pauseLogoUrl="/replacement-logo.png" />)
+    rerender(<ConsumitPlayer title="Another title" presentation={{ preparing: true, pauseLogoUrl: "/replacement-logo.png" }} />)
     expect(container.querySelector('[data-player-preparation] img')).toHaveAttribute('src', '/replacement-logo.png')
   })
 
   it('recognizes artwork that failed before the loading screen hydrated', () => {
     vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
     try {
-      const { container } = render(<ConsumitPlayer preparing title="Sea of Names" preparationMeta="E2 — The crossing" pauseLogoUrl="/failed-before-hydration.png" />)
+      const { container } = render(<ConsumitPlayer title="Sea of Names" presentation={{ preparing: true, preparationMeta: "E2 — The crossing", pauseLogoUrl: "/failed-before-hydration.png" }} />)
       expect(container.querySelector('.consumit-player-preparation-logo')).not.toBeInTheDocument()
       expect(container.querySelector('.consumit-player-preparation-title')).toHaveTextContent('Sea of Names')
       expect(container.querySelector('[data-player-preparation]')).toHaveTextContent('E2 — The crossing')
@@ -271,25 +283,25 @@ describe('playback shell components', () => {
   })
 
   it('presents pending resolution without inventing playback readiness and clears it on failure', () => {
-    const { container, rerender } = render(<ConsumitPlayer preparing posterSrc="/poster.jpg" title="Sea of Names" topMeta="S1 · E2 — The crossing" backHref="/title/1" />)
+    const { container, rerender } = render(<ConsumitPlayer title="Sea of Names" presentation={{ preparing: true, posterSrc: "/poster.jpg", topMeta: "S1 · E2 — The crossing", backHref: "/title/1" }} />)
     expect(screen.getByRole('status')).toHaveTextContent('Finding your stream…')
     expect(container.querySelector('[data-player-title]')).toHaveTextContent('S1 · E2 — The crossing')
     expect(container.querySelector('.consumit-player-preparation-title')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/title/1')
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
-    rerender(<ConsumitPlayer title="Sea of Names" status="No source available" statusTone="unavailable" />)
+    rerender(<ConsumitPlayer title="Sea of Names" presentation={{ status: "No source available", statusTone: "unavailable" }} />)
     expect(container.querySelector('[data-player-preparation]')).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('No source available')
   })
 
   it('uses preparation before playback and compact buffering after a frame arrives', () => {
-    const playing = vi.fn()
-    const { container } = render(<ConsumitPlayer autoPlay src="/movie.mp4" title="Sea of Names" onPlaying={playing} />)
+    const observations = vi.fn()
+    const { container } = render(<ConsumitPlayer title="Sea of Names" onMediaObservation={observations} media={{ autoPlay: true, source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     const video = container.querySelector('video')!
     fireEvent.waiting(video)
     expect(container.querySelector('[data-player-preparation]')).toHaveTextContent('Preparing playback…')
     fireEvent.playing(video)
-    expect(playing).toHaveBeenCalledTimes(1)
+    expect(observations).toHaveBeenCalledWith({ type: 'playing', positionSeconds: 0, durationSeconds: 0, videoWidth: 0, videoHeight: 0 })
     expect(container.querySelector('[data-player-preparation]')).not.toBeInTheDocument()
     fireEvent.waiting(video)
     expect(container.querySelector('[data-player-preparation]')).not.toBeInTheDocument()
@@ -299,7 +311,7 @@ describe('playback shell components', () => {
   it('keeps neighboring episode controls available inline and fullscreen and delegates them to Watch', () => {
     const previous = vi.fn()
     const next = vi.fn()
-    const { container } = render(<ConsumitPlayer src="/movie.mp4" title="Sea of Names" backHref="/title/1" onPreviousEpisode={previous} onNextEpisode={next} />)
+    const { container } = render(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ backHref: "/title/1" }} controls={{ playback: { previousEpisodeAvailable: Boolean(previous), nextEpisodeAvailable: Boolean(next) } }} onControlAction={action => { switch (action.type) { case 'previous-episode': (previous)?.(); break; case 'next-episode': (next)?.(); break } }} />)
     const original = Object.getOwnPropertyDescriptor(document, 'fullscreenElement')
     try {
       expect(screen.getByRole('button', { name: 'Previous episode' })).toBeInTheDocument()
@@ -324,13 +336,13 @@ describe('playback shell components', () => {
   })
 
   it('forwards a pending seek so Watch can retain its destination before frames arrive', () => {
-    const seeking = vi.fn((event) => event.currentTarget.currentTime)
-    const { container } = render(<ConsumitPlayer src="/movie.mp4" title="Sea of Names" onSeeking={seeking} />)
+    const observations = vi.fn()
+    const { container } = render(<ConsumitPlayer title="Sea of Names" onMediaObservation={observations} media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     const video = container.querySelector('video')!
     setClock(video, 600, 1200)
     fireEvent.seeking(video)
-    expect(seeking).toHaveBeenCalledTimes(1)
-    expect(seeking).toHaveReturnedWith(600)
+    expect(observations).toHaveBeenCalledWith({ type: 'seeking', positionSeconds: 600, durationSeconds: 1200 })
+    expect(observations.mock.calls[0]![0]).not.toHaveProperty('currentTarget')
   })
   it('renders reduced watch navigation', () => {
     const { container } = render(<WatchHeader backHref="/title" exitHref="/title" title="The Last City After Rain" />)
@@ -343,10 +355,10 @@ describe('playback shell components', () => {
 
   it('renders direct native playback without an iframe', () => {
     const { container } = render(
-      <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
+      <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ posterSrc: "/poster.jpg" }} />,
     )
 
-    expect(container.querySelector('video')).toHaveAttribute('src', '/movie.mp4')
+    expect(container.querySelector('video')).toHaveAttribute('src', 'https://media.example/movie.mp4')
     expect(container.querySelector('iframe')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
     expect(screen.getByRole('slider', { name: 'Playback position' })).toBeInTheDocument()
@@ -357,14 +369,14 @@ describe('playback shell components', () => {
     const first = { src: 'https://cdn.consumit.example/first.mp4', type: 'native' as const }
     const second = { src: 'https://cdn.consumit.example/second.mp4', type: 'native' as const }
     const { container, rerender } = render(
-      <ConsumitPlayer source={first} title="Sea of Names" />,
+      <ConsumitPlayer title="Sea of Names" media={{ source: first }} />,
     )
     const video = container.querySelector('video')!
     await waitFor(() => expect(video.src).toBe(first.src))
     await act(async () => { await Promise.resolve() })
 
     await act(async () => {
-      rerender(<ConsumitPlayer source={second} title="Sea of Names" />)
+      rerender(<ConsumitPlayer title="Sea of Names" media={{ source: second }} />)
       await Promise.resolve()
     })
 
@@ -377,7 +389,7 @@ describe('playback shell components', () => {
     try {
       const source = { src: 'https://cdn.consumit.example/episode.mp4', type: 'native' as const, expiresAt: '2026-09-30T15:05:00Z' }
       const renewed = { ...source, expiresAt: '2026-09-30T15:10:00Z' }
-      const { container, rerender } = render(<ConsumitPlayer source={source} title="Anime episode" />)
+      const { container, rerender } = render(<ConsumitPlayer title="Anime episode" media={{ source: source }} />)
       const video = container.querySelector('video')!
       await waitFor(() => expect(video.src).toBe(source.src))
       await act(async () => { await Promise.resolve() })
@@ -386,7 +398,7 @@ describe('playback shell components', () => {
       fireEvent.playing(video)
       const removeAttribute = vi.spyOn(video, 'removeAttribute')
       await act(async () => {
-        rerender(<ConsumitPlayer source={renewed} title="Anime episode" />)
+        rerender(<ConsumitPlayer title="Anime episode" media={{ source: renewed }} />)
         await Promise.resolve()
       })
       expect(container.querySelector('video')).toBe(video)
@@ -399,7 +411,7 @@ describe('playback shell components', () => {
   it('reloads the same media URL when retrying a failed engine', async () => {
     const failed = vi.fn()
     const source = { src: 'https://cdn.consumit.example/episode.mp4', type: 'native' as const }
-    const { container, rerender } = render(<ConsumitPlayer source={source} title="Anime episode" onSourceError={failed} />)
+    const { container, rerender } = render(<ConsumitPlayer title="Anime episode" onSourceError={failed} media={{ source: source }} />)
     const video = container.querySelector('video')!
     await waitFor(() => expect(video.src).toBe(source.src))
     await act(async () => { await Promise.resolve() })
@@ -407,7 +419,7 @@ describe('playback shell components', () => {
     expect(failed).toHaveBeenCalled()
     const removeAttribute = vi.spyOn(video, 'removeAttribute')
     await act(async () => {
-      rerender(<ConsumitPlayer source={{ ...source }} title="Anime episode" onSourceError={failed} />)
+      rerender(<ConsumitPlayer title="Anime episode" onSourceError={failed} media={{ source: { ...source } }} />)
       await Promise.resolve()
     })
     expect(removeAttribute).toHaveBeenCalledWith('src')
@@ -415,7 +427,7 @@ describe('playback shell components', () => {
 
   it('synchronizes a finite media duration even when metadata is ready before hydration', () => {
     const { container } = render(
-      <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
+      <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ posterSrc: "/poster.jpg" }} />,
     )
     const video = container.querySelector('video')!
     Object.defineProperty(video, 'duration', { configurable: true, value: 125 })
@@ -429,7 +441,7 @@ describe('playback shell components', () => {
 
   it('does not present an unavailable source as healthy', () => {
     const { container } = render(
-      <ConsumitPlayer status="No authorized source available" statusTone="unavailable" title="Sea of Names" />,
+      <ConsumitPlayer title="Sea of Names" presentation={{ status: "No authorized source available", statusTone: "unavailable" }} />,
     )
 
     expect(screen.getByRole('status')).toHaveTextContent('No authorized source available')
@@ -464,15 +476,13 @@ describe('playback shell components', () => {
 
   it('opens quality from the settings panel', () => {
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
           { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
-        ]}
-        selectedServer="vixsrc"
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
+          { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
+        ]?.length) } }} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
@@ -487,15 +497,13 @@ describe('playback shell components', () => {
 
   it('opens playback adjustments from the settings section', () => {
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
           { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
-        ]}
-        selectedServer="vixsrc"
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
+          { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
+        ]?.length) } }} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
@@ -514,7 +522,7 @@ describe('playback shell components', () => {
   it('adjusts playback without closing the panel, returns to settings, and restores trigger focus on Escape', () => {
     window.localStorage.clear()
     const rate = vi.fn()
-    const { container } = render(<ConsumitPlayer src="/movie.mp4" title="Fixture" onRateChange={rate} />)
+    const { container } = render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} onControlAction={action => { switch (action.type) { case 'rate-change': (rate)?.(action.value); break } }} />)
     const trigger = screen.getByRole('button', { name: /Settings:/ })
     trigger.focus()
     fireEvent.click(trigger)
@@ -533,7 +541,7 @@ describe('playback shell components', () => {
   })
 
   it('shows a normal-audio fallback when volume boost is unsupported', async () => {
-    render(<ConsumitPlayer src="/movie.mp4" title="Fixture" />)
+    render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
     fireEvent.click(screen.getByRole('button', { name: /Playback settings/ }))
     fireEvent.change(screen.getByRole('slider', { name: 'Volume boost' }), { target: { value: '3' } })
@@ -542,7 +550,7 @@ describe('playback shell components', () => {
   })
 
   it('does not offer invalid speeds when only one rate is configured', () => {
-    render(<ConsumitPlayer src="/movie.mp4" title="Fixture" playbackRates={[1, 1, -2, NaN]} />)
+    render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ playback: { rates: [1, 1, -2, NaN] } }} />)
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
     fireEvent.click(screen.getByRole('button', { name: /Playback settings/ }))
     expect(screen.getByRole('slider', { name: 'Playback speed' })).toBeDisabled()
@@ -562,7 +570,7 @@ describe('playback shell components', () => {
 
   it('requests optional subtitle search only when captions are opened', () => {
     const request = vi.fn()
-    render(<ConsumitPlayer src="/movie.mp4" title="Fixture" onSubtitleRequest={request} />)
+    render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { requestAvailable: Boolean(request) } }} onControlAction={action => { switch (action.type) { case 'subtitle-request': (request)?.(); break } }} />)
     expect(request).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     expect(request).toHaveBeenCalledTimes(1)
@@ -574,7 +582,8 @@ describe('playback shell components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Sync subtitle to audio' }))
     const menu = screen.getByRole('dialog', { name: 'Subtitle sync' })
-    expect(within(menu).getByText('Select a line when you hear it spoken.')).toBeInTheDocument()
+    expect(within(menu).queryByText(/Select a line when you hear it spoken\./)).not.toBeInTheDocument()
+    expect(within(menu).getByText(/^(No subtitles loaded|Subtitles are off)$/)).toBeInTheDocument()
     expect(within(menu).getByText('0ms')).toBeInTheDocument()
     fireEvent.click(within(menu).getByRole('button', { name: 'Close subtitle sync' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -586,14 +595,7 @@ describe('playback shell components', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       const { container } = render(
-        <ConsumitPlayer
-          title="Sea of Names"
-          src="/movie.mp4"
-          extraSubtitles={[{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }]}
-          subtitleOptions={[{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }]}
-          selectedSubtitle="external:consumit-external-a"
-          subtitleDelayMs={2000}
-        />,
+        <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { extraTracks: [{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }], options: [{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }], selected: "external:consumit-external-a", sync: { delayMs: 2000 } } }} />,
       )
       const video = container.querySelector('video')!
       await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -649,14 +651,7 @@ describe('playback shell components', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       const { container } = render(
-        <ConsumitPlayer
-          title="Sea of Names"
-          src="/movie.mp4"
-          extraSubtitles={[{ id: 'a', label: 'A', language: 'ar', url: 'https://media.example/a.vtt' }]}
-          subtitleOptions={[{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }]}
-          selectedSubtitle="external:consumit-external-a"
-          subtitleDelayMs={2000}
-        />,
+        <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { extraTracks: [{ id: 'a', label: 'A', language: 'ar', url: 'https://media.example/a.vtt' }], options: [{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }], selected: "external:consumit-external-a", sync: { delayMs: 2000 } } }} />,
       )
       const video = container.querySelector('video')!
       await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -693,14 +688,7 @@ describe('playback shell components', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     try {
       const { container } = render(
-        <ConsumitPlayer
-          title="Sea of Names"
-          src="/movie.mp4"
-          extraSubtitles={[{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }]}
-          subtitleOptions={[{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }]}
-          selectedSubtitle="external:consumit-external-a"
-          subtitleDelayMs={2000}
-        />,
+        <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { extraTracks: [{ id: 'a', label: 'A', language: 'en', url: 'https://media.example/a.vtt' }], options: [{ label: 'A', value: 'external:consumit-external-a' }, { label: 'Off', value: 'off' }], selected: "external:consumit-external-a", sync: { delayMs: 2000 } } }} />,
       )
       const video = container.querySelector('video')!
       await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -721,7 +709,7 @@ describe('playback shell components', () => {
   })
 
   it('searches available subtitle tracks without needing a discovery provider', () => {
-    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'ar', label: 'Arabic', language: 'ar' }, { value: 'off', label: 'Off' }]} />)
+    render(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { options: [{ value: 'en', label: 'English', language: 'en' }, { value: 'ar', label: 'Arabic', language: 'ar' }, { value: 'off', label: 'Off' }] } }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     const menu = screen.getByRole('dialog', { name: 'Captions' })
     fireEvent.change(within(menu).getByRole('searchbox'), { target: { value: 'English' } })
@@ -732,7 +720,7 @@ describe('playback shell components', () => {
 
   it('keeps local subtitles usable when language discovery fails and offers a direct retry', async () => {
     const page = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ tracks: [], total: 0, nextCursor: null })
-    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" subtitleOptions={[{ value: 'en', label: 'English', language: 'en' }, { value: 'off', label: 'Off' }]} onSubtitlePage={page} />)
+    render(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { options: [{ value: 'en', label: 'English', language: 'en' }, { value: 'off', label: 'Off' }], page: page } }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     const menu = screen.getByRole('dialog', { name: 'Captions' })
     fireEvent.click(within(menu).getByRole('button', { name: /English.*1/ }))
@@ -746,15 +734,11 @@ describe('playback shell components', () => {
 
   it('lists subtitle tracks PROVE-embed style with native names and a menu count', () => {
     const { container } = render(
-      <ConsumitPlayer
-        title="Sea of Names"
-        src="/movie.mp4"
-        subtitleOptions={[
+      <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { options: [
           { label: 'English (yify)', value: 'en', language: 'en' },
           { label: 'Arabic', value: 'ar', language: 'ar' },
           { label: 'Off', value: 'off' },
-        ]}
-      />,
+        ] } }} />,
     )
 
     // The toolbar icon carries no count badge; the count lives in the menu
@@ -783,14 +767,14 @@ describe('playback shell components', () => {
         { id: 'b-en', label: 'English (B)', language: 'en', url: 'https://cdn.example/b-en.vtt' },
         { id: 'y', label: 'English (yify)', language: 'en', url: 'https://subs.example/y.vtt' },
       ]
-      const { rerender } = render(<ConsumitPlayer title="X" source={first} extraSubtitles={shared} />)
+      const { rerender } = render(<ConsumitPlayer title="X" media={{ source: first }} controls={{ captions: { extraTracks: shared } }} />)
       fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
       const menu = screen.getByRole('dialog', { name: 'Captions' })
       fireEvent.click(within(menu).getByRole('button', { name: /English.*3/ }))
       await waitFor(() => expect(within(menu).getByText('English (A)')).toBeInTheDocument())
       expect(within(menu).getByText('3 tracks')).toBeInTheDocument()
 
-      rerender(<ConsumitPlayer title="X" source={second} extraSubtitles={shared} />)
+      rerender(<ConsumitPlayer title="X" media={{ source: second }} controls={{ captions: { extraTracks: shared } }} />)
       const kept = await screen.findByRole('dialog', { name: 'Captions' })
       // Server A's track survives next to server B's and the engine track.
       await waitFor(() => expect(within(kept).getByText('English (B)')).toBeInTheDocument())
@@ -807,20 +791,14 @@ describe('playback shell components', () => {
     try {
       const prepare = vi.fn(async (candidate: { id: string }) => ({ id: candidate.id, label: 'Arabic (vdrkv2)', language: 'ar', url: `https://subs.example/${candidate.id}.vtt`, cues: [{ startTime: 0, endTime: 10, text: 'Controlled Arabic captions' }] }))
       render(
-        <ConsumitPlayer
-          title="X"
-          source={{ src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [] }}
-          subtitleDiscovery={{ languages: [{ code: 'ar', count: 2 }], providers: [], loading: false, error: null }}
-          onSubtitlePage={async () => ({
+        <ConsumitPlayer title="X" media={{ source: { src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [] } }} controls={{ captions: { discovery: { languages: [{ code: 'ar', count: 2 }], providers: [], loading: false, error: null }, page: async () => ({
             tracks: [
               { id: 'c1', label: 'Arabic', language: 'ar', provider: 'vdrkv2' },
               { id: 'c2', label: 'Arabic', language: 'ar', provider: 'vdrk' },
             ],
             total: 2,
             nextCursor: null,
-          })}
-          onSubtitleCandidateSelect={prepare}
-        />,
+          }), prepare: prepare } }} />,
       )
       fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
       const menu = await screen.findByRole('dialog', { name: 'Captions' })
@@ -847,16 +825,11 @@ describe('playback shell components', () => {
     const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
     try {
       render(
-        <ConsumitPlayer
-          title="X"
-          source={{ src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [{ id: 'a1', label: 'Arabic (vdrkv2)', language: 'ar', url: 'https://media.example/prep.vtt' }] }}
-          selectedSubtitle="external:consumit-external-a1"
-          onSubtitlePage={async () => ({
+        <ConsumitPlayer title="X" media={{ source: { src: 'https://cdn.consumit.example/x.mp4', type: 'native', subtitles: [{ id: 'a1', label: 'Arabic (vdrkv2)', language: 'ar', url: 'https://media.example/prep.vtt' }] } }} controls={{ captions: { selected: "external:consumit-external-a1", page: async () => ({
             tracks: [{ id: 'c9', label: 'Arabic', language: 'ar', provider: 'vdrkv2', preparedUrl: 'https://media.example/prep.vtt' }],
             total: 1,
             nextCursor: null,
-          })}
-        />,
+          }) } }} />,
       )
       fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
       const menu = await screen.findByRole('dialog', { name: 'Captions' })
@@ -910,7 +883,7 @@ describe('playback shell components', () => {
 
   it('does not rediscover subtitle tracks when returning from appearance', () => {
     const request = vi.fn()
-    render(<ConsumitPlayer title="Fixture" src="/movie.mp4" onSubtitleRequest={request} />)
+    render(<ConsumitPlayer title="Fixture" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ captions: { requestAvailable: Boolean(request) } }} onControlAction={action => { switch (action.type) { case 'subtitle-request': (request)?.(); break } }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
     fireEvent.click(screen.getByRole('button', { name: 'Subtitle appearance' }))
     fireEvent.click(screen.getByRole('button', { name: 'Back to subtitles' }))
@@ -938,15 +911,13 @@ describe('playback shell components', () => {
 
   it('closes the server rail from its close control', () => {
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
           { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
-        ]}
-        selectedServer="vixsrc"
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
+          { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
+        ]?.length) } }} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
@@ -966,30 +937,20 @@ describe('playback shell components', () => {
 
   it('shows title facts and overview while paused and hides them without pause context', () => {
     const { container, rerender } = render(
-      <ConsumitPlayer
-        title="The End of Oak Street"
-        src="/movie.mp4"
-        pauseFacts="2026 · 1h 40m · ★ 6.5 · PG-13"
-        pauseOverview="After a mysterious cosmic event rips Oak Street from suburbia."
-      />,
+      <ConsumitPlayer title="The End of Oak Street" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ pauseFacts: "2026 · 1h 40m · ★ 6.5 · PG-13", pauseOverview: "After a mysterious cosmic event rips Oak Street from suburbia." }} />,
     )
     const overlay = container.querySelector('[data-consumit-player-pause]')!
     expect(overlay).toHaveTextContent('The End of Oak Street')
     expect(overlay).toHaveTextContent('2026 · 1h 40m · ★ 6.5 · PG-13')
     expect(overlay).toHaveTextContent('After a mysterious cosmic event rips Oak Street from suburbia.')
 
-    rerender(<ConsumitPlayer title="The End of Oak Street" src="/movie.mp4" />)
+    rerender(<ConsumitPlayer title="The End of Oak Street" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     expect(container.querySelector('[data-consumit-player-pause]')).not.toBeInTheDocument()
   })
 
   it('prefers the title artwork logo over the serif title while paused', () => {
     const { container } = render(
-      <ConsumitPlayer
-        title="Stowaway"
-        src="/movie.mp4"
-        pauseLogoUrl="https://image.tmdb.org/t/p/original/stowaway-logo.png"
-        pauseFacts="2021 · 1h 56m · ★ 6.0 · R"
-      />,
+      <ConsumitPlayer title="Stowaway" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ pauseLogoUrl: "https://image.tmdb.org/t/p/original/stowaway-logo.png", pauseFacts: "2021 · 1h 56m · ★ 6.0 · R" }} />,
     )
     const overlay = container.querySelector('[data-consumit-player-pause]')!
     expect(overlay.querySelector('img')).toHaveAttribute('src', 'https://image.tmdb.org/t/p/original/stowaway-logo.png')
@@ -999,12 +960,7 @@ describe('playback shell components', () => {
 
   it('keeps the pause headline on the bare series name when pauseTitle is set', () => {
     const { container } = render(
-      <ConsumitPlayer
-        title="Demon Slayer: Kimetsu no Yaiba Infinity Castle · Movie 1"
-        src="/movie.mp4"
-        pauseTitle="Demon Slayer: Kimetsu no Yaiba Infinity Castle"
-        pauseFacts="2025 · 2h 35m"
-      />,
+      <ConsumitPlayer title="Demon Slayer: Kimetsu no Yaiba Infinity Castle · Movie 1" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ pauseTitle: "Demon Slayer: Kimetsu no Yaiba Infinity Castle", pauseFacts: "2025 · 2h 35m" }} />,
     )
     const overlay = container.querySelector('[data-consumit-player-pause]')!
     expect(overlay).toHaveTextContent('Demon Slayer: Kimetsu no Yaiba Infinity Castle')
@@ -1014,44 +970,43 @@ describe('playback shell components', () => {
   it('opens Cast without a discovered TV and connects only on explicit selection', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
     const onCastClick = vi.fn()
-    const { rerender } = render(<ConsumitPlayer source={source} title="Stowaway" />)
+    const { rerender } = render(<ConsumitPlayer title="Stowaway" media={{ source: source }} />)
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
-    const button = screen.getByRole('button', { name: /TV connection/ })
+    const button = screen.getByRole('button', { name: 'Cast to TV' })
     expect(button).toBeEnabled()
     fireEvent.click(button)
     expect(screen.getByRole('dialog', { name: 'Cast to TV' })).toBeInTheDocument()
     expect(screen.getByText(/TV casting is being set up/)).toBeInTheDocument()
-    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable onCastClick={onCastClick} />)
+    rerender(<ConsumitPlayer title="Stowaway" media={{ source: source }} controls={{ cast: { available: true, canConnect: Boolean(onCastClick) } }} onControlAction={action => { switch (action.type) { case 'cast-click': (onCastClick)?.(); break } }} />)
     expect(onCastClick).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Choose TV' }))
     expect(onCastClick).toHaveBeenCalledOnce()
     expect(screen.queryByRole('dialog', { name: 'Cast to TV' })).not.toBeInTheDocument()
-    rerender(<ConsumitPlayer source={source} title="Stowaway" castAvailable castConnected onCastClick={onCastClick} />)
+    rerender(<ConsumitPlayer title="Stowaway" media={{ source: source }} controls={{ cast: { available: true, connected: true, canConnect: Boolean(onCastClick) } }} onControlAction={action => { switch (action.type) { case 'cast-click': (onCastClick)?.(); break } }} />)
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
-    fireEvent.click(screen.getByRole('button', { name: /TV connection/ }))
+    const connectedButton = screen.getByRole('button', { name: /Cast to TV/ })
+    expect(connectedButton).toHaveTextContent('Connected')
+    fireEvent.click(connectedButton)
     expect(onCastClick).toHaveBeenCalledTimes(2)
   })
   it('keeps Cast out of the player header while retaining the Settings connection control', () => {
     const source = { src: 'https://cdn.consumit.example/clip.mp4', type: 'native' as const }
-    const { container } = render(<ConsumitPlayer backHref="/title" source={source} title="Stowaway" castAvailable onCastClick={vi.fn()} />)
+    const { container } = render(<ConsumitPlayer title="Stowaway" media={{ source: source }} presentation={{ backHref: "/title" }} controls={{ cast: { available: true, canConnect: Boolean(vi.fn()) } }} onControlAction={action => { switch (action.type) { case 'cast-click': (vi.fn())?.(); break } }} />)
     expect(container.querySelector('[data-player-header]')).not.toHaveTextContent('Cast to TV')
     expect(screen.queryByRole('button', { name: 'Cast to TV' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
-    expect(screen.getByRole('button', { name: /TV connection/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cast to TV' })).toBeInTheDocument()
   })
   it('lists servers and switches on selection', () => {
     const onServerChange = vi.fn()
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
           { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
-        ]}
-        selectedServer="vixsrc"
-        onServerChange={onServerChange}
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p' },
+          { label: 'vidlink', value: 'vidlink', detail: 'Auto' },
+        ]?.length) } }} onControlAction={action => { switch (action.type) { case 'source-change': (onServerChange)?.(action.value); break } }} />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
     const menu = screen.getByRole('dialog', { name: 'Sources' })
@@ -1063,17 +1018,15 @@ describe('playback shell components', () => {
   it('groups mirror servers by family with their qualities', () => {
     const onServerChange = vi.fn()
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vidcore', value: 'vidcore', detail: '1080p', family: 'vidcore', mirror: 'auto' },
           { label: 'vidcore-nova', value: 'vidcore-nova', detail: '1080p', family: 'vidcore', mirror: 'nova' },
           { label: 'rivestream', value: 'rivestream', detail: '720p', family: 'rivestream', mirror: 'auto' },
-        ]}
-        selectedServer="vidcore"
-        onServerChange={onServerChange}
-      />,
+        ], selected: "vidcore", recoveryChooseAvailable: Boolean([
+          { label: 'vidcore', value: 'vidcore', detail: '1080p', family: 'vidcore', mirror: 'auto' },
+          { label: 'vidcore-nova', value: 'vidcore-nova', detail: '1080p', family: 'vidcore', mirror: 'nova' },
+          { label: 'rivestream', value: 'rivestream', detail: '720p', family: 'rivestream', mirror: 'auto' },
+        ]?.length) } }} onControlAction={action => { switch (action.type) { case 'source-change': (onServerChange)?.(action.value); break } }} />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
     const menu = screen.getByRole('dialog', { name: 'Sources' })
@@ -1084,28 +1037,40 @@ describe('playback shell components', () => {
     fireEvent.click(within(menu).getByRole('button', { name: 'Nova' }))
     expect(onServerChange).toHaveBeenCalledWith('vidcore-nova')
   })
-  it('offers another server from the error overlay when options exist', () => {
+  it('opens the source panel from the shared recovery panel', () => {
     const { container } = render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" onSourceError={() => {}} media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p', family: 'vixsrc', mirror: 'auto' },
           { label: 'vidcore-nova', value: 'vidcore-nova', detail: '1080p', family: 'vidcore', mirror: 'nova' },
-        ]}
-        selectedServer="vixsrc"
-        onSourceError={() => {}}
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p', family: 'vixsrc', mirror: 'auto' },
+          { label: 'vidcore-nova', value: 'vidcore-nova', detail: '1080p', family: 'vidcore', mirror: 'nova' },
+        ]?.length) } }} />,
     )
     fireEvent.error(container.querySelector('video')!)
-    expect(screen.getByRole('alert')).toHaveTextContent('Playback failed')
-    fireEvent.click(screen.getByRole('button', { name: 'Try another server' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Playback was interrupted')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a source' }))
     expect(screen.getByRole('dialog', { name: 'Sources' })).toBeInTheDocument()
+  })
+  it('cancels automatic search before making manual source choices actionable', () => {
+    const onRecoveryCancel = vi.fn()
+    const onServerRequest = vi.fn()
+    function RecoveryFixture() {
+      const [searching, setSearching] = useState(true)
+      return <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ recovery: { phase: searching ? 'searching' : 'failed', kind: 'startup', progress: { checked: 2, total: 6 } } }} controls={{ sourceSelection: { busy: searching, options: [{ label: 'Primary', value: 'primary' }, { label: 'Backup', value: 'backup' }], selected: "primary", requestAvailable: Boolean(onServerRequest), recoveryCancelAvailable: Boolean(() => { onRecoveryCancel(); setSearching(false) }), recoveryChooseAvailable: Boolean([{ label: 'Primary', value: 'primary' }, { label: 'Backup', value: 'backup' }]?.length) } }} onControlAction={action => { switch (action.type) { case 'recovery-cancel': (() => { onRecoveryCancel(); setSearching(false) })?.(); break; case 'source-request': (onServerRequest)?.(); break } }} />
+    }
+    render(<RecoveryFixture />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a source' }))
+    expect(onRecoveryCancel).toHaveBeenCalledOnce()
+    expect(onServerRequest).toHaveBeenCalledOnce()
+    const sourcePanel = screen.getByRole('dialog', { name: 'Sources' })
+    expect(within(sourcePanel).getByRole('button', { name: 'Backup' })).toBeEnabled()
   })
   it('auto-skips the intro while playing when auto-skip is on', () => {
     window.localStorage.clear()
     const source = { src: 'https://cdn.example/ep.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'intro' as const, start: 0, end: 85 }] }
-    const { container } = render(<ConsumitPlayer source={source} title="Skip intro" autoSkip />)
+    const { container } = render(<ConsumitPlayer title="Skip intro" media={{ source: source }} controls={{ playback: { autoSkip: true } }} />)
     const video = container.querySelector('video')!
     Object.defineProperty(video, 'paused', { configurable: true, value: false })
     setClock(video, 10, 1500)
@@ -1117,7 +1082,7 @@ describe('playback shell components', () => {
   it('keeps auto-skip off by default and shows the exact manual action', () => {
     window.localStorage.clear()
     const source = { src: 'https://cdn.example/ep.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'intro' as const, start: 0, end: 85 }] }
-    const { container } = render(<ConsumitPlayer source={source} title="Skip intro default" />)
+    const { container } = render(<ConsumitPlayer title="Skip intro default" media={{ source: source }} />)
     const video = container.querySelector('video')!
     Object.defineProperty(video, 'paused', { configurable: true, value: false })
     setClock(video, 10, 1500)
@@ -1134,7 +1099,7 @@ describe('playback shell components', () => {
     window.localStorage.setItem('consumit.player.auto-skip', '0')
     try {
       const source = { src: 'https://cdn.example/ep.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'outro' as const, start: 1400, end: 1440 }] }
-      const { container } = render(<ConsumitPlayer source={source} title="Skip outro" />)
+      const { container } = render(<ConsumitPlayer title="Skip outro" media={{ source: source }} />)
       const video = container.querySelector('video')!
       Object.defineProperty(video, 'paused', { configurable: true, value: false })
       setClock(video, 1410, 1500)
@@ -1148,16 +1113,13 @@ describe('playback shell components', () => {
   })
   it('marks mirrors that did not answer without removing them', () => {
     render(
-      <ConsumitPlayer
-        title="The Last City After Rain"
-        src="/movie.mp4"
-        serverOptions={[
+      <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
           { label: 'vixsrc', value: 'vixsrc', detail: '1080p', family: 'vixsrc', mirror: 'auto' },
           { label: 'vidcore-nova', value: 'vidcore-nova', family: 'vidcore', mirror: 'nova', available: false },
-        ]}
-        selectedServer="vixsrc"
-        onServerChange={() => {}}
-      />,
+        ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+          { label: 'vixsrc', value: 'vixsrc', detail: '1080p', family: 'vixsrc', mirror: 'auto' },
+          { label: 'vidcore-nova', value: 'vidcore-nova', family: 'vidcore', mirror: 'nova', available: false },
+        ]?.length) } }} />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
     const menu = screen.getByRole('dialog', { name: 'Sources' })
@@ -1165,7 +1127,7 @@ describe('playback shell components', () => {
     expect(within(menu).getByRole('button', { name: 'Nova' })).toBeInTheDocument()
   })
   it('hides the server switcher when there is nothing to switch to', () => {
-    render(<ConsumitPlayer title="The Last City After Rain" src="/movie.mp4" serverOptions={[{ label: 'vixsrc', value: 'vixsrc' }]} />)
+    render(<ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [{ label: 'vixsrc', value: 'vixsrc' }], recoveryChooseAvailable: Boolean([{ label: 'vixsrc', value: 'vixsrc' }]?.length) } }} />)
     expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Settings/ }))
     expect(screen.getByRole('dialog', { name: 'Settings options' })).toBeInTheDocument()
@@ -1182,7 +1144,7 @@ describe('playback shell components', () => {
 
   it('announces buffering and recovers through the error panel', () => {
     const { container } = render(
-      <ConsumitPlayer posterSrc="/poster.jpg" src="/movie.mp4" title="Sea of Names" />,
+      <ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ posterSrc: "/poster.jpg" }} />,
     )
     const video = container.querySelector('video')!
 
@@ -1193,9 +1155,9 @@ describe('playback shell components', () => {
     expect(screen.queryByText('Buffering video')).not.toBeInTheDocument()
 
     fireEvent.error(video)
-    expect(screen.getByRole('alert')).toHaveTextContent('Playback failed')
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Playback was interrupted')
     expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again with Auto' })).toBeInTheDocument()
   })
 
   it('keeps transport disabled when no authorized source exists', () => {
@@ -1216,7 +1178,7 @@ describe('playback shell components', () => {
       const html = renderToString(<ConsumitPlayer title="Sea of Names" />)
       expect(html).toContain('Settings: audio, speed, brightness')
       // The stored preference applies in an effect after mount.
-      render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" backHref="/title" />)
+      render(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} presentation={{ backHref: "/title" }} />)
       fireEvent.click(screen.getByRole('button', { name: 'Captions' }))
       const menu = screen.getByRole('dialog', { name: 'Captions' })
       expect(within(menu).getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true')
@@ -1226,10 +1188,10 @@ describe('playback shell components', () => {
   })
 
   it('keeps PiP support out of the first paint so SSR matches hydration', async () => {
-    const html = renderToString(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
+    const html = renderToString(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     // Advanced viewing choices do not occupy the initial transport deck.
     expect(html).not.toContain('Enter picture in picture')
-    render(<ConsumitPlayer title="Sea of Names" src="/movie.mp4" />)
+    render(<ConsumitPlayer title="Sea of Names" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
     fireEvent.click(screen.getByRole('button', { name: /Settings:/ }))
     const button = screen.getByRole('button', { name: /Picture in picture/ })
     expect(button).toBeDisabled()
@@ -1243,16 +1205,13 @@ describe('playback shell components', () => {
     window.localStorage.clear()
     try {
       render(
-        <ConsumitPlayer
-          title="The Last City After Rain"
-          src="/movie.mp4"
-          serverOptions={[
+        <ConsumitPlayer title="The Last City After Rain" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} controls={{ sourceSelection: { options: [
             { label: 'vixsrc', value: 'vixsrc', detail: '1080p', region: 'US', health: 'ok' },
             { label: 'rivestream', value: 'rivestream', detail: 'Auto', region: 'DE', health: 'degraded' },
-          ]}
-          selectedServer="vixsrc"
-          onServerChange={() => {}}
-        />,
+          ], selected: "vixsrc", recoveryChooseAvailable: Boolean([
+            { label: 'vixsrc', value: 'vixsrc', detail: '1080p', region: 'US', health: 'ok' },
+            { label: 'rivestream', value: 'rivestream', detail: 'Auto', region: 'DE', health: 'degraded' },
+          ]?.length) } }} />,
       )
       fireEvent.click(screen.getByRole('button', { name: 'Sources' }))
       const menu = screen.getByRole('dialog', { name: 'Sources' })

@@ -1,3 +1,5 @@
+import { createProviderRouteRegistry } from '../../api/src/playback/route-registry.ts'
+import { createSubtitleProviders } from '../../api/src/subtitles/providers.ts'
 import { type AnimeCatalog } from '../../api/src/catalog/anilist/adapter.ts'
 import { type ApiEnv } from '../../api/src/config/env.ts'
 import { createPlayback, type Playback } from '../../api/src/playback/playback.ts'
@@ -6,29 +8,11 @@ import { createMemoryPlaybackStore, createValkeyPlaybackStore } from '../../api/
 import { loadConfiguredProviders } from '../../api/src/playback/configured-providers.ts'
 import { createAnimeMetaResolver, createAnimeTitleResolver, createAnimeTitleVariantsResolver } from '../../api/src/anime/title-resolver.ts'
 import { createProbeScheduler } from '../../api/src/playback/probe.ts'
-import { createAddic7edProvider } from '../../api/src/subtitles/addic7ed.ts'
-import { createBanimeProvider } from '../../api/src/subtitles/banime.ts'
-import { createCastleSubsProvider } from '../../api/src/subtitles/castlesubs.ts'
-import { createCineSrcProvider } from '../../api/src/subtitles/cinesrc.ts'
-import { createAnimeToshoProvider } from '../../api/src/subtitles/animetosho.ts'
 import { createAnizipClient } from '../../api/src/subtitles/anizip.ts'
 import { createSubtitleHttp } from '../../api/src/subtitles/http.ts'
-import { createJimakuProvider } from '../../api/src/subtitles/jimaku.ts'
-import { createMeguAnimeProvider } from '../../api/src/subtitles/meguanime.ts'
-import { createNatsukiProvider } from '../../api/src/subtitles/natsuki.ts'
-import { createNxshaSubsProvider } from '../../api/src/subtitles/nxshasubs.ts'
-import { createRiveSubsProvider } from '../../api/src/subtitles/rivesubs.ts'
-import { createOpenSubtitlesProvider } from '../../api/src/subtitles/opensubtitles.ts'
-import { createSubDlProvider } from '../../api/src/subtitles/subdl.ts'
-import { createSubf2mProvider } from '../../api/src/subtitles/subf2m.ts'
-import { createSubSourceProvider } from '../../api/src/subtitles/subsource.ts'
 import { createDiskFileStore } from '../../api/src/subtitles/storage.ts'
 import { createSubtitleService, type SubtitleService } from '../../api/src/subtitles/subtitles.ts'
 import { createStreamingSubtitleProviders } from '../../api/src/subtitles/streaming.ts'
-import { createTvSubtitlesProvider } from '../../api/src/subtitles/tvsubtitles.ts'
-import { createVdrkProvider } from '../../api/src/subtitles/vdrk.ts'
-import { createVdrkV2Provider } from '../../api/src/subtitles/vdrkv2.ts'
-import { createYifyProvider } from '../../api/src/subtitles/yify.ts'
 import type { TmdbEpisodeCoordinates } from '../../api/src/subtitles/tmdb-episode.ts'
 import { createTmdbMetadataResolver } from '../../api/src/playback/tmdb-metadata.ts'
 import { createTmdbIdentityResolver } from '../../api/src/playback/tmdb-identity.ts'
@@ -45,7 +29,7 @@ import type { TitleMetadataResolver } from '../../api/src/playback/tmdb-metadata
 // from the playback service's DNS-pinned transport. Keep the alternate route
 // provider-scoped; do not weaken source or media-host validation. The set is
 // not anime-specific — it is the native-lookup exception list.
-const localResolverProviders = new Set(['kyren', 'recloud', '9anime', 'aniwave', 'miruro', 'allanime', 'kototv', 'yumezone', 'zenbu', 'fireanime', 'cinecat', 'vidapi', 'fmfau'])
+const localResolverProviders = new Set(['kyren', 'recloud', '9anime', 'aniwave', 'miruro', 'allanime', 'kototv', 'yumezone', 'zenbu', 'fireanime', 'cinecat', 'vidapi', 'fmfau', 'vidbolt', 'nontonflix', 'embedmaster', 'mapple', 'streamvault'])
 
 type RuntimeOptions = { configurationSnapshot?: (() => Promise<import('@consumit/contracts/internal').ProviderState>) | undefined; env: ApiEnv; animeCatalog: Pick<AnimeCatalog, 'title'>; animeTmdbEpisode?: ((tmdbId: number, absoluteEpisode: number, signal: AbortSignal) => Promise<TmdbEpisodeCoordinates | null>) | undefined; providerConfigStore?: ProviderConfigStore | undefined; subtitleCatalog?: SubtitleCatalog | undefined; files?: SubtitleFileStore | undefined; providerOptions?: Parameters<typeof loadConfiguredProviders>[1] | undefined; metadata?: CloudflareResolverOptions['metadata'] | undefined; titleMetadata?: TitleMetadataResolver; playback?: Playback | undefined; subtitles?: SubtitleService | undefined; scheduleProbes?: boolean | undefined; log?: ((fields: Record<string, unknown>) => void) | undefined }
 export async function createPlaybackRuntime({ configurationSnapshot, env, animeCatalog: resolvedAnimeCatalog, animeTmdbEpisode, providerConfigStore, subtitleCatalog, files, providerOptions: suppliedProviderOptions, metadata: suppliedMetadata, titleMetadata, playback, subtitles, scheduleProbes = false, log = () => {} }: RuntimeOptions) {
@@ -53,12 +37,17 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
   const closes: (() => Promise<void>)[] = []
   const playbackStore = env.playback?.enabled && env.playback.stateUrl ? createValkeyPlaybackStore(env.playback.stateUrl) : createMemoryPlaybackStore()
   const anizip = createAnizipClient(createSubtitleHttp(['api.ani.zip']))
-  const providerOptions = suppliedProviderOptions ?? {
+  const lookmovieOnMediaNode = Boolean(env.playback?.relay?.node?.providers.lookmovie?.length)
+  if (lookmovieOnMediaNode && env.playback?.resolver?.providerOrigins?.lookmovie) throw new Error('LookMovie media-node delivery requires lookup on the same node.')
+  const cloudflareOnly = env.playback?.execution === 'cloudflare-only'
+  const providerOptions = {
+    ...(suppliedProviderOptions ?? {
     tmdbToken: env.tmdbToken,
-    ...(env.playback?.relay?.discovery?.['lookmovie'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
+    ...(!lookmovieOnMediaNode && env.playback?.relay?.discovery?.['lookmovie'] === 'lookmovie-v1' ? { lookmovieWorker: { origin: env.playback.relay.origin, secret: env.playback.relay.secret } } : {}),
     animeTitleResolver: createAnimeTitleResolver(resolvedAnimeCatalog),
     animeTitleVariantsResolver: createAnimeTitleVariantsResolver(resolvedAnimeCatalog),
     animeMetaResolver: createAnimeMetaResolver(resolvedAnimeCatalog),
+    }),
   }
   const rawProviders = env.playback?.enabled ? await loadConfiguredProviders(env.playback.mediaConfig, providerOptions) : []
   const resolvedProviderConfig = providerConfigStore
@@ -88,6 +77,12 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
     timer.unref()
     app.addHook('onClose', async () => clearInterval(timer))
   }
+  const registry = cloudflareOnly && env.playback?.resolver ? createProviderRouteRegistry({
+    providers, resolverOrigin: env.playback.resolver.origin, resolverOrigins: env.playback.resolver.providerOrigins,
+    relayOrigin: env.playback.relay?.origin, relayOrigins: env.playback.relay?.providerOrigins, relayProviders: env.playback.relay?.providers,
+    accepted: env.playback.acceptedEdgeRoutes ?? [],
+  }) : null
+  if (registry) for (const provider of providers) provider.routeVersion = registry.version
   if (env.playback?.resolver) {
     const metadata = suppliedMetadata ?? createResolverMetadata({
       ...(env.tmdbToken ? { tmdb: createTmdbMetadataResolver(env.tmdbToken) } : {}),
@@ -97,15 +92,23 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
       animeMeta: createAnimeMetaResolver(resolvedAnimeCatalog),
     })
     for (const provider of providers) {
+      // Node-issued LookMovie media is tied to the native lookup egress.
+      // Wrapping this adapter in the edge resolver breaks that binding.
+      if (!cloudflareOnly && provider.adapter.id === 'lookmovie' && lookmovieOnMediaNode) continue
       // An explicitly reviewed Worker route overrides the default native-egress
       // exception; otherwise operator routing edits would be silently ignored.
-      if (!provider.workerConfig || localResolverProviders.has(provider.adapter.id) && !env.playback.resolver.providerOrigins?.[provider.adapter.id]) continue
+      if (cloudflareOnly && (!registry || !provider.workerConfig || !registry.snapshot().some(route => route.provider === provider.adapter.id))) {
+        provider.adapter = { ...provider.adapter, resolve: async () => ({ ok: false, code: 'unavailable', retryable: false }) }
+        continue
+      }
+      if (!cloudflareOnly && (!provider.workerConfig || localResolverProviders.has(provider.adapter.id) && !env.playback.resolver.providerOrigins?.[provider.adapter.id])) continue
+      if (cloudflareOnly) provider.execution = 'cloudflare'
       provider.adapter = createCloudflareResolverAdapter(provider, {
-        config: env.playback.resolver,
+        config: { ...env.playback.resolver, cloudflareOnly },
         currentConfig: current => ({
           ...current.workerConfig,
           id: current.adapter.id,
-          enabled: current.enabled,
+          enabled: current.enabled, role: current.role ?? 'video', upstreamGroup: current.upstreamGroup, concurrency: current.concurrency, requestsPerMinute: current.requestsPerMinute, mediaKinds: [...current.mediaKinds],
           regions: [...current.approvedRegions],
           mediaHosts: [...current.mediaHosts],
           mediaHostPatterns: (current.mediaHostPatterns ?? []).map(pattern => pattern.source),
@@ -113,11 +116,20 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
           ...(current.relayHostDiscovery ? { relayHostDiscovery: current.relayHostDiscovery } : {}),
         }),
         metadata,
+        ...(cloudflareOnly && registry ? { route: (input: import('@consumit/provider-sdk').ProviderInput) => registry.find(provider.adapter.id, input.ref.kind, input.region, provider.deliveryMode ?? 'direct', input.purpose === 'audio' ? 'audio' : 'video') } : {}),
       })
+      if (cloudflareOnly && registry) {
+        const adapter = provider.adapter
+        provider.adapter = { ...adapter, resolve: (input, signal) => registry.find(adapter.id, input.ref.kind, input.region, provider.deliveryMode ?? 'direct', input.purpose === 'audio' ? 'audio' : 'video')
+          ? adapter.resolve(input, signal) : Promise.resolve({ ok: false, code: 'unavailable', retryable: false }) }
+      }
     }
   }
+  if (registry) log({ component: 'provider-route-registry', version: registry.version })
   const resolvedPlayback = playback ?? createPlayback({ providers, store: playbackStore, region: env.tmdbRegion, providerOrders, audioOrigin: env.appOrigin,
-    ...(env.playback?.relay ? { relay: createPlaybackRelay(env.playback.relay), relayOrigin: env.appOrigin } : {}) })
+    ...(env.playback?.relay ? { relay: createPlaybackRelay({ ...env.playback.relay,
+      ...(registry ? { routeVersion: registry.version, routePolicy: registry.relayRoutes() } : {}),
+    }), relayOrigin: env.appOrigin } : {}) })
   const probeScheduler = env.playback?.enabled && env.nodeEnv !== 'test' && env.playback.probeIntervalMs > 0
     ? createProbeScheduler({
       providers, region: env.tmdbRegion, intervalMs: env.playback.probeIntervalMs, store: playbackStore,
@@ -126,7 +138,7 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
     : null
   if (scheduleProbes) probeScheduler?.start()
 
-  // Aggregated captions: eighteen subtitle providers plus the streaming
+  // Aggregated captions: registered subtitle providers plus the streaming
   // adapters' own tracks downstream. Converted VTT files are cached in the
   // playback store (Valkey when configured, memory otherwise) and served
   // first-party — the approved exception to browser-direct delivery.
@@ -135,26 +147,9 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
   // maps the absolute episode to the season/episode used by TMDB-keyed and
   // title-keyed TV providers. TVDB coordinates must not be reused as TMDB.
   const subtitleService = subtitles ?? createSubtitleService({
-    providers: [
-      createYifyProvider(createSubtitleHttp(['yifysubtitles.ch'])),
-      createTvSubtitlesProvider(createSubtitleHttp(['www.tvsubtitles.net'])),
-      createAnimeToshoProvider(createSubtitleHttp(['api.ani.zip', 'feed.animetosho.xyz', 'feed.animetosho.net'])),
-      createSubSourceProvider(createSubtitleHttp(['subsource.net'])),
-      createCastleSubsProvider(createSubtitleHttp(['api.hlowb.com'])),
-      createNxshaSubsProvider(createSubtitleHttp(['nxsha.space'])),
-      createVdrkProvider(createSubtitleHttp(['sub.vdrk.site'])),
-      createVdrkV2Provider(createSubtitleHttp(['sub.vdrk.site'])),
-      createRiveSubsProvider(createSubtitleHttp(['scrapper.rivestream.app'])),
-      createNatsukiProvider(createSubtitleHttp(['natsuki.hls.lol'])),
-      createCineSrcProvider(createSubtitleHttp(['cinesrc.st'])),
-      createSubf2mProvider(createSubtitleHttp(['subf2m.co'])),
-      createAddic7edProvider(createSubtitleHttp(['addic7ed.com', 'www.addic7ed.com'])),
-      createMeguAnimeProvider(createSubtitleHttp(['meguanime.com'])),
-      createBanimeProvider(createSubtitleHttp(['banime.dedyn.io'])),
-      // Key-gated providers decline without credentials (no keys set).
-      createSubDlProvider(createSubtitleHttp(['api.subdl.com']), env.subtitleKeys.subdl),
-      createJimakuProvider(createSubtitleHttp(['jimaku.cc']), env.subtitleKeys.jimaku),
-      createOpenSubtitlesProvider(createSubtitleHttp(['api.opensubtitles.com']), env.subtitleKeys.openSubtitles),
+    ...(cloudflareOnly && env.playback?.subtitleWorker ? { edge: env.playback.subtitleWorker } : {}),
+    providers: cloudflareOnly ? [] : [
+      ...createSubtitleProviders(env.subtitleKeys),
       ...createStreamingSubtitleProviders(providers, env.tmdbRegion, playbackStore),
     ],
     metadata: titleMetadata ?? (env.tmdbToken?.trim() ? createTmdbMetadataResolver(env.tmdbToken) : undefined),
@@ -162,11 +157,11 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
       const detail = await resolvedAnimeCatalog.title(id)
       return { title: detail.titles.preferred }
     },
-    animeMapping: async (anilistId, episode, signal) => {
+    ...(!cloudflareOnly ? { animeMapping: async (anilistId: number, episode: number, signal: AbortSignal) => {
       const mapped = await anizip.episodeFor(anilistId, episode, signal)
       if (!mapped || (!mapped.tmdbId && !mapped.imdbId)) return null
       return { ...(mapped.tmdbId ? { tmdbId: mapped.tmdbId } : {}), ...(mapped.imdbId ? { imdbId: mapped.imdbId } : {}), ...(mapped.anidbEid ? { anidbEid: mapped.anidbEid } : {}), season: mapped.season, episode: mapped.episode }
-    },
+    } } : {}),
     ...(animeTmdbEpisode ? { animeTmdbEpisode } : {}),
     store: playbackStore,
     origin: env.appOrigin,
@@ -179,6 +174,6 @@ export async function createPlaybackRuntime({ configurationSnapshot, env, animeC
     },
   })
 
-  return { playback: resolvedPlayback, subtitles: subtitleService, providers, providerOrders, providerOptions, store: playbackStore, probeScheduler, refreshConfiguration, configurationCurrent: () => Date.now() - configurationAt <= 10000, async close() { probeScheduler?.stop(); for (const close of closes) await close(); await playbackStore.close() } }
+  return { playback: resolvedPlayback, subtitles: subtitleService, providers, providerOrders, providerOptions, store: playbackStore, probeScheduler, routeRegistry: registry, refreshConfiguration, configurationCurrent: () => Date.now() - configurationAt <= 10000, async close() { probeScheduler?.stop(); for (const close of closes) await close(); await playbackStore.close() } }
 }
 

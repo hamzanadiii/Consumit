@@ -1,4 +1,4 @@
-import { fetchMedia } from '../playback/transport.ts'
+import { fetchMedia, type MediaTransport } from '../playback/transport.ts'
 
 export type SubtitleTextResponse = { text: string; cookies: string[] }
 
@@ -52,14 +52,14 @@ export type SubtitleHttp = {
 /** SSRF-safe fetch for subtitle search pages. DNS pinning, public-only
  *  addresses, and redirect re-validation ride on the shared media transport;
  *  the 1 MiB cap fits search/detail HTML and JSON. */
-export function createSubtitleHttp(hosts: readonly string[]): SubtitleHttp {
+export function createSubtitleHttp(hosts: readonly string[], transport: MediaTransport = fetchMedia): SubtitleHttp {
   async function get(
     url: string,
     headers: Record<string, string>,
     signal: AbortSignal,
     maxBytes = 1_048_576,
   ): Promise<SubtitleTextResponse> {
-    const response = await fetchMedia(url, hosts, headers, signal)
+    const response = await transport(url, hosts, headers, signal)
     if (response.status < 200 || response.status >= 300) {
       response.body.destroy()
       throw new Error(`Subtitle page HTTP ${response.status}.`)
@@ -70,7 +70,7 @@ export function createSubtitleHttp(hosts: readonly string[]): SubtitleHttp {
   }
   async function post(url: string, body: string, headers: Record<string, string>, signal: AbortSignal): Promise<string> {
     if (body.length > 65_536) throw new Error('Subtitle request exceeds its limit.')
-    const response = await fetchMedia(url, hosts, { ...headers, 'Content-Type': 'application/json' }, signal, { method: 'POST', body })
+    const response = await transport(url, hosts, { ...headers, 'Content-Type': 'application/json' }, signal, { method: 'POST', body })
     try {
       if (response.status < 200 || response.status >= 300) throw new Error(`Subtitle page HTTP ${response.status}.`)
       return (await readBody(response, signal, 1_048_576)).toString('utf8')
@@ -90,8 +90,9 @@ export async function fetchSubtitleBytes(
   signal: AbortSignal,
   maxBytes = 5_242_880,
   patterns: readonly RegExp[] = [],
+  transport: MediaTransport = fetchMedia,
 ): Promise<Buffer> {
-  const response = await fetchMedia(url, hosts, headers, signal, undefined, patterns)
+  const response = await transport(url, hosts, headers, signal, undefined, patterns)
   if (response.status < 200 || response.status >= 300) {
     response.body.destroy()
     throw new Error(`Subtitle file HTTP ${response.status}.`)

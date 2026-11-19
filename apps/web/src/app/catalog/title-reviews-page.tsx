@@ -58,11 +58,12 @@ export async function TitleReviewsPage({ id, kind, page, sort }: TitleReviewsPag
   } catch (error) {
     if (error instanceof MemberApiError && error.status === 404) notFound()
     return (
-      <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={`${title.title} reviews`}>
-        <main className="mx-auto w-full max-w-[90rem]">
+      <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={undefined}>
+        <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]">
           <div className="px-1 sm:px-3 lg:px-4">
+            <SectionHeading headingLevel={1} id="title-reviews-heading" title={`${title.title} reviews`} />
             <div className="mt-6 rounded-[16px] border border-[var(--fs-field-border)] bg-[var(--fs-field)] p-4">
-              <p className="text-sm leading-6 text-[var(--fs-secondary)]" role="alert">Member reviews could not be loaded, but nothing was lost.</p>
+              <p className="text-sm leading-6 text-[var(--fs-secondary)]" role="alert">Public reviews could not be loaded right now.</p>
               <Link
                 className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                 href={pageHref(kind, id, page, sort)}
@@ -78,20 +79,22 @@ export async function TitleReviewsPage({ id, kind, page, sort }: TitleReviewsPag
   if (reviews.totalResults > 0 && page > reviews.totalPages) notFound()
 
   return (
-    <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={`${title.title} reviews`}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-reviews>
+    <FilScreenShell activeKindTab={activeKindTab(kind)} pageHeading={undefined}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-title-reviews>
         <div className="px-1 sm:px-3 lg:px-4">
           <Link
+            aria-label={`Back to ${title.title}`}
             className="inline-flex min-h-11 items-center gap-1 text-xs font-bold text-[var(--fs-muted)] outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
             href={titleHref({ id, kind })}
           >
-            <span aria-hidden="true">←</span> Back to {title.title}
+            <span aria-hidden="true">←</span> Back to title
           </Link>
           <div className="mt-2">
             <SectionHeading
               description={reviews.totalResults === 0
-                ? 'No member reviews yet.'
-                : `${reviews.totalResults} member ${reviews.totalResults === 1 ? 'review' : 'reviews'} from public profiles.`}
+                ? 'No public reviews yet.'
+                : `${reviews.totalResults} public ${reviews.totalResults === 1 ? 'review' : 'reviews'}.`}
+              headingLevel={1}
               id="title-reviews-heading"
               title={`${title.title} reviews`}
             />
@@ -130,8 +133,8 @@ export async function TitleReviewsPage({ id, kind, page, sort }: TitleReviewsPag
               ) : (
                 <div className="mt-8">
                   <EmptyState
-                    description="No member reviews match this filter yet."
-                    title="No reviews yet"
+                    description="No public reviews are available on this page."
+                    title="No reviews on this page"
                   />
                 </div>
               )}
@@ -141,14 +144,15 @@ export async function TitleReviewsPage({ id, kind, page, sort }: TitleReviewsPag
               <EmptyState
                 action={(
                   <Link
+                    aria-label={`Back to ${title.title}`}
                     className="inline-flex min-h-11 items-center rounded-xl bg-[var(--fs-accent-soft)] px-4 text-sm font-bold text-[var(--fs-ink)] outline-none transition-colors hover:bg-[var(--fs-accent-soft-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]"
                     href={titleHref({ id, kind })}
                   >
-                    Back to {title.title}
+                    Back to title
                   </Link>
                 )}
-                description="Share what stayed with you — the first member review is written from the title page."
-                title="No member reviews yet"
+                description="Members can share a review from the title page."
+                title="No public reviews yet"
               />
             </div>
           )}

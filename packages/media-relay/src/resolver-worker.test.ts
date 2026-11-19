@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createCipheriv } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { createResolverWorker } from './resolver-worker.ts'
 
 const secret = 'resolver-test-secret-that-is-at-least-32-characters'
@@ -81,6 +82,34 @@ describe('Cloudflare provider resolver', () => {
     const response = await worker.fetch(request({ providerId: config.id, config, input: { ref, region: 'US', audioLanguage: 'en' } }), env)
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ ok: true, sources: [{ url: 'https://media.example.com/movie.m3u8' }] })
+  })
+
+  it('fails closed when a versioned route arrives without a matching Worker policy', async () => {
+    const response = await createResolverWorker().fetch(request({
+      route: { version: 'edge-v1-0123456789abcdef', policy: 'a'.repeat(64), purpose: 'video' },
+      providerId: config.id, config, input: { ref, region: 'US', audioLanguage: 'en' },
+    }), env)
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({ ok: false, code: 'unavailable', retryable: false })
+  })
+
+  it('accepts a versioned route only when the Worker policy and configured host hash match', async () => {
+    const policy = createHash('sha256').update(JSON.stringify([config.mediaHosts, undefined, undefined])).digest('hex')
+    const route = { version: 'edge-v1-0123456789abcdef', policy, purpose: 'video' as const }
+    const routePolicy = [{ ...route, provider: config.id, kind: 'movie', region: 'US', delivery: 'direct', lookup: 'https://resolver.example' }]
+    const response = await createResolverWorker().fetch(request({ route, providerId: config.id, config, input: { ref, region: 'US', audioLanguage: 'en' } }), {
+      ...env, RESOLVER_ROUTE_POLICY: JSON.stringify(routePolicy),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ ok: true })
+    const drifted = await createResolverWorker().fetch(request({ route: { ...route, policy: 'b'.repeat(64) }, providerId: config.id, config, input: { ref, region: 'US', audioLanguage: 'en' } }), {
+      ...env, RESOLVER_ROUTE_POLICY: JSON.stringify(routePolicy),
+    })
+    expect(drifted.status).toBe(403)
+    const wrongPurpose = await createResolverWorker().fetch(request({ route, providerId: config.id, config, input: { purpose: 'audio', ref, region: 'US', audioLanguage: 'en' } }), {
+      ...env, RESOLVER_ROUTE_POLICY: JSON.stringify(routePolicy),
+    })
+    expect(wrongPurpose.status).toBe(403)
   })
 
   it('rejects unauthenticated and disabled requests before provider work', async () => {

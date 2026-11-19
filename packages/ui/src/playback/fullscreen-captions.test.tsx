@@ -19,7 +19,7 @@ it('uses true iOS video fullscreen for uploaded subtitles instead of leaving Saf
   Object.defineProperty(HTMLVideoElement.prototype, 'webkitEnterFullscreen', { configurable: true, value: vi.fn(() => { nativeFullscreen = true }) })
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => `blob:${window.location.origin}/uploaded`) })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-  const view = render(<ConsumitPlayer title="iPhone captions" source={{ type: 'native', src: 'https://media.example/movie.mp4' }} />)
+  const view = render(<ConsumitPlayer title="iPhone captions" media={{ source: { type: 'native', src: 'https://media.example/movie.mp4' } }} />)
   const video = view.container.querySelector('video')!
   const file = new File([], 'captions.srt')
   Object.defineProperty(file, 'arrayBuffer', { value: async () => new TextEncoder().encode('1\n00:00:01,000 --> 00:00:04,000\nVisible on iPhone\n').buffer })
@@ -45,7 +45,7 @@ it('uses true iOS video fullscreen for uploaded subtitles instead of leaving Saf
 
 it('recovers a denied container fullscreen request and restores page state on Escape and unmount', async () => {
   Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: vi.fn().mockRejectedValue(new Error('Not supported')) })
-  const view = render(<><button>Outside player</button><ConsumitPlayer title="Fullscreen denied" src="/fixture.mp4" caption="Keep this line" /></>)
+  const view = render(<><button>Outside player</button><ConsumitPlayer title="Fullscreen denied" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ captions: { cue: 'Keep this line', selected: 'english' } }} /></>)
   const outside = screen.getByRole('button', { name: 'Outside player' })
   const previousInert = outside.inert
   const previousOverflow = document.body.style.overflow
@@ -70,7 +70,7 @@ it('recovers a denied container fullscreen request and restores page state on Es
 it('keeps using successful container fullscreen instead of the viewport fallback', async () => {
   const request = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value: request })
-  const view = render(<ConsumitPlayer title="Container fullscreen" src="/fixture.mp4" caption="Container caption" />)
+  const view = render(<ConsumitPlayer title="Container fullscreen" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ captions: { cue: 'Container caption', selected: 'english' } }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Enter fullscreen' }))
   await waitFor(() => expect(request).toHaveBeenCalledOnce())
   expect(view.container.querySelector('[data-consumit-player]')).not.toHaveAttribute('data-viewport-fullscreen')
@@ -79,7 +79,7 @@ it('keeps using successful container fullscreen instead of the viewport fallback
 
 it('keeps inline playback and offers retry when iOS refuses native fullscreen', async () => {
   Object.defineProperty(HTMLVideoElement.prototype, 'webkitEnterFullscreen', { configurable: true, value: vi.fn(() => { throw new Error('Denied') }) })
-  const view = render(<ConsumitPlayer title="Native denial" src="/fixture.mp4" caption="Keep this line" />)
+  const view = render(<ConsumitPlayer title="Native denial" media={{ source: { type: 'native', src: 'https://media.example/fixture.mp4' } }} controls={{ captions: { cue: 'Keep this line', selected: 'english' } }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Enter fullscreen' }))
   expect(view.container.querySelector('[data-consumit-player]')).not.toHaveAttribute('data-viewport-fullscreen')
   expect(view.container.querySelector('video')).not.toHaveAttribute('data-native-fullscreen')

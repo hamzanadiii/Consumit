@@ -46,7 +46,7 @@ export function AuthShell({
   ...props
 }: AuthShellProps) {
   return (
-    <main
+    <main id="consumit-main-content" tabIndex={-1}
       className={cn('grid min-h-[44rem] overflow-hidden rounded-card border border-border bg-canvas lg:grid-cols-[1.08fr_.92fr]', className)}
       data-consumit-auth-shell
       {...props}

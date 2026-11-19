@@ -5,7 +5,7 @@ import { Star } from 'lucide-react'
 import Image from 'next/image'
 import { useRef, useState } from 'react'
 
-import { CastCard, SectionHeading, Tabs } from '@consumit/ui'
+import { CastCard, SectionHeading } from '@consumit/ui'
 
 import { browserCatalogSeason } from '@/lib/catalog-browser'
 import { makerByline } from './catalog-ui'
@@ -13,17 +13,32 @@ import { EpisodesSection } from './episodes-section'
 import { MemberActionPanel } from './member-action-panel'
 import { TitleReviews } from './title-reviews'
 import { TitlePlayAction } from './title-play-action'
-import { FilScreenShell, TitleRail } from '../shared'
+import { FilScreenShell, ScrollableTabs, TitleRail } from '../shared'
 
-function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
+function uniquePeople(cast: readonly CatalogPerson[]) {
   // One person can appear as both cast and creator under the same id;
   // collapse duplicates (cast entry wins) so keys stay unique.
   const seen = new Set<number>()
-  const people = cast.filter((person) => {
+  return cast.filter((person) => {
     if (seen.has(person.id)) return false
     seen.add(person.id)
     return true
   })
+}
+
+function relatedTitles(current: Pick<CatalogTitleSummary, 'id' | 'kind'>, items: readonly CatalogTitleSummary[]) {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    if (item.id === current.id && item.kind === current.kind) return false
+    const key = `${item.kind}:${item.id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, 15)
+}
+
+function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
+  const people = uniquePeople(cast)
   return (
     <div className="mt-8 grid auto-cols-[minmax(9.5rem,42vw)] grid-flow-col gap-4 overflow-x-auto pb-4 sm:auto-cols-[11rem] xl:grid-flow-row xl:grid-cols-6 xl:overflow-visible xl:pb-0">
       {people.slice(0, 6).map((person) => (
@@ -40,25 +55,17 @@ function CastRail({ cast }: { cast: readonly CatalogPerson[] }) {
   )
 }
 
-function RelatedRail({ current, items }: {
-  current: Pick<CatalogTitleSummary, 'id' | 'kind'>
+function RelatedRail({ kind, items }: {
+  kind: CatalogTitleSummary['kind']
   items: readonly CatalogTitleSummary[]
 }) {
-  const seen = new Set<string>()
-  const related = items.filter((item) => {
-    if (item.id === current.id && item.kind === current.kind) return false
-    const key = `${item.kind}:${item.id}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  if (related.length === 0) return null
+  if (items.length === 0) return null
   return (
     <TitleRail
       description="Real titles recommended by TMDB"
       id="detail-related-titles"
-      items={related.slice(0, 15)}
-      title={current.kind === 'movie' ? 'If this stays with you' : 'Watch next'}
+      items={items}
+      title={kind === 'movie' ? 'If this stays with you' : 'Watch next'}
     />
   )
 }
@@ -85,6 +92,10 @@ function DetailFacts({ detail }: { detail: CatalogTitleDetail }) {
 }
 
 function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
+  const [failedBackdropUrl, setFailedBackdropUrl] = useState<string | null>(null)
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null)
+  const backdropUrl = detail.backdropUrl && failedBackdropUrl !== detail.backdropUrl ? detail.backdropUrl : null
+  const logoUrl = detail.logoUrl && failedLogoUrl !== detail.logoUrl ? detail.logoUrl : null
   const byline = makerByline(detail)
   const seasonCount = detail.kind === 'series' ? (detail.seasons?.length ?? 0) : 0
   const duration = detail.kind === 'movie'
@@ -98,19 +109,21 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
       className="relative isolate overflow-hidden rounded-card border border-[var(--fs-line)] bg-[#09090b] text-white"
       data-consumit-title-masthead
     >
-      {detail.backdropUrl ? (
+      {backdropUrl ? (
         <Image
           alt=""
           className="object-cover"
           fill
+          onError={() => setFailedBackdropUrl(backdropUrl)}
           priority
           sizes="(max-width: 1280px) 100vw, 1400px"
-          src={detail.backdropUrl}
+          src={backdropUrl}
         />
       ) : (
         <div
           aria-hidden="true"
           className="absolute inset-0"
+          data-consumit-title-backdrop-fallback
           style={{ background: 'radial-gradient(120% 90% at 78% 8%, #6b3c32 0%, #3a211d 34%, #211412 66%, #09090b 100%)' }}
         />
       )}
@@ -120,14 +133,15 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
 
       <div className="relative flex min-h-[480px] flex-col justify-center gap-8 p-6 sm:p-10 lg:grid lg:min-h-[520px] lg:grid-cols-[minmax(0,1fr)_340px] lg:items-center lg:p-12">
         <div className="flex max-w-2xl flex-col justify-center gap-3">
-          {detail.logoUrl ? (
+          {logoUrl ? (
             <div>
               <Image
                 alt={detail.title}
                 className="h-auto max-h-24 w-auto max-w-full [filter:drop-shadow(0_2px_16px_rgb(0_0_0/0.65))] sm:max-h-28"
                 height={240}
+                onError={() => setFailedLogoUrl(logoUrl)}
                 priority
-                src={detail.logoUrl}
+                src={logoUrl}
                 width={640}
               />
               <h1 className="sr-only">{detail.title}</h1>
@@ -148,7 +162,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
             {rating ? (
               <strong className="inline-flex items-center gap-1 font-bold text-orange tabular-nums">
                 <Star aria-hidden="true" className="size-3.5 fill-current" />
-                ★ {rating}
+                {rating}
                 <span className="sr-only">on TMDB</span>
               </strong>
             ) : null}
@@ -180,7 +194,7 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
           <MemberActionPanel
             id={detail.id}
             kind={detail.kind}
-            posterUrl={detail.posterUrl ?? undefined}
+            posterUrl={detail.posterUrl ?? detail.backdropUrl ?? undefined}
             title={detail.title}
             year={detail.year}
           />
@@ -191,19 +205,21 @@ function FilScreenTitleHero({ detail }: { detail: CatalogTitleDetail }) {
 }
 
 export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
+  const cast = uniquePeople([...detail.cast, ...detail.creators])
+  const related = relatedTitles(detail, detail.recommendations)
   return (
     <FilScreenShell activeKindTab="movies" pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-title-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
-          <Tabs
+          <ScrollableTabs
             activeValue="overview"
-            aria-label={`${detail.title} sections`}
+            ariaLabel={`${detail.title} sections`}
             items={[
               { href: '#overview', label: 'Overview', value: 'overview' },
               { href: '#reviews', label: 'Reviews', value: 'reviews' },
-              { href: '#cast', label: 'Cast & crew', value: 'cast' },
-              { href: '#related', label: 'Related', value: 'related' },
+              ...(cast.length ? [{ href: '#cast', label: 'Cast & crew', value: 'cast' }] : []),
+              ...(related.length ? [{ href: '#related', label: 'Related', value: 'related' }] : []),
             ]}
           />
           <section className="py-10 sm:py-12 lg:py-14" id="overview" aria-labelledby="movie-about-heading">
@@ -213,12 +229,12 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               <DetailFacts detail={detail} />
             </div>
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="movie-cast-heading">
+          {cast.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="movie-cast-heading">
             <SectionHeading id="movie-cast-heading" title="Cast & crew" />
-            <CastRail cast={[...detail.cast, ...detail.creators]} />
-          </section>
+            <CastRail cast={cast} />
+          </section> : null}
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="movie-reviews-heading">
-            <SectionHeading id="movie-reviews-heading" title="Member reviews" />
+            <SectionHeading id="movie-reviews-heading" title="Reviews" />
             <TitleReviews
               id={detail.id}
               kind={detail.kind}
@@ -227,25 +243,29 @@ export function TitleDetailScreen({ detail }: { detail: CatalogMovieDetail }) {
               year={detail.year}
             />
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related" aria-labelledby="movie-related-heading">
-            <RelatedRail current={detail} items={detail.recommendations} />
-          </section>
+          {related.length ? <section aria-label="Related titles" className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related">
+            <RelatedRail kind={detail.kind} items={related} />
+          </section> : null}
         </div>
       </main>
     </FilScreenShell>
   )
 }
 
-type SeriesDetailScreenProps = { detail: CatalogSeriesDetail; initialSeason: CatalogSeason | null }
+type SeriesDetailScreenProps = { detail: CatalogSeriesDetail; initialEpisode?: number | null; initialSeason: CatalogSeason | null }
 
-export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreenProps) {
+export function SeriesDetailScreen({ detail, initialEpisode = null, initialSeason }: SeriesDetailScreenProps) {
+  const cast = uniquePeople([...detail.cast, ...detail.creators])
+  const related = relatedTitles(detail, detail.recommendations)
   const [season, setSeason] = useState(initialSeason)
+  const [returnEpisode, setReturnEpisode] = useState(initialEpisode)
   const [failedSeason, setFailedSeason] = useState<number | null>(initialSeason ? null : (detail.seasons[0]?.number ?? 1))
   const [loadingSeason, setLoadingSeason] = useState(false)
   const controller = useRef<AbortController | null>(null)
 
   async function loadSeason(number: number) {
     if (number === season?.seasonNumber) return
+    setReturnEpisode(null)
     controller.current?.abort()
     const nextController = new AbortController()
     controller.current = nextController
@@ -263,17 +283,18 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
 
   return (
     <FilScreenShell activeKindTab="series" pageHeading={undefined}>
-      <main className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem]" data-consumit-series-detail data-tmdb-id={detail.id}>
         <FilScreenTitleHero detail={detail} />
         <div className="mt-8 px-1 sm:px-3 lg:px-4">
-          <Tabs
+          <ScrollableTabs
             activeValue="episodes"
-            aria-label={`${detail.title} sections`}
+            ariaLabel={`${detail.title} sections`}
             items={[
               { href: '#episodes', label: 'Episodes', value: 'episodes' },
               { href: '#overview', label: 'Overview', value: 'overview' },
               { href: '#reviews', label: 'Reviews', value: 'reviews' },
-              { href: '#cast', label: 'Cast & crew', value: 'cast' },
+              ...(cast.length ? [{ href: '#cast', label: 'Cast & crew', value: 'cast' }] : []),
+              ...(related.length ? [{ href: '#related', label: 'Related', value: 'related' }] : []),
             ]}
           />
           <section className="py-10 sm:py-12 lg:py-14" id="episodes" aria-labelledby="episodes-heading">
@@ -281,6 +302,7 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
             <EpisodesSection
               detail={detail}
               failedSeason={failedSeason}
+              initialEpisode={returnEpisode}
               key={season?.seasonNumber ?? 'no-season'}
               loadingSeason={loadingSeason}
               onRetrySeason={() => failedSeason !== null && void loadSeason(failedSeason)}
@@ -296,12 +318,12 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               <DetailFacts detail={detail} />
             </div>
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="series-cast-heading">
+          {cast.length ? <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="cast" aria-labelledby="series-cast-heading">
             <SectionHeading id="series-cast-heading" title="Cast & crew" />
-            <CastRail cast={[...detail.cast, ...detail.creators]} />
-          </section>
+            <CastRail cast={cast} />
+          </section> : null}
           <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="reviews" aria-labelledby="series-reviews-heading">
-            <SectionHeading id="series-reviews-heading" title="Member reviews" />
+            <SectionHeading id="series-reviews-heading" title="Reviews" />
             <TitleReviews
               id={detail.id}
               kind={detail.kind}
@@ -310,9 +332,9 @@ export function SeriesDetailScreen({ detail, initialSeason }: SeriesDetailScreen
               year={detail.year}
             />
           </section>
-          <section className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" aria-labelledby="series-related-heading">
-            <RelatedRail current={detail} items={detail.recommendations} />
-          </section>
+          {related.length ? <section aria-label="Related titles" className="border-t border-[var(--fs-line)] py-10 sm:py-12 lg:py-14" id="related">
+            <RelatedRail kind={detail.kind} items={related} />
+          </section> : null}
         </div>
       </main>
     </FilScreenShell>

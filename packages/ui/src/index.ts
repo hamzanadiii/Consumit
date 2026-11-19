@@ -91,8 +91,14 @@ export { readQualityPreference, createQualityPreference, type MediaPreferences }
 export {
   ConsumitPlayer,
   type ConsumitPlayerProps,
+  type PlayerControlAction,
+  type PlayerControlModel,
+  type PlayerMediaInput,
+  type PlayerMediaObservation,
+  type PlayerPresentation,
   type PlayerMenuId,
   type PlayerOption,
+  type PlaybackRecoveryViewModel,
   type CaptionBackground,
   type CaptionColor,
   type CaptionFont,
@@ -155,5 +161,7 @@ export {
 } from './title/title'
 
 export { PlayerShortcuts } from './playback/player-shortcuts'
+
+export { PlayerRecoveryPanel, type PlayerRecoveryPanelProps } from './playback/player-recovery-panel'
 
 export { PlayerPanel } from './playback/player-panel'

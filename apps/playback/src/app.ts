@@ -50,7 +50,7 @@ export async function buildPlaybackApp(env: ApiEnv, fetcher: InternalFetch = fet
   const parsedBackend = z.enum(['disk', 's3']).safeParse(process.env.SUBTITLE_FILE_BACKEND ?? 'disk')
   if (!parsedBackend.success) throw new Error('Use a supported subtitle storage backend.')
   const backend = parsedBackend.data
-  if (backend === 's3') {
+  if (backend === 's3' && env.playback?.execution !== 'cloudflare-only') {
     const storage = z.object({ SUBTITLES_S3_BUCKET: z.string().min(1), SUBTITLES_S3_REGION: z.string().min(1), SUBTITLES_S3_ENDPOINT: z.url().optional(), SUBTITLES_S3_CREDENTIALS_FILE: z.string().min(1) }).safeParse({ ...process.env, SUBTITLES_S3_ENDPOINT: process.env.SUBTITLES_S3_ENDPOINT || undefined })
     if (!storage.success) throw new Error('Subtitle object storage requires a bucket, region, and dedicated credentials.')
     if (storage.data.SUBTITLES_S3_ENDPOINT) { const url = new URL(storage.data.SUBTITLES_S3_ENDPOINT); if (url.protocol !== 'https:' || url.origin !== storage.data.SUBTITLES_S3_ENDPOINT || url.username || url.password) throw new Error('Use an exact HTTPS object storage origin.') }
@@ -65,19 +65,20 @@ export async function buildPlaybackApp(env: ApiEnv, fetcher: InternalFetch = fet
     try { await runtime.refreshConfiguration() } catch { throw new ApiError('PLAYBACK_UNAVAILABLE', 'Playback configuration is temporarily unavailable.', { retryable: true }) }
   })
   registerPlaybackRoutes(app, { playback: runtime.playback, origin: env.appOrigin, secure: env.nodeEnv === 'production', dev: env.nodeEnv !== 'production' })
-  registerSubtitleRoutes(app, { subtitles: runtime.subtitles, env, mode: 'delivery' })
+  registerSubtitleRoutes(app, { subtitles: runtime.subtitles, playback: runtime.playback, env, mode: 'delivery' })
   registerSkipTimesRoutes(app, env.nodeEnv === 'test' ? { read: async () => [] } : createSkipTimes({ animeMalId: async id => (await client.anime.title(id)).malId }))
   if (env.playback?.resolver?.computeSecret) registerProviderComputeRoutes(app, env.playback.resolver.computeSecret)
   // Diagnostics run here against the live runtime, but only through a typed,
   // validated operation forwarded by the product API. Playback exposes no
   // admin surface, session, or re-injectable path of its own.
-  const scoutCatalog = env.playback?.enabled ? createScoutCatalog(providerOptions) : undefined
+  const scoutCatalog = env.playback?.enabled && env.playback.execution !== 'cloudflare-only' ? createScoutCatalog(providerOptions) : undefined
   const diagnostics = createDiagnostics({
     env,
     providers: runtime.providers,
     store: runtime.store,
     playback: runtime.playback,
     subtitles: runtime.subtitles,
+    ...(runtime.routeRegistry ? { routeRegistry: runtime.routeRegistry } : {}),
     ...(runtime.probeScheduler ? { probeStatus: () => runtime.probeScheduler!.status() } : {}),
     scoutCatalog,
     scoutRecipes,
@@ -105,7 +106,9 @@ export async function buildPlaybackApp(env: ApiEnv, fetcher: InternalFetch = fet
     if (!parsed.success || parsed.data.region !== env.tmdbRegion) throw new ApiError('BAD_REQUEST', 'Use a valid release-check reference.')
     const provider = runtime.providers.find(row => row.adapter.id === parsed.data.providerId && row.enabled && row.approvedRegions.includes(parsed.data.region) && row.mediaKinds.includes(parsed.data.ref.kind))
     if (!provider) return { source: null }
-    const source = await resolveReleaseProbeSource(provider, parsed.data.ref, parsed.data.audioLanguage, { region: env.tmdbRegion, origin: env.appOrigin, store: runtime.store, ...(env.playback?.relay ? { relay: createPlaybackRelay(env.playback.relay), relayOrigin: env.playback.relay.origin } : {}) })
+    const source = await resolveReleaseProbeSource(provider, parsed.data.ref, parsed.data.audioLanguage, { region: env.tmdbRegion, origin: env.appOrigin, store: runtime.store, ...(env.playback?.relay ? { relay: createPlaybackRelay({ ...env.playback.relay,
+      ...(runtime.routeRegistry ? { routeVersion: runtime.routeRegistry.version, routePolicy: runtime.routeRegistry.relayRoutes() } : {}),
+    }), relayOrigin: env.playback.relay.origin } : {}) })
     return { source: source ? releaseProbeSourceSchema.parse(source) : null }
   })
   app.post('/v1/internal/jobs/run', options, async request => {

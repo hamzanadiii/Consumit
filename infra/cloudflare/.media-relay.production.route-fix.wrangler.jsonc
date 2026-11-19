@@ -1,0 +1,23 @@
+{
+  "name": "consumit-media-relay-production",
+  "main": "../../packages/media-relay/src/worker.ts",
+  "compatibility_date": "2026-09-28",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "APP_ORIGIN": "https://consumit.online",
+    "RELAY_ENABLED": "true",
+    "RELAY_ROUTE_POLICY_REQUIRED": "true",
+    "RELAY_ROUTE_POLICY": "[{\"version\":\"edge-v1-fba5ff557815b44f\",\"provider\":\"anixo\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-production.consumit-project.workers.dev\",\"hosts\":[\"anixo.buzz\"]},{\"version\":\"edge-v1-fba5ff557815b44f\",\"provider\":\"megavid\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-production.consumit-project.workers.dev\",\"hosts\":[\"cdnx.aniwatchtv.site\",\"hls.dramahot.top\"]},{\"version\":\"edge-v1-fba5ff557815b44f\",\"provider\":\"zoko\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-production.consumit-project.workers.dev\",\"hosts\":[\"hls.dramahot.top\",\"hls1.drama1.cfd\"]}]",
+    "RELAY_PROVIDERS": "{\"anixo\":[\"anixo.buzz\"],\"megavid\":[\"cdnx.aniwatchtv.site\",\"hls.dramahot.top\"],\"zoko\":[\"hls.dramahot.top\",\"hls1.drama1.cfd\"]}",
+    "RELAY_DISCOVERY_PROVIDERS": "{}",
+    "RELAY_ROUTE_VERSION": "edge-v1-fba5ff557815b44f"
+  }
+}

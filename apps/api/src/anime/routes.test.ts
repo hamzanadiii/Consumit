@@ -14,6 +14,7 @@ import { loadEnv } from '../config/env.ts'
 import { createFakeIdentity } from '../identity/fake-identity.ts'
 import type { AnimeCatalog } from '../catalog/anilist/adapter.ts'
 import { AnimeError } from './errors.ts'
+import { createTestAnimeCapability } from './test-capability.ts'
 
 const summary: AnimeTitleSummary = {
   anilistId: 1,
@@ -75,7 +76,7 @@ afterEach(async () => {
 describe('anime routes', () => {
   it('validates route input before calling the metadata adapter', async () => {
     const animeCatalog = fakeAnimeCatalog()
-    const app = await buildApp({ animeCatalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog) })
     openApps.push(app)
 
     const responses = await Promise.all([
@@ -95,7 +96,7 @@ describe('anime routes', () => {
   it('keeps anime search behind a signed-in member while browsing stays public', async () => {
     const animeCatalog = fakeAnimeCatalog()
     const identity = createFakeIdentity()
-    const app = await buildApp({ animeCatalog, identity, env: loadEnv({ NODE_ENV: 'test' }) })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog), identity, env: loadEnv({ NODE_ENV: 'test' }) })
     openApps.push(app)
 
     const anonymous = await app.inject({ method: 'GET', url: '/v1/anime/search?q=one%20piece' })
@@ -120,7 +121,7 @@ describe('anime routes', () => {
   it('preserves upstream outages instead of answering with a false 404', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockRejectedValueOnce(new AnimeError('ANILIST_UNAVAILABLE', 'AniList is unavailable.', { retryable: true }))
-    const app = await buildApp({ animeCatalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog) })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/anime/1' })
@@ -137,7 +138,7 @@ describe('anime routes', () => {
   })
 
   it('exposes a contract-checked anime detail response', async () => {
-    const app = await buildApp({ animeCatalog: fakeAnimeCatalog() })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog()) })
     openApps.push(app)
 
     const response = await app.inject({ method: 'GET', url: '/v1/anime/1' })
@@ -148,7 +149,7 @@ describe('anime routes', () => {
 
   it('browses anime by sort and filters before calling the metadata adapter', async () => {
     const animeCatalog = fakeAnimeCatalog()
-    const app = await buildApp({ animeCatalog })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/browse?sort=top-rated&genre=Action&year=2024&format=TV&page=2' })
@@ -171,12 +172,11 @@ describe('anime routes', () => {
     const episodeByAnilistId = vi.fn(async (id: number, number: number) => id === 142853 && number === 1
       ? { title: 'It Is What It Is', synopsis: 'Back in the present.', stillUrl: 'https://artworks.thetvdb.com/banners/season2-episode1.jpg', airDate: '2023-01-08' }
       : null)
-    const app = await buildApp({
-      animeCatalog,
-      animeCanonicalEpisodeArt: { episodeByAnilistId },
-      animeEpisodeArt: { episodeByMalId: async () => null },
-      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
-    })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      canonicalEpisodeArt: { episodeByAnilistId },
+      episodeArt: { episodeByMalId: async () => null },
+      tmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
+    }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/142853/episodes/1' })
@@ -189,12 +189,11 @@ describe('anime routes', () => {
   it('fills partial canonical metadata from existing episode art', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
-    const app = await buildApp({
-      animeCatalog,
-      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: 'Canonical title', synopsis: null, stillUrl: null, airDate: '2023-01-08' }) },
-      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: null, overview: 'Episode overview', stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
-      animeEpisodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
-    })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      canonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: 'Canonical title', synopsis: null, stillUrl: null, airDate: '2023-01-08' }) },
+      tmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: null, overview: 'Episode overview', stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
+      episodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
+    }) })
     openApps.push(app)
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
     expect(hit.statusCode).toBe(200)
@@ -204,12 +203,11 @@ describe('anime routes', () => {
   it('keeps a canonical still when a title fallback fails', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
-    const app = await buildApp({
-      animeCatalog,
-      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: null, synopsis: null, stillUrl: 'https://artworks.thetvdb.com/banners/episode.jpg', airDate: '2023-01-08' }) },
-      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
-      animeEpisodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
-    })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      canonicalEpisodeArt: { episodeByAnilistId: async () => ({ title: null, synopsis: null, stillUrl: 'https://artworks.thetvdb.com/banners/episode.jpg', airDate: '2023-01-08' }) },
+      tmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => null },
+      episodeArt: { episodeByMalId: async () => { throw new Error('Kitsu unavailable') } },
+    }) })
     openApps.push(app)
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
     expect(hit.statusCode).toBe(200)
@@ -217,11 +215,10 @@ describe('anime routes', () => {
   })
 
   it('falls back to existing art when canonical metadata is unavailable', async () => {
-    const app = await buildApp({
-      animeCatalog: fakeAnimeCatalog(),
-      animeCanonicalEpisodeArt: { episodeByAnilistId: async () => { throw new Error('Mapping unavailable') } },
-      animeTmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: 'Existing episode', overview: null, stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
-    })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog(), {
+      canonicalEpisodeArt: { episodeByAnilistId: async () => { throw new Error('Mapping unavailable') } },
+      tmdbEpisodeArt: { titleLogo: async () => null, episodeByTitle: async () => ({ tmdbId: 1, season: 1, episode: 1, title: 'Existing episode', overview: null, stillUrl: 'https://image.tmdb.org/t/p/w780/episode.jpg', airDate: null }) },
+    }) })
     openApps.push(app)
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/1/episodes/1' })
     expect(hit.statusCode).toBe(200)
@@ -238,7 +235,7 @@ describe('anime routes', () => {
           : null
       )),
     }
-    const app = await buildApp({ animeCatalog, animeEpisodeArt: episodeArt })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, { episodeArt }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })
@@ -255,7 +252,7 @@ describe('anime routes', () => {
     const episodeByMalId = vi.fn(async (_malId: number, episode: number) => episode === 5
       ? { kitsuId: '9', episode: 5, title: 'Ballad', synopsis: 'A past.', stillUrl: 'https://media.kitsu.app/x.jpeg', airDate: '1998-05-01' }
       : null)
-    const app = await buildApp({ animeCatalog, animeEpisodeArt: { episodeByMalId } })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, { episodeArt: { episodeByMalId } }) })
     openApps.push(app)
     const url = '/v1/anime/21/episodes?numbers=5,6'
     const first = await app.inject({ method: 'GET', url })
@@ -268,7 +265,7 @@ describe('anime routes', () => {
   })
 
   it('404s episode art without a MAL mapping', async () => {
-    const app = await buildApp({ animeCatalog: fakeAnimeCatalog(), animeEpisodeArt: { episodeByMalId: async () => null } })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog(), { episodeArt: { episodeByMalId: async () => null } }) })
     openApps.push(app)
 
     // detail.malId is null in the fixture.
@@ -278,16 +275,15 @@ describe('anime routes', () => {
   it('prefers TMDB art as the primary source when both answer', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
-    const app = await buildApp({
-      animeCatalog,
-      animeEpisodeArt: {
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      episodeArt: {
         episodeByMalId: async () => ({ kitsuId: '9', episode: 5, title: 'Ballad', synopsis: 'A past.', stillUrl: 'https://media.kitsu.app/x.jpeg', airDate: '1998-05-01' }),
       },
-      animeTmdbEpisodeArt: {
+      tmdbEpisodeArt: {
         titleLogo: async () => null,
         episodeByTitle: async () => ({ tmdbId: 34969, season: 1, episode: 5, title: 'Ballad of Fallen Angels', overview: 'Spike...', stillUrl: 'https://image.tmdb.org/t/p/w780/y.jpg', airDate: '1998-05-01' }),
       },
-    })
+    }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })
@@ -298,16 +294,15 @@ describe('anime routes', () => {
   it('prefers TMDB stills when Kitsu knows the title but has no art', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 820 })
-    const app = await buildApp({
-      animeCatalog,
-      animeEpisodeArt: {
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      episodeArt: {
         episodeByMalId: async () => ({ kitsuId: '727', episode: 1, title: 'In the Eternal Night', synopsis: null, stillUrl: null, airDate: null }),
       },
-      animeTmdbEpisodeArt: {
+      tmdbEpisodeArt: {
         titleLogo: async () => null,
         episodeByTitle: async () => ({ tmdbId: 27660, season: 1, episode: 1, title: 'In the Eternal Night', overview: 'Lupin...', stillUrl: 'https://image.tmdb.org/t/p/w780/logh.jpg', airDate: '1988-04-09' }),
       },
-    })
+    }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/820/episodes/1' })
@@ -316,26 +311,24 @@ describe('anime routes', () => {
   })
 
   it('enriches titles with TMDB hero logos without blocking on failure', async () => {
-    const app = await buildApp({
-      animeCatalog: fakeAnimeCatalog(),
-      animeTmdbEpisodeArt: {
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog(), {
+      tmdbEpisodeArt: {
         titleLogo: async () => ({ tmdbId: 1, kind: 'series' as const, logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png' }),
         episodeByTitle: async () => null,
       },
-    })
+    }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/1' })
     expect(hit.statusCode).toBe(200)
     expect(hit.json()).toMatchObject({ logoUrl: 'https://image.tmdb.org/t/p/w500/logo.png' })
 
-    const failing = await buildApp({
-      animeCatalog: fakeAnimeCatalog(),
-      animeTmdbEpisodeArt: {
+    const failing = await buildApp({ animeCapability: createTestAnimeCapability(fakeAnimeCatalog(), {
+      tmdbEpisodeArt: {
         titleLogo: async () => { throw new Error('tmdb down') },
         episodeByTitle: async () => null,
       },
-    })
+    }) })
     openApps.push(failing)
     const fallback = await failing.inject({ method: 'GET', url: '/v1/anime/1' })
     expect(fallback.statusCode).toBe(200)
@@ -352,7 +345,7 @@ describe('anime routes', () => {
       }] : [],
       page: 1, totalPages: 1, totalResults: 1,
     }))
-    const app = await buildApp({ animeCatalog: { ...fakeAnimeCatalog(), search } as never })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability({ ...fakeAnimeCatalog(), search } as never) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/match?title=Cowboy%20Bebop&year=1998' })
@@ -365,12 +358,11 @@ describe('anime routes', () => {
   it('404s usable-empty art instead of serving blank tracks', async () => {
     const animeCatalog = fakeAnimeCatalog()
     vi.mocked(animeCatalog.title).mockResolvedValue({ ...detail, malId: 21 })
-    const app = await buildApp({
-      animeCatalog,
-      animeEpisodeArt: {
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, {
+      episodeArt: {
         episodeByMalId: async () => ({ kitsuId: '9', episode: 1, title: null, synopsis: null, stillUrl: null, airDate: null }),
       },
-    })
+    }) })
     openApps.push(app)
 
     expect((await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/1' })).statusCode).toBe(404)
@@ -392,7 +384,7 @@ describe('anime routes', () => {
           : null
       )),
     }
-    const app = await buildApp({ animeCatalog, animeEpisodeArt: { episodeByMalId: async () => null }, animeTmdbEpisodeArt: tmdbEpisodeArt })
+    const app = await buildApp({ animeCapability: createTestAnimeCapability(animeCatalog, { episodeArt: { episodeByMalId: async () => null }, tmdbEpisodeArt }) })
     openApps.push(app)
 
     const hit = await app.inject({ method: 'GET', url: '/v1/anime/21/episodes/5' })

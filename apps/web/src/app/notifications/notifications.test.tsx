@@ -6,6 +6,7 @@ import { SessionProvider } from '../session/session'
 import { NewEpisodesRail } from '../home/new-episodes-rail'
 import { NotificationBell } from './notification-bell'
 import { NotificationPreference } from '../settings/notification-preference'
+import { SocialInbox } from '../taste/social'
 
 const member = { id: 'member', username: 'member', email: 'member@example.com' } as SafeMember
 const episode: ReleaseEpisode = { ref: { kind: 'series', id: 95396, season: 2, episode: 4 }, title: 'A very long series title that should remain readable across a small mobile screen', episodeTitle: null, imageUrl: null, releasedAt: '2026-10-08T00:00:00.000Z', datePrecision: 'date', checkedAt: null }
@@ -113,5 +114,33 @@ describe('personal release surfaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/watch/series/95396?season=2&episode=4'))
     expect(attempts).toBe(2); expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+  it('keeps social updates visible and retries the exact mark-all-read action', async () => {
+    const notification = { id: 'notice-1', text: 'A curator replied to your review.', href: '/reviews/review-1', createdAt: '2026-10-09T11:00:00.000Z', read: false }
+    let writes = 0
+    let rejectFirstWrite!: (response: Response) => void
+    const fetch = vi.fn((path: string) => {
+      if (path === '/v1/taste/notifications/read-all') {
+        if (++writes === 1) return new Promise<Response>(resolve => { rejectFirstWrite = resolve })
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      return response({ items: [notification], nextCursor: null })
+    })
+    vi.stubGlobal('fetch', fetch)
+    render(wrap(<SocialInbox />))
+    expect(await screen.findByRole('link', { name: notification.text })).toHaveAttribute('href', notification.href)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark all read' }))
+    expect(screen.getByRole('button', { name: 'Marking read…' })).toBeDisabled()
+    await act(async () => { rejectFirstWrite(new Response(null, { status: 503 })) })
+    expect(await screen.findByRole('alert')).toHaveTextContent('The account service is temporarily unavailable. Try again.')
+    expect(screen.getByRole('link', { name: notification.text })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry marking all read' }))
+    expect(await screen.findByText('All conversations are marked read.')).toHaveAttribute('role', 'status')
+    expect(writes).toBe(2)
+    expect(screen.getByRole('button', { name: 'Mark all read' })).toBeDisabled()
+    expect(screen.getByRole('link', { name: notification.text }).querySelector('strong')).toBeNull()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

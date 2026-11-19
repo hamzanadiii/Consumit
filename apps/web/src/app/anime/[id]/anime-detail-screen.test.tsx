@@ -1,5 +1,6 @@
 import type { AnimeEpisode, AnimeTitleDetail } from '@consumit/contracts'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '@/test/render'
@@ -7,7 +8,8 @@ import { renderWithProviders } from '@/test/render'
 import { AnimeDetailScreen, AnimeHeroTitle, indexStreamingMeta } from './anime-detail-screen'
 
 const batch = vi.hoisted(() => vi.fn<(_id: number, _numbers: number[]) => Promise<(AnimeEpisode | null)[]>>(async () => []))
-vi.mock('@/lib/anime-browser', () => ({ browserAnimeEpisodes: batch }))
+const retryRelations = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/anime-browser', () => ({ browserAnimeEpisodes: batch, browserAnimeRelations: retryRelations }))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -98,6 +100,13 @@ describe('anime hero title', () => {
     expect(screen.getByRole('heading', { name: 'Cowboy Bebop' })).toBeInTheDocument()
   })
 
+  it('shows the title as display text when matched logo art fails', () => {
+    render(<AnimeHeroTitle logoUrl="https://image.tmdb.org/t/p/w500/broken-logo.png" title="Cowboy Bebop" />)
+
+    fireEvent.error(screen.getByRole('img', { name: 'Cowboy Bebop' }))
+    expect(screen.getByRole('heading', { name: 'Cowboy Bebop' })).not.toHaveClass('sr-only')
+  })
+
   it('renders the serif display title without a logo', () => {
     render(<AnimeHeroTitle logoUrl={null} title="Cowboy Bebop" />)
     expect(screen.getByRole('heading', { name: 'Cowboy Bebop' })).toBeInTheDocument()
@@ -106,6 +115,20 @@ describe('anime hero title', () => {
 })
 
 describe('anime detail screen member surfaces', () => {
+  it('falls back from a failed banner to cover art, then to the branded background', () => {
+    const { container } = renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture({ bannerImage: 'https://cdn.example/banner.jpg' })} relations={null} />)
+    const masthead = container.querySelector('[data-consumit-anime-masthead]')!
+
+    const banner = Array.from(masthead.querySelectorAll('img')).find((image) => image.src.includes('banner.jpg'))
+    expect(banner).toBeDefined()
+    fireEvent.error(banner!)
+
+    const cover = Array.from(masthead.querySelectorAll('img')).find((image) => image.src.includes('cover.jpg'))
+    expect(cover).toBeDefined()
+    fireEvent.error(cover!)
+    expect(masthead.querySelector('[data-consumit-anime-artwork-fallback]')).toBeInTheDocument()
+  })
+
   it('loads metadata once for the visible page and labels title artwork', async () => {
     batch.mockResolvedValueOnce([{ anilistId: 21, number: 1, title: 'The Journey', description: 'A new beginning.', thumbnail: null, airDate: '2023-09-01', duration: 24 }, null])
     renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
@@ -134,7 +157,7 @@ describe('anime detail screen member surfaces', () => {
     expect(document.querySelector('[data-consumit-anime-masthead]')?.textContent).not.toMatch(/Next Episode: #/)
   })
 
-  it('wires a Reviews tab and member reviews section for anime', () => {
+  it('wires a Reviews tab and reviews section for anime', () => {
     renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
 
     const tabStrip = screen.getByRole('navigation', { name: 'Frieren: Beyond Journey\u2019s End sections' })
@@ -144,7 +167,7 @@ describe('anime detail screen member surfaces', () => {
 
     const reviews = document.getElementById('reviews')
     expect(reviews).not.toBeNull()
-    expect(reviews?.contains(screen.getByRole('heading', { name: 'Member reviews' }))).toBe(true)
+    expect(reviews?.contains(screen.getByRole('heading', { name: 'Reviews' }))).toBe(true)
 
     const reviewsModule = screen.getByTestId('title-reviews')
     expect(reviewsModule).toHaveAttribute('data-kind', 'anime')
@@ -154,6 +177,27 @@ describe('anime detail screen member surfaces', () => {
 })
 
 describe('anime recommendations', () => {
+  it('retries a failed related-anime read in place and focuses the recovered title', async () => {
+    const user = userEvent.setup()
+    const sequel = animeFixture({ anilistId: 22, titles: { english: 'Next Season', native: null, preferred: 'Next Season', romaji: 'Next Season' } })
+    retryRelations
+      .mockRejectedValueOnce(new Error('The catalog is unavailable.'))
+      .mockResolvedValueOnce({ main: animeFixture(), relations: [{ type: 'SEQUEL', anime: sequel }] })
+    renderWithProviders(<AnimeDetailScreen airing={null} detail={animeFixture()} relations={null} />)
+
+    expect(screen.getByText('Related anime could not load.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry related anime' }))
+    expect(await screen.findByText('Related anime is still unavailable. Try again.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry related anime' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Retry related anime' }))
+
+    const recovered = await screen.findByRole('link', { name: 'Next Season' })
+    expect(recovered).toHaveAttribute('href', '/anime/22')
+    expect(recovered).toHaveFocus()
+    expect(retryRelations).toHaveBeenNthCalledWith(1, 21, expect.any(AbortSignal))
+    expect(retryRelations).toHaveBeenNthCalledWith(2, 21, expect.any(AbortSignal))
+  })
+
   it('shows distinct related seasons and films before the overview and removes Staff', () => {
     const original = animeFixture()
     const sequel = animeFixture({ anilistId: 22, titles: { ...original.titles, preferred: 'Next Season' } })

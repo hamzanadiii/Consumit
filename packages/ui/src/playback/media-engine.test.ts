@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { attachMediaEngine, dedupeQualityHeights, orderQualityOptions, validQualityHeight } from './media-engine'
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
-const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }>; currentLevel: number; audioTrack: number; nextAudioTrack: number }>)
+const instances = vi.hoisted(() => [] as Array<{ levels: Array<{ height?: number; bitrate: number }>; currentLevel: number; audioTrack: number; nextAudioTrack: number; subtitleTrack: number; subtitleDisplay: boolean }>)
 const startLoad = vi.hoisted(() => vi.fn())
 vi.mock('hls.js', () => ({
   default: class {
@@ -32,6 +32,23 @@ vi.mock('hls.js', () => ({
 const source = { type: 'hls' as const, src: 'https://cdn.consumit.example/master.m3u8' }
 
 describe('media engine native teardown', () => {
+  it('keeps video playing when an embedded subtitle playlist is malformed', async () => {
+    instances.length = 0; startLoad.mockClear()
+    const video = document.createElement('video')
+    video.currentTime = 12
+    const fatal = vi.fn()
+    const engine = await attachMediaEngine(video, source, { tracks: vi.fn(), fatal })
+    instances[0]!.subtitleTrack = 1; instances[0]!.subtitleDisplay = true
+    const error = { fatal: true, type: 'network', details: 'levelParsingError', context: { type: 'subtitleTrack', id: 1 }, parent: 'subtitle' }
+    handlers.get('error')?.('error', error)
+    expect(fatal).not.toHaveBeenCalled()
+    expect(instances[0]!.subtitleTrack).toBe(-1)
+    expect(instances[0]!.subtitleDisplay).toBe(false)
+    expect(startLoad).toHaveBeenCalledWith(12)
+    handlers.get('error')?.('error', error)
+    expect(startLoad).toHaveBeenCalledTimes(1)
+    engine.destroy()
+  })
   it('keeps playing HLS audio buffered until the selected track is active', async () => {
     instances.length = 0
     const video = document.createElement('video')

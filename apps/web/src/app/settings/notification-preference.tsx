@@ -9,8 +9,10 @@ export function NotificationPreference() {
   const { member, data, error, loading, refresh } = useReleaseResource(readNotificationPreferences)
   const [state, setState] = useState<{ owner: string; busy: boolean; error?: string; attempted?: boolean } | null>(null)
   const controller = useRef<AbortController | null>(null)
+  const retryRef = useRef<HTMLButtonElement>(null)
   useEffect(() => () => controller.current?.abort(), [member?.id])
   const busy = state?.owner === member?.id && state?.busy, failure = state?.owner === member?.id ? state?.error : undefined
+  useEffect(() => { if (failure && !busy) retryRef.current?.focus() }, [busy, failure])
   async function change(enabled: boolean) {
     if (!member || busy) return
     const owner = member.id, next = new AbortController(); controller.current?.abort(); controller.current = next
@@ -24,6 +26,6 @@ export function NotificationPreference() {
     <PreferenceRow label="New episodes from your Watchlist and Favorites" description="Optional in-app reminders after an exact episode passes a playback check. Your Home shelf works even with reminders off."
       control={<Toggle checked={data?.newEpisodes ?? false} disabled={!data || loading || Boolean(busy)} label="New episodes from your Watchlist and Favorites" onCheckedChange={enabled => void change(enabled)} />} />
     {loading ? <p className="py-2 text-xs text-muted" role="status">Reading notification preferences…</p> : null}
-    {error || failure ? <div className="py-3 text-sm text-muted" role="alert"><p>{failure ?? error}</p><Button disabled={Boolean(busy)} onClick={() => { if (failure && state?.attempted !== undefined) void change(state.attempted); else refresh() }} size="sm" variant="secondary">Try again</Button></div> : null}
+    {error || failure ? <div className="py-3 text-sm text-muted" role="alert"><p>{failure ?? error}</p><Button className="min-h-11 focus:ring-2 focus:ring-orange" disabled={Boolean(busy)} onClick={() => { if (failure && state?.attempted !== undefined) void change(state.attempted); else refresh() }} ref={retryRef} size="sm" variant="secondary">Try again</Button></div> : null}
   </>
 }

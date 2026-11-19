@@ -35,7 +35,7 @@ describe('selection components', () => {
     expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Reviews' })).toHaveAttribute(
       'aria-current',
-      'page',
+      'location',
     )
     expect(screen.getByRole('button', { name: 'Watched' })).toHaveAttribute(
       'aria-pressed',

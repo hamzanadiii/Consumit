@@ -68,6 +68,7 @@ export async function listProviders(signal?: AbortSignal): Promise<{ providers: 
 }
 
 export type ProviderKind = 'movie' | 'series' | 'anime'
+export type ProviderHealthKind = ProviderKind | 'audio'
 export type ProviderOrder = { kind: ProviderKind; providerIds: string[]; revision: number }
 export async function getProviderOrder(kind: ProviderKind): Promise<ProviderOrder> {
   return request(`/v1/admin/providers/order/${kind}`, { method: 'GET' })
@@ -87,15 +88,26 @@ export type ProviderTestResult = {
 }
 
 export type ProviderHealthRow = {
+  kind: ProviderKind
+  purpose: 'video' | 'audio'
   id: string
   region: string
   enabled: boolean
+  delivery: 'direct' | 'relay' | 'embed'
+  routeVersion: string | null
   status: 'healthy' | 'degraded' | 'down' | 'unknown' | 'disabled'
-  probe: { ok: boolean; ms: number; at: number; code?: string } | null
+  lookupStatus: 'healthy' | 'degraded' | 'down' | 'unknown' | 'disabled'
+  deliveryStatus: 'healthy' | 'degraded' | 'unknown' | 'disabled'
+  stage: 'lookup' | 'delivery' | 'playback'
+  lastSuccessAt: number | null
+  latencyMs: number | null
+  failureCategory: string | null
+  evidence: { firstFrame: number; advanced: number; seeked: number; resumed: number }
+  probe: { ok: boolean; ms: number; at: number; stage?: 'lookup'; purpose?: 'video' | 'audio'; code?: string } | null
   circuit: { failures: number; playbackFailures: number; openUntil: number; outcomes: number; success: number; latencyMs: number } | null
 }
 
-export async function listProviderHealth(signal?: AbortSignal): Promise<Record<'movie' | 'series' | 'anime', ProviderHealthRow[]>> {
+export async function listProviderHealth(signal?: AbortSignal): Promise<Record<ProviderHealthKind, ProviderHealthRow[]>> {
   return request('/v1/admin/providers/health', { method: 'GET', ...(signal ? { signal } : {}) })
 }
 

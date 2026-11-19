@@ -1,0 +1,22 @@
+# Apply AFTER existing production pins. Activate only with reviewed route
+# evidence, scoped R2 access, verified quotas and subtitle lifecycle rules.
+x-provider-edge: &provider-edge
+  PROVIDER_EXECUTION_MODE: cloudflare-only
+  PLAYBACK_EDGE_ACCEPTED_ROUTES: ${PLAYBACK_EDGE_ACCEPTED_ROUTES:-[]}
+  SUBTITLE_WORKER_ORIGIN: ${SUBTITLE_WORKER_ORIGIN:?Set the accepted subtitle Worker origin}
+  SUBTITLE_WORKER_SECRET: ${SUBTITLE_WORKER_SECRET:?Set the dedicated subtitle Worker secret}
+  PLAYBACK_RESOLVER_API_PROVIDERS: '[]'
+  PLAYBACK_RESOLVER_COMPUTE_ENABLED: 'false'
+  PLAYBACK_NODE_ENABLED: 'false'
+  PLAYBACK_NODE_PROVIDERS: '{}'
+services:
+  api:
+    environment: *provider-edge
+  api-legacy:
+    environment: *provider-edge
+  playback:
+    environment: *provider-edge
+  release-worker:
+    profiles: !override [provider-browser-local-only]
+    environment:
+      PROVIDER_EXECUTION_MODE: cloudflare-only

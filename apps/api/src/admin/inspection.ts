@@ -79,7 +79,7 @@ export function registerProviderInspection(app: FastifyInstance, deps: {
       const registration = { ...provider, enabled: true }
       const preview = proxy ? valid.find(source => deps.relay?.permits({ source, registration })) : valid[0]
       const expiry = preview ? proxy ? Math.min(Date.parse(preview.expiresAt) - 5000, Date.now() + 90_000) : Date.parse(preview.expiresAt) : 0
-      const previewSrc = preview ? proxy ? await deps.relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, deps.origin) : preview.url : undefined
+      const previewSrc = preview ? proxy ? await deps.relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, deps.origin, { kind: input.ref.kind, region: deps.region, purpose: 'video' }) : preview.url : undefined
       reply.header('cache-control', 'private, no-store')
       return {
         providerId: input.providerId, ok: valid.length > 0 && (!proxy || Boolean(previewSrc)), elapsedMs: elapsed(), region: deps.region,

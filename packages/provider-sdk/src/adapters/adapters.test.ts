@@ -11,12 +11,12 @@ import type { ProviderSource } from '../index.ts'
 const now = Date.UTC(2026, 8, 9)
 const input = { ref: { kind: 'movie' as const, id: 1 }, region: 'US', audioLanguage: 'en' }
 const episode = { ...input, ref: { kind: 'series' as const, id: 2, season: 3, episode: 4 } }
-function http(...responses: { status?: number; text: string }[]) {
+function http(...responses: { status?: number; text: string; headers?: Headers }[]) {
   return vi.fn<ProviderHttp>(async (url, _headers, signal) => {
     signal.throwIfAborted()
     const next = responses.shift()
     if (!next) throw new Error('Unexpected request')
-    return { status: next.status ?? 200, text: next.text, url }
+    return { status: next.status ?? 200, text: next.text, url, ...(next.headers ? { headers: next.headers } : {}) }
   })
 }
 function vixPage(expires = now / 1000 + 3600) { return `window.masterPlaylist = { params: {'token': 'test-access', 'expires': '${expires}'}, url: 'https://vixsrc.to/playlist' };` }
@@ -538,51 +538,131 @@ describe('imported provider contracts', () => {
       expect(result).toMatchObject({ ok: true, sources: [{ key: 'adaptive-1', type: 'hls', headers: { referer: 'https://nextgencloudfabric.com/', origin: 'https://nextgencloudfabric.com' }, qualityHint: 'Auto · up to 1080p' }] })
     })
   }
-  it('resolves Mapple movies through token, encrypt, and manifest quality', async () => {
-    const page = `<html><script>window.__REQUEST_TOKEN__ = "tok-1";</script></html>`
-    const manifest = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720\nvideo.m3u8'
-    const client = http(
-      { text: page },
-      { text: JSON.stringify({ success: true, token: 'stream-tok' }) },
-      { text: JSON.stringify({ url: '/api/stream-encrypted?data=abc' }) },
-      { text: JSON.stringify({ success: true, data: { stream_url: 'https://cdn.example/master.m3u8' } }) },
-      { text: manifest },
-    )
+  it('resolves Mapple movies through session, encrypt, and multi-source manifests', async () => {
+    const pageUrl = 'https://mapple.fun/watch/movie/1'
+    const reply = (url: string, body: unknown, status = 200) => ({ status, text: JSON.stringify(body), url })
+    const client = vi.fn<ProviderHttp>(async (url, headers, signal, init) => {
+      signal.throwIfAborted()
+      if (url === pageUrl) {
+        return { status: 200, text: '<html></html>', url, headers: new Headers({ 'set-cookie': '_mapple_site=site-token; Path=/' }) }
+      }
+      if (url === 'https://mapple.fun/api/ui/session') {
+        expect(headers.cookie).toContain('_mapple_site=site-token')
+        return reply(url, { token: 'request-token' })
+      }
+      if (url === 'https://mapple.fun/api/media-session') return reply(url, { token: 'stream-token' })
+      if (url === 'https://mapple.fun/api/encrypt') {
+        const body = JSON.parse(String(init?.body))
+        expect(body.data).toMatchObject({ mediaId: 1, mediaType: 'movie', tv_slug: '', source: body.data.source })
+        return reply(url, { url: `/api/stream-encrypted?data=${body.data.source}` })
+      }
+      if (url.startsWith('https://mapple.fun/api/stream-encrypted?')) {
+        const source = new URL(url).searchParams.get('data')
+        return reply(url, { success: true, data: { stream_url: `https://source.jordanblackwell.bid/${source}.m3u8` } })
+      }
+      if (url.startsWith('https://source.jordanblackwell.bid/')) {
+        expect(headers).toEqual({ origin: 'https://mapple.fun', referer: 'https://mapple.fun/', 'user-agent': 'node' })
+        const source = new URL(url).pathname.slice(1, -'.m3u8'.length)
+        const height = source === 's25' ? 2160 : source === 'mapple' ? 1080 : source === 's10' ? 720 : 480
+        return { status: 200, text: `#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1920x${height}\nv.m3u8`, url }
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
     const result = await createMappleProvider(client, () => now).resolve(input, new AbortController().signal)
-    expect(client.mock.calls[0]?.[0]).toBe('https://mapple.rip/watch/movie/1')
-    expect(JSON.parse(String(client.mock.calls[1]?.[3]?.body)).requestToken).toBe('tok-1')
-    expect(client.mock.calls[3]?.[0]).toContain('requestToken=tok-1&token=stream-tok')
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'mapple:720p', type: 'hls', height: 720, qualityHint: '720p', headers: { referer: 'https://mapple.rip/' } }] })
+    expect(client.mock.calls[0]?.[0]).toBe(pageUrl)
+    expect(result).toMatchObject({
+      ok: true,
+      sources: [
+        { key: 'mapple:s25:2160p', type: 'hls', height: 2160, qualityHint: '2160p', qualityGroup: 'mapple' },
+        { key: 'mapple:mapple:1080p', type: 'hls', height: 1080, qualityHint: '1080p', qualityGroup: 'mapple', headers: { origin: 'https://mapple.fun', referer: 'https://mapple.fun/', 'user-agent': 'node' } },
+        { key: 'mapple:s10:720p', height: 720, qualityHint: '720p' },
+        { key: 'mapple:s2:480p', height: 480, qualityHint: '480p' },
+      ],
+    })
+  })
+  it('keeps a validated Mapple 4K source when another lane stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      const client: ProviderHttp = async (url, _headers, signal, init) => {
+        signal.throwIfAborted()
+        const reply = (body: unknown) => ({ status: 200, text: JSON.stringify(body), url })
+        if (url.includes('/watch/')) return { status: 200, text: '<html/>', url, headers: new Headers({ 'set-cookie': '_mapple_site=test' }) }
+        if (url.endsWith('/api/ui/session') || url.endsWith('/api/media-session')) return reply({ token: 'test' })
+        if (url.endsWith('/api/encrypt')) {
+          const body = JSON.parse(String(init?.body))
+          if (body.data.source === 's2') return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+          return reply({ url: '/api/stream-encrypted' })
+        }
+        if (url.includes('/api/stream-encrypted')) return reply({ data: { stream_url: 'https://proxy2.jordanblackwell.bid/4k.m3u8' } })
+        return { status: 200, text: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,RESOLUTION=3840x2160\nv.m3u8', url }
+      }
+      const pending = createMappleProvider(client, () => now, { sourceIds: ['s25', 's2'] }).resolve(input, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(6500)
+      expect(await pending).toMatchObject({ ok: true, sources: [{ key: 'mapple:s25:2160p', height: 2160 }] })
+    } finally { vi.useRealTimers() }
   })
   it('resolves Mapple episodes with exact tv_slug and bounded proof-of-work', async () => {
-    const page = `<html><script>window.__REQUEST_TOKEN__ = "tok-2";</script></html>`
-    const manifest = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvideo.m3u8'
-    const client = http(
-      { text: page },
-      { text: JSON.stringify({ success: true, requiresPow: true, pow: { challengeId: 'c1', challenge: 'pow-test', difficulty: 1 } }) },
-      { text: JSON.stringify({ success: true, token: 'tok-tv' }) },
-      { text: JSON.stringify({ url: 'https://cdn.example/enc' }) },
-      { text: JSON.stringify({ success: true, data: { stream_url: 'https://cdn.example/tv.m3u8' } }) },
-      { text: manifest },
-    )
+    const pageUrl = 'https://mapple.fun/watch/tv/2/3/4'
+    const reply = (url: string, body: unknown) => ({ status: 200, text: JSON.stringify(body), url })
+    let mediaSessionCalls = 0
+    const client = vi.fn<ProviderHttp>(async (url, _headers, signal, init) => {
+      signal.throwIfAborted()
+      if (url === pageUrl) {
+        return { status: 200, text: '<html></html>', url, headers: new Headers({ 'set-cookie': '_mapple_site=site; Path=/' }) }
+      }
+      if (url === 'https://mapple.fun/api/ui/session') return reply(url, { token: 'request-token' })
+      if (url === 'https://mapple.fun/api/media-session') {
+        mediaSessionCalls++
+        const body = JSON.parse(String(init?.body))
+        if (mediaSessionCalls === 1) {
+          expect(body).toMatchObject({ mediaId: 2, mediaType: 'tv', tv_slug: '3-4', requestToken: 'request-token' })
+          return reply(url, { requiresPow: true, pow: { challengeId: 'c1', challenge: 'pow-test', difficulty: 1 } })
+        }
+        expect(body.pow).toMatchObject({ challengeId: 'c1' })
+        expect(typeof body.pow.nonce).toBe('string')
+        return reply(url, { token: 'tv-token' })
+      }
+      if (url === 'https://mapple.fun/api/encrypt') {
+        const body = JSON.parse(String(init?.body))
+        return body.data.source === 's10' ? reply(url, { url: '/api/stream-encrypted?data=s10' }) : reply(url, {})
+      }
+      if (url.startsWith('https://mapple.fun/api/stream-encrypted?')) {
+        return reply(url, { success: true, data: { stream_url: 'https://proxy2.jordanblackwell.bid/tv.m3u8' } })
+      }
+      if (url === 'https://proxy2.jordanblackwell.bid/tv.m3u8') {
+        return { status: 200, text: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nv.m3u8', url }
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
     const result = await createMappleProvider(client, () => now).resolve(episode, new AbortController().signal)
-    expect(client.mock.calls[0]?.[0]).toBe('https://mapple.rip/watch/tv/2')
-    const bodies = client.mock.calls.map(([, , , init]) => String(init?.body ?? ''))
-    expect(bodies.some((body) => body.includes('"tv_slug":"3-4"'))).toBe(true)
-    expect(bodies.some((body) => body.includes('"nonce":'))).toBe(true)
-    expect(result).toMatchObject({ ok: true, sources: [{ key: 'mapple:auto', qualityHint: 'Auto' }] })
+    expect(client.mock.calls[0]?.[0]).toBe(pageUrl)
+    expect(mediaSessionCalls).toBe(2)
+    expect(result).toMatchObject({ ok: true, sources: [{ key: 'mapple:s10:auto', qualityHint: 'Auto', qualityGroup: 'mapple' }] })
   })
-  it('keeps Mapple missing tokens and non-manifests structured', async () => {
-    const noToken = createMappleProvider(http({ text: '<html>nope</html>' }), () => now)
-    expect(await noToken.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
-    const notManifest = createMappleProvider(http(
-      { text: `<html><script>window.__REQUEST_TOKEN__ = "t";</script></html>` },
-      { text: JSON.stringify({ success: true, token: 'tok' }) },
-      { text: JSON.stringify({ url: '/api/stream-encrypted?data=x' }) },
-      { text: JSON.stringify({ success: true, data: { stream_url: 'https://cdn.example/tv.m3u8' } }) },
-      { text: '<html>nope</html>' },
+  it('keeps Mapple missing cookies, unresolved sources, and foreign endpoints structured', async () => {
+    const noCookie = createMappleProvider(http({ text: '<html>nope</html>' }), () => now)
+    expect(await noCookie.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+
+    const page = { status: 200, text: '<html></html>', headers: new Headers({ 'set-cookie': '_mapple_site=site; Path=/' }) }
+    const noSource = createMappleProvider(http(
+      page,
+      { text: JSON.stringify({ token: 'request-token' }) },
+      { text: JSON.stringify({ token: 'stream-token' }) },
+      { text: JSON.stringify({}) },
+      { text: JSON.stringify({}) },
+      { text: JSON.stringify({}) },
     ), () => now)
-    expect(await notManifest.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+    expect(await noSource.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
+
+    const foreign = createMappleProvider(http(
+      page,
+      { text: JSON.stringify({ token: 'request-token' }) },
+      { text: JSON.stringify({ token: 'stream-token' }) },
+      { text: JSON.stringify({ url: 'https://attacker.example/api/stream-encrypted' }) },
+      { text: JSON.stringify({}) },
+      { text: JSON.stringify({}) },
+    ), () => now)
+    expect(await foreign.resolve(input, new AbortController().signal)).toMatchObject({ ok: false, code: 'empty' })
   })
   it('round-trips WeCollege payloads and rejects bad magic', async () => {
     const seed = 'test-seed-42'
@@ -614,6 +694,17 @@ describe('imported provider contracts', () => {
     expect(client.mock.calls[1]?.[0]).not.toContain('seasonId')
     expect(result).toMatchObject({ ok: true, sources: [{ key: 'miami:1080p:0', type: 'hls', height: 1080, qualityHint: '1080p' }] })
     expect(result.ok && result.sources[0]?.subtitles).toMatchObject([{ id: 'wecollege-sub-0', format: 'vtt' }])
+  })
+  it('preserves a city endpoint rate limit and Retry-After instead of reporting empty', async () => {
+    const client = http(
+      { text: JSON.stringify({ seed: 'limited-seed' }) },
+      { status: 429, text: '', headers: new Headers({ 'retry-after': '12' }) },
+    )
+    const metadata = async () => ({ title: 'Fight Club', year: 1999 })
+    const result = await createWecollegeProvider(client, metadata, () => now, { id: 'wecollege-miami', cities: ['miami'] })
+      .resolve(input, new AbortController().signal)
+
+    expect(result).toMatchObject({ ok: false, code: 'rate_limited', retryable: true, retryAfterMs: 12000 })
   })
   it('resolves WeCollege episodes with explicit season/episode identifiers', async () => {
     const seed = 'city-seed-9'

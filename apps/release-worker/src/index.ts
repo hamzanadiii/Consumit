@@ -3,6 +3,8 @@ import type { ReleaseProbeSource } from '@consumit/contracts'
 import { createProbeProxy } from './network'
 import { createWorker, workerConfigSchema } from './worker'
 
+if (process.env.NODE_ENV === 'production' || process.env.PROVIDER_EXECUTION_MODE === 'cloudflare-only') throw new Error('Provider execution on the VPS is disabled; use accepted Cloudflare routes.')
+
 const config = workerConfigSchema.parse({ apiOrigin: process.env.RELEASE_API_ORIGIN, appOrigin: process.env.RELEASE_APP_ORIGIN, secret: process.env.RELEASE_WORKER_SECRET })
 let source: ReleaseProbeSource | null = null
 const connectHost = new URL(config.appOrigin).protocol === 'http:' ? process.env.RELEASE_CONNECT_HOST : undefined

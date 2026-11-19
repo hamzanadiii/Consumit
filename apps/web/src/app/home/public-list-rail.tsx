@@ -8,7 +8,7 @@ export function PublicListRail({ id, items, title }: { id: string; items: readon
   return (
     <section aria-labelledby={`${id}-heading`} className="mt-8">
       <SectionHeading id={`${id}-heading`} title={title} />
-      <ul aria-label={`${title} lists`} className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 fs-noscroll sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3" role="region" tabIndex={0}>
+      <ul aria-label={`${title} lists`} className="mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 fs-noscroll sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3" tabIndex={0}>
         {items.slice(0, 3).map(({ artworkSources, list, owner }) => (
           <li className="w-[82vw] shrink-0 snap-start sm:w-auto" key={list.id}>
             <CuratedListCard

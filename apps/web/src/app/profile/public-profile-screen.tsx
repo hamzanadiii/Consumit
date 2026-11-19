@@ -14,11 +14,12 @@ import { FilScreenShell } from '../shared'
 import { TitleCard } from '../shared/title-card'
 
 import { memberAvatarSrc } from '@/lib/avatar'
+import { formatCalendarDay } from '@/lib/calendar-date'
 
 function refKey(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
 
 function formatDiaryDate(isoDate: string) {
-  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+  return formatCalendarDay(isoDate)
 }
 
 function diaryEpisodeLabel(entry: MemberProfileData['diary'][number]) {
@@ -42,12 +43,11 @@ function HeroStat({ href, label, value }: { href?: string; label: string; value:
       <span>{label}</span>
     </span>
   )
-  if (!href) return <div role="listitem">{content}</div>
+  if (!href) return <div>{content}</div>
   return (
     <a
       className="rounded outline-none transition-colors hover:text-white focus-visible:ring-2 focus-visible:ring-white"
       href={href}
-      role="listitem"
     >
       {content}
     </a>
@@ -58,6 +58,7 @@ type ActivityKind = 'watch' | 'review'
 
 type ActivityItem = {
   date: string | null
+  href: string
   kind: ActivityKind
   key: string
   rewatch?: boolean
@@ -73,6 +74,7 @@ function buildActivity(data: MemberProfileData): ActivityItem[] {
   const items: ActivityItem[] = [
     ...data.diary.map((entry) => ({
       date: entry.watchedOn,
+      href: diaryEntryHref(entry),
       kind: 'watch' as const,
       key: 'watch-' + entry.entryId,
       rewatch: entry.rewatch,
@@ -81,6 +83,7 @@ function buildActivity(data: MemberProfileData): ActivityItem[] {
     })),
     ...data.reviews.map((review) => ({
       date: review.reviewedOn,
+      href: `/reviews/${encodeURIComponent(review.reviewId)}`,
       kind: 'review' as const,
       key: 'review-' + review.reviewId,
       ref: review,
@@ -104,7 +107,7 @@ function ActivityFeed({ items, titleMap }: {
         const title = titleMap.get(refKey(item.ref))
         const label = title?.title ?? (kindLabel(item.ref.kind) + ' #' + item.ref.id)
         const action = item.kind === 'review' ? 'Reviewed' : item.rewatch ? 'Rewatched' : 'Watched'
-        const destination = item.kind === 'watch' ? diaryEntryHref(item.ref) : titleHref(item.ref)
+        const destination = item.href
         const cardTitle = title ?? { id: item.ref.id, kind: item.ref.kind, title: label, year: null, posterUrl: null, tmdbRating: null }
         return (
           <TitleCard
@@ -275,7 +278,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
   return (
     <FilScreenShell pageHeading={undefined}>
       <ProfileEditProvider>
-        <main className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-owner-profile={owner || undefined} data-consumit-public-profile={!owner || undefined}>
+        <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full max-w-[90rem] px-1 sm:px-3 lg:px-4" data-consumit-owner-profile={owner || undefined} data-consumit-public-profile={!owner || undefined}>
           <header className="relative isolate overflow-hidden rounded-card border border-white/10 bg-[#09090b] text-white" data-consumit-profile-masthead>
             {backdropUrl ? (
               <Image alt="" className="object-cover" fill priority sizes="(max-width: 1280px) 100vw, 1400px" src={backdropUrl} />
@@ -302,7 +305,7 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                     treatment={data.profile.avatarStyle}
                   />
                   <div className="min-w-0">
-                    <h1 className="font-display text-[clamp(2.4rem,5vw,4.5rem)] leading-[0.94] font-normal tracking-[-0.025em] text-white">{name}</h1>
+                    <h1 className="[overflow-wrap:anywhere] text-balance font-display text-[clamp(2.2rem,5vw,4.5rem)] leading-[0.94] font-normal tracking-[-0.025em] text-white">{name}</h1>
                     <p className="mt-3 text-xs font-medium text-white/75">{meta}</p>
                     {data.profile.bio ? <p className="mt-3 max-w-[62ch] text-sm leading-6 text-white/85">{data.profile.bio}</p> : null}
                   </div>
@@ -434,7 +437,9 @@ export function ProfileScreen({ catalogUnavailable = false, data, listPosters = 
                           <RatingBar key={value} count={count} owner={owner} username={data.profile.username} value={value} tallest={tallestRatingBar} />
                         ))}
                       </div>
-                      <div aria-hidden="true" className="mt-2 flex justify-between text-xs font-bold tabular-nums text-[var(--fs-muted)]"><span>1</span><span>10</span></div>
+                      <div aria-hidden="true" className="mt-2 grid grid-cols-10 gap-1 text-center text-xs font-bold tabular-nums text-[var(--fs-muted)]" data-consumit-rating-axis>
+                        {ratingDistribution.map(({ value }) => <span data-consumit-rating-value key={value}>{value}</span>)}
+                      </div>
                       <p className="mt-3 text-xs leading-5 text-[var(--fs-muted)]">Grouped totals appear here. Individual ratings are shown in the Ratings section.</p>
                     </section>
                   ) : null}

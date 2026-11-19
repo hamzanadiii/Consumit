@@ -1,13 +1,13 @@
 'use client'
 
-import { titleHref, type CatalogKind, type CatalogRef, type CatalogTitleSummary, type MemberListDetail } from '@consumit/contracts'
+import { titleHref, type CatalogKind, type CatalogRef, type CatalogTitleSummary, type MemberListDetail, type MemberListVisibility } from '@consumit/contracts'
 import { Button, Select } from '@consumit/ui'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 
 import { browserSearchCatalog } from '@/lib/catalog-browser'
-import { deleteMemberList, IdentityApiError, createMemberList, updateMemberListContent } from '@/lib/identity-browser'
+import { addListCollaborator, deleteMemberList, IdentityApiError, createMemberList, removeListCollaborator, updateMemberListContent } from '@/lib/identity-browser'
 
 function refKey(ref: CatalogRef) { return `${ref.kind}:${ref.id}` }
 
@@ -16,7 +16,7 @@ export function CreateListForm() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [visibility, setVisibility] = useState<'private' | 'public'>('public')
+  const [visibility, setVisibility] = useState<MemberListVisibility>('public')
   const [requestKey, setRequestKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,7 +80,7 @@ export function ListEditor({ data, titles }: { data: MemberListDetail; titles: r
   const router = useRouter()
   const [name, setName] = useState(data.list.name)
   const [description, setDescription] = useState(data.list.description ?? '')
-  const [visibility, setVisibility] = useState(data.list.visibility)
+  const [visibility, setVisibility] = useState<MemberListVisibility>(data.list.visibility)
   const [items, setItems] = useState<EditableTitle[]>(data.items.map(({ id, kind, note }) => ({ id, kind, note: note ?? '' })))
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<CatalogKind | 'all'>('all')
@@ -89,6 +89,9 @@ export function ListEditor({ data, titles }: { data: MemberListDetail; titles: r
   const [searchError, setSearchError] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [inviteUsername, setInviteUsername] = useState('')
+  const [collaboratorBusy, setCollaboratorBusy] = useState(false)
+  const [collaboratorError, setCollaboratorError] = useState<string | null>(null)
   const titleMap = useMemo(() => new Map([...titles, ...results].map((title) => [refKey(title), title])), [results, titles])
 
   useEffect(() => {
@@ -130,7 +133,7 @@ export function ListEditor({ data, titles }: { data: MemberListDetail; titles: r
         description: description.trim() || null,
         items: items.map(({ id, kind: titleKind, note }) => ({ id, kind: titleKind, note: note.trim() || null })),
         name: name.trim(),
-        visibility,
+        ...(data.viewerIsOwner ? { visibility } : {}),
       })
       router.refresh()
     } catch (cause) {
@@ -164,17 +167,18 @@ export function ListEditor({ data, titles }: { data: MemberListDetail; titles: r
         <label className="grid gap-2 text-xs font-bold text-[var(--fs-secondary)] sm:col-span-2">Description<textarea className="min-h-24 rounded-control border border-[var(--fs-field-border)] bg-transparent p-3 text-sm leading-6 text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" maxLength={2_000} onChange={(event) => setDescription(event.currentTarget.value)} value={description} /></label>
       </div>
 
-      <div className="mt-5"><ListVisibility value={visibility} onChange={setVisibility} /></div>
+      {data.viewerIsOwner ? <div className="mt-5"><ListVisibility value={visibility} onChange={setVisibility} /></div> : null}
       <div className="mt-8 border-t border-[var(--fs-line)] pt-6"><h3 className="font-display text-2xl text-[var(--fs-ink)]">Add a title</h3><div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]"><label className="grid gap-2 text-xs font-bold text-[var(--fs-secondary)]">Search movies, series, or anime<input autoComplete="off" className="h-11 rounded-control border border-[var(--fs-field-border)] bg-transparent px-3 text-sm text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onChange={(event) => { const value = event.currentTarget.value; setQuery(value); setResults([]); setSearching(false); setSearchError(false) }} placeholder="Search titles" type="search" value={query} /></label><div className="grid gap-2 text-xs font-bold text-[var(--fs-secondary)]"><span>Catalog</span><Select hideLabel label="Catalog" onValueChange={(value) => { setKind(value as CatalogKind | 'all'); setResults([]); setSearching(false); setSearchError(false) }} options={[{ value: 'all', label: 'All titles' }, { value: 'movie', label: 'Movies' }, { value: 'series', label: 'Series' }, { value: 'anime', label: 'Anime' }]} value={kind} /></div></div>
         {query.trim().length >= 2 ? <div aria-live="polite" className="mt-3 rounded-control border border-[var(--fs-line)] bg-[var(--fs-rail)] p-2">{searching ? <p className="px-3 py-2 text-sm text-[var(--fs-muted)]">Searching the catalog…</p> : searchError ? <p className="px-3 py-2 text-sm text-orange" role="alert">Catalog search is unavailable. Try again.</p> : visibleResults.length ? <ul className="divide-y divide-[var(--fs-line)]">{visibleResults.slice(0, 8).map((title) => <li className="flex items-center justify-between gap-3 py-2" key={refKey(title)}><span className="min-w-0"><span className="block truncate text-sm font-bold text-[var(--fs-ink)]">{title.title}</span><span className="text-xs text-[var(--fs-muted)]">{title.year ?? 'Year unavailable'} · {title.kind}</span></span><Button disabled={items.length >= 500} onClick={() => add(title)} size="sm" type="button" variant="secondary">Add</Button></li>)}</ul> : <p className="px-3 py-2 text-sm text-[var(--fs-muted)]">No matching titles yet.</p>}</div> : <p className="mt-3 text-xs text-[var(--fs-muted)]">Enter at least two characters.</p>}</div>
 
       <div className="mt-8 border-t border-[var(--fs-line)] pt-6"><h3 className="font-display text-2xl text-[var(--fs-ink)]">Titles in your order</h3>{items.length === 0 ? <p className="mt-4 rounded-xl border border-dashed border-[var(--fs-field-border)] p-5 text-sm text-[var(--fs-muted)]">This list is empty. Search above to add the first title.</p> : <ol className="mt-4 divide-y divide-[var(--fs-line)]">{items.map((item, index) => { const title = titleMap.get(refKey(item)); const label = title?.title ?? `${item.kind} #${item.id}`; return <li className="grid gap-3 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_auto] sm:items-center" key={refKey(item)}><span className="font-mono text-xs tabular-nums text-[var(--fs-muted)]">{String(index + 1).padStart(2, '0')}</span><div className="min-w-0"><Link className="truncate text-sm font-bold text-[var(--fs-ink)] hover:text-[var(--fs-accent)]" href={titleHref(item)}>{label}</Link><label className="mt-2 block"><span className="sr-only">Note for {label}</span><input className="h-9 w-full rounded-control border border-[var(--fs-field-border)] bg-transparent px-3 text-xs text-[var(--fs-secondary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" maxLength={500} onChange={(event) => { const note = event.currentTarget.value; setItems((current) => current.map((entry) => refKey(entry) === refKey(item) ? { ...entry, note } : entry)) }} placeholder="Add a note (optional)" value={item.note} /></label></div><div className="flex gap-2 sm:justify-end"><Button aria-label={`Move ${label} up`} disabled={index === 0} onClick={() => move(index, -1)} size="sm" type="button" variant="secondary">↑</Button><Button aria-label={`Move ${label} down`} disabled={index === items.length - 1} onClick={() => move(index, 1)} size="sm" type="button" variant="secondary">↓</Button><Button aria-label={`Remove ${label}`} onClick={() => setItems((current) => current.filter((entry) => refKey(entry) !== refKey(item)))} size="sm" type="button" variant="secondary">Remove</Button></div></li> })}</ol>}</div>
 
-      <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[var(--fs-line)] pt-6"><Button disabled={saving || !name.trim()} onClick={() => void save()} variant="primary">{saving ? 'Saving list…' : 'Save changes'}</Button><span className="text-xs text-[var(--fs-muted)]">Order, notes, details, and visibility save together.</span><Button disabled={saving} onClick={() => void removeList()} type="button" variant="secondary">Delete list</Button>{error ? <p className="basis-full text-sm text-orange" role="alert">{error}</p> : null}</div>
+      {data.viewerIsOwner ? <section className="mt-8 border-t border-[var(--fs-line)] pt-6" aria-labelledby="list-collaborators-heading"><h3 className="font-display text-2xl text-[var(--fs-ink)]" id="list-collaborators-heading">Editors</h3><p className="mt-2 max-w-[65ch] text-sm leading-6 text-[var(--fs-muted)]">Invite an existing member by username. Editors can change this list and its order; only you can change visibility or delete it.</p><form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={async (event) => { event.preventDefault(); const username = inviteUsername.trim().replace(/^@+/, ''); if (!username || collaboratorBusy) return; setCollaboratorBusy(true); setCollaboratorError(null); try { await addListCollaborator(data.list.id, username); setInviteUsername(''); router.refresh() } catch { setCollaboratorError('That member could not be added. Check the username and retry.') } finally { setCollaboratorBusy(false) } }}><label className="grid gap-2 text-xs font-bold text-[var(--fs-secondary)]">Member username<input autoCapitalize="none" autoComplete="off" className="h-11 w-60 rounded-control border border-[var(--fs-field-border)] bg-transparent px-3 text-sm text-[var(--fs-ink)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" maxLength={30} onChange={(event) => setInviteUsername(event.currentTarget.value)} pattern="@?[a-z0-9_]{3,30}" placeholder="@username" value={inviteUsername} /></label><Button disabled={collaboratorBusy || !inviteUsername.trim()} type="submit" variant="secondary">{collaboratorBusy ? 'Adding…' : 'Add editor'}</Button></form>{collaboratorError ? <p className="mt-3 text-sm text-[var(--fs-danger)]" role="alert">{collaboratorError}</p> : null}{data.collaborators.length ? <ul className="mt-5 divide-y divide-[var(--fs-line)] border-y border-[var(--fs-line)]">{data.collaborators.map((person) => <li className="flex min-h-14 items-center justify-between gap-4 py-2" key={person.memberId}><span className="text-sm text-[var(--fs-ink)]">{person.displayName ?? person.username} <span className="text-[var(--fs-muted)]">@{person.username}</span></span><Button disabled={collaboratorBusy} onClick={async () => { setCollaboratorBusy(true); setCollaboratorError(null); try { await removeListCollaborator(data.list.id, person.username); router.refresh() } catch { setCollaboratorError('The editor could not be removed. Try again.') } finally { setCollaboratorBusy(false) } }} size="sm" type="button" variant="ghost">Remove</Button></li>)}</ul> : <p className="mt-4 text-sm text-[var(--fs-muted)]">No editors yet.</p>}</section> : null}
+      <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[var(--fs-line)] pt-6"><Button disabled={saving || !name.trim()} onClick={() => void save()} variant="primary">{saving ? 'Saving list…' : 'Save changes'}</Button><span className="text-xs text-[var(--fs-muted)]">Order, notes, and details save together.</span>{data.viewerIsOwner ? <Button disabled={saving} onClick={() => void removeList()} type="button" variant="secondary">Delete list</Button> : null}{error ? <p className="basis-full text-sm text-orange" role="alert">{error}</p> : null}</div>
     </section>
   )
 }
 
-function ListVisibility({ value, onChange }: { value: 'private' | 'public'; onChange: (value: 'private' | 'public') => void }) {
-  return <fieldset className="sm:col-span-2"><legend className="text-sm font-bold text-[var(--fs-ink)]">List visibility</legend><div className="flex flex-wrap gap-5">{(['public', 'private'] as const).map(option => <label className="flex min-h-11 items-center gap-2 text-sm text-[var(--fs-secondary)]" key={option}><input className="size-4 accent-[var(--fs-accent)]" name="list-visibility" checked={value === option} onChange={() => onChange(option)} type="radio" value={option} />{option === 'public' ? 'Public' : 'Private'}</label>)}</div><p className="text-xs leading-5 text-[var(--fs-muted)]">A public list can be opened by link while your Lists section is public. New lists start public.</p></fieldset>
+function ListVisibility({ value, onChange }: { value: MemberListVisibility; onChange: (value: MemberListVisibility) => void }) {
+  return <fieldset className="sm:col-span-2"><legend className="text-sm font-bold text-[var(--fs-ink)]">List visibility</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{(['public', 'unlisted', 'private'] as const).map(option => <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-[var(--fs-field-border)] px-3 text-sm text-[var(--fs-secondary)]" key={option}><input className="size-4 accent-[var(--fs-accent)]" name="list-visibility" checked={value === option} onChange={() => onChange(option)} type="radio" value={option} />{option[0]!.toUpperCase() + option.slice(1)}</label>)}</div><p className="mt-2 text-xs leading-5 text-[var(--fs-muted)]">Public lists appear on your profile and in discovery. Unlisted lists work by link only and stay out of search. Private lists are for you and invited editors.</p></fieldset>
 }

@@ -3,14 +3,32 @@ import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.ts'
 
 describe('API environment', () => {
-  it('allows only the reviewed Miami lookup route with an enabled Cloudflare resolver', () => {
-    const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48) }
-    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' }).playback?.resolver?.apiProviders).toEqual(['wecollege-miami'])
-    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '[]' }).playback?.resolver?.apiProviders).toBeUndefined()
-    for (const routes of ['invalid', '{}', '["lookmovie"]', '["wecollege-miami","wecollege-miami"]', '["aphrodite"]']) {
-      expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: routes })).toThrow('reviewed Miami route')
+  it('does not expose provider lookup exceptions on the API', () => {
+    const config = { NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.example', AUTH_CODE_PEPPER: 'p'.repeat(64), AUTH_EMAIL_FROM: 'noreply@consumit.example', DATABASE_URL: 'postgres://consumit:secret@database.example/consumit', DATABASE_SSL_MODE: 'require', RESEND_API_KEY: 're_test_fixture', TMDB_API_READ_TOKEN: 't'.repeat(40), VALKEY_URL: 'valkey://auth-cache.example:6379/0', PROVIDER_EXECUTION_MODE: 'cloudflare-only', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48), SUBTITLE_WORKER_ORIGIN: 'https://subtitles.example', SUBTITLE_WORKER_SECRET: 's'.repeat(48) }
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' }).playback?.resolver).not.toHaveProperty('apiProviders')
+    expect(loadEnv({ ...config, PLAYBACK_RESOLVER_API_PROVIDERS: '[]' }).playback?.execution).toBe('cloudflare-only')
+  })
+  it('does not require provider-execution settings in the split product API', () => {
+    const config = {
+      NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online',
+      AUTH_CODE_PEPPER: 'p'.repeat(64), AUTH_EMAIL_FROM: 'noreply@consumit.online',
+      DATABASE_URL: 'postgres://consumit:secret@database.example/consumit', DATABASE_SSL_MODE: 'require',
+      RESEND_API_KEY: 're_test_fixture', TMDB_API_READ_TOKEN: 't'.repeat(40), VALKEY_URL: 'valkey://auth-cache.example:6379/0',
+      APPLICATION_MODE: 'product', INTERNAL_PLAYBACK_ORIGIN: 'http://playback:3002', INTERNAL_SERVICE_SECRET: 's'.repeat(64),
+      PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json',
     }
-    expect(() => loadEnv({ ...config, PLAYBACK_RESOLVER_ENABLED: 'false', PLAYBACK_RESOLVER_API_PROVIDERS: '["wecollege-miami"]' })).toThrow('require the Cloudflare resolver')
+    expect(loadEnv(config).applicationMode).toBe('product')
+  })
+  it('still requires Cloudflare-only execution and a resolver in a playback-owning production process', () => {
+    const config = { NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', AUTH_CODE_PEPPER: 'p'.repeat(64), AUTH_EMAIL_FROM: 'noreply@consumit.online', DATABASE_URL: 'postgres://consumit:secret@database.example/consumit', DATABASE_SSL_MODE: 'require', RESEND_API_KEY: 're_test_fixture', TMDB_API_READ_TOKEN: 't'.repeat(40), VALKEY_URL: 'valkey://auth-cache.example:6379/0', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json' }
+    expect(() => loadEnv({ ...config, APPLICATION_MODE: 'combined' })).toThrow('Production playback requires Cloudflare-only provider execution.')
+    expect(() => loadEnv({ ...config, PROVIDER_EXECUTION_MODE: 'cloudflare-only' })).toThrow('Cloudflare-only playback requires the provider resolver Worker.')
+    expect(loadEnv({ ...config, PROVIDER_EXECUTION_MODE: 'cloudflare-only', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48) }).playback?.resolver?.cloudflareOnly).toBe(true)
+  })
+  it('accepts explicit audio route tuples separately from video routes', () => {
+    const routes = ['fixture:movie:US:direct', 'fixture:movie:US:direct:audio']
+    expect(loadEnv({ NODE_ENV: 'test', PLAYBACK_EDGE_ACCEPTED_ROUTES: JSON.stringify(routes) }).playback?.acceptedEdgeRoutes).toEqual(routes)
+    expect(() => loadEnv({ NODE_ENV: 'test', PLAYBACK_EDGE_ACCEPTED_ROUTES: '["fixture:audio:movie:US:direct"]' })).toThrow()
   })
   it('allows an independently enabled LookMovie media node and rejects arbitrary node providers', () => {
     const config = { NODE_ENV: 'test', PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: 'providers.json', PLAYBACK_NODE_ENABLED: 'true', PLAYBACK_NODE_ORIGIN: 'https://media.example', PLAYBACK_NODE_SECRET: 'n'.repeat(48), PLAYBACK_NODE_PROVIDERS: '{"lookmovie":["srv310.seclar.cyou"]}' }
@@ -148,7 +166,7 @@ describe('regional relay control policy', () => {
 
 describe('split production playback state', () => {
   it('requires shared session state and independent authentication limits', () => {
-    const source = { NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', APPLICATION_MODE: 'playback', INTERNAL_API_ORIGIN: 'http://api:3001', INTERNAL_SERVICE_SECRET: 's'.repeat(64), PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json' }
+    const source = { NODE_ENV: 'production', APP_ORIGIN: 'https://consumit.online', PROVIDER_EXECUTION_MODE: 'cloudflare-only', PLAYBACK_RESOLVER_ENABLED: 'true', PLAYBACK_RESOLVER_ORIGIN: 'https://resolver.example', PLAYBACK_RESOLVER_SECRET: 'r'.repeat(48), SUBTITLE_WORKER_ORIGIN: 'https://subtitles.example', SUBTITLE_WORKER_SECRET: 's'.repeat(48), APPLICATION_MODE: 'playback', INTERNAL_API_ORIGIN: 'http://api:3001', INTERNAL_SERVICE_SECRET: 's'.repeat(64), PLAYBACK_ENABLED: 'true', PLAYBACK_MEDIA_CONFIG: '/run/consumit/providers.json' }
     expect(() => loadEnv(source)).toThrow('Split playback requires')
     expect(() => loadEnv({ ...source, PLAYBACK_VALKEY_URL: 'valkey://playback-valkey:6379/0', VALKEY_URL: 'valkey://valkey:6379/0' })).not.toThrow()
   })

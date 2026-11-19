@@ -45,6 +45,40 @@ describe('issue report destination and draft', () => {
     expect(query.get('body')).not.toContain('page activity')
   })
 
+  it('requires fresh consent after changing away from Playback and back', async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem('consumit.report.playback', JSON.stringify({
+      value: {
+        ref: { kind: 'series', id: 1399, season: 2, episode: 4 },
+        provider: 'configured_source', browser: 'Chrome', delivery: 'direct', category: 'network',
+      },
+      at: Date.now(),
+    }))
+    try {
+      render(<ReportIssueScreen category="playback" supportEmail="support@example.com" />)
+      await user.type(screen.getByRole('textbox', { name: 'Short summary' }), 'Episode does not start')
+      await user.type(screen.getByRole('textbox', { name: 'What happened?' }), 'The episode stays on the loading screen after I press play.')
+      const draftBody = () => new URL(screen.getByRole('link', { name: 'Prepare email' }).getAttribute('href')!).searchParams.get('body')!
+      const consent = await screen.findByRole('checkbox', { name: 'Include playback diagnostics' })
+
+      expect(draftBody()).not.toContain('Playback diagnostics:')
+      await user.click(consent)
+      expect(draftBody()).toContain('Playback diagnostics:\nTitle: series 1399 · S2 E4')
+
+      await user.click(screen.getByRole('button', { name: 'Issue category Playback' }))
+      await user.click(screen.getByRole('option', { name: 'Account' }))
+      expect(screen.queryByRole('checkbox', { name: 'Include playback diagnostics' })).not.toBeInTheDocument()
+      expect(draftBody()).not.toContain('Playback diagnostics:')
+
+      await user.click(screen.getByRole('button', { name: 'Issue category Account' }))
+      await user.click(screen.getByRole('option', { name: 'Playback' }))
+      expect(screen.getByRole('checkbox', { name: 'Include playback diagnostics' })).not.toBeChecked()
+      expect(draftBody()).not.toContain('Playback diagnostics:')
+    } finally {
+      sessionStorage.removeItem('consumit.report.playback')
+    }
+  })
+
   it('encodes a draft as a mailto URL without adding browser or account context', () => {
     const url = buildIssueMailto('support@example.com', {
       category: 'other',

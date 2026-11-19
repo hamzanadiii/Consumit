@@ -86,24 +86,22 @@ export function WatchScreen({ audioLanguage, demo, episode, title, interactive =
   const demoMeta = demo?.topMeta ?? (demo ? `Playing from Consumit · ${demo.qualityLabel ?? demo.source.qualityHint ?? 'HD'}` : undefined)
 
   return (
-    <main className="flex min-h-screen flex-col bg-black" data-consumit-player-screen data-consumit-watch-screen data-tmdb-id={title.id}>
+    <main id="consumit-main-content" tabIndex={-1} className="flex min-h-screen flex-col bg-black" data-consumit-player-screen data-consumit-watch-screen data-tmdb-id={title.id}>
       <WatchHeader backHref={titleHref(title)} className="border-white/10 bg-black" exitHref={titleHref(title)} linkComponent={Link} meta={meta} status={hasDemo ? <strong className="text-copy">Preview source ready</strong> : <strong className="text-muted">Source unavailable</strong>} title={displayTitle} />
       <section aria-label={`${displayTitle} playback`} className={`mx-auto flex w-full max-w-[100rem] flex-col px-3 py-3 sm:px-6 sm:py-5 lg:px-8 ${hasDemo ? 'flex-1' : ''}`}>
         <div className={hasDemo ? 'flex min-h-0 flex-1 items-start pt-3 lg:items-center lg:pt-0' : 'pt-3'}>
           {hasDemo && demo ? (
             <ConsumitPlayer
-              caption={demo.caption}
-              chapters={demo.chapters}
-              className="w-full rounded-none border-white/10"
-              posterSrc={poster}
-              source={demo.source}
-              status="Preview source ready"
-              statusTone="healthy"
               title={displayTitle}
-              topMeta={demoMeta}
+              media={{ source: demo.source }}
+              presentation={{
+                className: 'w-full rounded-none border-white/10', posterSrc: poster,
+                status: 'Preview source ready', statusTone: 'healthy', topMeta: demoMeta,
+              }}
+              controls={{ playback: { chapters: demo.chapters }, captions: { cue: demo.caption } }}
             />
           ) : (
-            <ConsumitPlayer className="w-full rounded-none border-white/10" posterSrc={poster} status="No playback source available" statusTone="unavailable" title={displayTitle} />
+            <ConsumitPlayer title={displayTitle} presentation={{ className: 'w-full rounded-none border-white/10', posterSrc: poster, status: 'No playback source available', statusTone: 'unavailable' }} />
           )}
         </div>
         <div className="flex flex-col gap-4 border-t border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between" role="status">

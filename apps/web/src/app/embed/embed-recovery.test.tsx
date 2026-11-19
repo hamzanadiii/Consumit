@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackSession } from '@consumit/contracts'
+import type { PlayerMediaInput, PlayerMediaObservation } from '@consumit/ui'
 import { EmbedPlayer } from './embed-player'
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), recover: vi.fn(), providers: vi.fn(), switch: vi.fn(), subtitles: vi.fn() }))
@@ -9,14 +10,13 @@ vi.mock('@/lib/embed-playback-browser', () => ({ resolveEmbedSession: mocks.reso
 vi.mock('@/lib/subtitles-browser', () => ({ fetchAggregatedSubtitles: mocks.subtitles }))
 vi.mock('@consumit/ui', () => ({
   readQualityPreference: () => undefined,
-  ConsumitPlayer: ({ source, resumeAt, resumePlaying, onSourceError, onTimeUpdate, onPause, onPlay }: {
-    source?: { src: string; providerId: string }; resumeAt?: number; resumePlaying?: boolean
-    onSourceError?: (reason: 'network') => void; onTimeUpdate?: (event: { currentTarget: { currentTime: number } }) => void
-    onPause?: (event: { currentTarget: { currentTime: number; duration: number } }) => void; onPlay?: (event: { currentTarget: { currentTime: number; duration: number } }) => void
-  }) => <div data-testid="player" data-source={source?.src} data-position={resumeAt} data-playing={String(resumePlaying)}>
-    <button onClick={() => onTimeUpdate?.({ currentTarget: { currentTime: 42 } })}>seek</button>
-    <button onClick={() => onPause?.({ currentTarget: { currentTime: 42, duration: 100 } })}>pause</button>
-    <button onClick={() => onPlay?.({ currentTarget: { currentTime: 42, duration: 100 } })}>play</button>
+  ConsumitPlayer: ({ media, onSourceError, onMediaObservation }: {
+    media?: PlayerMediaInput
+    onSourceError?: (reason: 'network') => void; onMediaObservation?: (observation: PlayerMediaObservation) => void
+  }) => <div data-testid="player" data-source={media?.source?.src} data-position={media?.resume?.positionSeconds} data-playing={String(media?.resume?.playing)}>
+    <button onClick={() => onMediaObservation?.({ type: 'time-update', positionSeconds: 42, durationSeconds: 100 })}>seek</button>
+    <button onClick={() => onMediaObservation?.({ type: 'pause', positionSeconds: 42, durationSeconds: 100 })}>pause</button>
+    <button onClick={() => onMediaObservation?.({ type: 'play', positionSeconds: 42, durationSeconds: 100 })}>play</button>
     <button onClick={() => onSourceError?.('network')}>fail</button>
   </div>,
 }))

@@ -30,6 +30,13 @@ export type SubtitleQuery = {
 }
 
 export type RawSubtitle = {
+  identity?: { tmdbId?: number; anilistId?: number; language?: string } | undefined
+  forced?: boolean | undefined
+  sdh?: boolean | undefined
+  signs?: boolean | undefined
+  songs?: boolean | undefined
+  machineTranslated?: boolean | undefined
+  recordingVersion?: string | undefined
   /** Streaming-provider authority. Never exposed in the public candidate. */
   authority?: string | undefined
   expiresAt?: string | undefined

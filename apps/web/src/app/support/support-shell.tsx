@@ -15,12 +15,12 @@ export function SupportShell({ children }: { children: ReactNode }) {
               <span className="text-xs font-bold tracking-[0.2em]">CONSUMIT</span>
             </Link>
             <nav aria-label="Support navigation" className="flex items-center gap-2 text-xs font-bold text-[var(--fs-secondary)] sm:gap-5">
-              <Link className="inline-flex min-h-11 items-center rounded-control px-2 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/help">Help center</Link>
-              <Link className="inline-flex min-h-11 items-center rounded-control px-2 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/sign-in">Sign in</Link>
+              <Link className="inline-flex min-h-11 items-center whitespace-nowrap rounded-control px-1 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:px-2" href="/help">Help center</Link>
+              <Link className="inline-flex min-h-11 items-center whitespace-nowrap rounded-control px-1 outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] sm:px-2" href="/sign-in">Sign in</Link>
             </nav>
           </header>
           <div className="flex-1 py-9 sm:py-14">{children}</div>
-          <footer className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-[var(--fs-line)] py-3 text-[0.6875rem] text-[var(--fs-muted)]">
+          <footer className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-t border-[var(--fs-line)] py-3 text-[0.6875rem] text-[var(--fs-secondary)]">
             <span>Help for your Consumit account and viewing experience.</span>
             <Link className="inline-flex min-h-11 items-center rounded-control px-2 hover:text-[var(--fs-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" href="/about">About Consumit</Link>
           </footer>

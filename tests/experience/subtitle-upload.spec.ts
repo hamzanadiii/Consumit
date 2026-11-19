@@ -14,11 +14,11 @@ for (const extension of ['srt', 'vtt']) {
     ].map(event => JSON.stringify(event)).join('\n') + '\n' }))
     await page.route('https://experience-media.example/*.vtt', route => route.fulfill({ contentType: 'text/vtt', body: 'WEBVTT\n\n00:00:00.000 --> 00:00:30.000\nBundled caption\n' }))
     if (sourceType === 'hls') {
-      await page.route('**/v1/playback/resolve', async route => {
+      await page.route('**/v1/playback/attempts', async route => {
         const response = await route.fetch()
-        const session = await response.json()
-        Object.assign(session.source, { type: 'hls', src: 'https://upload-media.example/media.m3u8' })
-        await route.fulfill({ response, json: session })
+        const attempt = await response.json()
+        Object.assign(attempt.session.source, { type: 'hls', src: 'https://upload-media.example/media.m3u8' })
+        await route.fulfill({ response, json: attempt })
       })
       await page.route('https://upload-media.example/**', async route => {
         const name = new URL(route.request().url()).pathname.slice(1)
@@ -30,13 +30,21 @@ for (const extension of ['srt', 'vtt']) {
     await page.locator('video').evaluate((video: HTMLVideoElement) => { video.pause(); video.currentTime = 2 })
     const captions = page.locator('[data-consumit-player-caption]')
     const subtitleButton = page.getByRole('button', { name: 'Captions', exact: true })
+    const captionsPanel = page.getByRole('dialog', { name: 'Captions' })
+    const ensureCaptionsOpen = async () => {
+      if (!await captionsPanel.isVisible().catch(() => false)) {
+        await subtitleButton.click()
+        await expect(captionsPanel).toBeVisible()
+      }
+    }
     const content = (text: string) => {
       const cues = `1\n00:00:00.000 --> 00:00:04.000\n${text}\n\n2\n00:00:08.000 --> 00:00:12.000\n${text} later\n\n3\n00:00:20.000 --> 00:00:26.000\n${text} last\n`
       return extension === 'srt' ? cues.replaceAll('.', ',') : `WEBVTT\n\n${cues}`
     }
 
     for (const text of ['Uploaded caption', 'Replacement caption']) {
-      await subtitleButton.click()
+      await ensureCaptionsOpen()
+      await page.getByRole('button', { name: 'Upload subtitle file', exact: true }).click()
       await page.locator('input[type="file"]').setInputFiles({ name: `captions.${extension}`, mimeType: extension === 'srt' ? 'application/x-subrip' : 'text/vtt', buffer: Buffer.from(content(text)) })
       await expect(captions).toHaveText(text)
       await expect(captions).toBeVisible()
@@ -68,7 +76,8 @@ for (const extension of ['srt', 'vtt']) {
       }
     }
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('consumit.experience.guest.v1')!))).toMatchObject({ subtitlesEnabled: true, subtitleLanguages: ['ar', 'en'] })
-    await subtitleButton.click()
+    await ensureCaptionsOpen()
+    await page.getByRole('button', { name: 'Upload subtitle file', exact: true }).click()
     await page.locator('input[type="file"]').setInputFiles({ name: 'broken.vtt', mimeType: 'text/vtt', buffer: Buffer.from('WEBVTT\n\nno cues') })
     await expect(page.getByText('This file has no usable subtitle cues.')).toBeVisible()
     await expect(page.getByRole('radio', { name: /captions\./ })).toHaveAttribute('aria-checked', 'true')

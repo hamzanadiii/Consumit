@@ -94,7 +94,7 @@ describe('profile lists collection', () => {
     expect(screen.queryByRole('link', { name: 'Cozy cinema, 12 titles' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Filter your lists by visibility' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Saved lists' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create list' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Create a collection' })).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: 'Search your lists' }))
     expect(screen.getByRole('link', { name: 'Cozy cinema, 12 titles' })).toBeInTheDocument()
   })
@@ -105,22 +105,16 @@ describe('profile lists collection', () => {
 
     expect(screen.getByRole('heading', { name: 'Saved Lists' })).toBeInTheDocument()
     expect(screen.getByText('Unavailable')).toBeInTheDocument()
-    expect(screen.getByText(/no longer public/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(screen.getByText(/unavailable/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove Late night animation from saved lists' }))
 
     expect(removeSavedListMock).toHaveBeenCalledWith('saved-original-id')
     expect(screen.queryByText('Late night animation')).not.toBeInTheDocument()
-    expect(screen.getByText(/Save a public list/)).toBeInTheDocument()
+    expect(screen.getByText(/Save a public or unlisted list/)).toBeInTheDocument()
   })
 
-  it('starts list creation as public and keeps the private choice available', async () => {
-    const user = userEvent.setup()
+  it('opens the dedicated collection editor from the empty shelf', () => {
     render(<ListsCollection lists={[]} />)
-    await user.click(screen.getByRole('button', { name: 'Create list' }))
-
-    expect(screen.getByRole('radio', { name: 'Public' })).toBeChecked()
-    expect(screen.getByRole('radio', { name: 'Private' })).not.toBeChecked()
-    await user.click(screen.getByRole('radio', { name: 'Private' }))
-    expect(screen.getByRole('radio', { name: 'Private' })).toBeChecked()
+    expect(screen.getByRole('link', { name: 'Create a collection' })).toHaveAttribute('href', '/lists/new')
   })
 })

@@ -1,9 +1,13 @@
 # Chromecast device testing
 
 Automated suites cover the sender state machine, the player chrome, and
-Watch integration with a mocked Cast SDK. A real device is still required
-before calling casting done. Receiver bugs (header injection, codec support,
-idle behavior) only reproduce on hardware.
+Watch integration with a mocked Cast SDK. An opt-in browser flow also stubs the
+SDK and verifies the explicit device-picker step, the starting phone checkpoint,
+and resume from the TV's latest position after disconnect. Set a non-empty
+`NEXT_PUBLIC_CAST_RECEIVER_ID` before starting the experience test server and
+run `bun run test:experience -- tests/experience/watch-cast.spec.ts`. A real
+device is still required before calling casting done. Receiver bugs (header
+injection, codec support, idle behavior) only reproduce on hardware.
 
 ## Prerequisites
 

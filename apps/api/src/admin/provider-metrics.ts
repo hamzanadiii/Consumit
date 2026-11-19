@@ -1,5 +1,7 @@
 export type ProviderMetrics = { starts: number; playbackFailures: number; buffers: number; directSelections: number; resolveSuccess: number; resolveFailures: number; startupP50Ms?: number; startupP95Ms?: number; startupP99Ms?: number; stallP50Ms?: number; stallP95Ms?: number; stallP99Ms?: number }
 export type MetricsSnapshot = Record<string, ProviderMetrics>
+export type ProviderRouteEvidence = { firstFrame: number; advanced: number; seeked: number; resumed: number; failures: number; lastSuccessAt?: number }
+export type ProviderRouteEvidenceSnapshot = Record<string, ProviderRouteEvidence>
 export type ProviderAlert = { name: string; severity: string; state: string; provider?: string; kind?: string; region?: string; since: string }
 
 const EMPTY = (): ProviderMetrics => ({ starts: 0, playbackFailures: 0, buffers: 0, directSelections: 0, resolveSuccess: 0, resolveFailures: 0 })
@@ -177,6 +179,42 @@ export async function readProviderMetrics(baseUrl: string, fetcher: typeof fetch
       const match = rowFor(sample)
       if (match) match.row[field] = match.count
     }
+  }
+  return result
+}
+
+/** Route-specific browser evidence. Only bounded playback events and compiled
+ * route versions are queried; no member, title, URL, or session labels. */
+export async function readProviderRouteEvidence(baseUrl: string, fetcher: typeof fetch = fetch): Promise<ProviderRouteEvidenceSnapshot> {
+  const [samples, successSamples] = await Promise.all([
+    query(baseUrl, 'sum by (provider,kind,region,delivery,purpose,routeVersion,event) (increase(consumit_playback_events_total[15m]))', fetcher, 20_000),
+    query(baseUrl, 'max by (provider,kind,region,delivery,purpose,routeVersion) (consumit_playback_route_last_success_timestamp_seconds)', fetcher, 20_000),
+  ])
+  const result: ProviderRouteEvidenceSnapshot = {}
+  for (const sample of samples) {
+    const { provider, kind, region, delivery, purpose, routeVersion, event } = sample.metric ?? {}
+    const count = Number(sample.value?.[1])
+    if (!provider || !/^[a-z0-9-]{1,64}$/.test(provider) || !['movie', 'series', 'anime'].includes(kind ?? '')
+      || !/^[A-Z]{2}$/.test(region ?? '') || !['direct', 'relay'].includes(delivery ?? '') || purpose !== 'video'
+      || !/^(?:edge-v1-[a-f0-9]{16}|local)$/.test(routeVersion ?? '')
+      || !['started', 'advanced', 'seeked', 'resumed', 'error'].includes(event ?? '') || !Number.isFinite(count) || count < 0) continue
+    const key = `${provider}:${kind}:${region}:${delivery}:${purpose}:${routeVersion}`
+    const row = result[key] ??= { firstFrame: 0, advanced: 0, seeked: 0, resumed: 0, failures: 0 }
+    if (event === 'started') row.firstFrame += count
+    else if (event === 'advanced') row.advanced += count
+    else if (event === 'seeked') row.seeked += count
+    else if (event === 'resumed') row.resumed += count
+    else row.failures += count
+  }
+  for (const sample of successSamples) {
+    const { provider, kind, region, delivery, purpose, routeVersion } = sample.metric ?? {}
+    const timestamp = Number(sample.value?.[1])
+    if (!provider || !/^[a-z0-9-]{1,64}$/.test(provider) || !['movie', 'series', 'anime'].includes(kind ?? '')
+      || !/^[A-Z]{2}$/.test(region ?? '') || !['direct', 'relay'].includes(delivery ?? '') || purpose !== 'video'
+      || !/^(?:edge-v1-[a-f0-9]{16}|local)$/.test(routeVersion ?? '') || !Number.isFinite(timestamp) || timestamp <= 0) continue
+    const key = `${provider}:${kind}:${region}:${delivery}:${purpose}:${routeVersion}`
+    const row = result[key] ??= { firstFrame: 0, advanced: 0, seeked: 0, resumed: 0, failures: 0 }
+    row.lastSuccessAt = Math.max(row.lastSuccessAt ?? 0, timestamp * 1000)
   }
   return result
 }

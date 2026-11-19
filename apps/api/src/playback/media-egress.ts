@@ -15,7 +15,7 @@ const CHUNK = 32 * 1024
 /** Separate media daemon, sharing capabilities and pinned sockets with the
  * control plane. It has no database, identity, or arbitrary URL endpoint. */
 export function createMediaEgress(env: RelayEnv, limits: Limits, deps: Dependencies) {
-  if (Object.keys(JSON.parse(env.RELAY_PROVIDERS)).some(id => id !== 'lookmovie')
+  if (Object.keys(JSON.parse(env.RELAY_PROVIDERS)).some(id => id !== 'lookmovie' && id !== 'mapple')
     || env.RELAY_DISCOVERY_PROVIDERS !== JSON.stringify({ 'lookmovie': 'lookmovie-v1' })
     || !Object.values(limits).every(value => Number.isSafeInteger(value) && value > 0)) throw new Error('Invalid media daemon policy.')
   const transport = deps.transport ?? createMediaTransport(), now = deps.now ?? Date.now
@@ -63,7 +63,7 @@ export function createMediaEgress(env: RelayEnv, limits: Limits, deps: Dependenc
   return {
     snapshot: () => ({ active, day: state.day, reserved: state.reserved, dailyBytes: limits.dailyBytes }),
     async fetch(request: Request): Promise<Response> {
-      const unavailable = (status: number) => new Response('Media unavailable.', { status, headers: { 'cache-control': 'no-store', 'access-control-allow-origin': env.APP_ORIGIN, 'retry-after': '30' } })
+      const unavailable = (status: number, retryAfter = 30) => new Response('Media unavailable.', { status, headers: { 'cache-control': 'no-store', 'access-control-allow-origin': env.APP_ORIGIN, 'retry-after': String(retryAfter) } })
       const time = now()
       admission = Math.min(60, admission + Math.max(0, time - admissionAt) / 200); admissionAt = time
       if (admission < 1 || active >= limits.active) return unavailable(429)
@@ -81,7 +81,16 @@ export function createMediaEgress(env: RelayEnv, limits: Limits, deps: Dependenc
         signal.throwIfAborted()
         const response = await worker.fetch(new Request(request, { signal }), env)
         if (signal.aborted) { await response.body?.cancel(); signal.throwIfAborted() }
+        // Authentication/upstream errors must remain readable even when the
+        // media allowance is spent; pacing their body turned them into EOF/502.
+        if (response.status >= 400) { finish(); return response }
         if (!response.body) { finish(); return response }
+        await consume(0) // Apply a UTC rollover before checking the saved quota.
+        if (credit <= 0 && state.reserved >= limits.dailyBytes) {
+          await response.body.cancel(); finish()
+          const tomorrow = Date.parse(`${state.day}T00:00:00.000Z`) + 86400_000
+          return unavailable(503, Math.max(1, Math.ceil((tomorrow - now()) / 1000)))
+        }
         reader = response.body.getReader()
         let pending: Uint8Array | undefined, offset = 0
         const body = new ReadableStream<Uint8Array>({

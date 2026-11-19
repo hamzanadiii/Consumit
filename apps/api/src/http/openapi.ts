@@ -5,13 +5,18 @@ import { resolvePlaybackRequestSchema, playbackSessionSchema, playbackSwitchRequ
 import * as contracts from '@consumit/contracts'
 import type { ZodType } from 'zod'
 
-const operations: Record<string, { body?: ZodType; response?: Record<number, ZodType> }> = {
+const operations: Record<string, { body?: ZodType; params?: ZodType; response?: Record<number, ZodType> }> = {
   'POST /v1/auth/register': { body: contracts.registerRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
   'POST /v1/auth/login': { body: contracts.loginRequestSchema, response: { 200: contracts.sessionMemberResponseSchema } },
   'POST /v1/auth/verify-email': { body: contracts.verifyEmailRequestSchema, response: { 200: contracts.sessionMemberResponseSchema } },
   'POST /v1/auth/verification/request': { body: contracts.emailRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
   'POST /v1/auth/recovery/request': { body: contracts.emailRequestSchema, response: { 202: contracts.acceptedResponseSchema } },
+  'POST /v1/auth/recovery/verify': { body: contracts.verifyEmailRequestSchema },
+  'POST /v1/auth/recovery/complete': { body: contracts.recoveryCompleteRequestSchema },
   'POST /v1/auth/recovery/confirm': { body: contracts.recoveryConfirmRequestSchema },
+  'GET /v1/auth/google/pending': { response: { 200: contracts.googleSignupPendingResponseSchema } },
+  'POST /v1/auth/google/complete': { body: contracts.googleSignupCompletionRequestSchema, response: { 200: contracts.googleSignupCompleteResponseSchema, 202: contracts.googleSignupVerificationRequiredResponseSchema } },
+  'GET /v1/usernames/:username/availability': { params: contracts.usernameAvailabilityParamsSchema, response: { 200: contracts.usernameAvailabilityResponseSchema } },
   'POST /v1/auth/password/change': { body: contracts.passwordChangeRequestSchema },
   'GET /v1/me': { response: { 200: contracts.sessionMemberResponseSchema } },
   'GET /v1/me/profile': { response: { 200: contracts.profileSchema } },
@@ -31,6 +36,7 @@ const operations: Record<string, { body?: ZodType; response?: Record<number, Zod
   'POST /v1/playback/attempts': { body: contracts.playbackAttemptRequestSchema, response: { 200: contracts.playbackAttemptSchema } },
   'POST /v1/playback/attempts/:id/continue': { response: { 200: contracts.playbackAttemptSchema } },
   'PUT /v1/progress': { body: contracts.progressWriteRequestSchema, response: { 200: contracts.playbackProgressSchema } },
+  'PUT /v1/progress/episode': { body: contracts.episodeTrackingWriteSchema, response: { 200: contracts.playbackProgressSchema } },
   'GET /v1/progress/:kind/:id': { response: { 200: contracts.playbackProgressSchema } },
   'GET /v1/profiles/:username': { response: { 200: contracts.profileReadResponseSchema } },
   'POST /v1/telemetry/client-errors': { body: contracts.clientErrorBatchSchema },

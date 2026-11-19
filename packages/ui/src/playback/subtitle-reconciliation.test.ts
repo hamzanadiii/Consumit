@@ -37,3 +37,24 @@ it.each([
     controller.destroy()
   }
 })
+
+it.each([
+  ['legacy', createPlaybackController],
+  ['next', createPlaybackControllerNext],
+] as const)('%s resets the active subtitle without changing the saved preference', async (_name, create) => {
+  const video = document.createElement('video')
+  video.play = vi.fn().mockResolvedValue(undefined)
+  const change = vi.fn(), preferenceChange = vi.fn()
+  const engine: MediaEngine = { destroy: vi.fn(), recover: () => false, quality: vi.fn(), audio: vi.fn(), subtitle: vi.fn() }
+  const controller = create(video, { change, fatal: vi.fn(), preferenceChange, initialPreferences: { qualityHeight: null, subtitlesEnabled: true, subtitleLanguages: ['ar', 'en'] } }, async () => engine)
+  try {
+    await controller.load({ type: 'native', src: 'https://media.example/one.mp4' }, 0, false)
+    preferenceChange.mockClear()
+    controller.resetSubtitle()
+    expect(engine.subtitle).toHaveBeenLastCalledWith('off')
+    expect(change.mock.lastCall?.[0].subtitleTrack).toBe('off')
+    expect(preferenceChange).not.toHaveBeenCalled()
+  } finally {
+    controller.destroy()
+  }
+})

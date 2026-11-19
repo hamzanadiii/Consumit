@@ -40,4 +40,19 @@ describe('Button', () => {
     await user.click(button)
     expect(onClick).not.toHaveBeenCalled()
   })
+
+  it('keeps disabled ghost actions legible without fading their text', () => {
+    render(
+      <Button disabled variant="ghost">
+        Refresh inventory
+      </Button>,
+    )
+
+    const button = screen.getByRole('button', { name: 'Refresh inventory' })
+    expect(button).toHaveClass(
+      'disabled:text-muted',
+      'disabled:opacity-100',
+    )
+    expect(button).not.toHaveClass('disabled:opacity-45')
+  })
 })

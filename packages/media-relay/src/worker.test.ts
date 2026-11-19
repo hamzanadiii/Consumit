@@ -29,6 +29,14 @@ function setup(response: Response | ((url: string) => Response)) {
   return { fetcher, report, worker: createRelayWorker({ fetch: fetcher, now: () => now, report }) }
 }
 describe('media grants', () => {
+  it('accepts measured Mapple 4K media playlists above the generic bound', async () => {
+    const playlist = '#EXTM3U\n#EXT-X-TARGETDURATION:6\n' + Array.from({ length: 1400 }, (_, index) => `#EXTINF:6,\npart-${index}.ts?pad=${'x'.repeat(390)}\n`).join('') + '#EXT-X-ENDLIST\n'
+    expect(playlist.length).toBeGreaterThan(512 * 1024)
+    const { worker } = setup(new Response(playlist, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const response = await worker.fetch(await request({ provider: 'mapple' }), { ...env, RELAY_PROVIDERS: JSON.stringify({ mapple: ['media.example'] }) })
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('#EXT-X-ENDLIST')
+  })
   it('continues accepting object grants issued before the compact wire format', async () => {
     const encoder = new TextEncoder()
     const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', encoder.encode(secret)), 'AES-GCM', false, ['encrypt'])
@@ -36,6 +44,12 @@ describe('media grants', () => {
     const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: encoder.encode('consumit-media-v1') }, key, encoder.encode(JSON.stringify(base)))
     const token = Buffer.concat([iv, new Uint8Array(encrypted)]).toString('base64url')
     expect(await (await createGrantCodec(secret)).open(token, now)).toEqual(base)
+  })
+  it('round trips the optional provider route version in compact signed grants', async () => {
+    const codec = await createGrantCodec(secret)
+    const versioned = { ...base, routeVersion: 'edge-v1-0123456789abcdef', route: { kind: 'movie' as const, region: 'US', purpose: 'video' as const } }
+    expect(await codec.open(await codec.seal(versioned, now), now)).toEqual(versioned)
+    await expect(codec.seal({ ...base, routeVersion: 'wrong-version' }, now)).rejects.toThrow()
   })
   it('hides URLs and headers, rejects forgery, expiry, wrong keys and unbounded lifetime', async () => {
     const codec = await createGrantCodec(secret)
@@ -49,8 +63,92 @@ describe('media grants', () => {
     await expect(codec.seal({ ...base, expires: now + MAX_GRANT_MS + 1 }, now)).rejects.toThrow()
     await expect(codec.seal({ ...base, headers: { Cookie: 'secret' } }, now)).rejects.toThrow()
   })
+  it('binds the NontonFlix cookie grant to its provider and exact media host', async () => {
+    const codec = await createGrantCodec(secret)
+    const review = { ...base, provider: 'nontonflix', url: 'https://media.nontonflix.com/media/grant', headerHost: 'media.nontonflix.com', headers: { cookie: 'nf_mk=device; nf_web=web', referer: 'https://nontonflix.com/' } }
+    const token = await codec.seal(review, now)
+    expect(await codec.open(token, now)).toEqual(review)
+    await expect(codec.seal({ ...review, provider: 'owned' }, now)).rejects.toThrow()
+    await expect(codec.seal({ ...review, url: 'https://media.example/grant', headerHost: 'media.example' }, now)).rejects.toThrow()
+    await expect(codec.seal({ ...review, headers: { authorization: 'Bearer secret' } }, now)).rejects.toThrow()
+  })
 })
 describe('Worker delivery boundary', () => {
+  it('rejects route-version drift before making a media request', async () => {
+    const { worker, fetcher } = setup(new Response('not used'))
+    const requestVersion = 'edge-v1-0123456789abcdef'
+    const requestValue = await request({ routeVersion: requestVersion })
+    const response = await worker.fetch(requestValue, { ...env, RELAY_ROUTE_VERSION: 'edge-v1-fedcba9876543210' })
+    expect(response.status).toBe(403)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+  it('requires a matching versioned provider, title, region, purpose, relay, and host policy', async () => {
+    const { worker, fetcher } = setup(new Response('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nseg.ts\n#EXT-X-ENDLIST', { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const version = 'edge-v1-0123456789abcdef'
+    const route = { kind: 'movie' as const, region: 'US', purpose: 'video' as const }
+    const grant = { routeVersion: version, route }
+    const policy = [{ version, provider: 'owned', ...route, delivery: 'relay' as const, media: edge, hosts: ['audio.example', 'media.example'] }]
+    const settings = { ...env, RELAY_ROUTE_VERSION: version, RELAY_ROUTE_POLICY_REQUIRED: 'true', RELAY_ROUTE_POLICY: JSON.stringify(policy) }
+    expect((await worker.fetch(await request(grant), settings)).status).toBe(200)
+    fetcher.mockClear()
+    expect((await worker.fetch(await request({ ...grant, route: { ...route, region: 'CA' } }), settings)).status).toBe(403)
+    expect(fetcher).not.toHaveBeenCalled()
+    expect((await worker.fetch(await request(grant), { ...settings, RELAY_PROVIDERS: JSON.stringify({ owned: ['media.example'] }) })).status).toBe(403)
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+  it('rewrites a VidBolt VOD playlist with more than 2,000 segments within the byte limit', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ vidbolt: ['media.example'] }) }
+    const playlist = '#EXTM3U\n' + Array.from({ length: 2080 }, (_, index) => `#EXTINF:4,\nsegment-${index}.ts`).join('\n') + '\n#EXT-X-ENDLIST\n'
+    const { worker, report } = setup(new Response(playlist, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const response = await worker.fetch(await request({ provider: 'vidbolt', url: 'https://media.example/master.m3u8' }), settings)
+
+    expect(response.status).toBe(200)
+    const rewritten = await response.text()
+    expect((rewritten.match(/https:\/\/edge\.example\/media\//g) ?? [])).toHaveLength(2080)
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ provider: 'vidbolt', kind: 'manifest', status: 200, stage: 'manifest-rewrite' }))
+  })
+
+  it('forwards the NontonFlix device cookie to signed children and accepts its larger manifest', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ nontonflix: ['media.nontonflix.com'] }) }
+    const segments = Array.from({ length: 1392 }, (_, index) => `#EXTINF:4,\nhttps://media.nontonflix.com/media/segment-${index}.ts`)
+    const playlist = '#EXTM3U\n# padding ' + 'x'.repeat(2_200_000) + '\n' + segments.join('\n') + '\n#EXT-X-ENDLIST\n'
+    let upstream = 0
+    const { worker, fetcher } = setup(() => upstream++ === 0
+      ? new Response(playlist, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } })
+      : new Response('segment', { headers: { 'content-type': 'video/mp2t', 'content-length': '7' } }))
+    const response = await worker.fetch(await request({
+      provider: 'nontonflix', url: 'https://media.nontonflix.com/media/grant',
+      headerHost: 'media.nontonflix.com', headers: { cookie: 'nf_mk=device; nf_web=web', referer: 'https://nontonflix.com/' },
+    }), settings)
+
+    expect(response.status).toBe(200)
+    const rewritten = await response.text()
+    expect((rewritten.match(/https:\/\/edge\.example\/media\//g) ?? [])).toHaveLength(1392)
+    const outgoing = new Headers(fetcher.mock.calls[0]?.[1]?.headers)
+    expect(outgoing.get('cookie')).toBe('nf_mk=device; nf_web=web')
+    expect(outgoing.get('referer')).toBe('https://nontonflix.com/')
+
+    const child = new URL(rewritten.split('\n').find(line => line.startsWith('https://'))!)
+    expect((await worker.fetch(new Request(child), settings)).status).toBe(200)
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get('cookie')).toBe('nf_mk=device; nf_web=web')
+  })
+
+  it('accepts the larger reviewed EmbedMaster feature playlist', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ embedmaster: ['perfectbussines.website'] }) }
+    const segments = Array.from({ length: 1669 }, (_, index) => `#EXTINF:5,\n/segment-${index}.html?t=token`)
+    const playlist = '#EXTM3U\n# padding ' + 'x'.repeat(1_200_000) + '\n' + segments.join('\n') + '\n#EXT-X-ENDLIST\n'
+    const { worker } = setup(new Response(playlist, { headers: { 'content-type': 'application/vnd.apple.mpegurl' } }))
+    const response = await worker.fetch(await request({
+      provider: 'embedmaster', url: 'https://perfectbussines.website/media/master.m3u8',
+      headerHost: 'perfectbussines.website', kind: 'hls',
+      headers: { referer: 'https://embdmstrplayer.com/', origin: 'https://embdmstrplayer.com' },
+    }), settings)
+
+    expect(response.status).toBe(200)
+    const rewritten = await response.text()
+    expect((rewritten.match(/https:\/\/edge\.example\/media\//g) ?? [])).toHaveLength(1669)
+  })
+
   it('fetches only authenticated signed Rigel control playlists, without rewriting or accepting media grants', async () => {
     const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ rigel: ['media.example'] }) }
     const codec = await createGrantCodec(secret)
@@ -72,7 +170,10 @@ describe('Worker delivery boundary', () => {
   it('resolves LookMovie and discovers its HLS host graph from authenticated Worker egress', async () => {
     const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ 'lookmovie': ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ 'lookmovie': 'lookmovie-v1' }) }
     const segment = new Uint8Array(564); segment[0] = 71; segment[188] = 71; segment[376] = 71
-    const fetcher = vi.fn<typeof fetch>(async input => {
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      // Match workerd: redirect:'error' throws before performing any HTTP.
+      if (init?.redirect === 'error') throw new TypeError('Invalid redirect value')
+      expect(init?.redirect).toBe('manual')
       const url = new URL(String(input))
       if (url.hostname === 'lmscript.xyz' && url.pathname === '/v1/movies') return Response.json({ items: [{ id_movie: '42', title: 'Alien', year: 1979 }] })
       if (url.hostname === 'lmscript.xyz' && url.pathname === '/v1/movies/view') return Response.json({ streams: { '1080p': 'https://srv313.seclar.cyou/master.m3u8' }, subtitles: [] })
@@ -90,6 +191,22 @@ describe('Worker delivery boundary', () => {
     expect(result.ok).toBe(true)
     expect(result.sources[0]).toMatchObject({ url: 'https://srv313.seclar.cyou/master.m3u8', relayRecipe: 'lookmovie-v1', relayHosts: ['srv313.seclar.cyou', 'srv314.seclar.cyou'] })
     expect(fetcher).toHaveBeenCalledTimes(4)
+  })
+
+  it('rejects Worker-side LookMovie catalog redirects without fetching their target', async () => {
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ lookmovie: ['srv310.seclar.cyou'] }), RELAY_DISCOVERY_PROVIDERS: JSON.stringify({ lookmovie: 'lookmovie-v1' }) }
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      expect(init?.redirect).toBe('manual')
+      return new Response(null, { status: 302, headers: { location: 'https://unapproved.example/catalog' } })
+    })
+    const worker = createRelayWorker({ fetch: fetcher })
+    const response = await worker.fetch(new Request('https://edge.example/v1/lookmovie/resolve', {
+      method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Alien', year: 1979, ref: { kind: 'movie', id: 550 } }),
+    }), settings)
+    expect(response.status).toBe(502)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0]?.[1]?.redirect).toBe('manual')
   })
 
   it('rejects unauthenticated or malformed Worker-side LookMovie resolution requests', async () => {
@@ -301,9 +418,9 @@ describe('Worker delivery boundary', () => {
       expect(outgoing.get('referer')).toBe(referrer)
     }
   })
-  it('accepts only verified TS bytes from reviewed Storm/Zeta hosts despite their HTML content type', async () => {
+  it('accepts only verified TS bytes from reviewed HTML-labelled hosts despite their content type', async () => {
     const bytes = new Uint8Array(564); bytes[0] = bytes[188] = bytes[376] = 0x47
-    for (const [provider, host] of [['stormboron', 'celestialdreamer.lol'], ['stormboron', 'moonfirekeeper.lol'], ['stormboron', 'emberwindkeeper.lol'], ['zeta', 'remoteconsultinggroup.site']]) {
+    for (const [provider, host] of [['stormboron', 'celestialdreamer.lol'], ['stormboron', 'moonfirekeeper.lol'], ['stormboron', 'emberwindkeeper.lol'], ['zeta', 'remoteconsultinggroup.site'], ['embedmaster', 'perfectbussines.website']]) {
       const grant = { provider: provider!, url: `https://${host}/segment.html`, headerHost: host!, kind: 'auto' as const }
       const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ [provider!]: [host] }) }
       const { worker } = setup(new Response(bytes, { headers: { 'content-type': 'text/html' } }))
@@ -314,6 +431,24 @@ describe('Worker delivery boundary', () => {
       expect((await setup(new Response('<html>Denied</html>', { headers: { 'content-type': 'text/html' } })).worker.fetch(await request(grant), settings)).status).toBe(502)
     }
     expect((await setup(new Response(bytes, { headers: { 'content-type': 'text/html' } })).worker.fetch(await request({ kind: 'native' }), env)).status).toBe(502)
+  })
+  it('accepts structurally verified Mapple fragmented MP4 while rejecting HTML and forged boxes', async () => {
+    const bytes = new Uint8Array(564), view = new DataView(bytes.buffer)
+    const box = (at: number, size: number, type: string) => { view.setUint32(at, size); bytes.set(new TextEncoder().encode(type), at + 4) }
+    box(0, 64, 'moof'); box(8, 16, 'mfhd'); box(24, 40, 'traf'); box(64, 500, 'mdat')
+    const host = 'proxy2.jordanblackwell.bid'
+    const grant = { provider: 'mapple', url: `https://${host}/4k.m4s`, headerHost: host, kind: 'auto' as const }
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ mapple: [host] }) }
+    const response = await setup(new Response(bytes, { headers: { 'content-type': 'text/html' } })).worker.fetch(await request(grant), settings)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('video/mp4')
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes)
+    for (const body of ['<html>Denied</html>', new Uint8Array(564)]) {
+      const result = await setup(new Response(body, { headers: { 'content-type': 'text/html' } })).worker.fetch(await request(grant), settings)
+      expect(result.status).toBe(502)
+    }
+    bytes[12] = 0
+    expect((await setup(new Response(bytes, { headers: { 'content-type': 'text/html' } })).worker.fetch(await request(grant), settings)).status).toBe(502)
   })
   it('decodes the fixed BingeBang manifest recipe, rewrites nested jpg fetches and leaves native bytes untouched', async () => {
     const encoded = Uint8Array.from(atob('fieJnDiqINzOWUvTmYBfd5DE0fjvYstZj9WA/mm0DIoZNpn1RJMDt591cunA9h8Xsa6e'), char => char.charCodeAt(0))

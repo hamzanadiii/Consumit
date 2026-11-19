@@ -11,9 +11,9 @@ import { TitleCardQuickActions } from '../shared/title-card-quick-actions'
 
 vi.mock('@/lib/identity-browser', () => ({
   appendMemberListTitle: vi.fn(async () => {}),
-  createMemberList: vi.fn(async (input: { name: string; visibility: 'public' | 'private' }) => ({
-    items: [],
-    list: { description: null, id: 'new-list-id', itemCount: 0, name: input.name, origin: 'native', slug: 'arrival-picks', visibility: input.visibility },
+  createMemberList: vi.fn(async (input: { name: string; title: { id: number; kind: 'movie' }; visibility: 'public' | 'unlisted' | 'private' }) => ({
+    items: [{ id: 329865, kind: 'movie', position: 0, title: { id: 329865, kind: 'movie' }, note: null }],
+    list: { description: null, id: 'new-list-id', itemCount: 1, name: input.name, origin: 'native', slug: 'arrival-picks', visibility: input.visibility },
     owner: { displayName: 'Film Fan', username: 'film_fan' },
     viewerHasSaved: false,
     viewerIsOwner: true,
@@ -76,7 +76,7 @@ describe('title page list action', () => {
     expect(getMemberTitleState).toHaveBeenCalledWith({ id: 329865, kind: 'movie' })
   })
 
-  it('creates a public list from a title page and appends that title', async () => {
+  it('creates a public list from a title action with the title already included', async () => {
     const user = userEvent.setup()
     render(<AddTitleToList title={{ id: 329865, kind: 'movie' }} titleName="Arrival" />)
 
@@ -85,29 +85,31 @@ describe('title page list action', () => {
     expect(screen.getByRole('button', { name: 'Visibility Public' })).toHaveAttribute('aria-haspopup', 'listbox')
     await user.click(screen.getByRole('button', { name: 'Create and add title' }))
 
-    expect(createMemberList).toHaveBeenCalledWith(expect.objectContaining({ name: 'Arrival picks', visibility: 'public' }))
-    expect(appendMemberListTitle).toHaveBeenCalledWith('new-list-id', { id: 329865, kind: 'movie' })
+    expect(createMemberList).toHaveBeenCalledWith(expect.objectContaining({ name: 'Arrival picks', title: { id: 329865, kind: 'movie' }, visibility: 'public' }))
+    expect(appendMemberListTitle).not.toHaveBeenCalled()
     expect(await screen.findByRole('status')).toHaveTextContent('Created Arrival picks and added Arrival.')
     expect(screen.getByRole('link', { name: 'Open list' })).toHaveAttribute('href', '/lists/arrival-picks')
   })
 
-  it('retries a failed append in the created list without creating a second list', async () => {
+  it('retries a failed list creation with the same idempotency key', async () => {
     const user = userEvent.setup()
-    vi.mocked(appendMemberListTitle).mockRejectedValueOnce(new Error('Temporary network failure'))
+    vi.mocked(createMemberList).mockRejectedValueOnce(new Error('Temporary network failure'))
     render(<AddTitleToList title={{ id: 329865, kind: 'movie' }} titleName="Arrival" />)
 
     await user.click(screen.getByRole('button', { name: 'Add to a list' }))
     await screen.findByRole('heading', { name: 'Choose a list' })
     await user.click(screen.getByRole('button', { name: 'Create and add title' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Created Arrival picks, but could not add Arrival.')
-    expect(screen.getByRole('button', { name: 'Retry add title' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Retry add title' }))
+    expect(await screen.findByText('The list could not be created. Retry to safely continue.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create and add title' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Create and add title' }))
 
-    expect(createMemberList).toHaveBeenCalledTimes(1)
-    expect(appendMemberListTitle).toHaveBeenCalledTimes(2)
-    expect(appendMemberListTitle).toHaveBeenNthCalledWith(1, 'new-list-id', { id: 329865, kind: 'movie' })
-    expect(appendMemberListTitle).toHaveBeenNthCalledWith(2, 'new-list-id', { id: 329865, kind: 'movie' })
+    expect(createMemberList).toHaveBeenCalledTimes(2)
+    const firstRequest = vi.mocked(createMemberList).mock.calls[0]?.[0]
+    const retryRequest = vi.mocked(createMemberList).mock.calls[1]?.[0]
+    if (!firstRequest || !retryRequest) throw new Error('Expected both create attempts')
+    expect(retryRequest.idempotencyKey).toBe(firstRequest.idempotencyKey)
+    expect(appendMemberListTitle).not.toHaveBeenCalled()
     expect(await screen.findByRole('status')).toHaveTextContent('Created Arrival picks and added Arrival.')
     expect(screen.getByRole('dialog', { name: 'Add to a list' })).toHaveTextContent(/1 title\s*·\s*public/)
   })

@@ -18,22 +18,24 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
   titles: readonly CatalogTitleSummary[]
 }) {
   const titleMap = new Map(titles.map((title) => [key(title), title]))
+  const viewerCanEdit = 'viewerCanEdit' in data && data.viewerCanEdit
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-list-detail data-list-slug={data.list.slug}>
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto min-h-screen w-full max-w-[90rem]" data-consumit-list-detail data-list-slug={data.list.slug}>
         <section className="overflow-hidden border-b border-border px-5 py-14 sm:px-8 lg:px-[50px] lg:py-24">
           <div className="grid gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(27rem,1.05fr)] lg:items-center">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange">{data.list.visibility === 'public' ? 'Public list' : 'Private list'}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-orange">{data.list.visibility[0]!.toUpperCase() + data.list.visibility.slice(1)} list</p>
               <h1 className="mt-4 max-w-[12ch] text-balance font-display text-5xl leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-[5rem]">{data.list.name}</h1>
               {data.list.description ? <p className="mt-6 max-w-[58ch] whitespace-pre-wrap text-sm leading-7 text-copy">{data.list.description}</p> : null}
               <p className="mt-7 text-sm text-muted">By <Link className="font-bold text-ink hover:text-orange" href={`/profile/${data.owner.username}`}>{data.owner.displayName ?? data.owner.username}</Link> · {data.items.length} {data.items.length === 1 ? 'title' : 'titles'}</p>
-              {data.list.visibility === 'public' ? <ListShareActions key={data.list.id} isOwner={data.viewerIsOwner} listId={data.list.id} saved={data.viewerHasSaved} signedIn={signedIn} slug={data.list.slug} /> : null}
+              {data.list.visibility !== 'private' ? <ListShareActions key={data.list.id} isOwner={data.viewerIsOwner} listId={data.list.id} name={data.list.name} saved={data.viewerHasSaved} signedIn={signedIn} slug={data.list.slug} visibility={data.list.visibility} /> : null}
             </div>
             <div aria-hidden="true" className="relative mx-auto h-72 w-full max-w-2xl sm:h-96">
               {data.items.slice(0, 4).map((item, index) => {
                 const title = titleMap.get(key(item))
-                return title?.posterUrl ? <Image alt="" className="absolute bottom-0 left-1/2 aspect-[2/3] h-[88%] w-auto rounded-card border border-border object-cover" height={600} key={key(item)} src={title.posterUrl} style={{ transform: `translateX(calc(-50% + ${(index - 1.5) * 22}%)) rotate(${(index - 1.5) * 4}deg)`, zIndex: index }} width={400} /> : null
+                  const artwork = title?.posterUrl ?? title?.backdropUrl
+                  return artwork ? <Image alt="" className="absolute bottom-0 left-1/2 aspect-[2/3] h-[88%] w-auto rounded-card border border-border object-cover" height={600} key={key(item)} src={artwork} style={{ transform: `translateX(calc(-50% + ${(index - 1.5) * 22}%)) rotate(${(index - 1.5) * 4}deg)`, zIndex: index }} width={400} /> : null
               })}
             </div>
           </div>
@@ -45,7 +47,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
           {catalogDetailsLimited && !catalogUnavailable ? <p className="mt-4 text-xs text-muted" role="status">Title details are loaded for the first 120 unique titles. Every entry remains in the list and can still be opened.</p> : null}
 
           <section className="py-14 sm:py-16 lg:py-20" id="titles" aria-labelledby="list-titles-heading">
-            {data.viewerIsOwner && 'origin' in data.list ? (
+            {viewerCanEdit && 'origin' in data.list ? (
               <>
                 <SectionHeading description="Edit details, add titles, and set their order." id="list-titles-heading" title="Your list" />
                 <div className="mt-8"><ListEditor data={data as MemberListDetail} key={data.list.id} titles={titles} /></div>
@@ -55,7 +57,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
                 <SectionHeading description="The member's order and notes are preserved." id="list-titles-heading" title="The list, in order" />
                 {data.items.length === 0 ? <p className="mt-8 rounded-card border border-dashed border-border bg-surface p-8 text-sm text-muted">This list is empty.</p> : <div className="mt-8 space-y-3">{data.items.map((item) => {
                   const title = titleMap.get(key(item))
-                  return <OrderedTitleRow action={<Link className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(item)}>View</Link>} artworkSrc={title?.posterUrl ?? undefined} href={titleHref(item)} index={item.position} key={`${item.position}:${key(item)}`} meta={title?.year ? String(title.year) : 'Title details not loaded'} quote={item.note ?? undefined} title={title?.title ?? `${kindLabel(item.kind)} #${item.id}`} />
+                  return <OrderedTitleRow action={<Link className={buttonVariants({ size: 'sm', variant: 'secondary' })} href={titleHref(item)}>View</Link>} artworkFallbackSrc={title?.backdropUrl ?? undefined} artworkSrc={title?.posterUrl ?? title?.backdropUrl ?? undefined} href={titleHref(item)} index={item.position} key={`${item.position}:${key(item)}`} meta={title?.year ? String(title.year) : 'Title details not loaded'} quote={item.note ?? undefined} title={title?.title ?? `${kindLabel(item.kind)} #${item.id}`} />
                 })}</div>}
               </>
             )}
@@ -63,7 +65,7 @@ export function ListDetailScreen({ catalogDetailsLimited = false, catalogUnavail
 
           <section className="border-t border-border py-14" id="about" aria-labelledby="list-about-heading">
             <SectionHeading id="list-about-heading" title="About this list" />
-            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. {data.list.visibility === 'public' ? 'This link stays available while its curator keeps the list and Lists section public.' : 'This list is private and only available to its owner.'}</p>
+            <p className="mt-6 max-w-2xl text-sm leading-7 text-muted">Titles stay in the curator&apos;s chosen order. {data.list.visibility === 'public' ? 'This list appears on its curator’s profile and can be found in discovery.' : data.list.visibility === 'unlisted' ? 'Anyone with this link can open the list. It stays out of profiles, discovery, and search.' : 'This list is private to its owner and invited editors.'}</p>
           </section>
         </div>
       </main>

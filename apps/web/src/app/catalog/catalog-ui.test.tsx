@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { movieSummary } from '@/test/catalog-fixtures'
@@ -11,10 +11,12 @@ vi.mock('next/navigation', () => ({
 }))
 
 describe('catalog UI', () => {
-  it('renders real title data with a numeric canonical link and missing-artwork fallback', () => {
+  it('uses backdrop artwork when a poster is missing or fails to load', () => {
     render(<CatalogGrid items={[movieSummary, { ...movieSummary, id: 329865, posterUrl: null, title: 'Arrival' }]} />)
     expect(screen.getByRole('link', { name: 'Dune: Part Two' })).toHaveAttribute('href', '/title/693134')
-    expect(screen.getByRole('img', { name: 'Arrival poster' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Arrival poster' })).toHaveAttribute('src', movieSummary.backdropUrl)
+    fireEvent.error(screen.getByRole('img', { name: 'Dune: Part Two poster' }))
+    expect(screen.getByRole('img', { name: 'Dune: Part Two poster' })).toHaveAttribute('src', movieSummary.backdropUrl)
     expect(screen.queryByText(/taste match|% match|TMDB rating/i)).not.toBeInTheDocument()
   })
 

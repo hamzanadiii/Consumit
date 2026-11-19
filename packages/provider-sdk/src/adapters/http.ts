@@ -1,7 +1,7 @@
 import { playbackRefSchema } from '@consumit/contracts'
 import { z } from 'zod'
 import { assertHlsManifest } from '../manifest.ts'
-import type { ProviderAdapter, ProviderInput, ProviderSource, SkipSegment } from '../index.ts'
+import { providerResultSchema, type ProviderAdapter, type ProviderInput, type ProviderSource, type SkipSegment } from '../index.ts'
 
 /** Intro/outro/recap ranges in seconds from upstream skip metadata. Only
  *  finite, ordered, in-day ranges survive; anything else is dropped. */
@@ -37,7 +37,31 @@ export type ProviderTitleMetadataResolver = (ref: ProviderInput['ref'], signal: 
 export const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
 
 export class ProviderFailure extends Error {
-  constructor(readonly code: 'empty' | 'malformed' | 'unavailable') { super(code) }
+  constructor(readonly code: 'empty' | 'timeout' | 'malformed' | 'unavailable' | 'blocked' | 'rate_limited', readonly retryAfterMs?: number) { super(code) }
+}
+
+export type ProviderOutcome = { code: 'ok' } | { code: ProviderFailure['code']; retryAfterMs?: number }
+
+/** Shared lane classification keeps provider waterfalls consistent when adapters fan out. */
+export function providerOutcome(error: unknown): ProviderOutcome {
+  if (error instanceof ProviderFailure) return { code: error.code, ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}) }
+  if (error instanceof z.ZodError || error instanceof SyntaxError) return { code: 'malformed' }
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return { code: 'timeout' }
+  return { code: 'unavailable' }
+}
+
+/** Preserve actionable upstream blocks/rate limits across parallel lane results. */
+export function providerFailureFromOutcomes(outcomes: readonly ProviderOutcome[]): ProviderFailure {
+  const failures = outcomes.filter((outcome): outcome is Exclude<ProviderOutcome, { code: 'ok' }> => outcome.code !== 'ok')
+  if (failures.some((outcome) => outcome.code === 'rate_limited')) {
+    const retryAfterMs = Math.max(0, ...failures.filter((outcome) => outcome.code === 'rate_limited').map((outcome) => outcome.retryAfterMs ?? 0))
+    return new ProviderFailure('rate_limited', retryAfterMs || undefined)
+  }
+  if (failures.some((outcome) => outcome.code === 'blocked')) return new ProviderFailure('blocked')
+  if (failures.length && failures.every((outcome) => outcome.code === 'malformed')) return new ProviderFailure('malformed')
+  if (failures.length && failures.every((outcome) => outcome.code === 'timeout')) return new ProviderFailure('timeout')
+  if (failures.length && failures.every((outcome) => outcome.code === 'unavailable' || outcome.code === 'timeout')) return new ProviderFailure('unavailable')
+  return new ProviderFailure('empty')
 }
 
 export function adapter(id: string, resolve: (input: ProviderInput, signal: AbortSignal) => Promise<ProviderSource[]>): ProviderAdapter {
@@ -47,11 +71,19 @@ export function adapter(id: string, resolve: (input: ProviderInput, signal: Abor
       playbackRefSchema.parse(input.ref)
       const sources = await resolve(input, signal)
       signal.throwIfAborted()
-      return sources.length ? { ok: true, sources } : { ok: false, code: 'empty', retryable: false }
+      if (!sources.length) return { ok: false, code: 'empty', retryable: false }
+      const result = providerResultSchema.safeParse({ ok: true, sources })
+      if (!result.success || sources.some((source) => {
+        try {
+          const url = new URL(source.url)
+          return !['http:', 'https:'].includes(url.protocol) || Boolean(url.username || url.password)
+        } catch { return true }
+      })) return { ok: false, code: 'malformed', retryable: false }
+      return { ok: true, sources }
     } catch (error) {
       const code = signal.aborted ? (signal.reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled')
         : error instanceof ProviderFailure ? error.code : error instanceof z.ZodError || error instanceof SyntaxError ? 'malformed' : 'unavailable'
-      return { ok: false, code, retryable: code === 'timeout' || code === 'unavailable' }
+      return { ok: false, code, retryable: code === 'timeout' || code === 'unavailable' || code === 'rate_limited', ...(error instanceof ProviderFailure && error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}) }
     }
   } }
 }
@@ -65,6 +97,13 @@ export function titlePath({ ref }: ProviderInput) {
 export async function document(http: ProviderHttp, url: string, signal: AbortSignal, headers: Record<string, string> = {}, init?: ProviderHttpRequest) {
   const response = await http(url, { 'user-agent': userAgent, ...headers }, signal, init)
   if (response.status === 404) throw new ProviderFailure('empty')
+  if (response.status === 403) throw new ProviderFailure('blocked')
+  if (response.status === 429) {
+    const value = response.headers?.get('retry-after')
+    const seconds = value && /^\d{1,7}(?:\.\d+)?$/.test(value) ? Number(value) : value ? (Date.parse(value) - Date.now()) / 1000 : 0
+    const retryAfterMs = Number.isFinite(seconds) && seconds > 0 ? Math.min(900_000, Math.ceil(seconds * 1000)) : undefined
+    throw new ProviderFailure('rate_limited', retryAfterMs)
+  }
   if (response.status < 200 || response.status >= 300) throw new ProviderFailure('unavailable')
   return response
 }

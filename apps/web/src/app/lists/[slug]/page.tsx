@@ -1,21 +1,35 @@
 import type { Metadata } from 'next'
-import type { CatalogTitleSummary } from '@consumit/contracts'
+import { tasteListReadSchema, type CatalogTitleSummary } from '@consumit/contracts'
 
-import { ListDetailScreen } from '../list-detail-screen'
+import { ListPublication } from '../../taste/list-publication'
 import { notFound } from 'next/navigation'
 
-import { getCatalogBatchForRefs, MAX_PAGE_CATALOG_ENRICHMENT } from '@/lib/catalog-api'
+import { getCatalogBatchForRefs } from '@/lib/catalog-api'
 import { getServerSession } from '@/lib/identity-server'
-import { getListRead, MemberApiError } from '@/lib/member-server'
-
-export const metadata: Metadata = {
-  title: 'List · Consumit',
-  description: 'A member-curated list, preserved in deliberate order.',
-  robots: { follow: false, index: false },
-}
+import { getListRead, MemberApiError, memberRequest } from '@/lib/member-server'
 
 type ListPageProps = {
   params: Promise<{ slug: string }>
+}
+
+export async function generateMetadata({ params }: ListPageProps): Promise<Metadata> {
+  const { slug } = await params
+  try {
+    const list = await getListRead(slug)
+    const description = list.list.description ?? `A member-curated collection of ${list.items.length} titles, kept in deliberate order.`
+    const indexable = list.list.visibility === 'public'
+    return {
+      title: `${list.list.name} · Consumit`,
+      description,
+      alternates: { canonical: `/lists/${encodeURIComponent(slug)}` },
+      robots: { follow: indexable, index: indexable },
+      openGraph: { title: `${list.list.name} · Consumit`, description, type: 'website' },
+      twitter: { card: 'summary', title: `${list.list.name} · Consumit`, description },
+    }
+  } catch (error) {
+    if (error instanceof MemberApiError && error.status === 404) return { title: 'List unavailable · Consumit', robots: { index: false, follow: false } }
+    throw error
+  }
 }
 
 export default async function ListPage({ params }: ListPageProps) {
@@ -29,8 +43,10 @@ export default async function ListPage({ params }: ListPageProps) {
     throw error
   }
   let titles: CatalogTitleSummary[] = []
-  let catalogUnavailable = false
-  try { titles = (await getCatalogBatchForRefs(list.items))?.items ?? [] } catch { catalogUnavailable = true }
-  const catalogDetailsLimited = new Set(list.items.map((item) => `${item.kind}:${item.id}`)).size > MAX_PAGE_CATALOG_ENRICHMENT
-  return <ListDetailScreen catalogDetailsLimited={catalogDetailsLimited} catalogUnavailable={catalogUnavailable} data={list} signedIn={session.status === 'authenticated'} titles={titles} />
+  try {
+    const resolved = await getCatalogBatchForRefs(list.items)
+    titles = resolved?.items ?? []
+  } catch { /* Stored list titles remain readable without artwork. */ }
+  const layout = await memberRequest(`/v1/taste/lists/${list.list.id}`, tasteListReadSchema)
+  return <ListPublication data={list} layout={layout.layout} watched={layout.watched} signedIn={session.status === 'authenticated'} titles={titles} />
 }

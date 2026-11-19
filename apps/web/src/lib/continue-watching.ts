@@ -1,5 +1,5 @@
-import { continueWatchingPageSchema, playbackProgressSchema, progressWriteRequestSchema, watchHref, type CatalogRef, type PlaybackProgress } from '@consumit/contracts'
-import { progressKey } from './playback-progress'
+import { continueWatchingPageSchema, watchHref, type CatalogRef, type PlaybackProgress } from '@consumit/contracts'
+import { parseStoredProgress, progressKey } from './playback-progress'
 import { browserAnimeEpisode } from './anime-browser'
 import { browserCatalogSeason, browserCatalogTitle } from './catalog-browser'
 
@@ -12,16 +12,34 @@ export function readOwnedProgress(memberId?: string): PlaybackProgress[] {
       const key = localStorage.key(index)
       if (!key?.startsWith(`consumit.progress:${memberId ?? 'guest'}:`)) continue
       try {
-        const raw = JSON.parse(localStorage.getItem(key) ?? 'null'), parsed = progressWriteRequestSchema.safeParse(raw)
-        if (!parsed.success || key !== progressKey(parsed.data, memberId)) continue
-        const record = playbackProgressSchema.safeParse({ ...parsed.data, completed: parsed.data.completed ?? false, durationSeconds: parsed.data.durationSeconds ?? null, updatedAt: raw.updatedAt ?? '1970-01-01T00:00:00.000Z' })
-        if (record.success) rows.push(record.data)
+        const record = parseStoredProgress(localStorage.getItem(key))
+        if (record && key === progressKey(record, memberId)) rows.push(record)
       } catch { /* One corrupt record never hides other titles. */ }
     }
   } catch { /* Account progress remains available without storage. */ }
   return rows
 }
-export type ResumeEntry = CatalogRef & { durationSeconds: number | null; episode?: number | undefined; season?: number | undefined; positionSeconds: number; percent: number; storageKey: string; updatedAt: number; href: string }
+export async function nextAiredEpisode(row: PlaybackProgress, signal?: AbortSignal): Promise<{ episode: number; season: number } | null> {
+  const today = new Date().toISOString().slice(0, 10)
+  const season = row.season ?? 1
+  const episode = row.episode ?? 1
+  if (row.kind === 'movie') return null
+  if (row.kind === 'anime') {
+    const next = await browserAnimeEpisode(row.id, episode + 1, signal)
+    return next?.airDate && next.airDate <= today ? { episode: next.number, season } : null
+  }
+  const detail = await browserCatalogTitle(row, signal)
+  if (detail.kind !== 'series') return null
+  const current = detail.seasons.find(item => item.number === season)
+  const nextSeason = detail.seasons.filter(item => item.number > season && item.episodeCount > 0).sort((a, b) => a.number - b.number)[0]
+  const target = current && episode < current.episodeCount ? { season, episode: episode + 1 }
+    : nextSeason ? { season: nextSeason.number, episode: 1 } : null
+  if (!target) return null
+  const next = (await browserCatalogSeason(row.id, target.season, signal)).item.episodes.find(item => item.episodeNumber === target.episode)
+  return next?.airDate && next.airDate <= today ? target : null
+}
+
+export type ResumeEntry = CatalogRef & { durationSeconds: number | null; tracking?: 'saved' | 'next'; episode?: number | undefined; season?: number | undefined; positionSeconds: number; percent: number; storageKey: string; updatedAt: number; href: string }
 export async function loadResumeEntries(memberId?: string, signal?: AbortSignal): Promise<ResumeEntry[]> {
   const latest = new Map<string, PlaybackProgress>(), hidden = new Map<string, number>()
   try { for (const [key, at] of Object.entries(JSON.parse(localStorage.getItem(hiddenKey(memberId)) ?? '{}'))) if (typeof at === 'number') hidden.set(key, at) } catch { /* Storage is optional. */ }
@@ -47,29 +65,22 @@ export async function loadResumeEntries(memberId?: string, signal?: AbortSignal)
   await Promise.all(Array.from({ length: Math.min(4, rows.length) }, async () => {
     while (index < rows.length && !signal?.aborted) {
       const row = rows[index++]!
-      const finished = row.completed || Boolean(row.durationSeconds && row.positionSeconds / row.durationSeconds >= .95)
+      const finished = row.episodeTracking ? row.episodeTracking === 'watched' : row.completed || Boolean(row.durationSeconds && row.positionSeconds / row.durationSeconds >= .95)
       let episode = row.episode, season = row.season, positionSeconds = row.positionSeconds, durationSeconds = row.durationSeconds
       if (finished) {
         try {
-          if (row.kind === 'movie') continue
-          if (row.kind === 'anime') {
-            const next = await browserAnimeEpisode(row.id, (episode ?? 1) + 1, signal)
-            if (!next?.airDate || next.airDate > new Date().toISOString().slice(0, 10)) continue
-            episode = next.number
-          } else {
-            const detail = await browserCatalogTitle(row, signal)
-            if (detail.kind !== 'series') continue
-            const current = detail.seasons.find(item => item.number === (season ?? 1))
-            const nextSeason = detail.seasons.filter(item => item.number > (season ?? 1) && item.episodeCount > 0).sort((a, b) => a.number - b.number)[0]
-            if (current && (episode ?? 1) < current.episodeCount) episode = (episode ?? 1) + 1
-            else if (nextSeason) { season = nextSeason.number; episode = 1 } else continue
-            const next = (await browserCatalogSeason(row.id, season ?? 1, signal)).item.episodes.find(item => item.episodeNumber === episode)
-            if (!next?.airDate || next.airDate > new Date().toISOString().slice(0, 10)) continue
-          }
-          positionSeconds = 0; durationSeconds = null
+          const next = await nextAiredEpisode(row, signal)
+          if (!next) continue
+          episode = next.episode
+          if (row.kind === 'series') season = next.season
+          positionSeconds = 0
+          durationSeconds = null
         } catch { continue }
-      } else if (positionSeconds < 60) continue
-      output.push({ kind: row.kind, id: row.id, episode, season, positionSeconds, durationSeconds, percent: durationSeconds ? Math.min(99, Math.round(positionSeconds / durationSeconds * 100)) : 0, storageKey: progressKey(row, memberId), updatedAt: Date.parse(row.updatedAt), href: watchHref(row, { episode: episode ?? 1, season: season ?? 1 }) })
+      } else if (row.episodeTracking === 'continue' && row.completed) {
+        positionSeconds = 0
+        durationSeconds = null
+      } else if (positionSeconds < 60 && row.episodeTracking !== 'continue') continue
+      output.push({ kind: row.kind, id: row.id, episode, season, positionSeconds, durationSeconds, ...(row.episodeTracking ? { tracking: finished ? 'next' as const : 'saved' as const } : {}), percent: durationSeconds ? Math.min(99, Math.round(positionSeconds / durationSeconds * 100)) : 0, storageKey: progressKey(row, memberId), updatedAt: Date.parse(row.updatedAt), href: watchHref(row, { episode: episode ?? 1, season: season ?? 1 }) })
     }
   }))
   return output.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20)

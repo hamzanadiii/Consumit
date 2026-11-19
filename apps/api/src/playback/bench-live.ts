@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { validatedSources, providerResultSchema } from '@consumit/provider-sdk'
 import { configuredProviders } from './configured-providers.ts'
 import { createAnilistCatalog } from '../catalog/anilist/adapter.ts'
-import { createAnimeMetaResolver, createAnimeTitleResolver, createAnimeTitleVariantsResolver } from '../anime/title-resolver.ts'
+import { createAnimeProviderResolvers } from '../anime/title-resolver.ts'
 import type { ProviderRegistration, MediaKind } from '@consumit/provider-sdk'
 
 // Opt-in live latency benchmark across the enabled local roster.
@@ -16,12 +16,15 @@ const token = process.env.TMDB_API_READ_TOKEN?.trim()
 if (!token) throw new Error('TMDB_API_READ_TOKEN is required (apps/api/.env).')
 
 const animeCatalog = createAnilistCatalog()
+// Keep the benchmark on raw AniList: it measures provider resolution without
+// the production fallback chain while sharing the production resolver seam.
+const animeProviderResolvers = createAnimeProviderResolvers(animeCatalog)
 const raw = JSON.parse(readFileSync(new URL('../../../../infra/playback/providers.local.json', import.meta.url), 'utf8')) as unknown
 const providers = configuredProviders(raw, {
   tmdbToken: token,
-  animeTitleResolver: createAnimeTitleResolver(animeCatalog),
-  animeTitleVariantsResolver: createAnimeTitleVariantsResolver(animeCatalog),
-  animeMetaResolver: createAnimeMetaResolver(animeCatalog),
+  animeTitleResolver: animeProviderResolvers.title,
+  animeTitleVariantsResolver: animeProviderResolvers.titleVariants,
+  animeMetaResolver: animeProviderResolvers.metadata,
 }).filter((row) => row.enabled)
 
 const DEFAULT_REFS: Record<MediaKind, { kind: MediaKind; id: number; season?: number; episode?: number }> = {

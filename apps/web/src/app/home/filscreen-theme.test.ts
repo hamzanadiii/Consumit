@@ -34,10 +34,12 @@ describe('sidebar pre-paint stamp', () => {
   })
 })
 
-describe('light title shelf theme', () => {
-  it('keeps the light member shelf white over cinematic title art, including pre-paint', () => {
+describe('title action shelf theme', () => {
+  it('keeps the member action shelf on the deployed midnight palette, including pre-paint', () => {
     expect(THEME_STYLE).toContain('[data-filscreen-home][data-theme="light"] [data-consumit-title-masthead] [data-consumit-member-shelf]')
     expect(THEME_STYLE).toContain('html[data-consumit-theme="light"] [data-filscreen-home] [data-consumit-title-masthead] [data-consumit-member-shelf]')
-    expect(THEME_STYLE).toContain('--color-surface:#ffffff;--color-surface-raised:#f3eee2;--color-ink:#1a1512;')
+    expect(THEME_STYLE).toContain('--fs-page:#09090b;--fs-shell:#0b0b0e;--fs-ink:#f4f0e8;')
+    expect(THEME_STYLE).toContain('--color-surface:#121216;--color-surface-raised:#19191e;')
+    expect(THEME_STYLE).toContain('--color-ink:#f4f0e8;--color-copy:#c9c4bc;')
   })
 })

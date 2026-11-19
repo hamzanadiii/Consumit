@@ -12,9 +12,11 @@
     }
   },
   "vars": {
-    "RELAY_ENABLED": "true",
     "APP_ORIGIN": "https://consumit.online",
-    "RELAY_DISCOVERY_PROVIDERS": "{\"stormboron\":\"storm-boron-v1\",\"wecollege-miami\":\"wecollege-city-v1\",\"wecollege-boise\":\"wecollege-city-v1\",\"aether\":\"aether-v1\",\"lookmovie\":\"lookmovie-v1\"}",
-    "RELAY_PROVIDERS": "{\"megavid\":[\"cdnx.aniwatchtv.site\",\"hls.dramahot.top\",\"s-90.megavid.se\"],\"9anime\":[\"megap.shiora.top\",\"hd3x5.stellarfrontier.world\"],\"anixo\":[\"anixo.buzz\"],\"zoko\":[\"hls.dramahot.top\",\"hls1.drama1.cfd\"],\"aniwave\":[\"ru-ri-cdn3.echovideo.to\",\"px.roburnt10.store\"],\"bingebangymovies\":[\"os.bingebangstream.online\",\"scrapemaster.net\",\"reliablephonerepairs.website\"],\"movy\":[\"img.rousav.tech\"],\"stormboron\":[\"celestialdreamer.lol\",\"sub.vdrk.site\",\"cache.vdrk.site\",\"moonfirekeeper.lol\",\"emberwindkeeper.lol\"],\"zeta\":[\"remoteconsultinggroup.site\",\"cache.vdrk.site\"],\"rivenebula\":[\"nebula.bright67.online\"],\"rivezephyr\":[\"zcdn.bluevelvet.space\"],\"wecollege-miami\":[\"moon.zenoak.top\",\"ultramoss.top\",\"emberwave.top\",\"rapidmesa.top\"],\"wecollege-boise\":[\"moon.zenoak.top\",\"ultramoss.top\",\"emberwave.top\",\"rapidmesa.top\"],\"stigstream\":[\"proxy.stigstream.ru\",\"ngcorp.dad\",\"proxy2.yflix.ru\",\"proxy.yflix.ru\"],\"viduki\":[\"cdn2.boomchick.org\",\"sprintspeedlight.lol\"],\"netoda\":[\"netoda.tech\",\"astream-11-1.voxzer.org\"],\"fabric\":[\"remoteconsultinggroup.site\",\"cache.vdrk.site\"],\"aphrodite\":[\"stream.hls.lol\",\"iad-01.transcode.cfd\",\"totallyacdn.org\"],\"aniclover\":[\"beta.zanora.xyz\",\"subtitle.aniclover.cc\",\"misty-thistle-2c17.kvofjofh103.workers.dev\",\"curly-poetry-b4f4.kvofjofh11.workers.dev\"],\"nekowatch\":[\"play.echovideo.ru\",\"px.roburnt10.store\",\"sub.vdrk.site\",\"megap.shiora.top\",\"www.animegg.org\",\"flixcloud.cc\"],\"justanime\":[\"play.echovideo.ru\",\"px.roburnt10.store\",\"www.animegg.org\",\"core.justanime.to\",\"vault-92.rundowncdn.top\",\"vault-95.rundowncdn.top\"],\"animedex\":[\"vidnest.fun\",\"megap.shiora.top\",\"px.roburnt10.store\",\"sub.vdrk.site\",\"ru-cdn2.echovideo.to\"],\"zenbu\":[\"edge.vidcdn-904.workers.dev\",\"edge.vidcache.workers.dev\"],\"cinecat\":[\"totallyacdn.org\"],\"aether\":[\"cdn1018.cdn-tnmr.org\"],\"fmfau\":[\"hahaevilcraft.site\"],\"lookmovie\":[\"srv310.seclar.cyou\",\"srv323.cimale.cyou\"],\"riveapogee\":[\"img.rousav.tech\",\"img.animecurx.tech\"],\"riveapogee-audio\":[\"img.rousav.tech\",\"img.animecurx.tech\"]}"
+    "RELAY_ENABLED": "true",
+    "RELAY_PROVIDERS": "{}",
+    "RELAY_DISCOVERY_PROVIDERS": "{}",
+    "RELAY_ROUTE_POLICY": "[]",
+    "RELAY_ROUTE_POLICY_REQUIRED": "true"
   }
 }

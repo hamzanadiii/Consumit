@@ -1,18 +1,22 @@
-import { screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders as render } from '@/test/render'
 
-import { FilScreenLoading } from './filscreen-loading'
+import { FILSCREEN_PROLONGED_LOADING_MS, FilScreenLoading } from './filscreen-loading'
 import { FilScreenShell } from './filscreen-shell'
 import { ShellStateProvider } from './shell-state'
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh }),
 }))
 
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }))
+
 afterEach(() => {
+  vi.useRealTimers()
+  refresh.mockReset()
   window.localStorage.clear()
 })
 
@@ -34,6 +38,22 @@ describe('filscreen loading', () => {
     expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument()
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
     expect(container.querySelector('.motion-reduce\\:animate-none')).toBeInTheDocument()
+  })
+
+  it('offers an explicit same-route retry after prolonged loading', async () => {
+    vi.useFakeTimers()
+    render(<FilScreenLoading />)
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(FILSCREEN_PROLONGED_LOADING_MS) })
+
+    expect(screen.getByRole('status', { name: 'Still loading' })).toHaveTextContent('taking longer than usual')
+    const retry = screen.getByRole('button', { name: 'Try again' })
+    expect(retry).toHaveClass('min-h-[44px]')
+    fireEvent.click(retry)
+    expect(refresh).toHaveBeenCalledOnce()
   })
 
   it('stays in light mode when the member chose light', () => {

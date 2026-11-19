@@ -23,9 +23,10 @@ export const buttonVariants = cva(
           'bg-orange text-canvas hover:brightness-110 active:brightness-95',
         secondary:
           'border border-control-outline bg-transparent text-ink hover:bg-surface-raised active:bg-surface',
-        ghost: 'bg-transparent text-copy hover:bg-surface hover:text-ink',
+        ghost:
+          'bg-transparent text-copy hover:bg-surface hover:text-ink disabled:text-muted disabled:opacity-100',
         danger:
-          'bg-danger text-ink hover:brightness-110 active:brightness-95',
+          'bg-danger text-danger-ink hover:brightness-110 active:brightness-95',
       },
       size: {
         sm: 'h-9 px-3 text-[0.8125rem]',

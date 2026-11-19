@@ -117,9 +117,10 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
   async function attempt(registration: ProviderRegistration, input: ResolvePlaybackRequest, signal: AbortSignal, retryCooldown = false, sourceKey?: string): Promise<ResolvedSource | null> {
     if (options.providerFilter && !options.providerFilter(registration)) return null
     const current = state(registration.adapter.id, input.ref.kind)
+    if (registration.execution === 'cloudflare') { current.failures = 0; if (current.playbackFailures < 3) current.openUntil = 0 }
     if (current.window + 60000 <= now()) { current.window = now(); current.requests = 0 }
     const ceiling = current.failures >= 3 ? 1 : registration.concurrency
-    if (!retryCooldown && current.openUntil > now() || current.active >= ceiling || current.requests >= registration.requestsPerMinute) return null
+    if (!retryCooldown && current.openUntil > now() || current.active >= ceiling || registration.execution !== 'cloudflare' && current.requests >= registration.requestsPerMinute) return null
     const releaseBudget = await acquireProviderBudget(registration, options.region, options.store)
     if (!releaseBudget) return null
     current.active++; current.requests++
@@ -150,10 +151,11 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
           return language === requested ? 3 : language.split('-')[0] === requested.split('-')[0] ? 2 : language === 'original' ? 1 : 0
         }
         candidates.sort((a, b) => languageScore(b) - languageScore(a)
+          || (b.priority ?? 0) - (a.priority ?? 0)
           || Number(input.capabilities.nativeHls && b.type === 'hls') - Number(input.capabilities.nativeHls && a.type === 'hls')
           || qualityScore(b) - qualityScore(a))
         const source = candidates[0]
-        if (!source) { current.outcomes++; if (!validated.length) current.failures++; attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'empty' }); return null }
+        if (!source) { current.outcomes++; if (!validated.length && registration.execution !== 'cloudflare') current.failures++; attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: 'empty' }); return null }
         current.failures = 0; if (current.playbackFailures < 3) current.openUntil = 0; current.success++
         current.latency = current.latency ? current.latency * 0.8 + (now() - started) * 0.2 : now() - started
         current.outcomes++
@@ -167,7 +169,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
           // A provider's own timeout does, so repeated hangs cool down.
           current.outcomes++
         } else if (!signal.aborted || signal.reason?.name === 'TimeoutError') {
-          current.failures++; current.outcomes++
+          if (registration.execution !== 'cloudflare') current.failures++; current.outcomes++
         }
         span.setStatus({ code: SpanStatusCode.ERROR })
         attempts.add(1, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region, outcome: signal.aborted ? 'cancelled' : 'error' })
@@ -175,7 +177,7 @@ export function createResolver(providers: readonly ProviderRegistration[], optio
       } finally {
         current.active--
         await releaseBudget().catch(() => undefined)
-        if (current.failures >= 3) current.openUntil = now() + 60000
+        if (registration.execution !== 'cloudflare' && current.failures >= 3) current.openUntil = now() + 60000
         latency.record(now() - started, { provider: registration.adapter.id, kind: input.ref.kind, region: options.region })
         persist(registration.adapter.id, input.ref.kind, current)
         span.end()

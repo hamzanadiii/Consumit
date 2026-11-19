@@ -18,6 +18,7 @@ export type IdentityHarness = {
 function latestCode(harness: IdentityHarness, kind: 'recovery' | 'verification') {
   const delivery = harness.notifier.deliveries.findLast((item) => item.kind === kind)
   if (!delivery || !('code' in delivery)) throw new Error(`Expected a ${kind} delivery.`)
+  expect(delivery.code).toMatch(/^\d{6}$/)
   return delivery.code
 }
 

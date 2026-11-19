@@ -9,7 +9,6 @@ import { anizipEpisode } from './anizip.ts'
 import { createAddic7edProvider } from './addic7ed.ts'
 import { createAnimeToshoProvider } from './animetosho.ts'
 import { createBanimeProvider } from './banime.ts'
-import { createCineSrcProvider } from './cinesrc.ts'
 import { createJimakuProvider } from './jimaku.ts'
 import { createMeguAnimeProvider } from './meguanime.ts'
 import { normTrackLang, normalizeTrackLanguage } from './lang.ts'
@@ -19,7 +18,6 @@ import { createRiveSubsProvider } from './rivesubs.ts'
 import { createVdrkV2Provider } from './vdrkv2.ts'
 import { createOpenSubtitlesProvider } from './opensubtitles.ts'
 import { createSubDlProvider } from './subdl.ts'
-import { createSubf2mProvider } from './subf2m.ts'
 import { createSubSourceProvider } from './subsource.ts'
 import { createTvSubtitlesProvider } from './tvsubtitles.ts'
 import type { RawSubtitle } from './types.ts'
@@ -583,51 +581,6 @@ describe('animetosho', () => {
   })
 })
 
-describe('cinesrc', () => {
-  const posts: { url: string; body: string }[] = []
-  const http: SubtitleHttp = {
-    get: (async () => {
-      throw new Error('Unexpected GET')
-    }) as SubtitleHttp['get'],
-    post: (async (url: string, body: string) => {
-      posts.push({ url, body })
-      return JSON.stringify({ subtitles: [
-        { url: 'https://subs.bright67.online/c/a', language: 'English', display: 'English', format: 'srt' },
-        { url: 'https://subs.bright67.online/c/a', language: 'English', format: 'srt' },
-        { url: 'https://subs.bright67.online/c/b', language: 'Portuguese', display: 'Portuguese', format: 'ssa' },
-        { url: 'https://subs.bright67.online/c/c', language: 'German', format: 'sub' },
-        { url: 'https://subs.bright67.online/c/d', language: 'French', format: 'txt' },
-      ] })
-    }) as SubtitleHttp['post'],
-  }
-  const provider = createCineSrcProvider(http)
-  const signal = () => new AbortController().signal
-
-  it('supports TMDB-keyed queries only', () => {
-    expect(provider.supports({ type: 'movie', tmdbId: 550 })).toBe(true)
-    expect(provider.supports({ type: 'tv', tmdbId: 1396, season: 1, episode: 1 })).toBe(true)
-    expect(provider.supports({ type: 'movie', title: 'Fight Club', imdbId: 'tt0137523' })).toBe(false)
-  })
-
-  it('posts TV coordinates and keeps convertible formats only', async () => {
-    const found = await provider.search({ type: 'tv', tmdbId: 1396, season: 2, episode: 3 }, signal())
-    expect(posts[0]?.url).toBe('https://cinesrc.st/api/subtitles/search')
-    expect(JSON.parse(posts[0]!.body)).toMatchObject({ tmdbId: '1396', season: '2', episode: '3', builtInSubtitles: [] })
-    expect(found).toHaveLength(2)
-    expect(found[0]).toMatchObject({ lang: 'en', format: 'srt', provider: 'cinesrc' })
-    expect(found[0]?.headers).toMatchObject({ Referer: 'https://cinesrc.st/', Origin: 'https://cinesrc.st' })
-    expect(found[1]).toMatchObject({ lang: 'pt', format: 'ass' })
-  })
-
-  it('omits season/episode for movies and honors preferred languages', async () => {
-    posts.length = 0
-    const found = await provider.search({ type: 'movie', tmdbId: 550, langs: ['en'] }, signal())
-    expect(JSON.parse(posts[0]!.body)).toEqual({ tmdbId: '550', builtInSubtitles: [] })
-    expect(found).toHaveLength(1)
-    expect(found[0]).toMatchObject({ lang: 'en' })
-  })
-})
-
 describe('meguanime', () => {
   const TRACKS = { tracks: [
     { file: 'https://cdn.meguanime.com/p?u=one', label: 'English', kind: 'sub' },
@@ -673,95 +626,6 @@ describe('meguanime', () => {
 
   it('returns nothing without an AniList id', async () => {
     await expect(provider.search({ type: 'anime', title: 'Show', episode: 1 }, signal())).resolves.toEqual([])
-  })
-})
-
-describe('subf2m', () => {
-  const FILLER = `<p>${'x'.repeat(600)}</p>`
-  const page = (items: string) => `<html><body>${FILLER}<ul>${items}</ul></body></html>`
-  const item = (lang: string, release: string, href: string) =>
-    `<li class='item'><span class='language ${lang.toLowerCase()}'>${lang}</span><div><ul><li>${release}</li></ul></div><a class='download' href='${href}'>download</a></li>`
-  const signal = () => new AbortController().signal
-
-  it('supports movies, TV and anime by title', () => {
-    const provider = createSubf2mProvider(stubHttp([]))
-    expect(provider.supports({ type: 'movie', title: 'Fight Club' })).toBe(true)
-    expect(provider.supports({ type: 'tv', title: 'Show' })).toBe(true)
-    expect(provider.supports({ type: 'anime', title: 'Show' })).toBe(true)
-    expect(provider.supports({ type: 'movie' })).toBe(false)
-  })
-
-  it('parses movie items into gated zip downloads', async () => {
-    const provider = createSubf2mProvider(stubHttp([
-      { match: '/subtitles/fight-club', text: page(
-        item('English', 'Fight Club 1080p BluRay', '/subtitles/fight-club/english/17') +
-        item('French', 'Fight Club FRENCH', '/subtitles/fight-club/french/18'),
-      ) },
-    ]))
-    const found = await provider.search({ type: 'movie', title: 'Fight Club' }, signal())
-    expect(found).toHaveLength(2)
-    expect(found[0]).toMatchObject({
-      url: 'https://subf2m.co/subtitles/fight-club/english/17/download',
-      lang: 'en', format: 'zip', provider: 'subf2m', needsExtract: true,
-      label: 'Fight Club 1080p BluRay',
-    })
-    expect(found[0]?.headers).toEqual({ Referer: 'https://subf2m.co/subtitles/fight-club/english/17' })
-    expect(found[1]).toMatchObject({ lang: 'fr' })
-  })
-
-  it('keeps only the requested TV episode but retains season-wide packs', async () => {
-    const provider = createSubf2mProvider(stubHttp([
-      { match: '/subtitles/example-show-season-1', text: page(
-        item('English', 'Example Show S01E02 Second', '/subtitles/example-show/english/21') +
-        item('English', 'Example Show S01E01 Pilot', '/subtitles/example-show/english/20') +
-        item('Spanish', 'Example Show S01E01 Pilot', '/subtitles/example-show/spanish/22') +
-        item('French', 'Some Batch Without Tags', '/subtitles/example-show/french/23'),
-      ) },
-    ]))
-    const found = await provider.search({ type: 'tv', title: 'Example Show', season: 1, episode: 1 }, signal())
-    expect(found.map((entry) => entry.lang)).toEqual(['en', 'es', 'fr'])
-    expect(found[0]?.label).toBe('Example Show S01E01 Pilot')
-  })
-
-  it('falls back to the bare slug when the season slug misses', async () => {
-    // stubHttp matches by substring, so the season URL would hit the bare
-    // route; this stub 404s every -season- path to exercise the fallback.
-    const provider = createSubf2mProvider({
-      get: (async (url: string) => {
-        if (url.includes('-season-')) throw new Error('Subtitle page HTTP 404.')
-        return { text: page(item('English', 'Other Show S01E01 Pilot', '/subtitles/other-show/english/1')), cookies: [] }
-      }) as SubtitleHttp['get'],
-      post: (async () => {
-        throw new Error('Unexpected POST')
-      }) as SubtitleHttp['post'],
-    })
-    const found = await provider.search({ type: 'tv', title: 'Other Show', season: 1, episode: 1 }, signal())
-    expect(found).toHaveLength(1)
-    expect(found[0]?.url).toBe('https://subf2m.co/subtitles/other-show/english/1/download')
-  })
-
-  it('falls back to the ordinal season slug when the digit slug misses', async () => {
-    const urls: string[] = []
-    const provider = createSubf2mProvider({
-      get: (async (url: string) => {
-        urls.push(url)
-        if (url.includes('-second-season')) {
-          return { text: page(item('English', 'Other Show S02E03 Third', '/subtitles/other-show/english/9')), cookies: [] }
-        }
-        if (url.includes('-season-')) throw new Error('Subtitle page HTTP 404.')
-        throw new Error(`Unexpected GET ${url}`)
-      }) as SubtitleHttp['get'],
-      post: (async () => {
-        throw new Error('Unexpected POST')
-      }) as SubtitleHttp['post'],
-    })
-    const found = await provider.search({ type: 'tv', title: 'Other Show', season: 2, episode: 3 }, signal())
-    expect(found).toHaveLength(1)
-    expect(found[0]?.label).toBe('Other Show S02E03 Third')
-    expect(urls).toEqual([
-      'https://subf2m.co/subtitles/other-show-season-2',
-      'https://subf2m.co/subtitles/other-show-second-season',
-    ])
   })
 })
 

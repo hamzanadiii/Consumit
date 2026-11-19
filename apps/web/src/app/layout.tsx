@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
 import './globals.css'
+import './taste/taste.css'
 
 import { siteUrl } from '@/lib/site'
 
@@ -10,7 +11,7 @@ import { SIDEBAR_INIT_SCRIPT, THEME_INIT_SCRIPT } from './home/filscreen-theme'
 import { ShellStateProvider } from './home/shell-state'
 import { WebVitals } from './web-vitals'
 import { GoogleAnalytics } from './shared/google-analytics'
-import { LenisProvider } from './shared/lenis-provider'
+import { SkipToContent } from './shared/skip-to-content'
 
 const siteDescription = 'Watch movies, series, and anime. Remember what you love in your private library.'
 
@@ -48,11 +49,12 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }} />
       </head>
       <body>
+        <SkipToContent />
         <SessionProvider initialStatus="loading">
           <ShellStateProvider>
             <WebVitals />
             <GoogleAnalytics measurementId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID} />
-            <LenisProvider>{children}</LenisProvider>
+            {children}
           </ShellStateProvider>
         </SessionProvider>
       </body>

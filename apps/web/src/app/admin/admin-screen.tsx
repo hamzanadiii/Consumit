@@ -99,7 +99,7 @@ function OperationsTab() {
     {!health && !error && <LoadingState title="Loading provider health" rows={3} />}
     {health && rows.length === 0 && <EmptyState title="No providers for this title kind." description="Deploy a configured adapter before it can be monitored." icon={<Globe className="size-5" />} />}
     {health && !metricsAvailable && <p className="text-xs text-muted" role="note">Playback trends are unavailable until the metrics backend is connected. Probe and circuit status remain visible.</p>}
-    {health && rows.length > 0 && <div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-border text-xs text-muted"><th className="p-3">Provider</th><th className="p-3">Status</th><th className="p-3">Last probe</th><th className="p-3">Playback · 15m</th><th className="p-3">Circuit</th><th className="p-3">Delivery</th><th className="p-3">Actions</th></tr></thead><tbody>{rows.map((row) => {
+    {health && rows.length > 0 && <div aria-label="Provider health by region" className="overflow-x-auto rounded-card border border-border bg-surface" role="region" tabIndex={0}><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-border text-xs text-muted"><th className="p-3">Provider</th><th className="p-3">Status</th><th className="p-3">Last probe</th><th className="p-3">Playback · 15m</th><th className="p-3">Circuit</th><th className="p-3">Delivery</th><th className="p-3">Actions</th></tr></thead><tbody>{rows.map((row) => {
       const provider = providers.find((entry) => entry.id === row.id)
       const probeAge = row.probe ? Math.max(0, Math.floor(((updatedAt ?? 0) - row.probe.at) / 60_000)) : null
       const prefix = `${row.id}:${kind}:${row.region}:`
@@ -120,7 +120,7 @@ function OperationsTab() {
         <Button disabled={subtitleTestWorking} onClick={() => void runSubtitleTest()} size="sm" variant="secondary">{subtitleTestWorking ? 'Testing…' : 'Test this title / episode'}</Button>
         {subtitleTestResult ? <span className="text-xs text-muted" role="status">{subtitleTestResult}</span> : null}
       </div>
-      <div className="overflow-x-auto rounded-card border border-border bg-surface"><table className="w-full min-w-[600px] text-left text-xs"><thead><tr className="border-b border-border text-muted"><th className="p-3">Provider</th><th className="p-3">Configuration</th><th className="p-3">Last search</th><th className="p-3">Results</th><th className="p-3">Failure</th></tr></thead><tbody>{subtitleProviders.map((provider) => <tr className="border-b border-border/50 last:border-0" key={provider.id}><td className="p-3 font-medium text-ink">{provider.name}</td><td className="p-3 text-muted">{provider.configured ? 'Configured' : `Credentials required: ${provider.requirement}`}</td><td className="p-3 text-muted">{provider.last ? `${provider.last.state} · ${provider.last.durationMs}ms` : 'Not searched yet'}</td><td className="p-3 tabular-nums text-ink">{provider.last?.found ?? '—'}</td><td className="p-3 text-muted">{provider.last?.failure ?? '—'}</td></tr>)}</tbody></table></div>
+      <div aria-label="Subtitle provider diagnostics" className="overflow-x-auto rounded-card border border-border bg-surface" role="region" tabIndex={0}><table className="w-full min-w-[600px] text-left text-xs"><thead><tr className="border-b border-border text-muted"><th className="p-3">Provider</th><th className="p-3">Configuration</th><th className="p-3">Last search</th><th className="p-3">Results</th><th className="p-3">Failure</th></tr></thead><tbody>{subtitleProviders.map((provider) => <tr className="border-b border-border/50 last:border-0" key={provider.id}><td className="p-3 font-medium text-ink">{provider.name}</td><td className="p-3 text-muted">{provider.configured ? 'Configured' : `Credentials required: ${provider.requirement}`}</td><td className="p-3 text-muted">{provider.last ? `${provider.last.state} · ${provider.last.durationMs}ms` : 'Not searched yet'}</td><td className="p-3 tabular-nums text-ink">{provider.last?.found ?? '—'}</td><td className="p-3 text-muted">{provider.last?.failure ?? '—'}</td></tr>)}</tbody></table></div>
     </section>
   </div>
 }
@@ -216,7 +216,7 @@ function MembersTab() {
             <Button variant="ghost" size="sm" disabled={(page + 1) * pageSize >= total} onClick={() => setPage((p) => p + 1)}>Next</Button>
           </div>
         </div>
-        <div className="mt-3 overflow-x-auto">
+        <div aria-label="Member access table" className="mt-3 overflow-x-auto" role="region" tabIndex={0}>
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
@@ -233,7 +233,7 @@ function MembersTab() {
                   <td className="py-2 pr-4 font-mono text-ink">{m.username}</td>
                   <td className="py-2 pr-4 text-muted">{m.email}</td>
                   <td className="py-2 pr-4">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${m.role === 'admin' ? 'bg-orange/10 text-orange' : 'bg-surface-raised text-muted'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${m.role === 'admin' ? 'bg-orange/10 text-ink' : 'bg-surface-raised text-muted'}`}>
                       {m.role}
                     </span>
                   </td>
@@ -304,7 +304,7 @@ export function AdminScreen() {
 
   return (
     <FilScreenShell pageHeading={undefined}>
-      <main className="mx-auto w-full min-w-0 max-w-[1600px]">
+      <main id="consumit-main-content" tabIndex={-1} className="mx-auto w-full min-w-0 max-w-[1600px]">
         <div className="mb-6 border-b border-border pb-6">
           <h1 className="font-display text-4xl tracking-[-0.02em] text-ink">Control room<span className="text-orange">.</span></h1>
           <p className="mt-2 max-w-[70ch] text-sm leading-6 text-muted">One place to manage playback providers, verify sources, and review service health.</p>
@@ -319,7 +319,7 @@ export function AdminScreen() {
               key={t.key}
               className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control px-3 py-3 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-orange xl:mb-1 xl:flex xl:w-full ${
                 tab === t.key
-                  ? 'bg-orange/10 text-orange'
+                  ? 'bg-orange/10 text-ink'
                   : 'text-muted hover:bg-surface hover:text-ink'
               }`}
               onClick={() => navigate(t.key)}

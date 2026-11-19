@@ -7,6 +7,7 @@ import { WatchCard } from '../cards/content-cards'
 export type SavedTitleCardProps = Omit<ComponentProps<'article'>, 'children'> & {
   action?: ReactNode | undefined
   artworkSrc?: string | undefined
+  artworkFallbackSrc?: string | undefined
   badge?: ReactNode | undefined
   footer?: ReactNode | undefined
   href?: string | undefined
@@ -20,6 +21,7 @@ export type SavedTitleCardProps = Omit<ComponentProps<'article'>, 'children'> & 
 export function SavedTitleCard({
   action,
   artworkSrc,
+  artworkFallbackSrc,
   badge,
   className,
   footer,
@@ -35,6 +37,7 @@ export function SavedTitleCard({
     <WatchCard
       action={action}
       artworkSrc={artworkSrc}
+      artworkFallbackSrc={artworkFallbackSrc}
       badge={badge}
       className={cn('min-w-0', className)}
       data-consumit-saved-title-card
@@ -53,6 +56,7 @@ export function SavedTitleCard({
 export type OrderedTitleRowProps = Omit<ComponentProps<'article'>, 'children'> & {
   action?: ReactNode | undefined
   artworkSrc?: string | undefined
+  artworkFallbackSrc?: string | undefined
   href?: string | undefined
   index: number
   match?: number | undefined
@@ -65,6 +69,7 @@ export type OrderedTitleRowProps = Omit<ComponentProps<'article'>, 'children'> &
 export function OrderedTitleRow({
   action,
   artworkSrc,
+  artworkFallbackSrc,
   className,
   href,
   index,
@@ -84,7 +89,7 @@ export function OrderedTitleRow({
       {...props}
     >
       <span className="self-start font-display text-3xl tabular-nums text-muted sm:text-4xl">{rank}</span>
-      <ArtworkFrame alt={`${title} artwork`} className="rounded-control" ratio="portrait" src={artworkSrc} />
+      <ArtworkFrame alt={`${title} artwork`} className="rounded-control" fallbackSrc={artworkFallbackSrc} ratio="portrait" src={artworkSrc} />
       <div className="min-w-0">
         {href ? (
           <a className="font-display text-2xl leading-tight text-ink outline-none hover:text-orange focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas" href={href}>{title}</a>

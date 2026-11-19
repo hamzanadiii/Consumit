@@ -5,7 +5,6 @@ import {
   memberLibraryCollectionPageSchema,
   memberLibrarySnapshotSchema,
   watchHistoryPageSchema,
-  memberListDetailSchema,
   memberProfileDataSchema,
   profileReadResponseSchema,
   listReadResponseSchema,
@@ -13,6 +12,7 @@ import {
   publicProfileCollectionPageSchema,
   type PublicProfileCollection,
   type PublicListDiscovery,
+  type PublicMemberSummary,
   memberProfileArchivePageSchema,
   memberRatingLookupResponseSchema,
   memberRatingPageSchema,
@@ -23,8 +23,9 @@ import {
   type MemberLibrarySnapshot,
   type MemberLibraryCollection,
   type MemberLibraryCollectionPage,
-  type WatchHistoryPage,
   type MemberListDetail,
+  type WatchHistoryPage,
+  type PublicListDetail,
   type MemberProfileData,
   type MemberProfileArchiveKind,
   type MemberProfileArchivePage,
@@ -47,7 +48,7 @@ function baseUrl() {
   return (process.env.CONSUMIT_API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '')
 }
 
-async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
+export async function memberRequest<T>(path: string, schema: ZodType<T>): Promise<T> {
   const store = await cookies()
   const cookie = store.get('__Host-consumit_session') ?? store.get('consumit_session')
   const response = await fetch(`${baseUrl()}${path}`, {
@@ -64,7 +65,8 @@ async function request<T>(path: string, schema: ZodType<T>): Promise<T> {
   return parsed.data
 }
 
-export const getProfileRead = cache((username: string) => request(`/v1/profiles/${encodeURIComponent(username)}`, profileReadResponseSchema))
+const request = memberRequest
+export const getProfileRead = cache((username: string, visitor = false) => request(`/v1/profiles/${encodeURIComponent(username)}${visitor ? '?visitor=true' : ''}`, profileReadResponseSchema))
 export const getPublicProfile = cache(async (username: string): Promise<MemberProfileData> => {
   const profile = await getProfileRead(username)
   if (!profile.viewerIsOwner) throw new MemberApiError('Profile not found.', 404)
@@ -74,6 +76,19 @@ export const getListRead = cache((slug: string) => request(`/v1/lists/${encodeUR
 export const getPublicMemberTrends = cache(() => request('/v1/trends/members', publicMemberTrendsSchema))
 export const getPublicListDiscovery = cache((): Promise<PublicListDiscovery> => request('/v1/lists/discovery', publicListDiscoverySchema))
 export const getPeopleSearch = cache((q: string, cursor?: string) => request(`/v1/members/search?${new URLSearchParams({ q, limit: '20', ...(cursor ? { cursor } : {}) })}`, publicMemberPageSchema))
+export const getPeopleSuggestions = cache(async (): Promise<PublicMemberSummary[]> => {
+  const discovery = await getPublicListDiscovery()
+  const usernames = [...new Set([...discovery.popular, ...discovery.newFromNetwork].map(item => item.owner.username))].slice(0, 16)
+  if (!usernames.length) return []
+
+  const profiles = await Promise.allSettled(usernames.map(username => getProfileRead(username)))
+  const available = profiles.flatMap(result => result.status === 'fulfilled' && !result.value.viewerIsOwner ? [result.value.profile] : [])
+  if (!available.length && profiles.every(result => result.status === 'rejected')) {
+    const firstFailure = profiles.find(result => result.status === 'rejected')
+    if (firstFailure?.status === 'rejected') throw firstFailure.reason
+  }
+  return available.filter(profile => !profile.isFollowing).slice(0, 8)
+})
 export const getPublicCollection = cache((username: string, collection: PublicProfileCollection, cursor?: string) => request(`/v1/profiles/${encodeURIComponent(username)}/collections/${collection}?${new URLSearchParams({ limit: '20', ...(cursor ? { cursor } : {}) })}`, publicProfileCollectionPageSchema))
 export const getPublicProfileArchivePage = cache((username: string, collection: MemberProfileArchiveKind, cursor?: string, limit = 30): Promise<MemberProfileArchivePage> => {
   const params = new URLSearchParams({ limit: String(limit) })
@@ -97,5 +112,5 @@ export const getMemberRatingsForTitles = cache((titles: readonly CatalogRef[]): 
   const refs = titles.slice(0, 50).map(({ kind, id }) => `${kind}:${id}`).join(',')
   return request(`/v1/me/ratings/lookup?${new URLSearchParams({ titles: refs })}`, memberRatingLookupResponseSchema)
 })
-export const getMemberList = cache((slug: string): Promise<MemberListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, memberListDetailSchema))
+export const getMemberList = cache((slug: string): Promise<MemberListDetail | PublicListDetail> => request(`/v1/lists/${encodeURIComponent(slug)}`, listReadResponseSchema))
 export const getTitleReviews = cache((kind: CatalogKind, id: number, page: number, sort: TitleReviewSort): Promise<TitleReviewsPage> => request(`/v1/reviews/${kind}/${id}?page=${page}&sort=${sort}`, titleReviewsPageSchema))

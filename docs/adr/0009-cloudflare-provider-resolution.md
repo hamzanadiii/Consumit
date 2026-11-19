@@ -2,6 +2,37 @@
 
 Status: Accepted; Resolver Worker connected to production API on 2026-10-11. Media Relay Worker refreshed on 2026-10-12; browser and relay acceptance remains provider-specific.
 
+Routing note (2026-10-25): ADR 0012 is the current operational policy and supersedes earlier native/API/VPS provider-lookup exceptions recorded below. Those dated sections are retained as deployment history; current provider lookups run only on Cloudflare, and the VPS does not make provider requests.
+
+## 2026-10-25: Cloudflare-only provider lookups
+
+An isolated Resolver diagnostic invoked the exact Evion adapter for TMDB 1399 S1E1 from Madrid, Paris, and Virginia. Each request to `api.bingr.one` returned HTTP 403 with the Cloudflare `Attention Required!` page before a media host was contacted. The production API container can reach the endpoint, but provider requests must stay on Cloudflare; no API/VPS lookup fallback is approved. The remedy requires the upstream operator to allow Resolver egress or publish a compatible endpoint. A Cloudflare-only production configuration also disables the legacy Miami API lookup exception and keeps `PLAYBACK_NODE_ENABLED=false`. The default provider waterfall handles lookup failures until upstream access changes. See the deployment record in `docs/DELIVERY.md`.
+
+
+
+
+## 2026-10-24: Deactivate VPS delivery pending edge acceptance
+
+The owner explicitly chooses disabling Mapple and LookMovie until Cloudflare works. Persist disabled provider overrides while retaining their saved order; disable node routing and stop the existing media daemon so outstanding node grants cannot consume upstream video bandwidth. Keep credentials, certificates and reservation history for audit/recovery, without automatically restoring the node. Future re-enablement requires accepted Cloudflare playback; the previous successful VPS samples do not authorize silent fallback. The [deactivation record](../audits/mapple-lookmovie-cloudflare-migration-2026-10-24.md#owner-approved-deactivation) owns operational evidence.
+
+## 2026-10-24: Requested Mapple/LookMovie edge migration remains blocked
+
+The owner requests Cloudflare media relay instead of VPS media delivery for these two providers. That is the target route; it does not establish upstream acceptance. Isolated default and Europe-hint attempts fail at the provider boundary. A workerd redirect-mode defect in the LookMovie helper is repaired in workspace code, while upstream 403 and non-HLS media responses still prevent acceptance. Production remains on its previous route pending the explicit provider-availability decision; no automatic retry or new relay destination is added. See the [migration record](../audits/mapple-lookmovie-cloudflare-migration-2026-10-24.md).
+
+## 2026-10-24: StreamVault native lookup and bounded Mapple delivery
+
+StreamVault now uses one native Playback-service lookup by default, after the configured Cloudflare lookup failed and the native movie candidate produced approved Direct media that passed browser frame and seek checks. An explicit provider Resolver origin still takes precedence. This is a selected provider route, never an automatic retry after a Cloudflare failure. Header-locked wrapper targets remain excluded; media stays browser-to-provider. The checked episode remained unavailable, so full-catalog acceptance is not claimed.
+
+Mapple's existing approved media node now permits its measured 531 KB 4K playlist within a provider-specific 2 MiB bound, and verifies fragmented MP4 structure when its two existing media hosts incorrectly return HTML content types. Both the movie and episode samples decoded at 3840x2160 and passed seek. This expands no host, grant credential scope, or generic proxy capability. Production node headroom is explicitly 64 GB/day and 48 Mbps aggregate with durable reservations, readable quota errors, and unchanged transfer/memory/CPU ceilings; it does not establish high-concurrency capacity.
+
+NontonFlix's earlier accepted movie/episode samples subsequently regressed to lookup failure. Its dedicated Resolver remains configured, but the route is not stable acceptance. The [reliability audit](../audits/provider-reliability-and-mapple-4k-2026-10-24.md) records these limits and the remaining WeCollege and title-specific failures.
+
+## 2026-10-24: Accepted LookMovie node route and NontonFlix lookup route
+
+The owner's provider-repair request reuses the existing bounded VPS media node for LookMovie when its node policy explicitly approves `lookmovie`. This route resolves natively on that VPS and relays through the same node; it must not be wrapped in the generic Cloudflare resolver or the Cloudflare media-helper adapter. A conflicting explicit Worker lookup origin fails configuration rather than mixing lookup and media egress. Without the node approval, existing edge routing remains unchanged. This provider-specific exception supersedes the edge-only LookMovie routing assumption below and preserves the adapter seam, validated graph, independent media policy and existing resource/daily-byte limits.
+
+NontonFlix uses an explicitly configured dedicated Cloudflare Resolver with the current adapter and the existing production Cloudflare Media Relay, approved only for `media.nontonflix.com`. Actual public movie/episode samples passed decoded first frame and seek. Public LookMovie movie 550 also passed through the existing HTTPS media node. These samples establish the selected routes for the tested cases, not general provider, device or capacity guarantees. See the [repair record](../audits/priority-provider-production-2026-10-24.md).
+
 ## 2026-10-17: AnimeKai regional resolution and media-host repair
 
 The active Europe Resolver had the computation secret but lacked `RESOLVER_COMPUTE_ORIGIN`, leaving AnimeKai's proof calculation inside the Worker. Live error telemetry recorded `exceededCpu`. The reviewed configuration now includes the existing `https://consumit.online` bounded computation helper. The adapter also uses native Web Crypto for P-256 attestation and AES-GCM payload decryption; ECDSA signatures retain the provider's DER encoding and the private attestation key stays local to the invocation. Protocol tests verify the exact signed challenge and existing encrypted playback fixtures. No provider HTTP or media moves to the product API.

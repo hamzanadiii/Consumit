@@ -76,7 +76,31 @@ export function createPublicMembers(prisma: PrismaClient): PublicMembers {
         visible.network ? prisma.follow.count({ where: { followingId: member.id, follower: publicMember } }) : Promise.resolve(0),
         visible.network ? prisma.follow.count({ where: { followerId: member.id, following: publicMember } }) : Promise.resolve(0),
       ])
-      return { viewerIsOwner: false, canonicalUsername: member.profile.username, sectionVisibility: publicVisibility, profile: { ...summary[0]!, bio: member.profile.bio, bannerUrl: member.profile.bannerUrl }, favorites: favorites.map(row => ({ kind: kind(row.catalogKind), id: row.tmdbId, position: row.position })), ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ value: index + 1, count: ratings.find(row => row.value === index + 1)?._count._all ?? 0 })), statistics: { ratings: ratings.reduce((count, row) => count + row._count._all, 0), reviews, lists }, social: { followers, following } }
+      const [diary, history, watched, watchlist] = await Promise.all([
+        visible.diary ? prisma.diaryEntry.count({ where: { memberId: member.id } }) : Promise.resolve(0),
+        visible.history ? prisma.watchHistoryEntry.count({ where: { memberId: member.id } }) : Promise.resolve(0),
+        visible.watched ? prisma.watchedTitle.count({ where: { memberId: member.id } }) : Promise.resolve(0),
+        visible.watchlist ? prisma.savedTitle.count({ where: { memberId: member.id } }) : Promise.resolve(0),
+      ])
+      return {
+        viewerIsOwner: false,
+        canonicalUsername: member.profile.username,
+        sectionVisibility: publicVisibility,
+        profile: { ...summary[0]!, bio: member.profile.bio, bannerUrl: member.profile.bannerUrl },
+        favorites: favorites.map(row => ({ kind: kind(row.catalogKind), id: row.tmdbId, position: row.position })),
+        ratingDistribution: Array.from({ length: 10 }, (_, index) => ({ value: index + 1, count: ratings.find(row => row.value === index + 1)?._count._all ?? 0 })),
+        statistics: {
+          activity: visible.activity ? diary + reviews : 0,
+          diary,
+          history,
+          lists,
+          ratings: ratings.reduce((count, row) => count + row._count._all, 0),
+          reviews,
+          watchlist,
+          watched,
+        },
+        social: { followers, following },
+      }
     },
     async search(query, cursor, limit, viewer) {
       const q = query.trim().replace(/^@+/, '').toLowerCase()
@@ -115,11 +139,11 @@ export function createPublicMembers(prisma: PrismaClient): PublicMembers {
         return { collection, items: rows.slice(0, take).map(row => ({ id: row.tmdbId, kind: kind(row.catalogKind), value: row.value })), nextCursor: next(rows) }
       }
       if (collection === 'reviews') {
-        const rows = await prisma.review.findMany({ where, orderBy: { id: 'asc' }, take: take + 1, select: { id: true, catalogKind: true, tmdbId: true, body: true, reviewedOn: true } })
-        return { collection, items: rows.slice(0, take).map(row => ({ id: row.tmdbId, kind: kind(row.catalogKind), reviewId: row.id, body: row.body, reviewedOn: row.reviewedOn?.toISOString().slice(0, 10) ?? null })), nextCursor: next(rows) }
+        const rows = await prisma.review.findMany({ where: { ...where, removedAt: null }, orderBy: { id: 'asc' }, take: take + 1, select: { id: true, catalogKind: true, tmdbId: true, body: true, spoiler: true, reviewedOn: true } })
+        return { collection, items: rows.slice(0, take).map(row => ({ id: row.tmdbId, kind: kind(row.catalogKind), reviewId: row.id, body: row.spoiler ? 'Contains spoilers. Open the review to read.' : row.body, reviewedOn: row.reviewedOn?.toISOString().slice(0, 10) ?? null })), nextCursor: next(rows) }
       }
       if (collection === 'lists') {
-        const rows = await prisma.memberList.findMany({ where: { ...where, visibility: 'public' }, orderBy: { id: 'asc' }, take: take + 1, select: { id: true, slug: true, name: true, description: true, _count: { select: { items: true } } } })
+        const rows = await prisma.memberList.findMany({ where: { ...where, visibility: 'public', removedAt: null }, orderBy: { id: 'asc' }, take: take + 1, select: { id: true, slug: true, name: true, description: true, _count: { select: { items: true } } } })
         return { collection, items: rows.slice(0, take).map(row => ({ id: row.id, slug: row.slug, name: row.name, description: row.description, itemCount: row._count.items })), nextCursor: next(rows) }
       }
       const relation = collection === 'followers' ? 'follower' : 'following'
@@ -181,6 +205,7 @@ export function createPublicMembers(prisma: PrismaClient): PublicMembers {
       }
     },
     async follow(actor, target, following) {
+      if (following && await prisma.tasteBlock.findFirst({ where: { OR: [{ actorId: actor, targetId: target }, { actorId: target, targetId: actor }] } })) throw new ApiError('FORBIDDEN', 'This relationship is unavailable.')
       if (actor === target) throw new ApiError('BAD_REQUEST', 'You cannot follow yourself.')
       if (!following) { await prisma.follow.deleteMany({ where: { followerId: actor, followingId: target } }); return }
       await prisma.$transaction(async tx => {

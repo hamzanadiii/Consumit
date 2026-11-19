@@ -1,4 +1,5 @@
 import { Valkey } from 'iovalkey'
+import { createHmac } from 'node:crypto'
 import { z } from 'zod'
 
 import {
@@ -10,14 +11,18 @@ import {
   CHALLENGE_DESTROYED_BACKOFF_MS,
   CHALLENGE_MAX_ATTEMPTS,
   CHALLENGE_TTL_MS,
+  GOOGLE_AUTH_TTL_MS,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_WINDOW_MS,
   MAX_MEMBER_SESSIONS,
+  RECOVERY_GRANT_TTL_MS,
   challengeCodeHash,
   challengeLookup,
   loginLookup,
   type AuthChallenge,
   type AuthStateStore,
+  type GoogleOAuthAttempt,
+  type GoogleSignupClaim,
   type RegistrationChallenge,
   type SessionRecord,
 } from './auth-state.ts'
@@ -32,16 +37,52 @@ import {
 const keyPrefix = 'consumit:auth:v1:'
 const sessionPrefix = `${keyPrefix}session:`
 const usernameReservationPrefix = `${keyPrefix}username:`
+const recoveryGrantPrefix = `${keyPrefix}recovery-grant:`
 
+const googleOAuthAttemptSchema = z.object({
+  codeVerifier: z.string().min(43).max(128),
+  nextPath: z.string().min(1).max(2048),
+  nonce: z.string().min(32).max(128),
+})
+const googleSignupClaimSchema = z.object({
+  email: z.string().email().max(254),
+  emailAuthoritative: z.boolean(),
+  googleSubject: z.string().min(1).max(255),
+  name: z.string().max(80).nullable(),
+  nextPath: z.string().min(1).max(2048),
+})
+const consumeStoredValueLua = `
+local value = redis.call('GET', KEYS[1])
+if value then redis.call('DEL', KEYS[1]) end
+return value
+`
+
+const storedRegistrationChallengeSchema = z.object({
+  email: z.string(),
+  kind: z.literal('registration'),
+  passwordHash: z.string().nullable(),
+  googleSubject: z.string().max(255).optional(),
+  displayName: z.string().max(80).nullable().optional(),
+  username: z.string(),
+})
 const storedChallengeSchema = z.object({
   attempts: z.number().int().nonnegative(),
   codeHash: z.string().length(64),
   createdAt: z.number().int().nonnegative(),
   payload: z.discriminatedUnion('kind', [
-    z.object({ email: z.string(), kind: z.literal('registration'), passwordHash: z.string(), username: z.string() }),
+    storedRegistrationChallengeSchema,
     z.object({ kind: z.literal('recovery'), memberId: z.string() }),
   ]),
 })
+
+function registrationChallenge(payload: z.output<typeof storedRegistrationChallengeSchema>): RegistrationChallenge {
+  const { googleSubject, displayName, ...required } = payload
+  return {
+    ...required,
+    ...(googleSubject === undefined ? {} : { googleSubject }),
+    ...(displayName === undefined ? {} : { displayName }),
+  }
+}
 
 const storedSessionSchema = z.object({
   absoluteExpiresAt: z.number().int().positive(),
@@ -237,6 +278,15 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
     return `${keyPrefix}login-attempts:${loginLookup(codePepper, email)}`
   }
 
+  function recoveryGrantKey(token: string) {
+    return `${recoveryGrantPrefix}${hashSessionToken(token)}`
+  }
+
+  function googleKey(kind: 'attempt' | 'signup', value: string) {
+    const lookup = createHmac('sha256', codePepper).update(`google:${kind}:${value}`).digest('hex')
+    return `${keyPrefix}google:${kind}:${lookup}`
+  }
+
   function memberSessionsKey(memberId: string) {
     return `${keyPrefix}member-sessions:${memberId}`
   }
@@ -305,7 +355,27 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       if (raw === -2) return 'locked'
       if (typeof raw !== 'string') return null
       const parsed = storedChallengeSchema.safeParse(JSON.parse(raw))
-      return parsed.success ? parsed.data.payload : null
+      if (!parsed.success) return null
+      return parsed.data.payload.kind === 'registration'
+        ? registrationChallenge(parsed.data.payload)
+        : parsed.data.payload
+    }),
+    consumeRecoveryGrant: (token) => run(async () => {
+      const raw = await client.eval(consumeStoredValueLua, 1, recoveryGrantKey(token))
+      return typeof raw === 'string' && raw.length > 0 ? raw : null
+    }),
+    consumeGoogleAttempt: (state) => run(async () => {
+      const raw = await client.eval(consumeStoredValueLua, 1, googleKey('attempt', state))
+      if (typeof raw !== 'string') return null
+      const parsed = googleOAuthAttemptSchema.safeParse(JSON.parse(raw))
+      return parsed.success ? parsed.data as GoogleOAuthAttempt : null
+    }),
+    deleteGoogleSignup: (ticket) => run(async () => { await client.del(googleKey('signup', ticket)) }),
+    getGoogleSignup: (ticket) => run(async () => {
+      const raw = await client.get(googleKey('signup', ticket))
+      if (!raw) return null
+      const parsed = googleSignupClaimSchema.safeParse(JSON.parse(raw))
+      return parsed.success ? parsed.data as GoogleSignupClaim : null
     }),
     clearFailedLogins: (email) => run(async () => {
       await client.del(loginAttemptsKey(email))
@@ -351,8 +421,20 @@ export function createValkeyAuthState(url: string, codePepper: string): AuthStat
       if (!raw) return null
       const parsed = storedChallengeSchema.safeParse(JSON.parse(raw))
       return parsed.success && parsed.data.payload.kind === 'registration'
-        ? parsed.data.payload as RegistrationChallenge
+        ? registrationChallenge(parsed.data.payload)
         : null
+    }),
+    storeGoogleAttempt: (state, attempt) => run(async () => {
+      const result = await client.set(googleKey('attempt', state), JSON.stringify(attempt), 'PX', GOOGLE_AUTH_TTL_MS, 'NX')
+      if (result !== 'OK') throw new Error('Could not store Google authorization state.')
+    }),
+    storeGoogleSignup: (ticket, claim) => run(async () => {
+      const result = await client.set(googleKey('signup', ticket), JSON.stringify(claim), 'PX', GOOGLE_AUTH_TTL_MS, 'NX')
+      if (result !== 'OK') throw new Error('Could not store Google signup state.')
+    }),
+    storeRecoveryGrant: ({ memberId, token }) => run(async () => {
+      const result = await client.set(recoveryGrantKey(token), memberId, 'PX', RECOVERY_GRANT_TTL_MS, 'NX')
+      if (result !== 'OK') throw new Error('Could not store password recovery state.')
     }),
     readSession: (token) => run(async () => {
       const hash = hashSessionToken(token)

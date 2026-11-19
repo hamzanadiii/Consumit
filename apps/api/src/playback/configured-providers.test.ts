@@ -182,6 +182,41 @@ describe('configured real provider integration', () => {
     const streamingunity = providers.find(row => row.adapter.id === 'streamingunity')
     expect(streamingunity).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'direct', mediaHosts: ['vixcloud.co'] })
   })
+  it('registers VidBolt as a disabled relay candidate with exact media hosts', async () => {
+    const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, url, headers: new Headers(), body: Readable.from([JSON.stringify({ stream: { server: 'orion', sources: [
+      { url: 'https://img.rousav.tech/media/movie.m3u8', kind: 'hls', quality: '1080p' },
+    ] } })]) }))
+    const providers = configuredProviders(raw, { transport, tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
+    const vidbolt = providers.find(row => row.adapter.id === 'vidbolt')!
+    const result = await vidbolt.adapter.resolve({ ref: { kind: 'movie', id: 550 }, region: 'US', audioLanguage: 'en' }, new AbortController().signal)
+
+    expect(vidbolt).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'], mediaHosts: ['img.rousav.tech', 'img.animecurx.tech', 'proxy.vidbolt.xyz', 'img1.hscow.com'] })
+    expect(vidbolt.approvedRegions).toEqual(['US'])
+    expect(allowedMediaUrl('https://proxy.vidbolt.xyz/f/movie.mp4', vidbolt.mediaHosts)).toBe(true)
+    expect(allowedMediaUrl('https://tenant.workers.dev/stream.m3u8', vidbolt.mediaHosts)).toBe(false)
+    expect(transport.mock.calls[0]?.[0]).toBe('https://vidbolt.xyz/api/resolve?type=movie&id=550')
+    expect(result).toMatchObject({ ok: true, sources: [{ serverName: 'Orion', headers: { origin: 'https://vidbolt.xyz' }, qualityHint: '1080p' }] })
+  })
+  it('registers NontonFlix, EmbedMaster, and Mapple as disabled relay candidates with exact hosts', async () => {
+    const raw: unknown = JSON.parse(await readFile(new URL('../../../../infra/playback/providers.example.json', import.meta.url), 'utf8'))
+    const providers = configuredProviders(raw, { transport: vi.fn(), tmdbToken: 'fixture-token', animeTitleResolver: async () => 'One Piece', animeTitleVariantsResolver: async () => ['One Piece'], animeMetaResolver: async () => ({ title: 'One Piece', malId: 21 }) })
+    expect(providers.find(row => row.adapter.id === 'nontonflix')).toMatchObject({
+      enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'],
+      mediaHosts: ['media.nontonflix.com'], approvedRegions: ['US'],
+    })
+    expect(providers.find(row => row.adapter.id === 'embedmaster')).toMatchObject({
+      enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'],
+      mediaHosts: ['perfectbussines.website'], approvedRegions: ['US'],
+    })
+    const mapple = providers.find(row => row.adapter.id === 'mapple')!
+    expect(mapple).toMatchObject({
+      enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'],
+      mediaHosts: ['*.jordanblackwell.bid'], approvedRegions: ['US'],
+    })
+    expect(allowedMediaUrl('https://source.jordanblackwell.bid/movie.m3u8', mapple.mediaHosts, mapple.mediaHostPatterns)).toBe(true)
+    expect(allowedMediaUrl('https://source.jordanblackwell.bid.evil.example/movie.m3u8', mapple.mediaHosts, mapple.mediaHostPatterns)).toBe(false)
+  })
   it('registers Evion for TV video and keeps Apogee audio out of video attempts', async () => {
     const evion = { id: 'evion', adapter: 'evion', regions: ['US'], mediaHosts: ['img.animecurx.tech'], upstreamGroup: 'riveapogee', mediaKinds: ['series'], role: 'video' }
     const apogee = { ...evion, id: 'riveapogee', adapter: 'riveapogee', mediaKinds: ['movie', 'series'], role: 'audio' }

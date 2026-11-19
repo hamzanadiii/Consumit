@@ -10,6 +10,7 @@ function copy(record: IdentityRecord): IdentityRecord {
 export function createMemoryIdentityRepository(): IdentityRepository & { count(): number } {
   const byId = new Map<string, IdentityRecord>()
   const byEmail = new Map<string, string>()
+  const byGoogleSubject = new Map<string, string>()
   const byUsername = new Map<string, string>()
   const aliases = new Map<string, string>()
 
@@ -32,21 +33,24 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       const existingId = byEmail.get(input.email)
       if (existingId && byId.get(existingId)?.status === 'ACTIVE') throw new Error('IDENTITY_EMAIL_CONFLICT')
       if (byUsername.has(input.username) || aliases.has(input.username)) throw new Error('IDENTITY_USERNAME_CONFLICT')
+      if (input.googleSubject && byGoogleSubject.has(input.googleSubject)) throw new Error('IDENTITY_GOOGLE_CONFLICT')
       const now = input.createdAt
       const record: IdentityRecord = {
         authVersion: 1,
         createdAt: now,
         email: input.email,
         emailVerifiedAt: now,
+        googleSubject: input.googleSubject ?? null,
         id: randomUUID(),
         passwordHash: input.passwordHash,
-        profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, sectionVisibility: defaultProfileSectionVisibility(), username: input.username, usernameChangedAt: now },
+        profile: { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: input.displayName ?? null, sectionVisibility: defaultProfileSectionVisibility(), username: input.username, usernameChangedAt: now },
         role: 'MEMBER',
         status: 'ACTIVE',
       }
       byId.set(record.id, record)
       byEmail.set(record.email, record.id)
       byUsername.set(record.profile.username, record.id)
+      if (record.googleSubject) byGoogleSubject.set(record.googleSubject, record.id)
       return copy(record)
     },
     async exportMember(memberId, exportedAt) {
@@ -54,6 +58,7 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       if (!member || member.status !== 'ACTIVE') return null
       return {
         exportedAt: exportedAt.toISOString(),
+        titleRecommendations: [],
         library: { diary: [], favorites: [], lists: [], savedLists: [], saved: [], watched: [] },
         watchHistory: [],
         member: {
@@ -86,6 +91,20 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       const member = id ? byId.get(id) : undefined
       return member ? copy(member) : null
     },
+    async findByGoogleSubject(googleSubject) {
+      const id = byGoogleSubject.get(googleSubject)
+      const member = id ? byId.get(id) : undefined
+      return member ? copy(member) : null
+    },
+    async linkGoogleSubject(memberId, googleSubject) {
+      const member = byId.get(memberId)
+      const subjectOwner = byGoogleSubject.get(googleSubject)
+      if (!member || member.status !== 'ACTIVE' || (subjectOwner && subjectOwner !== memberId)
+          || (member.googleSubject && member.googleSubject !== googleSubject)) throw new Error('IDENTITY_GOOGLE_CONFLICT')
+      member.googleSubject = googleSubject
+      byGoogleSubject.set(googleSubject, memberId)
+      return copy(member)
+    },
     async findById(memberId) {
       const member = byId.get(memberId)
       return member ? copy(member) : null
@@ -115,12 +134,14 @@ export function createMemoryIdentityRepository(): IdentityRepository & { count()
       const member = byId.get(memberId)
       if (!member || member.status !== 'ACTIVE') return
       byEmail.delete(member.email)
+      if (member.googleSubject) byGoogleSubject.delete(member.googleSubject)
       byUsername.delete(member.profile.username)
       aliases.set(member.profile.username, member.id)
       member.email = `deleted+${member.id}@invalid.consumit`
       member.emailVerifiedAt = null
       member.authVersion += 1
       member.passwordHash = null
+      member.googleSubject = null
         member.profile = { avatarStyle: 'dusk', avatarUrl: null, bannerUrl: null, bio: null, displayName: null, sectionVisibility: defaultProfileSectionVisibility(), username: `deleted_${member.id}`, usernameChangedAt: null }
       member.status = 'DELETED'
     },

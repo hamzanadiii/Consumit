@@ -6,6 +6,7 @@ import { cn } from '../lib/cn'
 type StateBaseProps<T extends 'div' | 'section'> = Omit<ComponentProps<T>, 'children' | 'title'> & {
   action?: ReactNode | undefined
   description: string
+  headingLevel?: 1 | 2 | undefined
   title: string
 }
 
@@ -17,17 +18,19 @@ export function EmptyState({
   action,
   className,
   description,
+  headingLevel = 2,
   icon,
   title,
   ...props
 }: EmptyStateProps) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2'
   return (
     <section className={cn('grid min-h-64 place-items-center rounded-card border border-border bg-surface px-5 py-10 text-center', className)} data-consumit-empty-state {...props}>
       <div className="max-w-md">
         <span aria-hidden="true" className="mx-auto grid size-12 place-items-center rounded-full border border-control-outline text-orange">
           {icon ?? <Clapperboard className="size-5" />}
         </span>
-        <h2 className="mt-5 font-display text-3xl leading-tight text-ink">{title}</h2>
+        <Heading className="mt-5 font-display text-3xl leading-tight text-ink">{title}</Heading>
         <p className="mt-3 text-sm leading-6 text-muted">{description}</p>
         {action ? <div className="mt-6 flex justify-center">{action}</div> : null}
       </div>
@@ -73,13 +76,15 @@ export function ErrorState({
   className,
   description,
   detail,
+  headingLevel = 2,
   title,
   ...props
 }: ErrorStateProps) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2'
   return (
     <section className={cn('rounded-card border border-border bg-surface p-6', className)} data-consumit-error-state role="alert" {...props}>
       <AlertTriangle aria-hidden="true" className="size-6 text-orange" />
-      <h2 className="mt-5 font-display text-3xl leading-tight text-ink">{title}</h2>
+      <Heading className="mt-5 font-display text-3xl leading-tight text-ink">{title}</Heading>
       <p className="mt-3 max-w-[58ch] text-sm leading-6 text-copy">{description}</p>
       {detail ? <p className="mt-3 text-xs leading-5 text-muted">{detail}</p> : null}
       {action ? <div className="mt-6">{action}</div> : null}

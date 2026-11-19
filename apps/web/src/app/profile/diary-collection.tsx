@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 
 import { titleDecade } from '../shared/title-collection-filters'
 import { DiaryEntryActions } from './diary-entry-actions'
+import { PersonalRatingsRetry } from './personal-ratings-retry'
 import { RatingFilter, matchesRatingFilter } from '../shared/rating-filter'
 
 type DiaryChanges = Pick<DiaryEntry, 'rewatch' | 'tags' | 'watchedOn'>
@@ -18,16 +19,20 @@ function episodeLabel(entry: DiaryEntry) {
 }
 function calendarDate(value: string) { return new Date(`${value}T00:00:00Z`) }
 const activeClass = '[&>button]:text-[var(--fs-accent)]'
+function diaryToolbarClass(active: boolean) { return active ? `${activeClass} [&>button]:h-[44px]` : '[&>button]:h-[44px]' }
 const ownerColumns = 'lg:grid-cols-[3rem_3.5rem_minmax(0,1fr)_4rem_8rem_4rem_5.5rem]'
 const publicColumns = 'lg:grid-cols-[3rem_3.5rem_minmax(0,1fr)_4rem_4rem]'
 
-export function DiaryCollection({ entries, hasMore, onDeleted, onSaved, owner, ratingsByTitle, ratingsUnavailable, selectedTag, titles }: {
+export function DiaryCollection({ entries, hasMore, onDeleted, onRetryRatings, onSaved, owner, ratingsByTitle, ratingsRetryFailed, ratingsRetrying, ratingsUnavailable, selectedTag, titles }: {
   entries: readonly DiaryEntry[]
   hasMore: boolean
   onDeleted: (entryId: string) => void
+  onRetryRatings: () => void
   onSaved: (entryId: string, changes: DiaryChanges) => void
   owner: boolean
   ratingsByTitle: Readonly<Record<string, number>>
+  ratingsRetryFailed: boolean
+  ratingsRetrying: boolean
   ratingsUnavailable: boolean
   selectedTag?: string | undefined
   titles: readonly CatalogTitleSummary[]
@@ -79,22 +84,23 @@ export function DiaryCollection({ entries, hasMore, onDeleted, onSaved, owner, r
 
   return <div data-consumit-diary-collection>
     <div className="mt-4 flex flex-wrap items-center justify-between gap-x-5 gap-y-2 border-b border-[var(--fs-line)] py-2" data-consumit-collection-toolbar>
-      <label className="flex h-10 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]"><Search aria-hidden="true" className="size-3.5" /><input aria-label="Search Diary" className="w-40 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={event => setQuery(event.target.value)} placeholder={owner ? 'Search your diary' : 'Search diary'} type="search" value={query} /></label>
+      <label className="flex h-[44px] min-h-[44px] shrink-0 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]"><Search aria-hidden="true" className="size-3.5 shrink-0" /><input aria-label="Search Diary" className="w-48 shrink-0 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={event => setQuery(event.target.value)} placeholder={owner ? 'Search your diary' : 'Search diary'} type="search" value={query} /></label>
       <div aria-label="Filter Diary" className="flex flex-wrap items-center gap-1" role="group">
-        <Select className={year === 'all' ? undefined : activeClass} hideLabel label="Filter by watched year" onValueChange={setYear} options={[{ value: 'all', label: 'All watched years' }, ...years.map(value => ({ value, label: value }))]} triggerLabel={year === 'all' ? 'Watched year' : year} value={year} variant="toolbar" />
-        <Select className={decade === 'all' ? undefined : activeClass} hideLabel label="Filter Diary by release decade" onValueChange={setDecade} options={[{ value: 'all', label: 'All release decades' }, ...decades.map(value => ({ value, label: `${value}s` }))]} triggerLabel={decade === 'all' ? 'Decade' : `${decade}s`} value={decade} variant="toolbar" />
-        <Select className={genre === 'all' ? undefined : activeClass} hideLabel label="Filter Diary by genre" onValueChange={setGenre} options={[{ value: 'all', label: 'All genres' }, ...genres.map(value => ({ value, label: value }))]} triggerLabel={genre === 'all' ? 'Genre' : genre} value={genre} variant="toolbar" />
+        <Select className={diaryToolbarClass(year !== 'all')} hideLabel label="Filter by watched year" onValueChange={setYear} options={[{ value: 'all', label: 'All watched years' }, ...years.map(value => ({ value, label: value }))]} triggerLabel={year === 'all' ? 'Watched year' : year} value={year} variant="toolbar" />
+        <Select className={diaryToolbarClass(decade !== 'all')} hideLabel label="Filter Diary by release decade" onValueChange={setDecade} options={[{ value: 'all', label: 'All release decades' }, ...decades.map(value => ({ value, label: `${value}s` }))]} triggerLabel={decade === 'all' ? 'Decade' : `${decade}s`} value={decade} variant="toolbar" />
+        <Select className={diaryToolbarClass(genre !== 'all')} hideLabel label="Filter Diary by genre" onValueChange={setGenre} options={[{ value: 'all', label: 'All genres' }, ...genres.map(value => ({ value, label: value }))]} triggerLabel={genre === 'all' ? 'Genre' : genre} value={genre} variant="toolbar" />
         {owner ? <RatingFilter label="Filter Diary by your current rating" onChange={setRating} unavailable={ratingsUnavailable ? 'all' : undefined} value={rating} /> : null}
-        <Select className={watches === 'all' ? undefined : activeClass} hideLabel label="Filter Diary by watch type" onValueChange={setWatches} options={[{ value: 'all', label: 'All watches' }, { value: 'rewatches', label: 'Rewatches' }, { value: 'first', label: 'First watches' }]} value={watches} variant="toolbar" />
-        <Select hideLabel label="Sort Diary" onValueChange={setSort} options={sorts} triggerLabel={<span className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="size-3.5" />{sorts.find(option => option.value === sort)?.label}</span>} value={sort} variant="toolbar" />
-        {filtered || sort !== 'newest' ? <button className="inline-flex min-h-10 items-center gap-1.5 rounded-control px-2 text-xs text-[var(--fs-muted)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onClick={reset} type="button"><RotateCcw aria-hidden="true" className="size-3" />Reset</button> : null}
+        <Select className={diaryToolbarClass(watches !== 'all')} hideLabel label="Filter Diary by watch type" onValueChange={setWatches} options={[{ value: 'all', label: 'All watches' }, { value: 'rewatches', label: 'Rewatches' }, { value: 'first', label: 'First watches' }]} value={watches} variant="toolbar" />
+        <Select className="[&>button]:h-[44px]" hideLabel label="Sort Diary" onValueChange={setSort} options={sorts} triggerLabel={<span className="flex items-center gap-2"><ArrowDownUp aria-hidden="true" className="size-3.5" />{sorts.find(option => option.value === sort)?.label}</span>} value={sort} variant="toolbar" />
+        {filtered || sort !== 'newest' ? <button className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control px-3 text-xs text-[var(--fs-muted)] outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" onClick={reset} type="button"><RotateCcw aria-hidden="true" className="size-3" />Reset</button> : null}
       </div>
     </div>
     <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs leading-5 text-[var(--fs-muted)]">
       <p role="status">{visible.length} {visible.length === 1 ? 'entry' : 'entries'}{filtered || selectedTag ? ` shown from ${entries.length} loaded` : ' loaded'}{hasMore ? ' · Load more to include earlier entries.' : ''}</p>
-      {owner ? <p role={ratingsUnavailable ? 'status' : undefined}>{ratingsUnavailable ? 'Your ratings could not load; rating filters are unavailable.' : 'Ratings show your current title scores.'}</p> : null}
+      {owner && !ratingsUnavailable ? <p>Ratings show your current title scores.</p> : null}
       {selectedTag ? <Link className="text-[var(--fs-accent)] underline underline-offset-4" href="?">Clear tag: {selectedTag}</Link> : null}
     </div>
+    {owner && ratingsUnavailable ? <PersonalRatingsRetry failed={ratingsRetryFailed} message="Your diary is still here, but personal rating filters are temporarily unavailable." onRetry={onRetryRatings} retrying={ratingsRetrying} /> : null}
     {visible.length ? <>
       <div aria-hidden="true" className="mt-6 hidden grid-cols-[7rem_minmax(0,1fr)] gap-6 border-b border-[var(--fs-line)] pb-3 text-[0.6875rem] uppercase tracking-[0.08em] text-[var(--fs-muted)] lg:grid"><span>Month</span><div className={`grid items-center gap-4 ${columns}`}><span>Day</span><span className="col-span-2">Title</span><span>Released</span>{owner ? <span>Your rating</span> : null}<span>Rewatch</span>{owner ? <span className="text-right">Edit</span> : null}</div></div>
       {months.map(([month, rows]) => {
@@ -121,6 +127,6 @@ export function DiaryCollection({ entries, hasMore, onDeleted, onSaved, owner, r
           </ol>
         </section>
       })}
-    </> : <div className="mt-7 border-y border-dashed border-[var(--fs-line)] py-12 text-center"><BookOpen aria-hidden="true" className="mx-auto size-6 text-[var(--fs-muted)]" /><h2 className="mt-4 font-display text-2xl text-[var(--fs-ink)]">{entries.length ? 'No diary entries match.' : owner ? 'Your diary starts with a watch.' : 'No watches logged yet.'}</h2><p className="mt-2 text-sm text-[var(--fs-muted)]">{entries.length ? 'Try another year, genre, or search.' : owner ? 'Log a watch from a title page to keep its date, episode, and rewatch here.' : 'This member’s public diary entries will appear here.'}</p>{filtered ? <button className="mt-4 min-h-10 text-sm text-[var(--fs-accent)] underline underline-offset-4" onClick={reset} type="button">Clear filters</button> : null}</div>}
+    </> : <div className="mt-7 border-y border-dashed border-[var(--fs-line)] py-12 text-center"><BookOpen aria-hidden="true" className="mx-auto size-6 text-[var(--fs-muted)]" /><h2 className="mt-4 font-display text-2xl text-[var(--fs-ink)]">{entries.length ? 'No diary entries match.' : owner ? 'Your diary starts with a watch.' : 'No watches logged yet.'}</h2><p className="mt-2 text-sm text-[var(--fs-muted)]">{entries.length ? 'Try another year, genre, or search.' : owner ? 'Log a watch from a title page to keep its date, episode, and rewatch here.' : 'This member’s public diary entries will appear here.'}</p>{filtered ? <button className="mt-4 inline-flex min-h-[44px] items-center px-3 text-sm text-[var(--fs-accent)] underline underline-offset-4" onClick={reset} type="button">Clear filters</button> : null}</div>}
   </div>
 }

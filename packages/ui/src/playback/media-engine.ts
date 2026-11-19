@@ -99,6 +99,8 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
     const measuredHeights = new Map<number, number>()
     let frameRequest: number | undefined
     let destroyed = false
+    const failedSubtitleTracks = new Set<number>()
+    let recoveredUnknownSubtitle = false
     const decodedHeight = () => {
       const height = video.videoHeight
       return standardQualityHeight(height, video.videoWidth)
@@ -124,7 +126,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
         return { value: String(index), label: height ? `${height}p` : source.qualityHint ?? `${Math.round(level.bitrate / 1000)} kbps`, height: height ?? undefined }
       })))],
       audio: hls.audioTracks.map((track, index) => ({ value: String(index), label: audioTrackLabel({ name: track.name, lang: track.lang, isDefault: track.default }, index), language: track.lang })),
-      subtitles: hls.subtitleTracks.map((track, index) => ({ value: String(index), label: track.name || track.lang || `Subtitles ${index + 1}`, language: track.lang })),
+      subtitles: hls.subtitleTracks.flatMap((track, index) => failedSubtitleTracks.has(index) ? [] : [{ value: String(index), label: track.name || track.lang || `Subtitles ${index + 1}`, language: track.lang }]),
       })
     }
     hls.on(Hls.Events.MANIFEST_PARSED, publish)
@@ -144,7 +146,21 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
       })
     })
     hls.on(Hls.Events.ERROR, (_event, data) => {
+      if (destroyed) return
       const detail = String((data as unknown as { details?: unknown }).details ?? '')
+      const context = (data as unknown as { context?: { type?: string; id?: number }; parent?: string }).context
+      if (context?.type === 'subtitleTrack' || data.frag?.type === 'subtitle' || (data as unknown as { parent?: string }).parent === 'subtitle' || /^subtitle/i.test(detail)) {
+        const index = context?.id ?? hls.subtitleTrack
+        const alreadyFailed = index >= 0 ? failedSubtitleTracks.has(index) : recoveredUnknownSubtitle
+        if (index >= 0) failedSubtitleTracks.add(index)
+        else recoveredUnknownSubtitle = true
+        hls.subtitleTrack = -1; hls.subtitleDisplay = false
+        publish()
+        // Optional captions cannot invalidate healthy video/audio. HLS stops
+        // loaders on a fatal subtitle parse error; resume at the same position.
+        if (data.fatal && !alreadyFailed) hls.startLoad(video.currentTime || -1)
+        return
+      }
       if (switching.pending() && (/^audioTrack/i.test(detail) || data.frag?.type === 'audio')) { switching.fail(); return }
       if (!data.fatal) return
       // HTTP 410 Gone is definitive: the bytes are not coming back, so a
@@ -193,6 +209,7 @@ export async function attachMediaEngine(video: HTMLVideoElement, source: DirectM
           hls.subtitleTrack = -1
           hls.subtitleDisplay = false
         } else {
+          if (failedSubtitleTracks.has(Number(value))) return
           hls.subtitleTrack = Number(value)
           hls.subtitleDisplay = true
         }

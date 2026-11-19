@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: AnimeReviewsPageProps): Promi
     const title = detail.titles.preferred
     return {
       alternates: { canonical: `/anime/${anilistId}/reviews` },
-      description: `Member reviews of ${title}.`,
+      description: `Public reviews of ${title}.`,
       openGraph: { images: detail.coverImage.url ? [detail.coverImage.url] : [], title: `${title} reviews`, type: 'video.other', url: `/anime/${anilistId}/reviews` },
       title: `${title} reviews · Consumit`,
     }

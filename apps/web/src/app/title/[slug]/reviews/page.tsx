@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: TitleMovieReviewsPageProps): 
     const { item } = await getCatalogTitle('movie', id)
     return {
       alternates: { canonical: `/title/${id}/reviews` },
-      description: `Member reviews of ${item.title}.`,
+      description: `Public reviews of ${item.title}.`,
       openGraph: { images: item.backdropUrl ? [item.backdropUrl] : [], title: `${item.title} reviews`, type: 'video.movie', url: `/title/${id}/reviews` },
       title: `${item.title} reviews · Consumit`,
     }

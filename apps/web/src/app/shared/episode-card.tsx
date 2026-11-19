@@ -48,7 +48,7 @@ export function EpisodeCard({ actionLabel = 'Play episode', linkLabel, status, a
               <Play aria-hidden="true" className="size-3 fill-current" /> Upcoming
             </span>
           ) : (
-            <Link className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-orange px-4 text-xs font-bold text-canvas outline-none transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href={href}>
+            <Link className="inline-flex min-h-[44px] items-center gap-1.5 rounded-control bg-orange px-4 text-xs font-bold text-canvas outline-none transition-[filter,transform] hover:brightness-110 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 focus-visible:ring-offset-canvas motion-reduce:transition-none" href={href}>
               <Play aria-hidden="true" className="size-3 fill-current" /> {actionLabel}
             </Link>
           )}

@@ -52,6 +52,18 @@ describe('continue rail from device progress', () => {
     )
   })
 
+  it('shows the exact privately saved episode without a fabricated timestamp', async () => {
+    const title = { ...movieSummary, kind: 'series', id: 7, title: 'Night watch' }
+    localStorage.setItem('consumit.progress:guest:series:7:2:3', JSON.stringify({
+      kind: 'series', id: 7, season: 2, episode: 3, episodeTracking: 'continue', positionSeconds: 0,
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ ...batch, items: [title] })))
+    render(<ContinueRail />)
+    expect(await screen.findByRole('link', { name: 'Continue Night watch · S2 · E3' })).toHaveAttribute('href', '/watch/series/7?season=2&episode=3')
+    expect(screen.getByText('S2 · E3 · Episode saved')).toBeVisible()
+    expect(screen.queryByText('0m')).not.toBeInTheDocument()
+  })
+
   it('hides a failed catalog load without losing progress and recovers on the next visit', async () => {
     seedProgress()
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')))

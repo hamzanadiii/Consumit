@@ -11,6 +11,7 @@ export type TitleCardItem = {
   title: string
   year?: number | null | undefined
   posterUrl?: string | null | undefined
+  backdropUrl?: string | null | undefined
   tmdbRating?: number | null | undefined
 }
 
@@ -41,9 +42,10 @@ export function TitleCard({
   return (
     <li className={className}>
       <WatchCard
-        action={<div className="flex items-center gap-1.5">{action}<TitleCardQuickActions id={title.id} kind={title.kind} posterUrl={title.posterUrl} title={title.title} /></div>}
+        action={<div className="flex items-center gap-1.5">{action}<TitleCardQuickActions id={title.id} kind={title.kind} posterUrl={title.posterUrl ?? title.backdropUrl} title={title.title} /></div>}
         footer={footer}
-        artworkSrc={title.posterUrl ?? undefined}
+        artworkFallbackSrc={title.posterUrl ? title.backdropUrl ?? undefined : undefined}
+        artworkSrc={title.posterUrl ?? title.backdropUrl ?? undefined}
         href={href ?? destination}
         linkComponent={OnDemandLink}
         meta={meta ?? (title.year ? String(title.year) : undefined)}

@@ -6,10 +6,18 @@ import { rewriteRelayManifest } from './manifest.ts'
 import { createLookmovieProvider } from '../../provider-sdk/src/adapters/lookmovie.ts'
 import type { ProviderHttp, ProviderHttpResponse } from '../../provider-sdk/src/adapters/http.ts'
 import { playbackRefSchema } from '@consumit/contracts'
+import { z } from 'zod'
 
-export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string }
+export type RelayEnv = { RELAY_ENABLED: string; RELAY_SECRET: string; APP_ORIGIN: string; RELAY_PROVIDERS: string; RELAY_DISCOVERY_PROVIDERS?: string; RELAY_ROUTE_VERSION?: string; RELAY_ROUTE_POLICY?: string; RELAY_ROUTE_POLICY_REQUIRED?: string }
 type Dependencies = { fetch?: (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => ReturnType<typeof fetch>; now?: () => number; verifyPublicHost?: (host: string, signal: AbortSignal) => Promise<void>; report?: (entry: { provider: string; kind: string; status: number; bytes: number; bytesKnown: boolean; durationMs: number; stage: string; blockedHost?: string }) => void }
 const MAX_MANIFEST_BYTES = 512 * 1024
+// Reviewed VOD playlists are larger than the generic bound: NontonFlix and
+// EmbedMaster publish multi-thousand-segment media playlists for feature
+// films (measured 2.2 MB and 1.2 MB). Keep the expanded bound provider-scoped.
+const LARGE_MANIFEST_PROVIDERS = new Set(['nontonflix', 'embedmaster'])
+const LARGE_MANIFEST_BYTES = 4 * 1024 * 1024
+// The checked Mapple 2160p child playlist is 531 KB, above the generic cap.
+const MAPPLE_MANIFEST_BYTES = 2 * 1024 * 1024
 const LOOKMOVIE_HOST = /^srv[0-9]+\.(?:[a-z-]+\.cyou|(?:faitioninthrey|superoled|cromning)\.site)$/
 /** Constant-time bearer secret check so auth timing does not leak secret bytes. */
 function authorized(request: Request, secret: string) {
@@ -26,6 +34,24 @@ function policies(raw: string): Record<string, string[]> {
   if (entries.length > 64 || entries.some(([id, hosts]) => !/^[a-z0-9-]{1,40}$/.test(id) || !Array.isArray(hosts)
       || !hosts.length || hosts.length > 100 || hosts.some(host => typeof host !== 'string' || !exactMediaHost(host)))) throw new Error('Invalid relay policy.')
   return Object.fromEntries(entries)
+}
+const relayRoutePolicySchema = z.array(z.object({
+  version: z.string().regex(/^edge-v1-[a-f0-9]{16}$/), provider: z.string().regex(/^[a-z0-9-]{1,40}$/),
+  kind: z.enum(['movie', 'series', 'anime']), region: z.string().regex(/^[A-Z]{2}$/), purpose: z.enum(['video', 'audio']),
+  delivery: z.literal('relay'), media: z.string().url(), hosts: z.array(z.string().refine(exactMediaHost)).min(1).max(100),
+}).strict()).max(384)
+function routePolicyMatches(env: RelayEnv, grant: RelayGrant, staticHosts: readonly string[], mediaOrigin: string) {
+  if (env.RELAY_ROUTE_POLICY_REQUIRED !== 'true') return true
+  if (!grant.route || !grant.routeVersion || env.RELAY_ROUTE_VERSION !== grant.routeVersion) return false
+  try {
+    const routes = relayRoutePolicySchema.parse(JSON.parse(env.RELAY_ROUTE_POLICY ?? '[]'))
+    const scoped = routes.find(route => route.version === grant.routeVersion && route.provider === grant.provider
+      && route.kind === grant.route!.kind && route.region === grant.route!.region && route.purpose === grant.route!.purpose
+      && route.delivery === 'relay' && route.media === mediaOrigin)
+    if (!scoped) return false
+    const expected = [...staticHosts].sort(), actual = [...scoped.hosts].sort()
+    return expected.length === actual.length && expected.every((host, index) => host === actual[index])
+  } catch { return false }
 }
 async function boundedManifest(response: Response, limit = MAX_MANIFEST_BYTES) {
   const reader = response.body?.getReader()
@@ -46,9 +72,27 @@ async function boundedManifest(response: Response, limit = MAX_MANIFEST_BYTES) {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
   return bytes
 }
-// These two reviewed origins mislabel TS segments as HTML. Verify three
-// transport sync bytes before streaming; genuine HTML still fails closed.
-async function verifiedTsPrefix(response: Response) {
+// Reviewed hosts mislabel media as HTML. Verify TS sync bytes or, only
+// for Mapple, fragmented MP4 box structure; genuine HTML fails closed.
+function fragmentedMp4Prefix(prefix: Uint8Array, length: number) {
+  const view = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength)
+  const type = (at: number) => String.fromCharCode(...prefix.subarray(at + 4, at + 8))
+  const size = (at: number) => view.getUint32(at)
+  let at = 0
+  const first = type(0)
+  if (first === 'ftyp' || first === 'styp') {
+    at = size(0)
+    if (at < 16 || at > 256 || at % 4 || length < at + 16) return false
+    const brand = String.fromCharCode(...prefix.subarray(8, 12))
+    if (!['isom', 'iso5', 'iso6', 'mp41', 'mp42', 'dash', 'cmfc', 'cmfs', 'msdh', 'msix'].includes(brand)) return false
+  }
+  if (length < at + 32) return false
+  const box = type(at), boxSize = size(at)
+  if (boxSize < 32 || boxSize > 32 * 1024 * 1024) return false
+  if (box === 'moof') return size(at + 8) === 16 && type(at + 8) === 'mfhd' && type(at + 24) === 'traf'
+  return first === 'ftyp' && box === 'moov' && type(at + 8) === 'mvhd'
+}
+async function verifiedMediaPrefix(response: Response, allowFragmentedMp4 = false) {
   const reader = response.body?.getReader()
   if (!reader) throw new Error('Missing media.')
   const chunks: Uint8Array[] = []
@@ -62,10 +106,11 @@ async function verifiedTsPrefix(response: Response) {
     const prefix = new Uint8Array(377)
     let offset = 0
     for (const chunk of chunks) { const part = chunk.subarray(0, 377 - offset); prefix.set(part, offset); offset += part.length }
-    if (length < 377 || prefix[0] !== 0x47 || prefix[188] !== 0x47 || prefix[376] !== 0x47) throw new Error('Invalid TS media.')
+    const ts = length >= 377 && prefix[0] === 0x47 && prefix[188] === 0x47 && prefix[376] === 0x47
+    if (!ts && !(allowFragmentedMp4 && fragmentedMp4Prefix(prefix, length))) throw new Error('Invalid media prefix.')
+    reader.releaseLock()
+    return { chunks, contentType: ts ? 'video/mp2t' : 'video/mp4' }
   } catch (error) { await reader.cancel().catch(() => undefined); throw error }
-  reader.releaseLock()
-  return chunks
 }
 /** Separate from Fastify: media is streamed at the edge, never through API. */
 export function createRelayWorker(deps: Dependencies = {}) {
@@ -131,8 +176,10 @@ export function createRelayWorker(deps: Dependencies = {}) {
         if (!cached || cached.secret !== env.RELAY_SECRET) cached = { secret: env.RELAY_SECRET, codec: createGrantCodec(env.RELAY_SECRET) }
         codec = await cached.codec
         grant = await codec.open(controlToken ?? path.pathname.slice(7), now())
+        if ((env.RELAY_ROUTE_VERSION || grant.routeVersion) && (!env.RELAY_ROUTE_VERSION || grant.routeVersion !== env.RELAY_ROUTE_VERSION)) return fail(403)
         if (control && (grant.provider !== 'rigel' || grant.kind !== 'hls')) return fail(403)
         staticHosts = policies(env.RELAY_PROVIDERS)[grant.provider] ?? []
+        if (!routePolicyMatches(env, grant, staticHosts, new URL(request.url).origin)) return fail(403)
         hosts = staticHosts
         if (grant.recipe) {
           const discovery = JSON.parse(env.RELAY_DISCOVERY_PROVIDERS ?? '{}') as Record<string, string>
@@ -177,18 +224,25 @@ export function createRelayWorker(deps: Dependencies = {}) {
         }
         status = response!.status
         if (![200, 206, 416].includes(status)) { await response!.body?.cancel(); clearTimeout(timer); report(); return fail(status === 403 ? 403 : 502) }
-        const mislabelledTs = grant.kind !== 'hls' && /text\/html/i.test(response!.headers.get('content-type') ?? '')
+        const mislabelledMedia = grant.kind !== 'hls' && /text\/html/i.test(response!.headers.get('content-type') ?? '')
           && ((grant.provider === 'stormboron' && (grant.recipe === 'storm-boron-v1' || ['celestialdreamer.lol', 'moonfirekeeper.lol', 'emberwindkeeper.lol'].includes(new URL(url).hostname)))
-            || (['zeta', 'vidnest', 'vaplayer'].includes(grant.provider) && new URL(url).hostname === 'remoteconsultinggroup.site'))
-        const prefix = mislabelledTs ? await verifiedTsPrefix(response!) : []
-        const contentType = mislabelledTs ? 'video/mp2t' : response!.headers.get('content-type') ?? ''
+            || (grant.provider === 'embedmaster' && new URL(url).hostname === 'perfectbussines.website')
+            || (['zeta', 'vidnest', 'vaplayer'].includes(grant.provider) && new URL(url).hostname === 'remoteconsultinggroup.site')
+            || (grant.provider === 'mapple' && ['source.jordanblackwell.bid', 'proxy2.jordanblackwell.bid'].includes(new URL(url).hostname)))
+        const verified = mislabelledMedia ? await verifiedMediaPrefix(response!, grant.provider === 'mapple') : undefined
+        const prefix = verified?.chunks ?? []
+        const contentType = verified?.contentType ?? response!.headers.get('content-type') ?? ''
         if (/text\/html|application\/(?:json|javascript)/i.test(contentType)) throw new Error('Invalid media.')
         const manifest = grant.kind === 'hls' || grant.kind === 'auto' && (/mpegurl/i.test(contentType) || new URL(url).pathname.endsWith('.m3u8'))
         kind = manifest ? 'manifest' : 'media'
         if (manifest && range) { await response!.body?.cancel(); clearTimeout(timer); status = 416; report(); return fail(416) }
         if (manifest && request.method !== 'HEAD' && status === 200) {
           stage = 'manifest-read'
-          const text = decodeRelayManifest(await boundedManifest(response!, control ? 2 * 1024 * 1024 : ['bingebangymovies', 'rigel'].includes(grant.provider) ? 1024 * 1024 : MAX_MANIFEST_BYTES), grant.provider, url)
+          const text = decodeRelayManifest(await boundedManifest(response!, control ? 2 * 1024 * 1024
+            : grant.provider === 'mapple' ? MAPPLE_MANIFEST_BYTES
+            : LARGE_MANIFEST_PROVIDERS.has(grant.provider) ? LARGE_MANIFEST_BYTES
+              : ['bingebangymovies', 'rigel'].includes(grant.provider) ? 1024 * 1024
+                : MAX_MANIFEST_BYTES), grant.provider, url)
           if (control) {
             if (!text.startsWith('#EXTM3U')) throw new Error('Invalid control playlist.')
             clearTimeout(timer)
@@ -295,7 +349,7 @@ function workerLookmovieHttp(fetcher: NonNullable<Dependencies['fetch']>, verify
     if (!catalog) await verifyPublicHost(target.hostname, signal)
     const body = typeof init.body === 'string' ? init.body : init.body ? new Blob([new Uint8Array(init.body).buffer as ArrayBuffer]) : undefined
     let response: Response
-    try { response = await fetcher(target.href, { method: init.method ?? 'GET', headers: requestHeaders, ...(body ? { body } : {}), redirect: 'error', signal, cache: 'no-store' }) }
+    try { response = await fetcher(target.href, { method: init.method ?? 'GET', headers: requestHeaders, ...(body ? { body } : {}), redirect: 'manual', signal, cache: 'no-store' }) }
     catch (error) { report?.({ host: target.hostname, path: target.pathname, status: error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'network-error' }); throw error }
     report?.({ host: target.hostname, path: target.pathname, status: response.status })
     const finalUrl = response.url || target.href

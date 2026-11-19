@@ -7,7 +7,7 @@ import { Button } from '@consumit/ui'
 export const serverName = (index: number) => `Server ${index + 1}`
 const actionClass = 'min-h-[38px] max-sm:min-h-[44px] [@media(pointer:coarse)]:min-h-[44px]'
 const frameNames: Record<string, string> = { vidapiframe: 'VidAPI', vidfastframe: 'VidFast', vidcoreioframe: 'VidCore', vidriftframe: 'VidRift', moviesapiframe: 'MoviesAPI', vidlinkframe: 'VidLink', vidnestframe: 'VidNest', vidrockframe: 'VidRock', vidboltframe: 'VidBolt', vixsrcframe: 'Vixsrc', apiplayerframe: 'APIPlayer', embedapiframe: 'EmbedAPI', vsembedframe: 'VsEmbed', cinesrcframe: 'CineSrc', reanimeframe: 'ReAnime', megaplayframe: 'MegaPlay', yumezoneframe: 'AniPM' }
-export const frameName = (server: PlaybackProvider) => frameNames[server.id] ?? server.label
+export const frameName = (server: Pick<PlaybackProvider, 'id' | 'label'>) => frameNames[server.id] ?? server.label
 export function ServerStrip({ servers, active, busy, loading, error, onRetry, onSelect }: {
   servers: readonly PlaybackProvider[]; active?: string | undefined; busy: boolean; loading: boolean; error: string | null;
   onRetry(): void; onSelect(id: string): void;

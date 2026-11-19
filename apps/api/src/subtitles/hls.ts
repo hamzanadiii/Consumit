@@ -12,14 +12,14 @@ function clock(seconds: number) {
 }
 
 /** Export finite, unencrypted WebVTT playlists through the existing file store. */
-export async function downloadStreamingSubtitle(raw: RawSubtitle, registration: ProviderRegistration, signal: AbortSignal): Promise<Buffer> {
+export async function downloadStreamingSubtitle(raw: RawSubtitle, registration: Pick<ProviderRegistration, 'mediaHosts' | 'mediaHostPatterns'>, signal: AbortSignal, fetchFile: typeof fetchSubtitleBytes = fetchSubtitleBytes): Promise<Buffer> {
   const safe = (url: string) => allowedMediaUrl(url, registration.mediaHosts, registration.mediaHostPatterns)
   let bytes = 0
   async function read(url: string, maxBytes = MAX_BYTES) {
     if (!safe(url)) throw new Error('Unconfigured subtitle destination.')
     const sameHost = new URL(url).hostname === new URL(raw.url).hostname
     const headers = sameHost ? raw.headers ?? {} : Object.fromEntries(Object.entries(raw.headers ?? {}).filter(([key]) => !/^(cookie|authorization)$/i.test(key)))
-    const result = await fetchSubtitleBytes(url, registration.mediaHosts, headers, signal, Math.min(maxBytes, Math.max(1, MAX_BYTES - bytes)), registration.mediaHostPatterns)
+    const result = await fetchFile(url, registration.mediaHosts, headers, signal, Math.min(maxBytes, Math.max(1, MAX_BYTES - bytes)), registration.mediaHostPatterns)
     bytes += result.length
     if (bytes > MAX_BYTES) throw new Error('Subtitle playlist exceeds its limit.')
     return result

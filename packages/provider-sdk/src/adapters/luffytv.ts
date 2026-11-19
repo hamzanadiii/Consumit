@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ProviderSource } from '../index.ts'
-import { accessDeadline, adapter, document, mediaType, parseSkipSegments, ProviderFailure, verifiedPlaybackSources, type ProviderHttp } from './http.ts'
+import { accessDeadline, adapter, document, mediaType, parseSkipSegments, ProviderFailure, providerFailureFromOutcomes, providerOutcome, verifiedPlaybackSources, type ProviderHttp, type ProviderOutcome } from './http.ts'
 
 const SITE = 'https://luffytv.live'
 
@@ -41,8 +41,6 @@ const serverSchema = z.object({
 
 const laneSchema = z.object({ servers: z.array(serverSchema).max(64).optional() }).passthrough()
 
-type Outcome = 'ok' | 'empty' | 'malformed' | 'unavailable'
-
 function bounded(parent: AbortSignal, ms: number) {
   const controller = new AbortController()
   if (parent.aborted) controller.abort(parent.reason)
@@ -50,18 +48,6 @@ function bounded(parent: AbortSignal, ms: number) {
   parent.addEventListener('abort', onAbort, { once: true })
   const timer = setTimeout(() => controller.abort(new DOMException('LuffyTV lane timed out', 'TimeoutError')), ms)
   return { signal: controller.signal, cleanup: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort) } }
-}
-
-function classify(error: unknown): Exclude<Outcome, 'ok'> {
-  if (error instanceof ProviderFailure) return error.code
-  if (error instanceof z.ZodError || error instanceof SyntaxError) return 'malformed'
-  return 'unavailable'
-}
-
-function failureOf(outcomes: readonly Outcome[]): 'empty' | 'malformed' | 'unavailable' {
-  if (outcomes.length && outcomes.every((outcome) => outcome === 'malformed')) return 'malformed'
-  if (outcomes.length && outcomes.every((outcome) => outcome === 'unavailable')) return 'unavailable'
-  return 'empty'
 }
 
 function absolute(raw: string): string {
@@ -103,17 +89,17 @@ export function createLuffytvProvider(http: ProviderHttp, now = Date.now) {
 
     const settled = await Promise.allSettled(LANES.map((lane) => fetchLane(http, lane, id, episode, signal)))
 
-    const outcomes: Outcome[] = []
+    const outcomes: ProviderOutcome[] = []
     const candidates: ProviderSource[] = []
     const seen = new Set<string>()
     for (let index = 0; index < settled.length; index++) {
       const lane = LANES[index]!
       const result = settled[index]!
       if (result.status === 'rejected') {
-        outcomes.push(classify(result.reason))
+        outcomes.push(providerOutcome(result.reason))
         continue
       }
-      outcomes.push('ok')
+      outcomes.push({ code: 'ok' })
       for (const server of result.value) {
         if (candidates.length >= MAX_SOURCES) break
         const raw = server.streamUrl ?? ''
@@ -145,7 +131,7 @@ export function createLuffytvProvider(http: ProviderHttp, now = Date.now) {
       }
       if (candidates.length >= MAX_SOURCES) break
     }
-    if (!candidates.length) throw new ProviderFailure(failureOf(outcomes))
+    if (!candidates.length) throw providerFailureFromOutcomes(outcomes)
 
     const verified = await verifiedPlaybackSources(http, candidates, signal)
     if (!verified.length) throw new ProviderFailure('empty')

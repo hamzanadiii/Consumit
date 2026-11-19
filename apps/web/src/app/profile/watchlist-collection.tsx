@@ -11,6 +11,7 @@ import { SaveTitleButton } from '../catalog/save-title-button'
 import { TitleCollectionFilters, titleDecade, type TitleCollectionSort } from '../shared/title-collection-filters'
 import { TitleCard } from '../shared/title-card'
 import { matchesRatingFilter } from '../shared/rating-filter'
+import { PersonalRatingsRetry } from './personal-ratings-retry'
 
 import { browserCatalogBatches } from '@/lib/catalog-browser'
 import { getMemberLibraryPage, getMemberRatingsForTitles } from '@/lib/identity-browser'
@@ -39,6 +40,8 @@ export function WatchlistCollection({ catalogDetailsLimited = false, catalogUnav
   const [rating, setRating] = useState('any')
   const [ratingsByTitle, setRatingsByTitle] = useState<Record<string, number>>(() => Object.fromEntries(initialRatings.map(({ id, kind, value }) => [`${kind}:${id}`, value])))
   const [ratingsUnavailableState, setRatingsUnavailableState] = useState(ratingsUnavailable)
+  const [ratingsRetrying, setRatingsRetrying] = useState(false)
+  const [ratingsRetryFailed, setRatingsRetryFailed] = useState(false)
   const [view, setView] = useState('posters')
   const [loading, setLoading] = useState(false)
   const [pageError, setPageError] = useState(false)
@@ -106,6 +109,22 @@ export function WatchlistCollection({ catalogDetailsLimited = false, catalogUnav
     }
   }
 
+  async function retryRatingLookup() {
+    if (ratingsRetrying) return
+    setRatingsRetrying(true)
+    setRatingsRetryFailed(false)
+    try {
+      const ratings = await getMemberRatingsForTitles(items)
+      if (ratings.length) setRatingsByTitle((current) => ({ ...current, ...Object.fromEntries(ratings.map(({ id, kind, value }) => [`${kind}:${id}`, value])) }))
+      setRatingsUnavailableState(false)
+    } catch {
+      setRatingsUnavailableState(true)
+      setRatingsRetryFailed(true)
+    } finally {
+      setRatingsRetrying(false)
+    }
+  }
+
   const filtered = query.trim() !== '' || kind !== 'all' || genre !== 'all' || decade !== 'all' || rating !== 'any'
   const loadedCount = items.length
   function resetFilters() { setQuery(''); setKind('all'); setGenre('all'); setDecade('all'); setRating('any'); setSort('recent') }
@@ -128,21 +147,21 @@ export function WatchlistCollection({ catalogDetailsLimited = false, catalogUnav
             <p className="inline-flex items-center gap-2 text-xs leading-5 text-[var(--fs-muted)]"><LockKeyhole aria-hidden="true" className="size-3.5" />Your private collection of stories for another night.</p>
             <p className="text-xs tabular-nums text-[var(--fs-secondary)]">{loadedCount}{nextCursor ? '+' : ''} saved {loadedCount === 1 && !nextCursor ? 'title' : 'titles'}</p>
           </div>
-          {artworkError ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--fs-line)] pb-3 text-xs text-[var(--fs-muted)]" role="status"><p>Your Watchlist is safe. Some poster details could not load.</p><button className="inline-flex min-h-9 items-center gap-1.5 rounded-control outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:opacity-50" disabled={artworkLoading} onClick={() => void retryArtwork()} type="button"><RefreshCw aria-hidden="true" className={`size-3.5 ${artworkLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />{artworkLoading ? 'Loading artwork…' : 'Retry artwork'}</button></div> : null}
+          {artworkError ? <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--fs-line)] pb-3 text-xs text-[var(--fs-muted)]" role="status"><p>Your Watchlist is safe. Some poster details could not load.</p><button className="inline-flex min-h-11 items-center gap-1.5 rounded-control outline-none hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] disabled:opacity-50" disabled={artworkLoading} onClick={() => void retryArtwork()} type="button"><RefreshCw aria-hidden="true" className={`size-3.5 ${artworkLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />{artworkLoading ? 'Loading artwork…' : 'Retry artwork'}</button></div> : null}
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--fs-line)] py-2" data-consumit-collection-toolbar>
-            <label className="flex h-10 min-w-0 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]">
+            <label className="flex min-h-[44px] min-w-0 items-center gap-2 border-b border-transparent text-[var(--fs-muted)] focus-within:border-[var(--fs-focus)]">
               <Search aria-hidden="true" className="size-3.5 shrink-0" />
-              <input aria-label="Search your Watchlist" className="w-40 min-w-0 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Search titles" type="search" value={query} />
+              <input aria-label="Search your Watchlist" className="min-h-[44px] w-40 min-w-0 bg-transparent text-sm text-[var(--fs-ink)] outline-none placeholder:text-[var(--fs-muted)]" onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Search titles" type="search" value={query} />
             </label>
             <div aria-label="Filter Watchlist by title type" className="flex flex-wrap gap-1" role="group">
               {([['all', 'All'], ['movie', 'Movies'], ['series', 'Series'], ['anime', 'Anime']] as const).map(([value, label]) => (
-                <button aria-pressed={kind === value} className={`min-h-10 border-b-2 px-2 text-xs font-medium outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${kind === value ? 'border-[var(--fs-accent)] text-[var(--fs-ink)]' : 'border-transparent text-[var(--fs-muted)]'}`} key={value} onClick={() => setKind(value)} type="button">{label}</button>
+                <button aria-pressed={kind === value} className={`min-h-[44px] border-b-2 px-2 text-xs font-medium outline-none transition-colors hover:text-[var(--fs-ink)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${kind === value ? 'border-[var(--fs-accent)] text-[var(--fs-ink)]' : 'border-transparent text-[var(--fs-muted)]'}`} key={value} onClick={() => setKind(value)} type="button">{label}</button>
               ))}
             </div>
             <div className="ml-auto"><TitleCollectionFilters decades={decades} genres={genres} hasActiveFilters={filtered || sort !== 'recent'} onDecadeChange={setDecade} onGenreChange={setGenre} onRatingChange={setRating} onReset={resetFilters} onSortChange={setSort} rating={rating} recentLabel="Recently saved" selectedDecade={decade} selectedGenre={genre} showRating sort={sort} {...(ratingsUnavailableState ? { unavailableRatings: 'all' as const } : {})} /></div>
-            <div aria-label="Watchlist display" className="flex gap-1 border-l border-[var(--fs-line)] pl-3" role="group">{([{ value: 'posters', label: 'Posters', icon: LayoutGrid }, { value: 'shelf', label: 'Shelf', icon: List }] as const).map(({ value, label, icon: Icon }) => <button aria-label={label} aria-pressed={view === value} className={`grid size-9 place-items-center rounded-control outline-none hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${view === value ? 'text-[var(--fs-ink)]' : 'text-[var(--fs-muted)]'}`} key={value} onClick={() => setView(value)} title={label} type="button"><Icon aria-hidden="true" className="size-4" /></button>)}</div>
+            <div aria-label="Watchlist display" className="flex gap-1 border-l border-[var(--fs-line)] pl-3" role="group">{([{ value: 'posters', label: 'Posters', icon: LayoutGrid }, { value: 'shelf', label: 'Shelf', icon: List }] as const).map(({ value, label, icon: Icon }) => <button aria-label={label} aria-pressed={view === value} className={`grid size-[44px] place-items-center rounded-control outline-none hover:bg-[var(--fs-hover)] focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)] ${view === value ? 'text-[var(--fs-ink)]' : 'text-[var(--fs-muted)]'}`} key={value} onClick={() => setView(value)} title={label} type="button"><Icon aria-hidden="true" className="size-4" /></button>)}</div>
           </div>
-          {ratingsUnavailableState ? <p className="mt-3 text-xs text-[var(--fs-muted)]" role="status">Your saved titles are still here, but personal rating filters are temporarily unavailable. Reload to try again.</p> : null}
+          {ratingsUnavailableState ? <PersonalRatingsRetry failed={ratingsRetryFailed} itemLabel="titles" message="Your saved titles are still here, but personal rating filters are temporarily unavailable." onRetry={() => void retryRatingLookup()} retrying={ratingsRetrying} /> : null}
 
           <div className="mt-6">
           {filtered || nextCursor ? <p className="mb-4 text-xs text-[var(--fs-muted)]" role="status">
@@ -153,7 +172,7 @@ export function WatchlistCollection({ catalogDetailsLimited = false, catalogUnav
             <div className="rounded-card border border-dashed border-[var(--fs-field-border)] bg-[var(--fs-field)] px-6 py-12 text-center">
               <Bookmark aria-hidden="true" className="mx-auto size-7 text-[var(--fs-muted)]" />
               <h2 className="mt-4 font-display text-2xl text-[var(--fs-ink)]">{rating !== 'any' && ratingsUnavailableState ? 'Personal ratings are unavailable.' : filtered ? 'No titles match that shelf.' : 'Your Watchlist is ready.'}</h2>
-              <p className="mx-auto mt-2 max-w-[50ch] text-sm leading-6 text-[var(--fs-muted)]">{rating !== 'any' && ratingsUnavailableState ? 'Reload the page before filtering by rating again.' : filtered ? 'Try a different search or filter.' : 'Save a movie, series, or anime while you explore, and it will be waiting here.'}</p>
+              <p className="mx-auto mt-2 max-w-[50ch] text-sm leading-6 text-[var(--fs-muted)]">{rating !== 'any' && ratingsUnavailableState ? 'Retry the rating lookup above to apply rating filters again.' : filtered ? 'Try a different search or filter.' : 'Save a movie, series, or anime while you explore, and it will be waiting here.'}</p>
               {filtered ? (
                 <button className={`${buttonVariants({ variant: 'secondary' })} mt-5`} onClick={resetFilters} type="button">Clear filters</button>
               ) : (

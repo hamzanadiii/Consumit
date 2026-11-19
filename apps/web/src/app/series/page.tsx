@@ -8,8 +8,10 @@ import { catalogBrowseFeed } from '@/lib/catalog-browser'
 
 export const metadata: Metadata = { title: 'Series · Consumit', description: 'Browse real television series from the TMDB catalog.' }
 
-export default async function SeriesPage({ searchParams }: { searchParams: Promise<{ feed?: string | string[] }> }) {
-  const initialFeed = catalogBrowseFeed((await searchParams).feed)
+export default async function SeriesPage({ searchParams }: { searchParams: Promise<{ feed?: string | string[]; genre?: string | string[]; year?: string | string[] }> }) {
+  const params = await searchParams
+  const first = (value?: string | string[]) => Array.isArray(value) ? value[0] : value
+  const initialFeed = catalogBrowseFeed(first(params.feed))
   let responses
   try {
     responses = await Promise.all([
@@ -20,5 +22,5 @@ export default async function SeriesPage({ searchParams }: { searchParams: Promi
     return <CatalogUnavailableScreen activeHref="/series" error={error} />
   }
   const [current, popular] = responses
-  return <CatalogBrowseScreen current={current} initialFeed={initialFeed} kind="series" popular={popular} />
+  return <CatalogBrowseScreen current={current} initialFeed={initialFeed} initialGenre={first(params.genre)} initialYear={first(params.year)} kind="series" popular={popular} />
 }

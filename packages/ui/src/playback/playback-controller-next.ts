@@ -15,10 +15,13 @@ type ExternalTrack = { id: string; label: string; language: string; url: string 
 
 const EMPTY_TRACKS: EngineTracks = { qualities: [{ value: 'auto', label: 'Auto' }], audio: [], subtitles: [] }
 const ATTACH_TIMEOUT_MS = 8_000
-const FIRST_FRAME_TIMEOUT_MS = 12_000
 const STALL_TIMEOUT_MS = 8_000
 // Pending seeks have their own recovery budget; ordinary stalls keep the shorter one.
 const SEEK_TIMEOUT_MS = 30_000
+// Slow direct CDNs can spend well over ten seconds before the first decoded
+// frame (VidBolt measured 14.32s); startup uses its own budget and never
+// borrows the shorter mid-playback stall watchdog.
+const STARTUP_TIMEOUT_MS = 20_000
 
 function playableCaption(url: string): boolean {
   if (isSafeMediaUrl(url)) return true
@@ -44,6 +47,8 @@ export function createPlaybackControllerNext(
   let bufferStartedAt = 0
   let firstFrame = false
   let framePending = false
+  let seekForProof = false
+  let resumeForProof = false
   let recoveryAttempted = false
   let fatalTimer: ReturnType<typeof setTimeout> | undefined
   let startupTimer: ReturnType<typeof setTimeout> | undefined
@@ -118,7 +123,9 @@ export function createPlaybackControllerNext(
     callbacks.fatal(reason, deliveryFailure)
   }
   const inspectStall = () => {
-    if (disposed || snapshot.phase !== 'buffering' || video.paused) return
+    // Start-up is bounded by startupTimer; pre-frame waiting is not a
+    // playback stall and must not abort a slow source before its first frame.
+    if (disposed || !firstFrame || snapshot.phase !== 'buffering' || video.paused) return
     if (seekDeadlineAt) {
       if (performance.now() >= seekDeadlineAt) { fail('network', 'timeout'); return }
       stallTimer = setTimeout(inspectStall, 1_000)
@@ -208,7 +215,8 @@ export function createPlaybackControllerNext(
       }
       if ('requestVideoFrameCallback' in video) video.requestVideoFrameCallback(markFrame)
       else markFrame()
-    } else if (resumed && firstFrame) emit('buffer-end')
+    } else if (firstFrame && resumeForProof) { resumeForProof = false; emit('resumed') }
+    else if (resumed && firstFrame) emit('buffer-end')
   }
   const onWaiting = () => {
     if (video.paused || snapshot.phase === 'failed') return
@@ -220,12 +228,13 @@ export function createPlaybackControllerNext(
       emit('buffer-start')
     }
     clearTimeout(stallTimer)
-    stallTimer = setTimeout(inspectStall, 1_000)
+    if (firstFrame) stallTimer = setTimeout(inspectStall, 1_000)
   }
   const onTimeUpdate = () => {
     if (video.currentTime > lastPosition + 0.1) { lastPosition = video.currentTime; lastAdvanceAt = performance.now() }
   }
   const onSeeking = () => {
+    if (firstFrame) seekForProof = true
     if (tearingDown || video.paused || snapshot.phase === 'failed') return
     seekDeadlineAt = performance.now() + SEEK_TIMEOUT_MS
     lastAdvanceAt = performance.now(); lastPosition = video.currentTime
@@ -234,6 +243,7 @@ export function createPlaybackControllerNext(
   const onSeeked = () => {
     seekDeadlineAt = 0
     lastAdvanceAt = performance.now(); lastPosition = video.currentTime
+    if (firstFrame && seekForProof) { seekForProof = false; resumeForProof = true; emit('seeked') }
   }
   const onPause = () => {
     seekDeadlineAt = 0
@@ -262,7 +272,7 @@ export function createPlaybackControllerNext(
     const current = generation
     if (!firstFrame) {
       clearTimeout(startupTimer)
-      startupTimer = setTimeout(() => { if (current === generation && !firstFrame && !snapshot.needsGesture) fail('network', 'timeout') }, FIRST_FRAME_TIMEOUT_MS)
+      startupTimer = setTimeout(() => { if (current === generation && !firstFrame && !snapshot.needsGesture) fail('network', 'timeout') }, STARTUP_TIMEOUT_MS)
     }
     try { await video.play(); if (!disposed && current === generation) { restorePlaybackRate(); update({ needsGesture: false }) } }
     catch (error) {
@@ -347,7 +357,7 @@ export function createPlaybackControllerNext(
         if (disposed || current !== generation) { disposeEngine(attached); return }
         engine = attached
         mergeTracks()
-        if (!metadataRestored && !firstFrame) startupTimer = setTimeout(() => { if (current === generation && !metadataRestored && !firstFrame) fail('network', 'timeout') }, FIRST_FRAME_TIMEOUT_MS)
+        if (!metadataRestored && !firstFrame) startupTimer = setTimeout(() => { if (current === generation && !metadataRestored && !firstFrame) fail('network', 'timeout') }, STARTUP_TIMEOUT_MS)
         preferredSubtitle(previousSubtitle)
         preferredAudio()
         preferredQuality()
@@ -404,6 +414,11 @@ export function createPlaybackControllerNext(
         try { localStorage.setItem('consumit.player.subtitle-language', subtitlePreference) } catch { /* Optional storage. */ }
       }
       selectSubtitle(resolved)
+      update({ subtitleNotice: undefined })
+    },
+    resetSubtitle() {
+      manualSubtitle = undefined
+      selectSubtitle('off')
       update({ subtitleNotice: undefined })
     },
     externalSubtitles(entries: readonly ExternalTrack[]) {

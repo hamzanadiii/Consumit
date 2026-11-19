@@ -2,7 +2,7 @@
 
 import { watchHref, type CatalogSeason, type CatalogSeriesDetail } from '@consumit/contracts'
 import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button, SeasonSelector, SectionHeading } from '@consumit/ui'
 
@@ -13,6 +13,7 @@ const EPISODES_PER_PAGE = 8
 export type EpisodesSectionProps = {
   detail: CatalogSeriesDetail
   failedSeason: number | null
+  initialEpisode?: number | null
   loadingSeason: boolean
   onRetrySeason: () => void
   onSelectSeason: (seasonNumber: number) => void
@@ -28,13 +29,22 @@ export type EpisodesSectionProps = {
 export function EpisodesSection({
   detail,
   failedSeason,
+  initialEpisode = null,
   loadingSeason,
   onRetrySeason,
   onSelectSeason,
   season,
   seasons,
 }: EpisodesSectionProps) {
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() => {
+    const episodeIndex = season?.episodes.findIndex((episode) => episode.episodeNumber === initialEpisode) ?? -1
+    return episodeIndex >= 0 ? Math.floor(episodeIndex / EPISODES_PER_PAGE) + 1 : 1
+  })
+  const returnEpisodeId = initialEpisode && season ? `episode-${season.seasonNumber}-${initialEpisode}` : null
+  useEffect(() => {
+    if (!returnEpisodeId) return
+    document.getElementById(returnEpisodeId)?.focus({ preventScroll: true })
+  }, [returnEpisodeId])
   const episodes = season?.episodes ?? []
   const totalPages = Math.max(1, Math.ceil(episodes.length / EPISODES_PER_PAGE))
   const safePage = Math.min(page, totalPages)
@@ -66,7 +76,7 @@ export function EpisodesSection({
         <>
           <ul aria-label={`Season ${season?.seasonNumber ?? ''} episodes, page ${safePage} of ${totalPages}`} className="mt-8 grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {visible.map((episode) => (
-              <li className="min-w-0" key={episode.id}>
+              <li className="min-w-0 scroll-mt-20 outline-none focus-visible:ring-2 focus-visible:ring-[var(--fs-focus)]" id={`episode-${episode.seasonNumber}-${episode.episodeNumber}`} key={episode.id} tabIndex={-1}>
                 <EpisodeCard airDate={episode.airDate} duration={episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : null} episode={episode.episodeNumber} fallbackArt={detail.backdropUrl ?? detail.posterUrl} href={watchHref(detail, { episode: episode.episodeNumber, season: episode.seasonNumber })} stillUrl={episode.stillUrl} summary={episode.overview} title={episode.title} />
               </li>
             ))}

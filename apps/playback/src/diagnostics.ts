@@ -4,7 +4,7 @@ import { ApiError } from '../../api/src/http/errors.ts'
 import { inspectProviderSources } from '../../api/src/playback/inspection.ts'
 import { createPlaybackRelay } from '../../api/src/playback/relay.ts'
 import { isProviderRemoved } from '../../api/src/admin/provider-config.ts'
-import { aggregateProviderMetrics, readProviderMetrics, type MetricsSnapshot } from '../../api/src/admin/provider-metrics.ts'
+import { readProviderRouteEvidence, type ProviderRouteEvidenceSnapshot } from '../../api/src/admin/provider-metrics.ts'
 import { suppliesVideo, validatedSources, type ProviderRegistration } from '@consumit/provider-sdk'
 import type { DiagnosticOperation } from '@consumit/contracts/internal'
 import type { PlaybackRef } from '@consumit/contracts'
@@ -12,6 +12,8 @@ import type { ProbeStatus } from '../../api/src/playback/probe.ts'
 import type { SubtitleService } from '../../api/src/subtitles/subtitles.ts'
 import type { Playback } from '../../api/src/playback/playback.ts'
 import type { PlaybackStore } from '../../api/src/playback/state.ts'
+import { buildProviderHealthRows } from '../../api/src/playback/provider-health.ts'
+import type { createProviderRouteRegistry } from '../../api/src/playback/route-registry.ts'
 
 export type DiagnosticResult = { statusCode: number; body: unknown }
 type ScoutCatalog = (() => readonly ProviderRegistration[]) | undefined
@@ -29,19 +31,20 @@ export function createDiagnostics(deps: {
   playback: Playback
   subtitles: SubtitleService
   probeStatus?: (() => Promise<ProbeStatus>) | undefined
+  routeRegistry?: ReturnType<typeof createProviderRouteRegistry> | null | undefined
   scoutCatalog?: ScoutCatalog
   scoutRecipes?: readonly { id: string }[]
 }) {
   const { env, providers, store, playback, subtitles } = deps
-  let metricsCache: { at: number; data: MetricsSnapshot | null } | null = null
-  let metricsPending: Promise<MetricsSnapshot | null> | null = null
-  async function metricsSnapshot(): Promise<MetricsSnapshot | null> {
+  let evidenceCache: { at: number; data: ProviderRouteEvidenceSnapshot | null } | null = null
+  let evidencePending: Promise<ProviderRouteEvidenceSnapshot | null> | null = null
+  async function routeEvidenceSnapshot(): Promise<ProviderRouteEvidenceSnapshot | null> {
     if (!env.adminMetricsUrl) return null
-    if (metricsCache && Date.now() - metricsCache.at < 15_000) return metricsCache.data
-    metricsPending ??= readProviderMetrics(env.adminMetricsUrl).catch(() => null).then(data => {
-      metricsCache = { at: Date.now(), data }; return data
-    }).finally(() => { metricsPending = null })
-    return metricsPending
+    if (evidenceCache && Date.now() - evidenceCache.at < 15_000) return evidenceCache.data
+    evidencePending ??= readProviderRouteEvidence(env.adminMetricsUrl).catch(() => null).then(data => {
+      evidenceCache = { at: Date.now(), data }; return data
+    }).finally(() => { evidencePending = null })
+    return evidencePending
   }
 
   function findProvider(providerId: string): ProviderRegistration {
@@ -74,25 +77,15 @@ export function createDiagnostics(deps: {
 
   async function providersHealth(): Promise<DiagnosticResult> {
     const probed = await deps.probeStatus?.() ?? {}
-    const metrics = await metricsSnapshot()
-    const kinds = ['movie', 'series', 'anime'] as const
-    const result: Record<string, Array<{ id: string; region: string; enabled: boolean; probe: ProbeStatus[string] | null; status: 'healthy' | 'degraded' | 'down' | 'unknown' | 'disabled'; circuit: { failures: number; playbackFailures: number; openUntil: number; outcomes: number; success: number; latencyMs: number } | null }>> = {}
-    for (const kind of kinds) {
-      const circuits = playback.providerStatus?.(kind) ?? []
-      result[kind] = providers
-        .filter((p) => !isProviderRemoved(p) && suppliesVideo(p) && p.mediaKinds.includes(kind))
-        .flatMap((p) => [...new Set(p.approvedRegions)].map((region) => {
-          const probe = probed[`${p.adapter.id}:${kind}:${region}`] ?? null
-          const current = circuits.find((entry) => entry.id === p.adapter.id)
-          const open = Boolean(current && current.openUntil > Date.now())
-          const fresh = Boolean(probe && Date.now() - probe.at <= Math.max(10 * 60_000, (env.playback?.probeIntervalMs ?? 0) * 2))
-          const trend = metrics ? aggregateProviderMetrics(metrics, p.adapter.id, kind, region) : null
-          const observations = (trend?.starts ?? 0) + (trend?.playbackFailures ?? 0)
-          const failureShare = observations ? (trend?.playbackFailures ?? 0) / observations : 0
-          const status = !p.enabled ? 'disabled' : fresh && !probe?.ok && open || observations >= 10 && failureShare >= 0.5 ? 'down' : !fresh ? 'unknown' : !probe?.ok || open || observations >= 10 && failureShare >= 0.1 ? 'degraded' : observations >= 10 ? 'healthy' : 'unknown'
-          return { id: p.adapter.id, region, enabled: p.enabled, probe, status, circuit: current ? { failures: current.failures, playbackFailures: current.playbackFailures, openUntil: current.openUntil, outcomes: current.outcomes, success: current.success, latencyMs: current.latency } : null }
-        }))
-    }
+    const evidence = await routeEvidenceSnapshot()
+    const circuits = (['movie', 'series', 'anime'] as const).flatMap(kind => playback.providerStatus?.(kind) ?? [])
+    const result = buildProviderHealthRows({
+      providers: providers.filter(provider => !isProviderRemoved(provider)), probes: probed, circuits,
+      ...(evidence ? { evidence } : {}),
+      ...(deps.routeRegistry?.version ? { routeVersion: deps.routeRegistry.version } : {}),
+      ...(deps.routeRegistry ? { findRoute: (id, kind, region, delivery, purpose) => deps.routeRegistry!.find(id, kind, region, delivery, purpose) } : {}),
+      probeIntervalMs: env.playback?.probeIntervalMs ?? 0,
+    })
     return { statusCode: 200, body: result }
   }
 
@@ -178,12 +171,14 @@ export function createDiagnostics(deps: {
     const elapsed = () => Math.round(performance.now() - started)
     try {
       const { result, sources: valid } = await inspectProviderSources(provider, { ref, region: env.tmdbRegion, audioLanguage }, controller.signal, store)
-      const relay = env.playback?.relay ? createPlaybackRelay(env.playback.relay) : undefined
+      const relay = env.playback?.relay ? createPlaybackRelay({ ...env.playback.relay,
+        ...(deps.routeRegistry ? { routeVersion: deps.routeRegistry.version, routePolicy: deps.routeRegistry.relayRoutes() } : {}),
+      }) : undefined
       const proxy = provider.deliveryMode === 'relay'
       const registration = { ...provider, enabled: true }
       const preview = proxy ? valid.find(source => relay?.permits({ source, registration })) : valid[0]
       const expiry = preview ? proxy ? Math.min(Date.parse(preview.expiresAt) - 5000, Date.now() + 90_000) : Date.parse(preview.expiresAt) : 0
-      const previewSrc = preview ? proxy ? await relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, env.appOrigin) : preview.url : undefined
+      const previewSrc = preview ? proxy ? await relay?.issue({ source: preview, registration, subtitles: [], delivery: 'direct' }, expiry, env.appOrigin, { kind: ref.kind, region: env.tmdbRegion, purpose: 'video' }) : preview.url : undefined
       return { statusCode: 200, body: {
         providerId, ok: valid.length > 0 && (!proxy || Boolean(previewSrc)), elapsedMs: elapsed(), region: env.tmdbRegion,
         delivery: provider.deliveryMode ?? 'direct',

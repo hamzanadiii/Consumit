@@ -30,7 +30,7 @@ export type AnimeTitles = {
 const mappingPolicy = { freshForMs: 7 * 86_400_000, staleForMs: 30 * 86_400_000 } satisfies CachePolicy
 
 export function normalizeAnimeTitle(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 }
 
 function yearOf(date: string | null): number | null {
@@ -94,7 +94,7 @@ export function createTmdbEpisodeArt(catalog: Catalog, cache = new StaleCache())
   async function tmdbTitle(anilistId: number, titles: AnimeTitles, year: number | null): Promise<{ id: number; kind: 'movie' | 'series' } | null> {
     const cached = await cache.get<{ id: number; kind: 'movie' | 'series' } | null>(`tmdb:anime:${anilistId}`, mappingPolicy, async () => {
       for (const kind of ['series', 'movie'] as const) {
-        for (const query of [titles.english, titles.romaji].filter((title): title is string => !!title?.trim())) {
+        for (const query of [titles.english, titles.romaji, titles.native].filter((title): title is string => !!title?.trim())) {
           const page = await catalog.search({ kind, page: 1, query: query.slice(0, 100) })
           const hit = page.items.find((item) =>
             matchesTmdbTitle(titles, year, { name: item.title, originalName: item.originalTitle, firstAirDate: item.releaseDate }),

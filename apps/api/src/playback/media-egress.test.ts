@@ -16,6 +16,21 @@ function setup(body: Readable = Readable.from([Buffer.from('media')]), dailyByte
   return { transport, save, daemon: createMediaEgress(env, { active, dailyBytes, bytesPerSecond: 1_500_000, deadlineMs }, { transport, save, state }) }
 }
 describe('isolated media daemon', () => {
+  it('returns readable quota errors and preserves capability rejection after quota exhaustion', async () => {
+    const state = { day: new Date().toISOString().slice(0, 10), reserved: 99 }
+    const transport = vi.fn<MediaTransport>(async url => ({ status: 200, headers: new Headers({ 'content-type': 'video/mp2t' }), body: Readable.from([Buffer.from('media')]), url }))
+    const daemon = createMediaEgress(env, { active: 2, dailyBytes: 99, bytesPerSecond: 1_500_000, deadlineMs: 5000 }, { state, transport, save: async () => {} })
+    const rejected = await daemon.fetch(new Request(`${media}/media/forged`))
+    expect(rejected.status).toBe(403)
+    await expect(rejected.text()).resolves.toBe('Media unavailable.')
+    const limited = await daemon.fetch(await request())
+    expect(limited.status).toBe(503)
+    expect(limited.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0)
+    await expect(limited.text()).resolves.toBe('Media unavailable.')
+    expect(daemon.snapshot().reserved).toBe(99)
+    expect(daemon.snapshot().active).toBe(0)
+  })
   it('validates capabilities before touching the pinned transport and preserves Range', async () => {
     const { daemon, transport, save } = setup()
     const rejected = await daemon.fetch(new Request(`${media}/media/forged`))
@@ -54,7 +69,10 @@ describe('isolated media daemon', () => {
     const transport = vi.fn<MediaTransport>(async url => ({ status: 200, headers: new Headers({ 'content-type': 'video/mp2t' }), body: Readable.from([Buffer.from('x')]), url }))
     const restarted = createMediaEgress(env, { active: 2, dailyBytes: 99, bytesPerSecond: 1_500_000, deadlineMs: 5000 }, { state, save, transport })
     const responses = await Promise.all([restarted.fetch(await request()), restarted.fetch(await request())])
-    for (const item of responses) await expect(item.text()).rejects.toThrow()
+    for (const item of responses) {
+      expect(item.status).toBe(503)
+      await expect(item.text()).resolves.toBe('Media unavailable.')
+    }
     expect(restarted.snapshot().reserved).toBe(99)
   })
   it('releases capacity when an unread response hits its overall deadline', async () => {

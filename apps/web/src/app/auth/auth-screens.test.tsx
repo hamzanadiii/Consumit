@@ -7,12 +7,14 @@ import { IdentityApiError } from '@/lib/identity-browser'
 import { movieSummary } from '@/test/catalog-fixtures'
 import { renderWithProviders as render } from '@/test/render'
 
-import { SignInScreen, SignUpScreen } from './auth-screens'
+import { GoogleSignUpScreen, SignInScreen, SignUpScreen, VerifyEmailScreen } from './auth-screens'
 // Authentication owns session issuance; preference persistence is covered by its own service and browser tests.
 vi.mock('../experience/experience-provider', () => ({ ExperienceProvider: ({ children }: { children: ReactNode }) => children }))
 
 const mocks = vi.hoisted(() => ({
   getUsernameAvailability: vi.fn(),
+  getGoogleSignupPending: vi.fn(),
+  completeGoogleSignup: vi.fn(),
   loginMember: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
@@ -29,6 +31,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/identity-browser', () => ({
   confirmPasswordRecovery: vi.fn(),
   getUsernameAvailability: mocks.getUsernameAvailability,
+  getGoogleSignupPending: mocks.getGoogleSignupPending,
+  completeGoogleSignup: mocks.completeGoogleSignup,
   IdentityApiError: class IdentityApiError extends Error {
     code?: string | undefined
     constructor(message?: string, options?: { code?: string }) {
@@ -60,11 +64,52 @@ describe('server-backed authentication screens', () => {
     window.localStorage.clear()
     window.sessionStorage.clear()
     mocks.getUsernameAvailability.mockResolvedValue({ available: true, username: 'cinema_fan' })
+    mocks.getGoogleSignupPending.mockResolvedValue({ email: 'google@example.com', name: 'Google Fan' })
+    mocks.completeGoogleSignup.mockResolvedValue({ member, status: 'complete' })
     mocks.loginMember.mockResolvedValue(member)
     mocks.registerMember.mockResolvedValue({ message: 'If the details can be used, a verification code has been sent.' })
     mocks.verifyMemberEmail.mockResolvedValue(member)
     mocks.updateMemberProfile.mockResolvedValue({})
     mocks.requestEmailVerification.mockResolvedValue({ message: 'A new code has been sent.' })
+  })
+
+  it('requires deliberate Terms and Privacy acceptance before moving to identity', async () => {
+    const user = userEvent.setup()
+    render(<SignUpScreen titles={[]} />)
+
+    const termsAcceptance = screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' })
+    expect(termsAcceptance).not.toBeChecked()
+    await user.type(screen.getByLabelText('Email'), member.email)
+    await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(screen.getByRole('heading', { name: 'Create your account.' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
+
+    await user.click(termsAcceptance)
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('heading', { name: 'Choose your identity.' })).toBeInTheDocument()
+  })
+
+  it('requires deliberate Terms and Privacy acceptance to complete Google signup', async () => {
+    const user = userEvent.setup()
+    render(<GoogleSignUpScreen nextPath="/library" />)
+
+    const termsAcceptance = await screen.findByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' })
+    expect(termsAcceptance).not.toBeChecked()
+    await user.type(screen.getByLabelText('Username'), 'google_fan')
+    const createAccount = screen.getByRole('button', { name: 'Create account' })
+    await user.click(createAccount)
+    expect(mocks.completeGoogleSignup).not.toHaveBeenCalled()
+
+    await user.click(termsAcceptance)
+    await user.click(createAccount)
+    await waitFor(() => expect(mocks.completeGoogleSignup).toHaveBeenCalledWith({
+      displayName: 'Google Fan',
+      termsAccepted: true,
+      username: 'google_fan',
+    }))
+    expect(mocks.push).toHaveBeenCalledWith('/onboarding?next=%2Flibrary')
   })
 
   it('ignores a username lookup that finishes after the username changes', async () => {
@@ -74,6 +119,7 @@ describe('server-backed authentication screens', () => {
     render(<SignUpScreen titles={[]} />)
     await user.type(screen.getByLabelText('Email'), member.email)
     await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.type(screen.getByLabelText('Username'), 'first_name')
     await user.tab()
@@ -92,6 +138,7 @@ describe('server-backed authentication screens', () => {
     render(<SignUpScreen titles={[]} />)
     await user.type(screen.getByLabelText('Email'), member.email)
     await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.type(screen.getByLabelText('Username'), member.username)
     await user.click(screen.getByRole('button', { name: 'Send verification code' }))
@@ -105,6 +152,39 @@ describe('server-backed authentication screens', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Email delivery is unavailable')
     expect(resend).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Verify and continue' })).toBeEnabled()
+  })
+
+  it('explains resend timing after an accepted signup resend', async () => {
+    const user = userEvent.setup()
+    render(<SignUpScreen titles={[]} />)
+    await user.type(screen.getByLabelText('Email'), member.email)
+    await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.type(screen.getByLabelText('Username'), member.username)
+    await user.click(screen.getByRole('button', { name: 'Send verification code' }))
+    await screen.findByRole('heading', { name: 'Check your email.' })
+
+    const code = screen.getByLabelText('Verification code')
+    await user.type(code, '123456')
+    await user.click(screen.getByRole('button', { name: 'Send another code' }))
+
+    expect(await screen.findByText('Give the email a minute to arrive and check spam before requesting another. A newly issued code replaces the previous one.')).toBeInTheDocument()
+    expect(code).toHaveValue('')
+    expect(code).toHaveFocus()
+  })
+
+  it('explains resend timing on standalone verification', async () => {
+    const user = userEvent.setup()
+    render(<VerifyEmailScreen nextPath="/library" />)
+    await user.type(screen.getByLabelText('Email'), member.email)
+    const code = screen.getByLabelText('Verification code')
+    await user.type(code, '123456')
+    await user.click(screen.getByRole('button', { name: 'Send another code' }))
+
+    expect(await screen.findByText('Give the email a minute to arrive and check spam before requesting another. A newly issued code replaces the previous one.')).toBeInTheDocument()
+    expect(code).toHaveValue('')
+    expect(code).toHaveFocus()
   })
 
   it('signs in through the identity API without browser-stored session tokens', async () => {
@@ -121,17 +201,18 @@ describe('server-backed authentication screens', () => {
     expect(window.sessionStorage).toHaveLength(0)
   })
 
-  it('walks account, identity, and verification without OAuth controls', async () => {
+  it('walks email account, identity, and verification with Google sign-up available', async () => {
     const user = userEvent.setup()
     render(<SignUpScreen titles={[movieSummary]} />)
 
-    expect(screen.queryByText(/google|apple/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Create your account with Google' })).toHaveAttribute('href', '/v1/auth/google/start')
     expect(screen.getAllByText('Your account and library are private by default.')).toHaveLength(1)
     expect(screen.getByRole('link', { name: 'Need help?' })).toHaveAttribute('href', '/help')
     expect(screen.getByRole('progressbar', { name: 'Sign-up step 1 of 3' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('Email'), member.email)
     await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(screen.getByRole('heading', { name: 'Choose your identity.' })).toBeInTheDocument()
@@ -148,10 +229,10 @@ describe('server-backed authentication screens', () => {
     expect(await screen.findByRole('heading', { name: 'Check your email.' })).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Sign-up step 3 of 3' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Verification code'), '12345678')
+    await user.type(screen.getByLabelText('Verification code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify and continue' }))
 
-    await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalledWith({ code: '12345678', email: member.email }))
+    await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalledWith({ code: '123456', email: member.email }))
     expect(mocks.updateMemberProfile).toHaveBeenCalledWith({ displayName: 'Cinema Fan' })
     expect(mocks.push).toHaveBeenCalledWith('/onboarding')
     expect(window.localStorage).toHaveLength(0)
@@ -163,6 +244,7 @@ describe('server-backed authentication screens', () => {
 
     await user.type(screen.getByLabelText('Email'), member.email)
     await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.click(screen.getByRole('button', { name: 'Back to account details' }))
 
@@ -186,12 +268,13 @@ describe('server-backed authentication screens', () => {
 
     await user.type(screen.getByLabelText('Email'), member.email)
     await user.type(screen.getByLabelText('Password'), 'a-secure-password')
+    await user.click(screen.getByRole('checkbox', { name: 'I agree to the Terms and Privacy Policy' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await user.type(screen.getByLabelText('Username'), member.username)
     await user.click(screen.getByRole('button', { name: 'Send verification code' }))
     expect(await screen.findByRole('heading', { name: 'Check your email.' })).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Verification code'), '12345678')
+    await user.type(screen.getByLabelText('Verification code'), '123456')
     await user.click(screen.getByRole('button', { name: 'Verify and continue' }))
 
     await waitFor(() => expect(mocks.verifyMemberEmail).toHaveBeenCalled())
@@ -218,13 +301,27 @@ describe('server-backed authentication screens', () => {
     expect(screen.queryByRole('button', { name: /switch to (light|dark) mode/i })).not.toBeInTheDocument()
   })
 
-  it('explains which email to use and keeps password requirements visible', async () => {
+  it('explains sign-in fields and applies the API password length constraints before sending', async () => {
     render(<SignInScreen nextPath="/library" titles={[]} />)
 
     expect(screen.getByText('Use the verified email for your account, not your username.')).toBeInTheDocument()
-    expect(screen.getByText('12 or more characters.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Password')).not.toHaveAttribute('minlength')
+    expect(screen.getByText('Use 12–128 characters.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('minlength', '12')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('maxlength', '128')
     expect(screen.getByText('Your account and library are private by default.')).toBeInTheDocument()
+  })
+
+  it('keeps a short sign-in password editable and exposes the minimum length', async () => {
+    const user = userEvent.setup()
+    render(<SignInScreen nextPath="/library" titles={[]} />)
+    const email = screen.getByLabelText('Email')
+    const password = screen.getByLabelText('Password')
+    await user.type(email, member.email)
+    await user.type(password, 'too-short')
+    expect(password).toHaveValue('too-short')
+    expect(password).toHaveAttribute('minlength', '12')
+    expect(mocks.loginMember).not.toHaveBeenCalled()
   })
 
   it('names unverified emails and offers verification instead of blame', async () => {
@@ -237,7 +334,7 @@ describe('server-backed authentication screens', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('registered but not verified')
-    expect(screen.getByRole('link', { name: 'Verify it now' })).toHaveAttribute('href', '/verify-email')
+    expect(screen.getByRole('link', { name: 'Verify it now' })).toHaveAttribute('href', '/verify-email?next=%2Flibrary')
   })
 
   it('offers password reset on mismatched credentials', async () => {
@@ -250,7 +347,41 @@ describe('server-backed authentication screens', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('did not match')
-    expect(screen.getByRole('link', { name: 'Reset your password' })).toHaveAttribute('href', '/forgot-password')
+    expect(screen.getByRole('link', { name: 'Reset your password' })).toHaveAttribute('href', '/forgot-password?next=%2Flibrary')
+  })
+
+  it('keeps credentials and the return task after a retryable sign-in outage', async () => {
+    const user = userEvent.setup()
+    const nextPath = '/search?q=evening&type=anime'
+    let rejectLogin!: (error: Error) => void
+    mocks.loginMember.mockImplementationOnce(() => new Promise((_, reject) => { rejectLogin = reject })).mockResolvedValueOnce(member)
+    render(<SignInScreen nextPath={nextPath} titles={[]} />)
+    const email = screen.getByLabelText('Email')
+    const password = screen.getByLabelText('Password')
+    await user.type(email, member.email)
+    await user.type(password, 'a-secure-password')
+
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(email).toBeDisabled()
+    expect(password).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toHaveAttribute('aria-busy', 'true')
+
+    await act(async () => rejectLogin(new IdentityApiError('The account service could not be reached. Try again.', { code: 'AUTH_STATE_UNAVAILABLE', retryable: true, status: 503 })))
+    const error = await screen.findByRole('alert')
+
+    expect(error).toHaveTextContent('Try again.')
+    expect(error).toHaveFocus()
+    expect(email).toHaveValue(member.email)
+    expect(password).toHaveValue('a-secure-password')
+    expect(email).toBeEnabled()
+    expect(password).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => expect(mocks.loginMember).toHaveBeenCalledTimes(2))
+    expect(mocks.loginMember).toHaveBeenLastCalledWith({ email: member.email, password: 'a-secure-password' })
+    expect(mocks.push).toHaveBeenCalledWith(nextPath)
   })
 
   it('tabs email, password, reveal, recovery, then submit in visual order', async () => {

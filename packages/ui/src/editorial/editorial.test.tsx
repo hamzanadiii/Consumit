@@ -6,14 +6,20 @@ import { SectionHeading } from './editorial'
 describe('editorial components', () => {
   it('keeps section hierarchy semantic', () => {
     render(
-      <SectionHeading
-        description="What people you trust are loving tonight."
-        title="From your circle"
-      />,
+      <>
+        <SectionHeading
+          description="What people you trust are loving tonight."
+          title="From your circle"
+        />
+        <SectionHeading headingLevel={1} title="Notifications" />
+      </>,
     )
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'From your circle' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Notifications' }),
     ).toBeInTheDocument()
   })
 
