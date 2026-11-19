@@ -696,7 +696,7 @@ export function createPostgresMemberData(prisma: PrismaClient, outboxEnabled = f
         const rows = await prisma.savedTitle.findMany({
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take,
-          where: { memberId, removedAt: null, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
+          where: { memberId, ...(cursor && createdAt ? { OR: [{ createdAt: { lt: createdAt } }, { createdAt, id: { lt: cursor.id } }] } : {}) },
         })
         const page = rows.slice(0, pageSize)
         const last = page.at(-1)

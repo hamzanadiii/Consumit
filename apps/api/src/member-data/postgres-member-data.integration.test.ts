@@ -152,7 +152,7 @@ describe('real member data read model', () => {
   })
 
   it('enforces profile section visibility on direct archive reads while owners retain private records', async () => {
-    const member = await db.prisma.member.create({ data: { email: 'section-owner@example.test', profile: { create: { username: 'section_owner' } } } })
+    const member = await db.prisma.member.create({ data: { email: 'section-owner@example.test', profile: { create: { username: 'section_owner', sectionVisibility: { ...defaultProfileSectionVisibility(), diary: false } } } } })
     await db.prisma.savedTitle.create({ data: { memberId: member.id, tmdbId: 550 } })
     await db.prisma.diaryEntry.create({ data: { memberId: member.id, tmdbId: 550, tags: ['private-diary-tag'], watchedOn: new Date('2026-10-18T00:00:00.000Z') } })
     await db.prisma.review.create({ data: { body: 'Public take', memberId: member.id, tags: ['public-review-tag'], tmdbId: 550 } })
