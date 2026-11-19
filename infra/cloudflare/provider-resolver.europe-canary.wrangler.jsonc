@@ -1,0 +1,45 @@
+{
+  "name": "consumit-provider-resolver-europe-canary",
+  "main": "../../packages/media-relay/src/resolver-worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "RESOLVER_ENABLED": "true",
+    "RESOLVER_COORDINATION_ENABLED": "true",
+    "RESOLVER_ROUTE_POLICY_REQUIRED": "true",
+    "RESOLVER_COMPUTE_ORIGIN": "https://consumit.online",
+    "RESOLVER_ROUTE_POLICY": "[{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"policy\":\"e0039cb08e7bcd662996a5f3977263df07d892a4d2a9d7326405f689561c26bb\",\"provider\":\"megaplayframe\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"embed\",\"lookup\":\"https://consumit-provider-resolver-europe-canary.consumit-project.workers.dev\"},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"policy\":\"670417f4db8ed40e3efafe3d76f1bc26f1292418604edaaaffa4028fa2d08ebc\",\"provider\":\"reanimeframe\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"embed\",\"lookup\":\"https://consumit-provider-resolver-europe-canary.consumit-project.workers.dev\"},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"policy\":\"2df7ab05f90cd8c160aef4edbaed9b0ca7921221f8e4b52d05e02404c2dd9957\",\"provider\":\"yumezoneframe\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"embed\",\"lookup\":\"https://consumit-provider-resolver-europe-canary.consumit-project.workers.dev\"}]",
+    "RESOLVER_ROUTE_POLICY_1": "[]",
+    "RESOLVER_ROUTE_POLICY_2": "[]"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROVIDER_COORDINATORS",
+        "class_name": "ProviderCoordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ProviderCoordinator"
+      ]
+    }
+  ],
+  "placement": {
+    "region": "aws:eu-west-3"
+  }
+}

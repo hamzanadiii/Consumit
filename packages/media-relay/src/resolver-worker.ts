@@ -28,7 +28,7 @@ const routePolicySchema = z.array(z.object({
   provider: z.string().regex(/^[a-z0-9-]{1,40}$/), kind: z.enum(['movie', 'series', 'anime']), region: z.string().regex(/^[A-Z]{2}$/),
   purpose: z.enum(['video', 'audio']), delivery: z.enum(['direct', 'relay', 'embed']), lookup: z.string().url(),
 }).strict()).max(384)
-export type ResolverEnv = { RESOLVER_ENABLED: string; RESOLVER_SECRET: string; RESOLVER_COMPUTE_ORIGIN?: string; RESOLVER_COMPUTE_SECRET?: string; RESOLVER_ROUTE_POLICY?: string; RESOLVER_ROUTE_POLICY_REQUIRED?: string; RESOLVER_COORDINATION_ENABLED?: string; PROVIDER_COORDINATORS?: { idFromName(name: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } } }
+export type ResolverEnv = { RESOLVER_ENABLED: string; RESOLVER_SECRET: string; RESOLVER_COMPUTE_ORIGIN?: string; RESOLVER_COMPUTE_SECRET?: string; RESOLVER_ROUTE_POLICY?: string; RESOLVER_ROUTE_POLICY_1?: string; RESOLVER_ROUTE_POLICY_2?: string; RESOLVER_ROUTE_POLICY_REQUIRED?: string; RESOLVER_COORDINATION_ENABLED?: string; PROVIDER_COORDINATORS?: { idFromName(name: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } } }
 type ResolverFetch = (input: string | URL, init?: RequestInit) => Promise<Response>
 type ResolverDeps = { fetch?: ResolverFetch; maxSubrequests?: number; report?: (entry: { provider: string; subrequests: number; durationMs: number; outcome: string; sources: number }) => void }
 const MAX_REQUEST = 64 * 1024
@@ -78,7 +78,11 @@ function equalSecret(actual: string | null, expected: string) {
 function routePolicyMatches(parsed: ResolverRequest, env: ResolverEnv, lookup: string) {
   if (!parsed.route) return env.RESOLVER_ROUTE_POLICY_REQUIRED !== 'true' && env.RESOLVER_COORDINATION_ENABLED !== 'true'
   try {
-    const policy = routePolicySchema.parse(JSON.parse(env.RESOLVER_ROUTE_POLICY ?? '[]'))
+    const policy = routePolicySchema.parse([
+      ...routePolicySchema.parse(JSON.parse(env.RESOLVER_ROUTE_POLICY ?? '[]')),
+      ...routePolicySchema.parse(JSON.parse(env.RESOLVER_ROUTE_POLICY_1 ?? '[]')),
+      ...routePolicySchema.parse(JSON.parse(env.RESOLVER_ROUTE_POLICY_2 ?? '[]')),
+    ])
     const scoped = policy.find(row => row.version === parsed.route!.version && row.policy === parsed.route!.policy
       && row.provider === parsed.providerId && row.kind === parsed.input.ref.kind && row.region === parsed.input.region
       && row.purpose === (parsed.input.purpose ?? 'video') && row.delivery === (parsed.config.deliveryMode ?? 'direct') && row.lookup === lookup)

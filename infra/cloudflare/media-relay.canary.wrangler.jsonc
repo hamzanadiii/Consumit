@@ -1,0 +1,23 @@
+{
+  "name": "consumit-media-relay-canary",
+  "main": "../../packages/media-relay/src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.01,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "APP_ORIGIN": "https://consumit.online",
+    "RELAY_ENABLED": "true",
+    "RELAY_DISCOVERY_PROVIDERS": "{}",
+    "RELAY_ROUTE_VERSION": "edge-v1-fd51822b5c1fa49e",
+    "RELAY_ROUTE_POLICY": "[{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"anixo\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"anixo.buzz\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"cno\",\"kind\":\"movie\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"cno.to\",\"v.haloshade.top\",\"v.lumenbox.top\",\"v.neonvase.top\",\"v.prismdesk.top\",\"v.sparkwick.top\",\"v.starlantern.top\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"cno\",\"kind\":\"series\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"cno.to\",\"v.haloshade.top\",\"v.lumenbox.top\",\"v.neonvase.top\",\"v.prismdesk.top\",\"v.sparkwick.top\",\"v.starlantern.top\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"megavid\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"cdnx.aniwatchtv.site\",\"hls.dramahot.top\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"nexa\",\"kind\":\"movie\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"indiacdn.sbs\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"nexa\",\"kind\":\"series\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"indiacdn.sbs\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"zenox\",\"kind\":\"movie\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"bub.zenox.lol\",\"r10.zenox.lol\",\"zenox.lol\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"zenox\",\"kind\":\"series\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"bub.zenox.lol\",\"r10.zenox.lol\",\"zenox.lol\"]},{\"version\":\"edge-v1-fd51822b5c1fa49e\",\"provider\":\"zoko\",\"kind\":\"anime\",\"region\":\"US\",\"purpose\":\"video\",\"delivery\":\"relay\",\"media\":\"https://consumit-media-relay-canary.consumit-project.workers.dev\",\"hosts\":[\"hls.dramahot.top\",\"hls1.drama1.cfd\"]}]",
+    "RELAY_ROUTE_POLICY_REQUIRED": "true",
+    "RELAY_PROVIDERS": "{\"anixo\":[\"anixo.buzz\"],\"cno\":[\"cno.to\",\"v.prismdesk.top\",\"v.lumenbox.top\",\"v.neonvase.top\",\"v.starlantern.top\",\"v.haloshade.top\",\"v.sparkwick.top\"],\"megavid\":[\"cdnx.aniwatchtv.site\",\"hls.dramahot.top\"],\"nexa\":[\"indiacdn.sbs\"],\"zenox\":[\"zenox.lol\",\"bub.zenox.lol\",\"r10.zenox.lol\"],\"zoko\":[\"hls.dramahot.top\",\"hls1.drama1.cfd\"]}"
+  }
+}

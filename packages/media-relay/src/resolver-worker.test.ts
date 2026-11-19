@@ -112,6 +112,22 @@ describe('Cloudflare provider resolver', () => {
     expect(wrongPurpose.status).toBe(403)
   })
 
+  it('accepts versioned routes split across bounded policy bindings', async () => {
+    const policy = createHash('sha256').update(JSON.stringify([config.mediaHosts, undefined, undefined])).digest('hex')
+    const route = { version: 'edge-v1-0123456789abcdef', policy, purpose: 'video' as const }
+    const routePolicy = [{ ...route, provider: config.id, kind: 'movie', region: 'US', delivery: 'direct', lookup: 'https://resolver.example' }]
+    const response = await createResolverWorker().fetch(request({
+      route, providerId: config.id, config, input: { ref, region: 'US', audioLanguage: 'en' },
+    }), {
+      ...env,
+      RESOLVER_ROUTE_POLICY: '[]',
+      RESOLVER_ROUTE_POLICY_1: JSON.stringify(routePolicy),
+      RESOLVER_ROUTE_POLICY_2: '[]',
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ ok: true })
+  })
+
   it('rejects unauthenticated and disabled requests before provider work', async () => {
     const fetcher = vi.fn()
     const worker = createResolverWorker({ fetch: fetcher })
