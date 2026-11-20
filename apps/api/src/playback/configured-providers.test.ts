@@ -122,6 +122,7 @@ describe('configured real provider integration', () => {
       expect(provider).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: animeIds.includes(id) ? ['anime'] : ['movie', 'series'] })
     }
     expect(providers.find(row => row.adapter.id === 'bingebangymovies')).toMatchObject({ enabled: true, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'] })
+    expect(providers.find(row => row.adapter.id === 'xpass')).toMatchObject({ enabled: false, role: 'video', deliveryMode: 'relay', mediaKinds: ['movie', 'series'], mediaHosts: ['tok.1x2.space', 'vip.1x2.space', 'tik.1x2.space', 'sub.1x2.space'] })
     expect(providers.find(row => row.adapter.id === 'vixsrc')?.deliveryMode).toBe('direct')
     expect(providers.find(row => row.adapter.id === 'megavid')?.deliveryMode).toBe('relay')
     expect(providers.find(row => row.adapter.id === 'movy')).toMatchObject({ enabled: false, role: 'both', deliveryMode: 'relay', mediaKinds: ['movie'], mediaHosts: ['img.rousav.tech'] })

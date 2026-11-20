@@ -337,6 +337,31 @@ describe('Worker delivery boundary', () => {
     const other = setup(new Response(encoded))
     expect((await other.worker.fetch(await request(), env)).status).toBe(502)
   })
+  it('preserves only the XPass embed Referer and User-Agent across its approved CDN edges', async () => {
+    const hosts = ['tok.1x2.space', 'vip.1x2.space', 'tik.1x2.space', 'sub.1x2.space']
+    const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ xpass: hosts }) }
+    const page = 'https://play.xpass.top/e/movie/550'
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36'
+    const { worker, fetcher } = setup(url => url.includes('/master.m3u8')
+      ? new Response('#EXTM3U\n#EXTINF:6,\nhttps://vip.1x2.space/segment.ts\n')
+      : new Response('segment bytes'))
+    const root = await worker.fetch(await request({ provider: 'xpass', url: 'https://tok.1x2.space/master.m3u8', headerHost: 'tok.1x2.space', headers: { referer: page, 'user-agent': userAgent } }), settings)
+    expect(root.status).toBe(200)
+    const child = (await root.text()).match(/https:\/\/edge\.example\/media\/([A-Za-z0-9_-]+)/)![1]!
+    const codec = await createGrantCodec(secret)
+    expect(await codec.open(child, now)).toMatchObject({ provider: 'xpass', url: 'https://vip.1x2.space/segment.ts', headerHost: 'tok.1x2.space' })
+    const segment = await worker.fetch(new Request(mediaGrantUrl(edge, child)), settings)
+    expect(segment.status).toBe(200)
+    expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get('referer')).toBe(page)
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get('referer')).toBe(page)
+    expect(new Headers(fetcher.mock.calls[1]?.[1]?.headers).get('user-agent')).toBe(userAgent)
+
+    const invalid = setup(new Response('bytes'))
+    await invalid.worker.fetch(await request({ provider: 'xpass', url: 'https://vip.1x2.space/segment.ts', headerHost: 'tok.1x2.space', kind: 'auto', headers: { referer: 'https://evil.example/', origin: 'https://evil.example' } }), settings)
+    const outgoing = new Headers(invalid.fetcher.mock.calls[0]?.[1]?.headers)
+    expect(outgoing.get('referer')).toBeNull()
+    expect(outgoing.get('origin')).toBeNull()
+  })
   it.each(['bingebangymovies', 'rigel'])('bounds %s large playlists separately and still denies off-host references', async (provider) => {
     const large = '#EXTM3U\n# comment ' + 'x'.repeat(600_000) + '\n#EXTINF:6,\nseg.mp4\n'
     const settings = { ...env, RELAY_PROVIDERS: JSON.stringify({ [provider]: ['os.bingebangstream.online'] }) }

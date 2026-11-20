@@ -9,6 +9,22 @@
  * Only vetted non-credential hints ever reach here (see relay permits). */
 export function mediaHeaders(provider: string, host: string, headerHost: string, hints: Record<string, string>, recipe?: string) {
   if (host === headerHost) return hints
+  if (provider === 'xpass') {
+    const hosts = ['tok.1x2.space', 'vip.1x2.space', 'tik.1x2.space', 'sub.1x2.space']
+    const referer = hints.referer
+    const userAgent = hints['user-agent']
+    let validReferer = false
+    try {
+      const url = new URL(referer ?? '')
+      validReferer = url.origin === 'https://play.xpass.top' && /^\/e\/(?:movie\/\d+|tv\/\d+\/\d+\/\d+)$/.test(url.pathname)
+        && !url.username && !url.password && !url.search && !url.hash
+    } catch { /* Invalid hints are omitted. */ }
+    if (!hosts.includes(host) || !hosts.includes(headerHost) || !validReferer) return {}
+    return {
+      referer: referer!,
+      ...(typeof userAgent === 'string' && userAgent.length <= 512 && !/[\r\n]/.test(userAgent) ? { 'user-agent': userAgent } : {}),
+    }
+  }
   if (provider === 'zoko' && headerHost === 'hls.dramahot.top' && host === 'hls1.drama1.cfd') {
     return { referer: 'https://zokoanime.video/', origin: 'https://zokoanime.video' }
   }

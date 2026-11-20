@@ -138,6 +138,8 @@ describe('provider inspection bench', () => {
     const catalog = read()
     expect(catalog.length).toBe(scoutRecipes.length)
     expect(catalog.every(row => !row.enabled)).toBe(true)
+    expect(scoutRecipes.find(row => row.id === 'nontonflix')).toMatchObject({ adapter: 'nontonflix', enabled: false, deliveryMode: 'relay', mediaHosts: ['media.nontonflix.com'], mediaKinds: ['movie', 'series'] })
+    expect(catalog.find(row => row.adapter.id === 'nontonflix')).toMatchObject({ enabled: false, deliveryMode: 'relay', mediaHosts: ['media.nontonflix.com'], mediaKinds: ['movie', 'series'] })
     expect(read()).toBe(catalog)
   })
   it('shares dashboard metric queries and briefly caches collector failure', async () => {
