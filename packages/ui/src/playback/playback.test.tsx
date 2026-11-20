@@ -1076,6 +1076,37 @@ describe('playback shell components', () => {
     expect(video.currentTime).toBe(85)
     window.localStorage.clear()
   })
+  it('does not auto-skip an intro while a saved seek is pending beyond it', async () => {
+    window.localStorage.removeItem('consumit.player.auto-skip')
+    const source = { src: 'https://cdn.example/resume.m3u8', type: 'hls' as const, skipSegments: [{ kind: 'intro' as const, start: 0, end: 119 }] }
+    const { container } = render(<ConsumitPlayer source={source} title="Resume past intro" />)
+    const video = container.querySelector('video')!
+    const assignments: number[] = []
+    let currentTime = 0
+    let seeking = false
+    let paused = true
+    Object.defineProperty(video, 'duration', { configurable: true, value: 8348 })
+    let pendingSeek: number | undefined
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => currentTime, set: (value: number) => { assignments.push(value); if (seeking) pendingSeek = value; else currentTime = value } })
+    Object.defineProperty(video, 'seeking', { configurable: true, get: () => seeking })
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused })
+
+    await act(async () => {})
+    seeking = true
+    video.currentTime = 172
+    paused = false
+    fireEvent.play(video)
+    expect(assignments).toEqual([172])
+
+    currentTime = pendingSeek ?? 0
+    pendingSeek = undefined
+    seeking = false
+    fireEvent.seeked(video)
+    fireEvent.timeUpdate(video)
+    expect(video.currentTime).toBe(172)
+    expect(assignments).not.toContain(119)
+    window.localStorage.removeItem('consumit.player.auto-skip')
+  })
   it('offers a manual skip button when auto-skip is off', () => {
     window.localStorage.setItem('consumit.player.auto-skip', '0')
     try {

@@ -179,7 +179,17 @@ function WatchPlaybackReady({ audioLanguage: audioLanguageProp, title, episode, 
 
   const save = useCallback(async (keepalive = false, force = false) => {
     if (frameActive.current) return
-    if (saveInFlight.current && !keepalive) return
+    if (saveInFlight.current && !keepalive) {
+      if (!force) return
+      // A forced seek or pause must follow an older checkpoint so that its
+      // late completion cannot replace the newer position.
+      while (saveInFlight.current) {
+        const precedingWrite: Promise<void> = saveInFlight.current
+        await precedingWrite
+        if (saveInFlight.current === precedingWrite) saveInFlight.current = null
+        if (frameActive.current) return
+      }
+    }
     // Coalesce server and local writes: the interval only persists meaningful
     // changes, while pause, seek, completion, and page exit save explicitly.
     if (!keepalive && !force && !hasMeaningfulProgressChange(lastSynced.current, { position: clock.current.position, completed: clock.current.completed })) return

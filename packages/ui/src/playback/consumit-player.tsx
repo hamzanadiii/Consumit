@@ -926,6 +926,10 @@ export function ConsumitPlayer({
       return
     }
     if (!video || !autoSkip || video.paused || !hasSource || hasError) return
+    // `currentTime` state may still reflect the old position while a browser
+    // seek is pending. Never let that stale intro state replace the seek.
+    const position = video.currentTime
+    if (video.seeking || !Number.isFinite(position) || position < activeSkip.start || position >= activeSkip.end - 0.25) return
     const key = `${source?.src ?? ''}:${activeSkip.kind}:${activeSkip.start}`
     if (skipArmed.current === key) return
     skipArmed.current = key
